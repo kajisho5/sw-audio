@@ -49,6 +49,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MS03 Multiband Limit | 4 帯域マルチバンドリミッター。LR4 で分割（120 Hz／1 kHz／6 kHz、足すと平ら）、帯域ごとに Gain（0〜+12 dB）・Ceiling・Release、先読み 2 ms の帯域リミッター、最後に True peak リミッターで Out ceiling を必ず守る。Character（Clean／Punch／Dense）、Link bands（EVO：合成後に天井を超える分を、帯域ごとのピークの大きさに応じて配分） | 遅延 184 サンプル@48 kHz（仕様書の見積もり約 200 より少し短い、下の「MS03 の設計」） |
 | SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
 | SW MS05 Leveler | 自動フェーダー。K 特性の短時間ラウドネス（Source：Vocal 150 Hz〜5 kHz／Mix 全帯域／Bass 250 Hz 以下の長い窓）を Target へ寄せる Ride（±Range、Speed 3 秒／1 秒／0.3 秒）。Gate 以下では動かない。Write automation On の間は Ride をプラグインが自分で動かし、ホストに操作（ジェスチャー開始・値・終了）として通知する。Off では Ride パラメータ（ホストのオートメーション）がそのままゲイン | Ride を書き出す仕組みを共通のプラグイン層（CLAP）に追加。VST3／AU への伝わり方と DAW ごとの記録の挙動は、主要 DAW での確認が必要（下の「MS05 の設計」） |
+| SW MS06 Master Chain | マスタリング用のチェーン。EQ（Tilt ±6 dB・80 Hz／12 kHz のシェルフ・Bell 200 Hz〜8 kHz）・Comp・Saturate・Width（Mono below）・Limit を、並び順 120 通りの 1 つ（オートメーション不可、設定と一緒に保存）で並べて使う。各段に On。Gain match（既定 On）は、各段の出力をチェーン入力のラウドネスに合わせる | Comp 以外の項目は仕様書の案。Reference A/B は監視用のスイッチだけで、参照曲の読み込みと整列は UT03・画面と一緒（下の「MS06 の設計」） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
 | SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
 | SW LV16 Live Gate | LIVE 用ゲート／ダッカー。Key HPF（120 Hz・24 dB/oct）で床鳴りではゲートが開かない、外部サイドチェーン | 床鳴りの帯域を測って自動で置く学習は未実装（固定 120 Hz） |
@@ -170,6 +171,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **動き。** 64 サンプルごとに、`Ride += (clamp(Target − ラウドネス, −Range, +Range) − Ride) × (1 − exp(−dt/τ))`、τ は Slow 3 秒・Medium 1 秒・Fast 0.3 秒（設計値）。補正は 64 サンプルの中で直線補間。実測：RMS −26 dBFS の定常音で Target −18 LUFS に対し Ride は約 +5.7 dB に収まり、Range 6 で −10 dBFS の音は −6 dB で止まる（テスト）。
 - **Write automation。** 共通のプラグイン層（`clap_adapter.hpp`）に「コアが自分でパラメータを動かす」仕組みを追加した。コアが `takeParamWrite(id, plain)` を実装すると、各サブブロックの終わりに CLAP の出力イベントとして、ジェスチャー開始 → 値（0.02 dB 以上動いたとき）→ ジェスチャー終了を出す。On の間、Ride パラメータへのホストからの値はコアが無視する（自分が書いた値の戻りと衝突しないため）。Off にすると Ride はホストのオートメーションに従い、1 サブブロックの補間でつながる。VST3 は clap-wrapper が出力イベントを編集開始／値変更／編集終了に、AU もパラメータ変更通知に変換する（clap-wrapper の機能。実際の DAW で記録されるかは未確認で、主要 DAW での動作確認が必要）。**この項目の動作の保証範囲は、コアの単体テストと clap-validator／Steinberg validator の合格まで。**
 - 遅延 0。
+
+### MS06 の設計（仕様書に数値がない部分）
+
+- **段の処理。** 256 サンプルごとのかたまりで、選んだ順に 1 段ずつ処理する（そのため先読みリミッターをチェーンのどこにでも置ける。CS04 は Limit を最後に回していた）。EQ：Tilt は 1 kHz を軸にした低域シェルフ（−Tilt）と高域シェルフ（＋Tilt）、Q 0.5。Low／High は 80 Hz／12 kHz のシェルフ Q 0.707、Bell は Q 0.7。Comp：プログラム検出、ニー 6 dB、リリース Auto は 100 ms と 1.2 秒の 2 段（DY03 と同じ方式）、Mix は並列。Saturate：Drive 段（`sw::DriveStage`、非対称 tanh）に Drive dB ÷ 1.8 を渡す、Mix は並列。Width：サイド × Width ％。Mono below：サイドを LR4 のハイパスに通し、ミッドは同じ分割の全域通過（低域＋高域）を通して位相関係を保つ（100 Hz の逆相が −12 dB より小さくなり、3 kHz は変わらない、テスト）。Limit：先読み 1.5 ms ＋ True peak 4×（`PeakLimiter`、MS02 の既定値）。
+- **既定値。** すべて何も変えない値で、EQ・Comp・Width・Limit が On、Saturate が Off。Limit が On のとき遅延 88 サンプル（72＋16、@48 kHz。仕様書の「約 100」）、Off で 0。Limit の On／Off は遅延が変わるので、次の prepare で反映（再起動を要求）。Limit を Off にしても遅延は保ち、リミッターが働かないだけ。
+- **Gain match。** チェーン入力と各段の出力（補正前）の K 特性の平均二乗（3 秒の指数平均）を比べ、差を打ち消す補正を段ごとに足す（±12 dB、追従 2 秒、Off の段は 0 dB）。どの段を外す・並べ替える・強く動かしても全体の音量は変わらず、25 秒の定常ノイズで EQ・Saturate・Limit を動かしても Integrated は入力と 0.7 LU 以内、Off では 2 LU 以上ずれる（テスト）。
+- **並べ替え。** 並び順の変更は、1 かたまり（256 サンプル ＝ 約 5 ms）で音を下げ、入れ替え、次のかたまりで戻す。
+- **Reference A/B。** 切り替え用のパラメータ（オートメーション不可）だけ。参照曲のラウドネス合わせは UT03 と共通の処理を作るときに実装する。
 
 ### CS04 の注意
 
