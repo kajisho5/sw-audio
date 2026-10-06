@@ -13,6 +13,9 @@ namespace sw {
 class Fdn {
 public:
     static constexpr int kMax = 16;
+    // an optional processor on the lines' outputs (RV06's pitch shifters): process(line, s) returns what feeds back and goes to the output
+    struct LineHook { virtual double process(int line, double s) = 0; virtual ~LineHook() = default; };
+    void setHook(LineHook* h) { hook_ = h; }
     void prepare(double fs, int lines, double maxSeconds) {
         fs_ = fs; n_ = std::clamp(lines, 4, kMax);
         size_t sz = 16; while (sz < static_cast<size_t>(maxSeconds * fs) + 16) sz <<= 1;
@@ -64,6 +67,7 @@ private:
             const double y = read(k, d);
             lp_[k] += (1.0 - p) * (y - lp_[k]);
             s[k] = lp_[k] * (g_[k] + (0.99995 - g_[k]) * fz);
+            if (hook_) s[k] = hook_->process(i, s[k]);
             sum += s[k]; l += sgnL_[k] * s[k]; r += sgnR_[k] * s[k];
         }
         const double mean2 = 2.0 * sum / n_, invN = inG / std::sqrt(static_cast<double>(n_));
@@ -85,6 +89,7 @@ private:
     void updateGains() { for (int i = 0; i < n_; ++i) { const size_t k = static_cast<size_t>(i); g_[k] = std::pow(10.0, -3.0 * len_[k] / (fs_ * rt60_)); } }
     double fs_ = 48000.0, rt60_ = 2.0, damp_ = 0.5, modDepth_ = 4.0, modInc_ = 0.0, freezeGain_ = 0.0, inGain_ = 1.0;
     int n_ = 16, ctl_ = 0;
+    LineHook* hook_ = nullptr;
     bool freeze_ = false;
     size_t mask_ = 0, pos_ = 0;
     std::array<std::vector<float>, kMax> buf_;
