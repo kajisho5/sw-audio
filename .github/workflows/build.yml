@@ -25,6 +25,7 @@ jobs:
           - os: ubuntu-22.04
             validator_zip: ubuntu-22.04.zip
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -33,12 +34,12 @@ jobs:
 
       - name: Configure
         run: |
-          EXTRA=""
-          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA="-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"; fi
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
+          # macOS builds the runner's own architecture here (a universal build compiles everything twice); the
+          # universal release build is the manual 'universal' job below
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release --parallel 4
 
       - name: Unit tests
         run: ctest --test-dir build -C Release --output-on-failure
