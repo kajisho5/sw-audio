@@ -267,6 +267,11 @@ private:
         const uint32_t count = static_cast<uint32_t>(numParams());
         if (!writeAll(s, magic, 4) || !writeAll(s, &count, 4)) return false;
         for (int i = 0; i < numParams(); ++i) { const double v = self(p)->host_values_[static_cast<size_t>(i)].load(); if (!writeAll(s, &v, 8)) return false; }
+        if constexpr (HasExtraState<typename P::Core>::value) {
+            std::vector<uint8_t> extra; self(p)->shell_.core().saveExtra(extra);
+            const char xm[4] = {'S', 'W', 'X', '1'}; const uint32_t len = static_cast<uint32_t>(extra.size());
+            if (!writeAll(s, xm, 4) || !writeAll(s, &len, 4) || (len && !writeAll(s, extra.data(), len))) return false;
+        }
         return true;
     }
     static bool stateLoad(const clap_plugin_t* p, const clap_istream_t* s) {
@@ -276,6 +281,12 @@ private:
         for (uint32_t i = 0; i < count; ++i) {
             double v; if (!readAll(s, &v, 8)) return false;
             if (i < static_cast<uint32_t>(numParams())) { pl->host_values_[i].store(v); pl->dirty_[i].store(true); }
+        }
+        if constexpr (HasExtraState<typename P::Core>::value) {   // optional: states saved before the extra block existed end here
+            char xm[4]; uint32_t len = 0;
+            if (readAll(s, xm, 4) && std::memcmp(xm, "SWX1", 4) == 0 && readAll(s, &len, 4) && len <= (1u << 20)) {
+                std::vector<uint8_t> extra(len); if (len == 0 || readAll(s, extra.data(), len)) pl->shell_.core().loadExtra(extra.data(), extra.size());
+            }
         }
         pl->snap_pending_.store(true);
         if (!pl->active_) pl->applyPending();

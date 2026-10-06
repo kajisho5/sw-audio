@@ -16,10 +16,8 @@ const std::vector<ParamSpec>& specs() {
             {"sa02.width",     "Width",     0, 150, 100,  Curve::Lin,  1, {}, "%"},
             {"sa02.output",    "Output",    -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa02.group",     "Group",     1, 8, 1,      Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, ""},
-            {"sa02.seed",      "Unit seed", 0, 65535, 0,  Curve::Lin,  1, {}, ""},
         };
         v[Noise].minLabel = "Off"; v[Noise].maxLabel = "Max";
-        v[Seed].automatable = false;
         return v;
     }();
     return s;
@@ -37,7 +35,11 @@ constexpr double kLowSplitHz = 160.0, kPi = 3.14159265358979323846;
 double unit(uint32_t& s) { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s / 4294967296.0 * 2.0 - 1.0; }
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() {
+    for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def;
+    const uint32_t t = static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count());   // a new instance gets its own seed
+    seed_ = 1 + static_cast<int>(((gCounter.fetch_add(1) * 2654435761u) ^ t ^ static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this) >> 4)) % 65535u);
+}
 void Processor::Slot::release() { if (idx >= 0) { gMs[group - 1][idx].store(0.0f); gUsed[group - 1][idx].store(false); idx = -1; } }
 
 void Processor::joinGroup() {
@@ -66,13 +68,6 @@ void Processor::prepare(double sampleRate, int) {
     lf_.prepare(fs_); hf_.prepare(fs_);
     lp_ = {0, 0}; lpA_ = 1.0 - std::exp(-2.0 * kPi * kLowSplitHz / fs_);
     msC_ = std::exp(-1.0 / (0.1 * fs_)); msSmooth_ = 0; loadDb_ = 0;
-    seed_ = static_cast<int>(std::lround(target_[Seed]));
-    seedPending_ = false;
-    if (seed_ == 0) {   // first use: pick a seed for this instance and hand it to the plugin layer once
-        const uint32_t t = static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count());
-        seed_ = 1 + static_cast<int>(((gCounter.fetch_add(1) * 2654435761u) ^ t ^ static_cast<uint32_t>(reinterpret_cast<uintptr_t>(this) >> 4)) % 65535u);
-        target_[Seed] = seed_; seedPending_ = true;
-    }
     rng_ = static_cast<uint32_t>(seed_) * 747796405u + 2891336453u;
     applySeed();
     joinGroup();
@@ -85,13 +80,6 @@ void Processor::setParam(int id, double v) {
     if (id == Output) out_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Color) applySeed();
     else if (id == Group && slot_.idx >= 0) joinGroup();
-    else if (id == Seed && std::lround(v) != 0) { seed_ = static_cast<int>(std::lround(v)); applySeed(); }
-}
-
-int Processor::takeParamWrite(int& id, double& plain) {
-    if (!seedPending_) return 0;
-    seedPending_ = false; id = Seed; plain = seed_;
-    return 7;
 }
 
 void Processor::process(float** ch, int numCh, int n) {
