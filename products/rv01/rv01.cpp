@@ -75,7 +75,7 @@ void Processor::prepare(double sampleRate, int) {
     for (auto& g : tapGain_) g.fill(0.0);
     width_.reset(fs_, 20.0, target_[Width] * 0.01);
     const double er = target_[ErLate] * 0.01;
-    erG_.reset(fs_, 20.0, std::sqrt(er)); lateG_.reset(fs_, 20.0, std::sqrt(1.0 - er));
+    erG_.reset(fs_, 20.0, std::sqrt(er)); lateG_.reset(fs_, 20.0, std::sqrt(std::max(0.0, 1.0 - er)));   // (max: 100 * 0.01 is 1.0000000000000000208 when the compiler fuses the multiply into the subtraction, as on arm64)
     for (auto& f : sideHp_) f.setup(Svf::Mode::HighPass, 120.0, fs_, 0.70710678, 0);
     updateLines(); fdn_.snapLengths(); updateFilters();
     lateTrim_ = 1.0 / std::sqrt(Fdn::kEnergyConstant * target_[Decay] / fdn_.meanLengthSeconds());
@@ -91,7 +91,7 @@ void Processor::setParam(int id, double v) {
         case Algorithm: case Size: case Decay: case Damping: case Freeze: updateLines(); break;
         case LowCut: case HighCut: updateFilters(); break;
         case Width: width_.setTarget(v * 0.01); break;
-        case ErLate: erG_.setTarget(std::sqrt(v * 0.01)); lateG_.setTarget(std::sqrt(1.0 - v * 0.01)); break;
+        case ErLate: erG_.setTarget(std::sqrt(v * 0.01)); lateG_.setTarget(std::sqrt(std::max(0.0, 1.0 - v * 0.01))); break;
         default: break;
     }
 }

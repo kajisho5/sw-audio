@@ -40,3 +40,6 @@ if line not in c:
     idx = c.rindex("endif()")
     c = c[:idx] + line + c[idx:]
 (root / "CMakeLists.txt").write_text(c)
+
+import subprocess
+subprocess.run([sys.executable, str(root / "tools" / "gen_fuzz.py")], check=False)   # keep the parameter-bounds fuzz test in step with the product list
