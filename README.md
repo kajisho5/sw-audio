@@ -81,6 +81,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW VO06 Formant | Pitch ±12・Formant ±5（母音だけ動く）・Character 4 種・Keep timing・Smooth・Mix。遅延 1450 サンプル | 設計値は README「VO06 Formant の設計」。遅延は仕様書の見積もり 512 とは違う。Keep timing Off は声色が音程に追従する設計（タイミングは常に保つ） |
 | SW VO07 Vocal Strip | HPF→De-ess→Breath→Body/Presence/Air→Comp→Level→Plate/Echo 送り→Output の順の声のストリップ。遅延 0 | 設計値は README「VO07 Vocal Strip の設計」。DY05・DY02・RV02・DL01 のコアを内部で使用。段間の音量合わせはコンプの自動メイクアップのみ |
 | SW VO08 Breath | Reduce／Remove／Mark only、Reduction・Sensitivity・Keep・Fade。規則による息の検出。遅延 1024 サンプル | 設計値は README「VO08 Breath の設計」。学習モデルとフレーズごとの選択は未実装 |
+| SW RS01 Denoise | 短時間 FFT（2048）のスペクトル抑圧。Profile・Adaptive（最小値統計）・Reduction・Threshold・Smoothing・Low/High band・Artifact guard・Learn。遅延 2048 | 設計値は README「RS01 Denoise の設計」。共通部品 sw/stft.hpp。定常な純音は雑音として覚える。Low lat は未実装 |
+| SW RS03 Dehum | 基本波と倍音のノッチ列（Base 50/60/Auto、Harmonics、Depth、Width、Buzz）。Track で ±2 Hz を追従。遅延 0 | 設計値は README「RS03 Dehum の設計」。Width は Q 60〜8、Buzz は設計値 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -637,6 +639,22 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Keep（設計値）。** Natural は Reduction の 0.6 倍（息が聞こえる程度に残す）、Less は 1.0 倍、None は 1.5 倍（−40 dB で頭打ち）。
 - **Fade** 1〜50 ms（Log）：下げ切るまでの時間（dB で直線）。**戻りは最大 10 ms**（息の終わりの判定は、次のフレーズの頭より約 10 ms 前に出るため。長いフェードで次のフレーズを覆わない）。テスト：Fade 50 ms で 24 dB の下げのうち 3〜21 dB の区間が約 37 ms、1 ms でほぼ即時。
 - フレーズごとに残す・消すを選ぶ機能（区分 B・C）は、音声の取り込みが必要なため未実装（保存用の値も無し）。Δ ボタンは無い（仕様書どおり）。
+
+### RS01 Denoise の設計（仕様書に数値がない部分）
+
+- **共通部品 `sw/stft.hpp`。** √Hann の分析・合成窓と重ね合わせ加算（N＝2048、ホップ 512）。ハンドラは各ホップで半スペクトルを書き換える。遅延は N ＝ 2048 サンプル（42.7 ms@48 kHz、仕様書どおり）。ゲイン 1 のとき入力を 2048 サンプル遅らせた信号と 1.2e-7 以内で一致（テスト）。RS06 でも使う。
+- **ノイズ推定。** Adaptive On：各ビンの平滑パワー（時定数 約 50 ms）の最小値を、8 つの小区間（Voice 0.2 s／Music 0.4 s／Field 0.25 s ＝ 窓 1.6／3.2／2 秒）で追い、×1.5（最小値の偏りの補正）。Adaptive Off：推定を固定（**一度も学習していなければ何も抑えない**）。Learn On：その間の平均パワーで推定を置き換える（Adaptive が On でも Learn 中は最小値統計を止める）。
+- **ゲイン。** 前フレームから引き継ぐ事前 SNR（α ＝ 0.93／0.96／0.98 が Smoothing Low／Mid／High）、λ ＝ ノイズ推定 × 10^(Threshold/10)（Field は更に 1.15 倍）、Wiener ゲイン ξ/(1+ξ)、下限は Reduction。**Low band／High band** は下限に dB を足す（＋で深く、−で浅く。Low は 400 Hz 以下で全量、1.2 kHz で 0。High は 4 kHz 以上で全量、1.5 kHz で 0）。**Artifact guard** On：ゲインは時間方向に速い立ち上がり・遅い戻り（0.3）、周波数方向に 3 ビンの平滑。
+- **注意：定常な純音はノイズとして覚えてしまう**（最小値統計は定常な成分を雑音と区別できない。テストは 0.25 秒ごとに入り切りするバーストで確認：ノイズは Reduction ±3.5 dB、信号は 1.5 dB 以内で残る）。声・音楽のように変動する信号では問題にならない。Learn で雑音だけを覚えさせれば定常音も守れる。
+- Low lat（512 点・512 サンプル）は仕様書の表のつまみには無いので未実装。Profile の窓長・over-subtraction は設計値。
+
+### RS03 Dehum の設計（仕様書に数値がない部分）
+
+- **ノッチ列。** Harmonics（2／4／8／16）＝ノッチの本数（基本波とその整数倍、その数まで）。Depth 0〜10 ＝ 0〜−40 dB（1 で −4 dB）。各ノッチは Svf のベル（負のゲイン）。**Width は Q 60〜8（Log）**（半ゲイン点の幅が 50 Hz で 0.8〜6 Hz）。最初は Q 30〜4 にしたが、−40 dB のベルの裾が広く、隣のノッチの中間（75 Hz）が −2.3 dB 下がったため、Q を 60〜8 に変えた（Q 60 では 1 dB 以内）。
+- **Buzz（設計値）。** 奇数次を Buzz × 1 dB だけ深く、Harmonics+1〜2×Harmonics 次に Buzz × 4 dB（最大 −40 dB）のノッチを足す。
+- **Track（On）。** 基本波の周波数を ±2 Hz の範囲で追う：信号を 300 Hz のローパスで 1.5 kHz に間引き、1 秒の窓で最初の 4 倍音までを 0.25 Hz 刻みの 17 周波数に射影し、ピーク（放物線補間。中央値の 2 倍以上のときだけ）へ推定を半分ずつ寄せる。全ノッチが推定に追従する。テスト：51.5 Hz のハムを 9 秒後に −25 dB 以上（Track Off は −15 dB 未満）、50→51 Hz に流れるハムも −15 dB 以上。**追従は秒単位**（速く揺れるハムには間に合わない）。
+- **Base Auto。** 50／60 Hz の両方を探し、強いほうに 2 回続けて決まったら切り替える（テスト：60 Hz のハムで 5〜8 秒に −25 dB 以上）。
+- 遅延 0。仕様書の要確認（画面の Unit A／B／C は修復機に意味が無い）は、パラメータに含めていない。
 
 ### CS04 の注意
 
