@@ -7,6 +7,7 @@
 #pragma once
 #include "sw/dynamics.hpp"
 #include "sw/param.hpp"
+#include "sw/pitch_tracker.hpp"
 #include "sw/svf.hpp"
 #include <array>
 #include <vector>
@@ -17,21 +18,7 @@ enum ParamId { Mode, Freq, Threshold, Range, Lookahead, Listen, Pitch, kNumParam
 
 const std::vector<ParamSpec>& specs();
 
-class PitchTracker {
-public:
-    void prepare(double fs);
-    void push(double x);                  // one input sample (mono)
-    bool voiced() const { return voiced_; }
-    double f0() const { return f0_; }     // last tracked fundamental (Hz), 0 when none yet
-    void reset();
-private:
-    void analyse();
-    double fd_ = 6000.0;
-    int decim_ = 8, phase_ = 0, hop_ = 0, pos_ = 0;
-    double lp1_ = 0, lp2_ = 0, lpC_ = 0, f0_ = 0; int sinceHop_ = 0;
-    bool voiced_ = false;
-    std::vector<double> ring_;
-};
+using sw::PitchTracker;
 
 class Processor {
 public:
