@@ -73,6 +73,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW ST04 Center | センターと広がりと Haas。Center（S を +6 dB〜−∞）、Haas 0〜40 ms（遅らせる側を選ぶ）、Low center、Balance、Link、Mono safe（モノの和の櫛形の落ち込みを自動で浅く） | 設計値は README「ST04 Center の設計」。Link の意味は仕様書にないため設計値（遅れ 1 ms あたり +0.35 dB）。確認が要る |
 | SW ST05 Phones | ヘッドホンでスピーカーの部屋を聴く。Speakers（Nearfield／Mains／Car）、Room、Angle、Head size、Phones profile（Closed／Open／Earbud の汎用カーブ）、Tracking（頭の向きの土台）。モデルから作った 4 本の両耳 IR を畳み込む（遅延 0） | 設計値は README「ST05 Phones の設計」。IR は録音ではなくモデル（仕様書の収録は未対応）。ヘッドホンは機種名でなく種類別、測定データ読み込みと Tracking の機器は未対応。CPU は 256 サンプルで平均約 27 %、512 以上を推奨 |
 | SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
+| SW VO01 Tune | ピッチ補正（Auto）。PSOLA の音程エンジン＋Scale／Key／Speed／Humanize／Vibrato／Formant／Transpose、キー検出の提案。遅延は 1450 サンプル（仕様書の見積もり 512 は低い男声の 1 周期が入らず満たせない） | 設計値は README「音程エンジンと VO01 Tune の設計」。Graph 編集・Detect MIDI・Snap・Reference は画面／MIDI／ARA が要るので保存だけ。Δ ボタンは無い（仕様書の要確認） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -554,6 +555,19 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **IR の作り直し。** Speakers／Room／Angle／Head size（または頭の向き）が変わると、音声スレッドで **1 回の呼び出しに 1 つの小さな仕事**（IR 1 本の設計 約 0.45 ms、畳み込みの変換と切り替えは 1 本ずつ）として 4 本を作り、20 ms で切り替える。Phones profile は即時。
 - **CPU の実測（このクラウド環境、-O2）。** 定常：256 サンプルのブロックあたり平均 約 1.4 ms（余裕の 27 %）、最悪 約 3.6 ms。作り直し中の最悪 約 4.6 ms。畳み込み 4 本のうち重いブロックが別々の呼び出しに入るように位相をずらしてある（`TieredConvolver` の位相 0〜3）。**バッファ 256 では余裕が少ないので、512 以上を推奨**（RV04 と同じ）。
 - **要確認（仕様書）：** ヘッドホンの補正を機種名でなく種類別にすること／測定データの読み込み、IR の収録、Tracking の対応機器、**書き出し時の注意表示**（Monitor 用であること）は画面側。
+
+### 音程エンジン（VO01・VO02・VO03・VO06 が共有、`core/include/sw/pitch_engine.hpp`）と VO01 Tune の設計
+
+- **音程エンジン。** 仕様書どおり「ピッチ検出＋時間領域の波形重ね合わせ、フォルマントは保持」：
+  - **`PitchAnalyzer`：** 入力をリングに入れ、128 サンプルごとに YIN 型の周期推定（12 kHz に間引いた複製で粗く、フルレートで 0.05 サンプルまで精密化：正規化相関＋放物線補間）。周期の履歴（周期・有声か）を持つ。**1 周期ずつ離した「印」**を置く（前の印から 1 周期先を、1 周期ぶんの波形が前の周期と最もよく合う位置 ±P/20 に動かす：どの周期でも同じ位相に置ける）。無声のときは 5 ms ごと。倍音が強い母音で倍の周波数に誤る（オクターブ誤り）対策：しきい値を 0.05 に絞り、見つからないときは最小値の 1/2・1/3・1/4 のラグが同じくらい深ければそちらを採る。
+  - **`PsolaSynth`：** 合成の印を P/ratio 間隔で置き、最も近い解析の印のまわりから、`windowPeriods`（2）周期のハン窓の粒を切り出し（フォルマント係数で読み出しの速さを変えるので、スペクトル包絡がその倍率で動く）、重ねて足す。**各サンプルで窓の和で割る**（粒の重なりの量にレベルが左右されない）。粒の位相が隣と違うことによる損失（ピッチの移動が大きいと最大 −3.5 dB）は、入力のレベルに合わせる遅い利得（80 ms、±6 dB まで）で戻す。無声は ratio 1（入力が遅れて戻る）。**印ごとに 1 回だけ `RatioSource` に聞く。**
+  - **遅延（仕様書の見積もり 512 サンプルとは違う）：** 粒の右半分と音程の窓（2×最長周期）が入っている必要があるので、**遅延 ＝ 窓周期 × 最長周期 ÷ 2 ＋ 最長周期 ＋ 2 ホップ＋64 ＝ 1450 サンプル（30 ms@48 kHz、85 Hz まで）**。仕様書の 512 は設計上の見積もりで、低い男声の 1 周期（85 Hz で 565 サンプル）が入らないため満たせない。85 Hz 未満は動かさない。
+  - 単体テスト（`tests/test_pitch_engine.cpp`）：周期を 0.15 サンプル以内で当てる（100〜660 Hz）、ノイズ・無音は無声、印の間隔は 1 周期、ratio 1 で入力が戻る（相関 0.95 超）、ratio 0.5〜2 で基本周波数が ±0.4 %、フォルマントが Keep で動かず Follow で倍率どおり動く、滑る声とノイズが有限でレベルを保つ。CPU は 256 サンプルで平均 約 0.4 ms（7 %）。
+- **`PitchCorrector`（`sw/pitch_correct.hpp`、VO01・VO02 共通）。** 測った音高 m（半音）、歌い手のゆっくりした音高 c（時定数 120 ms）、音階の最寄りの音 n（40 ms の平均から選び、0.2 半音のヒステリシス）、補正した中心 cc（Speed の時定数で n へ）、ビブラート v ＝ m − c。**出力 ＝ cc ＋ 0.6×Humanize×(c − n) ＋ kV×v ＋ Transpose**（kV：Natural 1／Reduce 0.4／Flat 0）、ratio ＝ 2^((出力 − m)/12)。Formant：Follow なら ratio、Keep なら 1。
+- **VO01 の ID。** 仕様書の順に `vo01.view／scale／speed／humanize／vibrato／formant／transpose／detectmidi／snap／reference`、末尾に追加：`vo01.key`（12 種：仕様書の「キーは 12 種」）、`vo01.customscale`（Custom 用の音のビット、自動化不可）。Scale は Major／Chromatic／Custom（「C major」の表示は Key＋Scale）。Speed は 0〜400 ms（Skew k ＝ 2）。
+- **実測（テスト）。** 235 Hz（58.1 半音）は C メジャーで B（59）へ、226 Hz は A（57）へ（±0.08 半音）。Chromatic で 228 Hz → A#。Key（D メジャー）や Custom（C と G だけ → 220 Hz が G）も動く。Transpose +7 で 66.0 ±0.1。Speed 0 なら 0.1 s 後に新しい音へ、300 ms なら 0.1 s 後はまだ動かず 1.2 s 後に着く。Vibrato：±0.6 半音のビブラートの標準偏差が Natural で 0.25 超、Reduce で Natural の 0.6 倍未満、Flat で 0.35 倍未満。Humanize 0／50／100 % で 0.4 半音の誤差が 0／0.12／0.24 半音残る。Formant の Keep／Follow、無声ノイズの素通し（±1 dB）、Graph（補正なし）も確認。
+- **View／Detect MIDI／Snap to grid／Reference は画面・MIDI・ARA が要るので、保存だけで効かない**（Graph は補正なしの Auto）。トラックはモノ（ステレオ入力は和にして、左右同じ音を出す）。Mix は無い。
+- **進化機能（キー検出、区分 B）。** 聞いた音の高さのクラス（30 秒で薄まる時間重みのヒストグラム）を Krumhansl–Schmuckler のメジャーの型と 12 のキーで相関させ、`suggestedKey()` と確からしさを出す（提案だけ、Scale は書き換えない）。テスト：E メジャーの旋律で E（4）、確からしさ 0.6 超、無音では 0。
 
 ### CS04 の注意
 
