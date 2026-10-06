@@ -60,6 +60,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW DL03 Bbd | バケツリレー素子（BBD）のアナログディレイ。Time（クロックと帯域が連動）、Feedback、Mod depth／rate、Grit、Mix、Sync | 設計値は README「DL03 Bbd の設計」。Sync は実テンポでの最近傍の音符（既定 Off）。Δ ボタンの有無は画面で確認 |
 | SW DL04 Multitap | 6 タップのディレイ。タップごとに On／Time／Level／Pan／Filter、Feedback、Mix、Sync、Ping-pong | 設計値は README「DL04 Multitap の設計」。Sync は Time を 120 bpm の ms と読み最近傍の音符に寄せる。Δ ボタンは無い（仕様書の要確認）。clap-validator の denormals 警告が時々出る（既知の偏り） |
 | SW DL05 Reverse | 逆再生・順再生・ランダムの粒ディレイ。Mode、Time（音符 1/16〜2 小節）、Grain size、Spray、Pitch +12、Freeze、Mix。拍位置があれば区間境界を小節線にそろえる | 設計値は README「DL05 Reverse の設計」。Δ ボタンは無い（仕様書の要確認） |
+| SW MD01 Chorus | BBD 風のコーラス。Mode（I／II／I+II）、Rate、Depth、Width（左右の LFO 位相 0〜180°）、Tone、Mix。Wide ではモノの和で揺れが打ち消し合う | 設計値は README「MD01 Chorus の設計」。Δ ボタンの有無は画面で確認 |
+| SW MD02 Flanger | フランジャー。Rate（Sync で音符長）、Depth、Feedback ±100 %、Manual、Through zero（報告遅延 480／0）、Sync、Mix | 設計値は README「MD02 Flanger の設計」。Sync 時の LFO 位相は小節線にそろえる。Δ ボタンは無い（仕様書の要確認） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -436,6 +438,21 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **拍位置（EVO）。** 区間の境界は始めは自由に回るが、ホストが再生中で小節の位置を教えるとき（`setTransport`）は「次の小節線 − k × P」にそろえる（拍頭で逆再生が始まる）。テスト：120 bpm、小節線まで 0.3 拍 → 境界は 7200 ＋ 24000 k サンプル（再生していなければ従来どおり 24000 k）。
 - **Pitch +12。** 粒を 2 倍速で読む。**読み出し位置の動きは「粒から粒へ rate × hop」にそろえてある（そうしないと重なる粒の位相が合わず、音が消える）：** Reverse は s0 ＝ 現在 − (1＋rate) × u（u ＝ 境界からの時間）、Forward は遅れが縮むので P/(2(rate−1)) ごとに P に戻す（遅れは P と P/2 の間を行き来する）。テスト：440 Hz の正弦が 880 Hz に出る（Forward は 20 dB 以上、Reverse は 15 dB 以上、440 Hz より大きい）。Spray が 0 でないと粒ごとの位相がばらつくので、既定（30 %）では「粒状の質感」が付く。
 - **Freeze。** 録音を止め、その瞬間までの P 秒に読み出しを巻き付ける（Reverse なら逆向きにぐるぐる回る）。解除すると、その間のリングの内容は使わない（無音扱い）。テスト：入力が止まって 6 秒後でもレベルが −30 dB より大きい（Freeze なしは −100 dB 未満）。
+
+### MD01 Chorus の設計（仕様書に数値がない部分）
+
+- **構成。** 左右それぞれ、中心 7 ms の変調遅延（4 点 Hermite 補間）。変調幅 dev ＝ Depth ÷ 10 × 3 ms × （Mode I：0.6、II：1.0）、波形は三角波。出力は遅延音だけ（Mix は共通の枠、既定 50 %）。遅延 0。
+- **Mode（設計値）。** I：1 つの声、LFO ＝ Rate。II：1 つの声、LFO ＝ 1.6 × Rate。I+II：両方の声（II の位相を 90° ずらす）を各 1/√2 で足す。
+- **Width（Mono〜Wide、既定 100 %）。** **右の LFO の位相を左に対して 0°〜180° ずらす**（Mono ＝ 左右同じ、Wide ＝ 逆向き）。テスト：左右の揺れの相関 ＋1.0／0／−1.0（Width 0／50／100 %）。
+- **モノ互換（EVO 相当の常時構成）。** Wide では左右の揺れが逆向きなので、L＋R では 1 次の揺れ（ピッチの変動）が打ち消し合う。テスト：Rate 5 Hz、Depth 10、1 kHz の正弦で、片側のサイドバンド（±5 Hz）が搬送波に対して −30 dB より大きいのに、L＋R では 20 dB 以上小さくなる（Width 0 では打ち消されず、モノの和でも 15 dB 以上大きい）。
+- **Tone と BBD 風。** Tone（Dark〜Bright）＝ 遅延音のローパス 2.5 kHz〜14 kHz（LOG、2 次）、120 Hz のハイパス、BBD のヒス（−78 dBFS、**入力がある間だけ**入る：無音は無音）。Tone 100 と 0 で 9 kHz は 12 dB 以上差が出る（テスト）。
+
+### MD02 Flanger の設計（仕様書に数値がない部分）
+
+- **構成。** 遅延線を d(t) で読み、入力に Feedback ×（リミッタ L·tanh(x/L)、L ＝ 4）を足して書き戻す（Feedback −100〜+100 %、小信号の利得 1、100 % の大音量ノイズでも暴走しない：テスト）。右の LFO は左より 90° 遅れ（設計値）、波形は正弦。出力は遅延音だけ（Mix は共通の枠、既定 50 %）。
+- **Through zero なし。** d ＝ Manual × 2^(1.5 × Depth × sin)：中心が Manual、Depth 70 % で最大／最小 ＝ 2^2.1 ≒ 4.3（テスト：2^(3×0.7) ±0.1）、Depth 100 % で 1/2.83〜2.83 倍。遅延 0。
+- **Through zero（EVO、`md02.evo.on`、既定 On）。** 共通の枠が原音を 10 ms（480 サンプル@48 kHz）遅らせ（報告遅延 480、Off なら 0）、d ＝ 10 ms ＋ Manual × Depth × sin。**遅延音が原音の経路より後から前へ、また後へと交差する**（Depth 100 %、Manual 3 ms で 336〜624 サンプル：原音の 480 をまたぐ、テスト）。Depth 0 では遅延音が原音とぴったり同じ 480 サンプル。報告遅延は「次の prepare で使う値」（CLAP では変更にホストの再起動が必要）で、動作中のコアは prepare 時の値を使い続ける。
+- **Sync。** LFO の周期を音符長にする：Rate（Hz）を周期（120 bpm での秒）と読んで最も近い音符長に寄せ、ホストのテンポで鳴らす（既定 0.2 Hz ＝ 5 s → 2 小節 ＝ 4 s、Rate 2 Hz → 1/4：90 bpm なら 1.5 Hz、テスト）。テンポが無いときは Hz。**再生中で小節線が分かるときは LFO の位相を「次の小節線 − k 周期」にそろえる**（`setTransport`、仕様書の「テンポ同期した Through zero の掃引」）。再生していなければ 0 から自由に回る。
 
 ### CS04 の注意
 
