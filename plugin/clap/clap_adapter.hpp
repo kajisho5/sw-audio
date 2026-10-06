@@ -25,6 +25,12 @@
 
 namespace sw::clapad {
 
+// cores with hidden state that must be saved with the project (SA02's per-instance seed) implement
+// saveExtra(std::vector<uint8_t>&) and loadExtra(const uint8_t*, size_t); it is appended to the state ("SWX1", length, bytes)
+template <class C, class = void> struct HasExtraState : std::false_type {};
+template <class C>
+struct HasExtraState<C, std::void_t<decltype(std::declval<C&>().saveExtra(std::declval<std::vector<uint8_t>&>()))>> : std::true_type {};
+
 // cores that write a parameter themselves (MS05 Ride) implement takeParamWrite(id, plain): bit 0 begin gesture, bit 1 value, bit 2 end gesture
 template <class C, class = void> struct HasParamWrite : std::false_type {};
 template <class C>
