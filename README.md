@@ -56,6 +56,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW RV07 Early | 初期反射だけのリバーブ。Use／Distance／Angle／Room size／Wall。直接音は遅らせない | 仕様書どおり Mix なし。設計値は README「RV07 の設計」。Δ ボタンなし |
 | SW RV08 Gated | ゲートリバーブ。Size／Gate time／Threshold／Shape／Tone／Mix、Snare key（検出をスネア帯域に絞る） | 設計値は README「RV08 Gated の設計」。被り学習は UI と一緒に作る（CS02 と同じ扱い）。Δ ボタンの有無は画面で確認 |
 | SW DL01 Echo | 3 種の音色（Tape／Analog／Digital）のエコー。Time（Sync で音符長）、Feedback 0〜110 %、ループ内 HPF／LPF、Depth／Rate、Ping-pong、Duck、Mix | 設計値は README「DL01 Echo の設計」。Sync は Time のつまみ位置を 18 の音符長に割り当て（既定 375 ms 位置は 1/4 付点）。画面パネル表記の確認（Hybrid echo processor／Tape delay）と Δ ボタンは未決 |
+| SW DL02 Tape Echo | 3 ヘッドのテープエコー。Heads、Rate（Slow〜Fast）、Intensity 0〜110 %、Bass／Treble、Wear（高域劣化・ワウ・ドロップアウト）、Mix | 設計値は README「DL02 Tape Echo の設計」。ループ内の飽和は SA01 の履歴モデルではなく tanh に簡略化。Heads 切替は 10 ms、再生中は小節線まで待つ（プラグイン層に setTransport を追加）。Δ ボタンの有無は画面で確認 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -393,6 +394,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Ping-pong。** 左の線だけが入力を受け、左の返りは右の線へ、右の返りは左の線へ入る（1 回目の返りは左、2 回目は右。テスト）。Off では左右が別々にエコー。
 - **Sync。** 仕様書は「Time は Sync 時 1/64〜2 小節」としか書いていないため、**Time のつまみの位置を 18 個の音符長（1/64〜2 小節、3連・付点つき。`sw/notes.hpp`）に等分で割り当てる**（今後の DL04／DL05 等と共通）。ホストのテンポが無いときは Time（ms）のまま。既定の 375 ms の位置は 1/4 付点（120 bpm で 750 ms）になる（画面の 375 ms と一致しない）。
 - **Duck。** 入力（左右の平均）が −40〜−10 dBFS の間で 0→全量、返りを Duck dB まで下げる（10 ms で下げ、250 ms で戻す）。実測：12 dB 設定で定常ノイズ中 −12 ±1.5 dB、入力が止まれば戻る。Duck の ID は `dl01.duck`（量を持つため `evo.on` ではない）。
+
+### DL02 Tape Echo の設計（仕様書に数値がない部分）
+
+- **構成。** テープ 1 周：録音 ＝ 低域・高域シェルフ ← ローパス ← 飽和 ← 入力＋Feedback、遅延線を 3 つのヘッドが t・2t・3t（t ＝ Rate）で読む。Heads で聞こえるヘッドを選び（1／2／3／1+2／2+3／All、既定 1+2）、出力 ＝ 合計 ÷ √（ヘッド数）、帰還 ＝ 聞こえているヘッドの平均 × Intensity（0〜10 ＝ 0〜110 %。テスト：Intensity 3／6／9 で 2 回目の返りが 1 回目の × 0.33／0.66／0.99 ±1.5 dB）。Mix は共通の枠（既定 25 %）。遅延 0。
+- **Rate。** 1 つ目のヘッドの遅延 50〜200 ms、LOG。「Slow〜Fast」なので **Slow（左端）＝ 200 ms、Fast（右端）＝ 50 ms**（`reversed`、中央 100 ms）。変えると 0.15 s で追従する（ピッチが滑る）。
+- **テープの速度と帯域（設計値）。** ヘッドギャップのローパス（2 次）＝ 9 kHz × √(100 ms ÷ t) × (1 − 0.06 × Wear)。速い（t が短い）ほど明るい（テスト：50 > 100 > 200 ms で各 2 dB 以上）。飽和は tanh（小信号の利得 1、SA01 のヒステリシスは流用せず簡略化）。**仕様書は「SA01 のテープ飽和を流用」だが、1 周ごとに通る反復ループで SA01 の履歴モデル（2× OS）を持つと CPU が増えるので、ループ内は tanh に簡略化した**（SA01 そのものを通す版は必要なら別途）。
+- **Bass／Treble。** 200 Hz のロー・シェルフと 3 kHz のハイ・シェルフ（±6 dB、ループ内で毎周かかる）。
+- **Wear（EVO、0〜10、既定 3、ID は `dl02.wear`）。** ひとつの量で、高域の劣化（上の式）、ワウ（0.12 ms × Wear、0.55／1.37 Hz）、フラッター（0.006 ms × Wear、9.1 Hz。ヘッドの遅延は距離に比例して揺れる）、ドロップアウト（Wear 2 超で毎秒 (Wear−2)×0.375 回、20〜60 ms、4〜10 dB の落ち込み）を同時に動かす。テスト：Wear 10 で 8 kHz が Wear 0 より 6 dB 以上低い、1 kHz の搬送波が 1 dB 以上減る（サイドバンドへ）、20 秒の 300 Hz で 10 ms 窓の最大最小差が Wear 0 で 0.3 dB 未満、Wear 10 で 3 dB 超。
+- **Heads の切替。** 10 ms の直線で入れ替える（テスト：10 %〜90 % が 6.5〜9.5 ms）。**ホストが再生中で小節位置（拍子・小節の頭）を教えるときは、次の小節線まで待ってから切り替える**（そのためにプラグイン層へ `setTransport(playing, 次の小節線までの拍数)` を追加：全製品に影響しない任意の呼び出し）。再生していない・小節位置が無いときは即座に 10 ms で切り替える。
 
 ### CS04 の注意
 
