@@ -75,6 +75,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
 | SW VO01 Tune | ピッチ補正（Auto）。PSOLA の音程エンジン＋Scale／Key／Speed／Humanize／Vibrato／Formant／Transpose、キー検出の提案。遅延は 1450 サンプル（仕様書の見積もり 512 は低い男声の 1 周期が入らず満たせない） | 設計値は README「音程エンジンと VO01 Tune の設計」。Graph 編集・Detect MIDI・Snap・Reference は画面／MIDI／ARA が要るので保存だけ。Δ ボタンは無い（仕様書の要確認） |
 | SW VO02 Tune Rt | ライブ向けのピッチ補正。Key（12）、Scale（Maj／Min／Chr）、Speed（Slow〜Hard）、Humanize、Formant（母音だけ動かす）、Mix。不安定な区間は補正を弱める。遅延 1085 サンプル | 設計値は README「VO02 Tune Rt の設計」。遅延は仕様書の見積もり 128 サンプルとは違う（110 Hz 以上限定の短縮版でも 1 周期ぶん要る）。Key の ♯・♭は 12 段にした |
+| SW VO03 Harmony | ハーモニー 4 声（Scale／Fixed／MIDI は Scale 同等）、Interval ±7 度、Level・Pan・Formant・Humanize・Delay。遅延 1450 サンプル | 設計値は README「VO03 Harmony の設計」。遅延は仕様書の見積もり 512 サンプルとは違う。MIDI 入力は未実装（Scale と同じ動作）。Key／Scale は末尾に追加 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -576,6 +577,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **遅延（仕様書の見積もり 128 サンプルとは違う）：1085 サンプル（22.6 ms@48 kHz）。** 同じ理由（粒の右半分と音程の窓が入る前に出せない）で、周期の短い高い声（110 Hz 以上）に限って短くしてある。**110 Hz 未満は動かさない。** 128 サンプルにするには別の方式（因果的な粒、検出の短縮）が要る。
 - **パラメータ。** Key（12）、Scale（Maj／Min（自然短音階）／Chr）。**Speed は Slow〜Hard ＝ 100〜0 ms（Skew k ＝ 2、つまみが逆向き。中央が 25 ms ＝ 既定）。** Humanize 0〜10（VO01 の 0〜100 %）、既定 3。**Formant −3〜+3（半音相当）：声の母音だけを動かし、音高は動かさない**（テスト：基本周波数が同じで、エネルギーが 700 Hz から 700×2^(3/12) Hz へ移る）。Mix は 0〜100 %。ビブラートは残す（Natural）。
 - **音階の切り替わり。** 新しい音に移ったとき、ビブラートを取り出すためのゆっくりした中心を歌い手の位置から始め直す（音の段差をビブラートと誤って残さない。VO01 の実測を直した：Natural でもステップ後に 0.5 半音程度の戻りに収まる）。
+
+### VO03 Harmony の設計（仕様書に数値がない部分）
+
+- **構成。** 音程の解析（`PitchAnalyzer`）は 1 つを共有し、ハーモニー 4 声それぞれが `PsolaSynth`＋`PitchCorrector`（Speed 15 ms、ビブラートは残す）＋遅延リングを持つ。**原音（リード）は遅延を揃えて中央にそのまま通す**。Mix は無い（仕様書の表のとおり。リードとハーモニーの比は各声の Level で決める）。
+- **Source。** Scale（既定）：Key／Scale（Major／Minor）に対する度数で、歌い手の音から Interval 度ぶん上下の音階音へ動かす。Fixed：Interval を長音階の度数の半音数（2度＝2、3度＝4、5度＝7 …）として固定の半音で動かす。**MIDI は MIDI 入力がアダプターにまだ無いため Scale と同じ動作**（保存用の値だけ持つ）。Key／Scale は仕様書の表に無く、**末尾に追加したパラメータ**（`vo03.key`、`vo03.scale`）。
+- **Interval −7〜+7 度。** 既定は +2（3度上）、+4（5度上）、−2（3度下）、+7（オクターブ上）。1・2 声目だけ On。Level −60〜0 dB（既定 −3）、Pan −100〜+100（既定 −40／+40／−70／+70、定電力）、Formant ±3 半音、Delay 0〜100 ms（既定 15）。
+- **Humanize。** 声ごとの遅いランダムな音高の揺れ（2 つの遅い正弦波＋なめらかなノイズ）、**±30 cents × Humanize**。テスト：Humanize 100 では音高の標準偏差が 6 cents 超（実測は 0.25 倍のとき 5.9 cents、0.3 倍に上げて 6 超）、0 では 4 cents 未満。
+- **遅延：1450 サンプル（30.2 ms@48 kHz）**。VO01 と同じ理由・同じエンジン（仕様書の見積もり 512 サンプルとは違う）。
+- 入力がステレオのときは L/R を足してモノで解析する。出力はステレオ。
 
 ### CS04 の注意
 

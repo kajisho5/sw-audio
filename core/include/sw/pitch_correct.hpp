@@ -12,6 +12,20 @@
 
 namespace sw {
 
+// the note `deg` steps of the scale above (deg > 0) or below (deg < 0) `note` (MIDI), counting only notes the mask allows
+inline int stepScale(uint16_t mask, int note, int deg) {
+    if (deg == 0 || mask == 0) return note;
+    const int dir = deg > 0 ? 1 : -1; int cnt = deg > 0 ? deg : -deg, x = note;
+    for (int guard = 0; cnt > 0 && guard < 200; ++guard) { x += dir; if ((mask >> (((x % 12) + 12) % 12)) & 1) --cnt; }
+    return x;
+}
+// the interval of `deg` degrees of a major scale in semitones (+-1 octave = +-7 degrees): the fixed intervals of VO03
+inline int majorDegreeSemitones(int deg) {
+    static const int major[7] = {0, 2, 4, 5, 7, 9, 11};
+    const int oct = deg >= 0 ? deg / 7 : -((-deg + 6) / 7), idx = deg - 7 * oct;
+    return 12 * oct + major[idx];
+}
+
 inline uint16_t scaleBits(int type, int key) {   // type 0 major, 1 natural minor, 2 chromatic; bit k = the note k semitones above C is allowed
     static const int major[7] = {0, 2, 4, 5, 7, 9, 11}, minor[7] = {0, 2, 3, 5, 7, 8, 10};
     uint16_t m = 0;
@@ -26,6 +40,9 @@ public:
         uint16_t mask = 0x0AB5;       // C major
         double speedMs = 20.0, humanize = 0.4, vibrato = 1.0, formantSemis = 0.0, transpose = 0.0, strength = 1.0;
         bool formantFollow = false, enabled = true, weakenWhenUnstable = false;
+        // harmony voices: the target is the note `degrees` scale steps from the singer's note (harmonyDegrees) or a fixed interval above it (harmonyFixed, semitones); extraSemis: a drift added to the output
+        int harmonyMode = 0;        // 0 off (correction), 1 degrees, 2 fixed
+        int harmonyDegrees = 0; double harmonyFixed = 0.0, extraSemis = 0.0;
     };
     void setSettings(const Settings& s) { s_ = s; }
     const Settings& settings() const { return s_; }
@@ -41,12 +58,13 @@ public:
         c_ += kc * (m - c_);
         if (!haveN_ || std::abs(m - cn_) > 1.5) cn_ = m; else cn_ += kn * (m - cn_);
         haveN_ = true;
-        const int n = nearestNote(cn_);
-        if (n != lastN_) { if (lastN_ != -1000) c_ = cn_; lastN_ = n; }   // a new note: the slow centre starts from where the singer is, so the step is not mistaken for vibrato
+        const int nSinger = nearestNote(cn_);
+        const int n = s_.harmonyMode == 1 ? stepScale(s_.mask, nSinger, s_.harmonyDegrees) : s_.harmonyMode == 2 ? nSinger + static_cast<int>(std::lround(s_.harmonyFixed)) : nSinger;
+        if (nSinger != lastN_) { if (lastN_ != -1000) c_ = cn_; lastN_ = nSinger; }   // a new note: the slow centre starts from where the singer is, so the step is not mistaken for vibrato
         const double tau = s_.speedMs * 0.001;
         if (tau <= 1e-6) cc_ = n; else cc_ += (n - cc_) * (1.0 - std::exp(-dt / tau));
         const double v = m - c_;
-        const double out = cc_ + 0.6 * s_.humanize * (c_ - n) + s_.vibrato * v + s_.transpose;
+        const double out = cc_ + 0.6 * s_.humanize * (c_ - nSinger) + s_.vibrato * v + s_.transpose + s_.extraSemis;
         double strength = s_.strength;
         if (s_.weakenWhenUnstable) { if (std::abs(m - prevM_) > 2.5) unstable_ = 4; if (unstable_ > 0) { strength *= 0.3; --unstable_; } }
         prevM_ = m; lastOut_ = out; lastM_ = m;

@@ -81,6 +81,7 @@
 #include "st06/st06.hpp"
 #include "vo01/vo01.hpp"
 #include "vo02/vo02.hpp"
+#include "vo03/vo03.hpp"
 
 namespace {
 template <class C, class = void> struct HasTempo : std::false_type {};
@@ -193,3 +194,4 @@ TEST_CASE("fuzz parameter bounds: st05") { fuzzBounds<sw::st05::Processor>(sw::s
 TEST_CASE("fuzz parameter bounds: st06") { fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 17u); fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: vo01") { fuzzBounds<sw::vo01::Processor>(sw::vo01::specs(), 17u); fuzzBounds<sw::vo01::Processor>(sw::vo01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: vo02") { fuzzBounds<sw::vo02::Processor>(sw::vo02::specs(), 17u); fuzzBounds<sw::vo02::Processor>(sw::vo02::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: vo03") { fuzzBounds<sw::vo03::Processor>(sw::vo03::specs(), 17u); fuzzBounds<sw::vo03::Processor>(sw::vo03::specs(), 29u); }
