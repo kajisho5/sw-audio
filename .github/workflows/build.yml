@@ -20,10 +20,17 @@ jobs:
         include:
           - os: windows-latest
             validator_zip: windows.zip
-          - os: macos-latest
-            validator_zip: macos-universal.zip
+            shard: 0
+            shards: 1
+          # macOS compiles the AUv2 / VST3 wrapper sources again for every product: spread the products over 4 runners
+          - {os: macos-latest, validator_zip: macos-universal.zip, shard: 0, shards: 4}
+          - {os: macos-latest, validator_zip: macos-universal.zip, shard: 1, shards: 4}
+          - {os: macos-latest, validator_zip: macos-universal.zip, shard: 2, shards: 4}
+          - {os: macos-latest, validator_zip: macos-universal.zip, shard: 3, shards: 4}
           - os: ubuntu-22.04
             validator_zip: ubuntu-22.04.zip
+            shard: 0
+            shards: 1
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     defaults:
@@ -39,9 +46,23 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --config Release --parallel 4
+        run: |
+          if [ "${{ matrix.shards }}" = "1" ]; then
+            cmake --build build --config Release --parallel 4
+          else
+            # this shard's products (every Nth sw_add_plugin line) + the unit tests on shard 0
+            T=""; i=0
+            for c in $(grep -o 'sw_add_plugin([a-z][a-z0-9]*' CMakeLists.txt | sed 's/sw_add_plugin(//'); do
+              if [ $((i % ${{ matrix.shards }})) = ${{ matrix.shard }} ]; then T="$T sw-$c-plugin sw-$c-plugin_vst3 sw-$c-plugin_auv2"; fi
+              i=$((i + 1))
+            done
+            [ "${{ matrix.shard }}" = "0" ] && T="$T sw-tests"
+            echo "targets:$T"
+            cmake --build build --config Release --parallel 4 --target $T
+          fi
 
       - name: Unit tests
+        if: matrix.shard == 0
         run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Validate CLAP (clap-validator)
@@ -91,5 +112,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sw-audio-${{ runner.os }}
+          name: sw-audio-${{ runner.os }}-${{ matrix.shard }}
           path: dist
