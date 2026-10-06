@@ -69,6 +69,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD07 Ensemble | ストリングアンサンブル風の多重コーラス。Voices（2／3／4／6）、Spread、Rate、Depth、Tone、Mix。声の位相を等間隔に置き、モノの和で 1 次の揺れが打ち消し合う | 設計値は README「MD07 Ensemble の設計」。Δ ボタンの有無は画面で確認 |
 | SW ST01 Imager | 4 帯域のステレオ幅調整（LR4 分割、帯域ごとに S を 0〜200 %）。Crossover 1〜3、Mono check（監視用）、帯域ごとの相関メーターと広げすぎの印 | 設計値は README「ST01 Imager の設計」。画面の描画は UI の作業。Δ ボタンは無い（仕様書の要確認） |
 | SW ST02 Mid Side | M/S のレベルと音色。Mid level／Side level ±12 dB、Side HPF、Side air、Mid low、Encode（M/S のまま入出力） | 設計値は README「ST02 Mid Side の設計」。参照曲との M/S バランス比較（区分 B）は画面側 |
+| SW ST04 Center | センターと広がりと Haas。Center（S を +6 dB〜−∞）、Haas 0〜40 ms（遅らせる側を選ぶ）、Low center、Balance、Link、Mono safe（モノの和の櫛形の落ち込みを自動で浅く） | 設計値は README「ST04 Center の設計」。Link の意味は仕様書にないため設計値（遅れ 1 ms あたり +0.35 dB）。確認が要る |
 | SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
@@ -520,6 +521,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **構成。** M ＝ (L＋R)/2 には触れず、S ＝ (L−R)/2 だけに Frequency（20〜300 Hz、既定 120 Hz）の**ハイパス**（Slope 6／12／24／48 dB/oct ＝ 1 次／2 次 1 段／2 次 2 段（4 次）／2 次 4 段（8 次）、Butterworth）をかけ、Side boost（Frequency の 1 オクターブ上から効くハイシェルフ ±6 dB）、L ＝ M＋ S′、R ＝ M − S′、Output ±10 dB。Mix は無い。遅延 0。
 - **実測（テスト）。** 角（Frequency）で S が −3.01 dB ±0.3（どの Slope でも）、1 オクターブ下で Butterworth の理論値 ±0.7 dB、M は 30／120 Hz でも ±0.01 dB。Frequency 未満では出力がモノ（L と R の差 −40 dB 以下、200 Hz・48 dB/oct）。Frequency を 30／120／300 Hz に動かすと角も動く。
 - **Listen（EVO、監視用、Auto 不可）。** 「モノにして消える成分」＝ Frequency 未満の S だけを両チャンネルに出す（同じ次数のローパス：40 Hz の側音がほぼそのまま、4 kHz は −40 dB 以下、M は無音）。
+
+### ST04 Center の設計（仕様書に数値がない部分）
+
+- **構成。** M ＝ (L＋R)/2、S ＝ (L−R)/2。**Center（Wide〜Focus、0〜100 %、既定 50 ＝ 中央）は S のゲイン：** 左半分は +6 dB から 0 dB（6×(1−x/50) dB）、右半分は 0 dB から −∞（20 log10(1−(x−50)/50)、100 % ＝ モノ）。M は動かない（テスト：0／25／50／75 % で S が +6／+3／0／−6.02 dB）。Mix は無い。遅延 0。
+- **Low center（0〜10、0 ＝ Off、設計値：20×15^(v/10) Hz ＝ 26〜300 Hz）。** S に 4 次のハイパス（その周波数より下はモノ）。角で −3 dB、M は触らない（テスト：v ＝ 2／5／10）。
+- **Haas（0〜40 ms、Skew k ＝ 2）。** 選んだ側（Side：L／R）を遅らせる（4 点 Hermite、30 ms で追従）。テスト：5／10／25 ms でぴったりそのサンプル数、反対側は 0。
+- **Link（既定 On）。** 仕様書は「Link」の意味を書いていない。**設計値：Haas で遅らせた側のレベルを遅れ 1 ms あたり 0.35 dB（最大 +6 dB）持ち上げて、先に届く側に像が引かれるのを和らげる**（Off なら補正なし）。確認が要る（README の注意）。
+- **Balance（L〜R、±100 %）。** 線形：大きい側はそのまま、反対側を 0 まで下げる（テスト：+50 % で左が 0.5 倍）。
+- **進化機能 Mono safe（`st04.evo.on`、既定 Off、区分 A）。** 遅らせた側をモノに足すと、最初のノッチの深さは 20 log10((1−r)/(1+r)) dB（r ＝ 遅らせた側／反対側のレベル比）。**−10 dB より深いとき（r ＞ 0.52）、r ＝ 0.52（−5.7 dB）まで遅らせた側を下げ、その側に 20 kHz × (0.52/r)² のローパス（3 kHz 以上）をかける。** テスト：5 ms・等レベルでモノの和の 100 Hz の落ち込みが −25 dB 未満（Off）から −10 dB ±1.5（On）に、12 kHz は 10 dB 以上下がる。`monoCombDepthDb()` と `delayedSideGainDb()` を画面用に出す。
 
 ### CS04 の注意
 
