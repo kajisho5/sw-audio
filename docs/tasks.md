@@ -8,7 +8,7 @@
 1. **CI を通す。** `.github/workflows/build.yml`（Windows MSVC／macOS ユニバーサル＋AU／Linux）はまだ一度も動かしていない。失敗したら直す。Mac 版（AU）はここで初めてできる。
 2. ~~**アナログ出力段を仕様どおり非対称にする。**~~ 済（v0.11.1、README「Drive 段の設計」）。元の記述： 仕様書は EQ01 の Drive を「非対称ソフトクリップ1段、2× OS、音量補正つき」と定め、EQ03・EQ04 も「EQ01 と同じ出力段」。今の `core/include/sw/drive.hpp` は対称の tanh（ヘッドルーム +6 dBFS は決定事項なので維持）。偶数次倍音が出ることをテストで確かめる。
 
-## 製品（済 26・残り 113）
+## 製品（済 27・残り 112）
 
 ### EQ
 - [x] EQ01 Passive 進化版 — Contour turns the boost-and-dip trick into one knob
@@ -33,7 +33,7 @@
 - [x] DY03 Bus 進化版 — Punch keep protects transients under the glue
 - [x] DY04 Gate — Learns bleed versus hits and sets the threshold
 - [x] DY05 De-ess — Sibilance detector follows the singer's pitch
-- [ ] DY06 Vari-Mu — Time constant adapts to program density
+- [x] DY06 Vari-Mu — Time constant adapts to program density
 - [x] DY07 Snap — Snap shapes the attack independently of ratio
 - [x] DY08 Clean — Auto release reads the groove tempo
 - [ ] DY09 Transient — Split bands shape kick and cymbals separately
