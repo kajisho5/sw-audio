@@ -1,0 +1,140 @@
+code,name,line,category,chassis,material,description,evo,n_params
+CR01,Filter,STUDIO,Creative・Instrument,デジタル,,,Envelope follows the drummer's dynamics,4
+CR02,Stutter,STUDIO,Creative・Instrument,デジタル,,,Random patterns stay inside the groove,6
+CR03,Granular,STUDIO,Creative・Instrument,デジタル,,,Grains follow the harmony of the input,6
+CR04,Freeze,STUDIO,Creative・Instrument,デジタル,,,Freeze triggers on transients or MIDI,4
+CR05,Tape Stop,STUDIO,Creative・Instrument,デジタル,,,Stops land exactly on the bar line,4
+CR06,One Knob,STUDIO,Creative・Instrument,2Uラック,anodized,One knob effects,One knob drives six effects with tuned macro curves,4
+CS01,Inductor Strip,STUDIO,EQ,2Uラック,bronze,Inductor channel strip,Mic profile sets EQ and comp starting points,11
+CS02,Console Strip,STUDIO,EQ,2Uラック,anodized,Console channel strip,Gate learns drum bleed and ignores it,12
+CS03,Stepped Strip,STUDIO,EQ,2Uラック,brushed,Stepped channel strip,Auto gain staging sets the input for each source,7
+CS04,Modular Strip,STUDIO,EQ,デジタル,,,Suggests the best module order for the source,5
+DL01,Echo,STUDIO,Space・Time,2Uラック,anodized,Tape delay,Repeats duck while you sing and swell in the gaps,8
+DL02,Tape Echo,STUDIO,Space・Time,2Uラック,olive,Tape echo,"Wear simulates tape age, heads switch per bar",7
+DL03,Bbd,STUDIO,Space・Time,2Uラック,graphite,Bucket brigade delay,Grit adds clock noise to repeats only,6
+DL04,Multitap,STUDIO,Space・Time,デジタル,,,Each tap has its own filter and pan,6
+DL05,Reverse,STUDIO,Space・Time,デジタル,,,Grains follow the tempo and reverse on the beat,4
+DY01,FET 進化版,STUDIO,Dynamics・Mastering,2Uラック,brushed,FET character compressor,Bite keeps the transient while Color sets the distortion,7
+DY02,Opto 進化版,STUDIO,Dynamics・Mastering,2Uラック,olive,Optical leveler,Target rides the vocal like a hand on the fader,6
+DY03,Bus 進化版,STUDIO,Dynamics・Mastering,2Uラック,anodized,VCA bus compressor,Punch keep protects transients under the glue,8
+DY04,Gate,STUDIO,Dynamics・Mastering,500シリーズ,,500-series module,Learns bleed versus hits and sets the threshold,5
+DY05,De-ess,STUDIO,Dynamics・Mastering,デジタル,,Multiband dynamics,Sibilance detector follows the singer's pitch,4
+DY06,Vari-Mu,STUDIO,Dynamics・Mastering,2Uラック,graphite,Variable mu compressor,Time constant adapts to program density,5
+DY07,Snap,STUDIO,Dynamics・Mastering,2Uラック,anodized,Snap VCA compressor,Snap shapes the attack independently of ratio,5
+DY08,Clean,STUDIO,Dynamics・Mastering,デジタル,,,Auto release reads the groove tempo,8
+DY09,Transient,STUDIO,Dynamics・Mastering,デジタル,,,Split bands shape kick and cymbals separately,5
+DY10,Multiband 4,STUDIO,Dynamics・Mastering,デジタル,,,Auto places crossovers from the mix spectrum,8
+DY11,Multiband 6,STUDIO,Dynamics・Mastering,デジタル,,,Each band switches between compressor and dynamic EQ,8
+DY12,Parallel,STUDIO,Dynamics・Mastering,2Uラック,olive,Parallel and upward compressor,Upward mode lifts quiet detail instead of only squashing,6
+EQ01,Passive 進化版,STUDIO,EQ,2Uラック,crinkle,Passive tone shaper,Contour turns the boost-and-dip trick into one knob,8
+EQ02,Surgical 進化版,STUDIO,EQ,デジタル,,Surgical EQ,"Assist finds resonances, Unmask shows clashes with other tracks",4
+EQ03,Mid Shaper,STUDIO,EQ,2Uラック,graphite,Passive midrange shaper,Peak band rides with the vocal level automatically,7
+EQ04,Inductor,STUDIO,EQ,2Uラック,bronze,Inductor console EQ,Iron saturation scales with each band's boost,9
+EQ05,Console,STUDIO,EQ,2Uラック,anodized,Four band console EQ,Match copies the tone curve of a reference track,14
+EQ06,Stepped,STUDIO,EQ,2Uラック,brushed,Proportional stepped EQ,Stepped gains glide between steps with no zipper noise,8
+EQ07,Dynamic,STUDIO,EQ,デジタル,,,Learns each band's threshold from 5 seconds of audio,7
+EQ08,Linear,STUDIO,EQ,デジタル,,,Pre-ring guard limits linear phase smearing,4
+EQ09,Tilt,STUDIO,EQ,2Uラック,olive,Tilt tone shaper,Pivot follows the spectral center of the song,5
+GT01,Amp,STUDIO,Saturation,2Uラック,tolex,Guitar amplifier,Cleans up when you roll back the guitar volume,7
+GT02,Cab Ir,STUDIO,Saturation,デジタル,,,Drag the mic across the speaker,4
+GT03,Pedalboard,STUDIO,Saturation,デジタル,,,"Drag to reorder pedals, tuner always running",4
+GT04,Bass Amp,STUDIO,Saturation,2Uラック,tolex,Bass amplifier,DI and amp blend is phase aligned automatically,8
+GT05,Reamp,STUDIO,Saturation,2Uラック,brushed,Reamp and DI tone,Pickup model turns a DI into a different guitar,5
+IN01,Synth,STUDIO,Creative・Instrument,デジタル,,,Patch morph between two sounds,8
+IN02,Drums,STUDIO,Creative・Instrument,デジタル,,,Humanize timing by drummer style,6
+IN03,Keys,STUDIO,Creative・Instrument,デジタル,,,Pedal and hammer noise follow your playing,6
+IN04,Bass,STUDIO,Creative・Instrument,デジタル,,,Slides and ghost notes from MIDI velocity,6
+IN05,Organ,STUDIO,Creative・Instrument,デジタル,,,Drawbar settings morph with an expression pedal,5
+IN06,Sampler,STUDIO,Creative・Instrument,デジタル,,,Auto maps slices to keys by transient,6
+LO01,Low Harm,STUDIO,Saturation,デジタル,,,Phone preview checks small speaker playback,4
+LO02,Sub Gen,STUDIO,Saturation,2Uラック,anodized,Sub harmonic generator,Sub tracks the pitch of the bass note,5
+LO03,Low Focus,STUDIO,Saturation,デジタル,,,Separates kick and bass and keys them to each other,4
+LV01,Voice,LIVE,Vocal,ロードケース,,Voice strip,"One knob sets noise, EQ, comp and limit together",0
+LV02,Feedback,LIVE,—,ロードケース,,,Ring out learns fixed filters before the show,4
+LV03,Channel,LIVE,—,ロードケース,,Channel strip,Mic presets set the whole strip,12
+LV04,Safety limiter,LIVE,—,ロードケース,,,Logs every limit event with the time,3
+LV05,Auto ducker,LIVE,—,ロードケース,,,"Ducks for voices only, ignores claps and noise",4
+LV06,Stream master,LIVE,—,ロードケース,,,Rides to the platform loudness target,3
+LV07,Speech Agc,LIVE,Broadcast,ロードケース,,Speech leveler,Holds level for close and distant talkers,4
+LV08,Room Noise,LIVE,Restore,ロードケース,,Room noise suppressor,Learns HVAC and keyboard noise,3
+LV09,Hum Cut,LIVE,Restore,ロードケース,,Hum and buzz remover,Tracks mains drift live,3
+LV10,Voice Fx,LIVE,Vocal,ロードケース,,Live voice changer,Anonymous mode for interviews,4
+LV11,Mic Switch,LIVE,Broadcast,ロードケース,,Mic switch and cough,"Mutes on silence, cough button",4
+LV12,Geq 31,LIVE,EQ,ロードケース,,31 band graphic EQ,Feedback guard flags ringing bands,3
+LV13,Live Peq,LIVE,EQ,ロードケース,,Live parametric EQ,RTA overlay with peak suggestions,5
+LV14,Align,LIVE,Meter,ロードケース,,Speaker time alignment,Measures delay in one click,3
+LV15,Auto Mixer,LIVE,Broadcast,ロードケース,,Gain sharing auto mixer,Last mic hold and open mic limit,4
+LV16,Live Gate,LIVE,Dynamics・Mastering,ロードケース,,Live gate and ducker,Key filter ignores stage rumble,4
+LV17,Bus Comp,LIVE,Dynamics・Mastering,ロードケース,,Live bus compressor,Modes switch with OBS scenes,5
+LV18,Pop Guard,LIVE,Broadcast,ロードケース,,Plug and handling pop guard,Catches plug and handling pops,2
+LV19,Av Sync,LIVE,Meter,ロードケース,,Audio to video sync delay,Clap sync measures the offset,2
+LV20,Rta,LIVE,Meter,ロードケース,,Real time analyzer,Pink noise reference overlay,3
+LV21,Test Gen,LIVE,Meter,ロードケース,,Test signal generator,Output stays off until armed,3
+LV22,Polarity,LIVE,Meter,ロードケース,,Polarity checker,Instant in-phase check,1
+LV23,Loudness,LIVE,Meter,ロードケース,,Broadcast loudness meter,ARIB TR-B32 log export,0
+LV24,Live Reverb,LIVE,Space・Time,ロードケース,,Low CPU live reverb,1% CPU and ducks under speech,4
+LV25,Live Delay,LIVE,Space・Time,ロードケース,,Tap tempo live delay,"Tap or MIDI clock, tails spill over on bypass",4
+LV26,Mono,LIVE,Space・Time,ロードケース,,Mono and phase safety,Auto phase fix for mono viewers,2
+LV27,Scene Sync,LIVE,Broadcast,ロードケース,,OBS scene to preset sync,Follows OBS scenes to recall presets,0
+LV28,Remote Hub,LIVE,Broadcast,ロードケース,,Tablet remote hub,Tablet control protected by PIN,0
+LV29,Interp Mix,LIVE,Broadcast,ロードケース,,Interpretation channel mix,Ducks the floor when the interpreter talks,3
+LV30,Recorder,LIVE,Broadcast,ロードケース,,Always-on backup recorder,Always-on backup recording with markers,0
+MD01,Chorus,STUDIO,Space・Time,2Uラック,brushed,Bucket chorus,Width stays mono compatible,6
+MD02,Flanger,STUDIO,Space・Time,デジタル,,,Through-zero sweep synced to tempo,4
+MD03,Phaser,STUDIO,Space・Time,2Uラック,tolex,Phase shifter,Center frequency follows the note being played,6
+MD04,Tremolo Pan,STUDIO,Space・Time,デジタル,,,Harmonic mode splits lows and highs,4
+MD05,Rotary,STUDIO,Space・Time,2Uラック,walnut,Rotary speaker,Speed ramps follow a footswitch or MIDI,7
+MD06,Freq Shift,STUDIO,Space・Time,デジタル,,,Shift tracks pitch for even detune,4
+MD07,Ensemble,STUDIO,Space・Time,2Uラック,graphite,String ensemble chorus,Voices stay mono compatible,6
+MS01,Maximizer 進化版,STUDIO,Dynamics・Mastering,デジタル,,Mastering limiter,Lock reaches the loudness target automatically,3
+MS02,True Peak,STUDIO,Dynamics・Mastering,デジタル,,,Inter-sample peaks caught at 8x and marked on the display,4
+MS03,Multiband Limit,STUDIO,Dynamics・Mastering,デジタル,,,"Bands share one ceiling, no pumping across bands",6
+MS04,Clipper,STUDIO,Dynamics・Mastering,デジタル,,,Knee morphs from hard clip to tape-like softness,4
+MS05,Leveler,STUDIO,Dynamics・Mastering,デジタル,,,Writes the rides back as DAW automation,4
+MS06,Master Chain,STUDIO,Dynamics・Mastering,デジタル,,,"Every stage is gain matched, chain order is drag and drop",5
+MS07,Dither,STUDIO,Dynamics・Mastering,2Uラック,brushed,Dither and requantizer,Auto blank mutes dither in true silence,3
+MT01,Loudness,STUDIO,Meter,デジタル,,Loudness meter,Loudness presets for Japanese broadcast and streaming,0
+MT02,Spectrum,STUDIO,Meter,デジタル,,,Compares your mix against a reference curve,4
+MT03,Spectrogram,STUDIO,Meter,デジタル,,,Click the spectrogram to hear that band,4
+MT04,Phase Scope,STUDIO,Meter,デジタル,,,Warns before a mono problem happens,2
+MT05,Vu Ppm,STUDIO,Meter,2Uラック,brushed,VU and peak program meter,VU reference calibrated per project,1
+RS01,Denoise,STUDIO,Restore,デジタル,,,Adaptive profile updates as the noise changes,5
+RS02,Voice Isolate,STUDIO,Restore,デジタル,,,Separates voice from music and room,4
+RS03,Dehum,STUDIO,Restore,2Uラック,anodized,Hum and buzz remover,Tracks drift in the mains frequency,5
+RS04,Declick,STUDIO,Restore,デジタル,,,Every repaired click is marked on the spectrogram,4
+RS05,Declip,STUDIO,Restore,デジタル,,,Detects clipped sections automatically,4
+RS06,Dereverb,STUDIO,Restore,デジタル,,,Learns the room tail from silence,4
+RS07,Mouth Noise,STUDIO,Restore,デジタル,,,Finds mouth clicks between words,4
+RV01,Hall,STUDIO,Space・Time,デジタル,,Algorithmic reverb,Tail ducks while the dry signal is loud,10
+RV02,Plate,STUDIO,Space・Time,2Uラック,graphite,Plate reverb,Pre-delay syncs to tempo and ducks under vocals,6
+RV03,Spring,STUDIO,Space・Time,2Uラック,tolex,Spring reverb,"Drip reacts to transients, not to sustain",6
+RV04,Convolution,STUDIO,Space・Time,デジタル,,,IR length trims itself to the song tempo,6
+RV05,Chamber,STUDIO,Space・Time,2Uラック,olive,Echo chamber,Mic distance morphs the chamber realistically,6
+RV06,Shimmer,STUDIO,Space・Time,デジタル,,,Freeze holds a chord pad on demand,4
+RV07,Early,STUDIO,Space・Time,デジタル,,,Place the source in the room by dragging,4
+RV08,Gated,STUDIO,Space・Time,2Uラック,anodized,Gated reverb,Gate opens on the snare only and ignores bleed,6
+SA01,Tape,STUDIO,Saturation,2Uラック,brushed,Tape machine,Calibrate sets the tape operating level from your input,8
+SA02,Console Sum,STUDIO,Saturation,2Uラック,anodized,Console summing,Every channel gets its own analog variance,6
+SA03,Tube,STUDIO,Saturation,2Uラック,olive,Tube saturator,Bias follows input dynamics like a real tube,6
+SA04,Transformer,STUDIO,Saturation,2Uラック,bronze,Transformer and preamp color,Load reacts to the source impedance,6
+SA05,Exciter,STUDIO,Saturation,デジタル,,,Adds harmonics only where the mix lacks them,4
+SA06,Saturator,STUDIO,Saturation,デジタル,,,Dynamics makes saturation react to playing strength,7
+SA07,Lo-Fi,STUDIO,Saturation,2Uラック,tolex,Vinyl and lo-fi,"Era sets crackle, wow and bandwidth in one move",7
+SA08,Bitcrush,STUDIO,Saturation,デジタル,,,Rate locks to song tempo for rhythmic aliasing,4
+ST01,Imager,STUDIO,Space・Time,デジタル,,,Width per band with a live mono check,5
+ST02,Mid Side,STUDIO,Space・Time,2Uラック,graphite,Mid side processor,Compares mid and side balance against a reference,5
+ST03,Phase Align,STUDIO,Space・Time,デジタル,,,Auto align finds the best delay and phase,4
+ST04,Center,STUDIO,Space・Time,2Uラック,brushed,Center and Haas control,Haas with an automatic mono compatibility check,5
+ST05,Phones,STUDIO,Space・Time,デジタル,,,Calibrated profiles for common headphone models,4
+ST06,Mono Low,STUDIO,Space・Time,2Uラック,anodized,Low end mono maker,Listen solos only what becomes mono,4
+UT01,Gain,STUDIO,Meter,2Uラック,anodized,Gain and polarity utility,Remembers gain staging per track type,3
+UT02,Mono Check,STUDIO,Meter,デジタル,,,Phone speaker simulation,4
+UT03,Reference,STUDIO,Meter,デジタル,,,Loudness matched A/B so louder never wins,4
+VO01,Tune,STUDIO,Vocal,デジタル,,,Detects the key and suggests the scale,5
+VO02,Tune Rt,STUDIO,Vocal,2Uラック,anodized,Real time pitch correction,Low latency and formant safe for live singers,6
+VO03,Harmony,STUDIO,Vocal,デジタル,,,Harmony follows chords from a MIDI track,6
+VO04,Doubler,STUDIO,Vocal,2Uラック,graphite,Vocal doubler,"Doubles with natural timing, not chorus wobble",6
+VO05,Rider,STUDIO,Vocal,デジタル,,,Listens to the music and rides the vocal against it,4
+VO06,Formant,STUDIO,Vocal,デジタル,,,Shifts character while keeping timing,4
+VO07,Vocal Strip,STUDIO,Vocal,2Uラック,bronze,Vocal channel strip,"Clean, tone, dynamics and space in the right order",11
+VO08,Breath,STUDIO,Vocal,デジタル,,,Marks breaths so you choose per phrase,4

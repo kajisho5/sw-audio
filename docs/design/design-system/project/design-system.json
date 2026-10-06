@@ -1,0 +1,159 @@
+{
+ "v": 3,
+ "layout": "files",
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-05T06:44:44Z"
+ },
+ "title": "SW AUDIO Design System",
+ "namespace": "SWAudio",
+ "libraries": [],
+ "sections": {},
+ "groups": [
+  "Logo",
+  "Logos",
+  "Renders"
+ ],
+ "assetGroups": {
+  "Logos": {
+   "name": "Logo concepts (archive)",
+   "tile": "l",
+   "order": [
+    "logo-c-rack-ear.svg",
+    "logo-a-one-line-sw.svg",
+    "logo-b-seventh.svg",
+    "logo-d-dial-o.svg"
+   ],
+   "files": {
+    "logo-c-rack-ear.svg": {
+     "name": "logo-c-rack-ear.svg",
+     "blob": "0ed86717eefd55c010a09524ecdbdcbe",
+     "size": 31032,
+     "type": "image/svg+xml"
+    },
+    "logo-a-one-line-sw.svg": {
+     "name": "logo-a-one-line-sw.svg",
+     "blob": "c5afeb5c92a3e9f02713e658676480f3",
+     "size": 25201,
+     "type": "image/svg+xml"
+    },
+    "logo-b-seventh.svg": {
+     "name": "logo-b-seventh.svg",
+     "blob": "6d4a9fd361df924e91217de67a2c046b",
+     "size": 35818,
+     "type": "image/svg+xml"
+    },
+    "logo-d-dial-o.svg": {
+     "name": "logo-d-dial-o.svg",
+     "blob": "85b1f075130d31a093a4aeb84a797d66",
+     "size": 27554,
+     "type": "image/svg+xml"
+    }
+   }
+  },
+  "Renders": {
+   "name": "Rendered knobs",
+   "tile": "m",
+   "order": [
+    "knob-black.png",
+    "knob-alu.png",
+    "knob-ivory.png",
+    "knob-rubber.png"
+   ],
+   "files": {
+    "knob-black.png": {
+     "name": "knob-black.png",
+     "blob": "7965ef8aa059c0e6c648718663a42b9e",
+     "size": 40360,
+     "type": "image/png"
+    },
+    "knob-alu.png": {
+     "name": "knob-alu.png",
+     "blob": "ed4e49e8b6cb262789af6e0bd3d7b2c6",
+     "size": 36631,
+     "type": "image/png"
+    },
+    "knob-ivory.png": {
+     "name": "knob-ivory.png",
+     "blob": "2249fe0e7a5c69d9cd1c818da7ac4e9f",
+     "size": 32168,
+     "type": "image/png"
+    },
+    "knob-rubber.png": {
+     "name": "knob-rubber.png",
+     "blob": "5b5c6ffc209a0eb938905b423b0c1965",
+     "size": 27099,
+     "type": "image/png"
+    }
+   }
+  },
+  "Logo": {
+   "name": "Logo",
+   "tile": "l",
+   "order": [
+    "sw-audio-horizontal.svg",
+    "sw-audio-stacked.svg",
+    "sw-audio-studio.svg",
+    "sw-audio-live.svg",
+    "sw-audio-symbol.svg",
+    "sw-audio-symbol-small.svg",
+    "sw-audio-app-icon.svg"
+   ],
+   "files": {
+    "sw-audio-horizontal.svg": {
+     "name": "sw-audio-horizontal.svg",
+     "blob": "12d9b5aea92c4ac890e6211330616cae",
+     "size": 9929,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-stacked.svg": {
+     "name": "sw-audio-stacked.svg",
+     "blob": "a447936bd808a7d8282d36e68d5f0e15",
+     "size": 9139,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-studio.svg": {
+     "name": "sw-audio-studio.svg",
+     "blob": "8e19e35f08bd3bfb23a38e91056a4977",
+     "size": 18643,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-live.svg": {
+     "name": "sw-audio-live.svg",
+     "blob": "24fdc89dd0e9e8b29b1af5c3a1f56262",
+     "size": 12869,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-symbol.svg": {
+     "name": "sw-audio-symbol.svg",
+     "blob": "9e3b181283dce64c528f91f50bd0b589",
+     "size": 378,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-symbol-small.svg": {
+     "name": "sw-audio-symbol-small.svg",
+     "blob": "838e7ecc6badcc8d4fcbd5ed00944004",
+     "size": 382,
+     "type": "image/svg+xml"
+    },
+    "sw-audio-app-icon.svg": {
+     "name": "sw-audio-app-icon.svg",
+     "blob": "1f6eca73006190be2bd9acfeedf2cc88",
+     "size": 496,
+     "type": "image/svg+xml"
+    }
+   }
+  }
+ },
+ "blobs": {},
+ "docs": {
+  "readme": "project/README.md",
+  "sections": []
+ },
+ "lastChange": {
+  "by": "Shogo",
+  "at": "2026-10-05T07:03:13Z",
+  "via": "Claude chat",
+  "note": "Logo decided: C Rack Ear. Added final logo assets and usage rules; toolbar now shows the logo."
+ }
+}

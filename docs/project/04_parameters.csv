@@ -1,0 +1,699 @@
+code,title,line,evo,param,type,min,max,steps,shown
+CR01,CR01 Filter,STUDIO,Envelope follows the drummer's dynamics,Cutoff,digital,,,,1.2 kHz
+CR01,CR01 Filter,STUDIO,Envelope follows the drummer's dynamics,Resonance,digital,,,,60%
+CR01,CR01 Filter,STUDIO,Envelope follows the drummer's dynamics,Env amount,digital,,,,+40%
+CR01,CR01 Filter,STUDIO,Envelope follows the drummer's dynamics,Drive,digital,,,,20%
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Gate,digital,,,,60%
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Repeat,digital,,,,4x
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Pitch,digital,,,,0 st
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Reverse,digital,,,,Off
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Filter,digital,,,,4 kHz
+CR02,CR02 Stutter,STUDIO,Random patterns stay inside the groove,Mix,digital,,,,100%
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Grain,digital,,,,60 ms
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Density,digital,,,,40/s
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Spray,digital,,,,30%
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Pitch,digital,,,,+5 st
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Spread,digital,,,,Wide
+CR03,CR03 Granular,STUDIO,Grains follow the harmony of the input,Mix,digital,,,,50%
+CR04,CR04 Freeze,STUDIO,Freeze triggers on transients or MIDI,Freeze,digital,,,,Hold
+CR04,CR04 Freeze,STUDIO,Freeze triggers on transients or MIDI,Blur,digital,,,,40%
+CR04,CR04 Freeze,STUDIO,Freeze triggers on transients or MIDI,Drift,digital,,,,Slow
+CR04,CR04 Freeze,STUDIO,Freeze triggers on transients or MIDI,Mix,digital,,,,50%
+CR05,CR05 Tape Stop,STUDIO,Stops land exactly on the bar line,Stop time,digital,,,,1/2 bar
+CR05,CR05 Tape Stop,STUDIO,Stops land exactly on the bar line,Start time,digital,,,,1/8 bar
+CR05,CR05 Tape Stop,STUDIO,Stops land exactly on the bar line,Curve,digital,,,,Exp
+CR05,CR05 Tape Stop,STUDIO,Stops land exactly on the bar line,Filter,digital,,,,On
+CR06,CR06 One Knob,STUDIO,One knob drives six effects with tuned macro curves,Amount,knob,0,10,,
+CR06,CR06 One Knob,STUDIO,One knob drives six effects with tuned macro curves,Effect,selector,,,,
+CR06,CR06 One Knob,STUDIO,One knob drives six effects with tuned macro curves,Mix,knob,Dry,Wet,,
+CR06,CR06 One Knob,STUDIO,One knob drives six effects with tuned macro curves,Output,knob,-10,+10,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Drive,knob,0,10,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,HPF,selector,,,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,High,knob,-16,+16,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Mid kHz,selector,,,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Mid,knob,-18,+18,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Low,knob,-16,+16,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Thresh,knob,0,10,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Ratio,selector,,,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Release,knob,Fast,Slow,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Mix,knob,Dry,Wet,,
+CS01,CS01 Inductor Strip,STUDIO,Mic profile sets EQ and comp starting points,Output,knob,-10,+10,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Ratio,knob,1,Max,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Thresh,knob,+10,-20,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Release,knob,.1,4s,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Gate,knob,-30,+10,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Range,knob,0,40,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,HPF,selector,,,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,LPF,selector,,,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,HF,knob,-15,+15,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,HMF,knob,-15,+15,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,LMF,knob,-15,+15,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,LF,knob,-15,+15,,
+CS02,CS02 Console Strip,STUDIO,Gate learns drum bleed and ignores it,Fader,knob,Off,+10,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Gain,knob,0,+60,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Low,knob,-12,+12,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Mid,knob,-12,+12,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,High,knob,-12,+12,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Thresh,knob,0,10,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Ratio,knob,1.2,10,,
+CS03,CS03 Stepped Strip,STUDIO,Auto gain staging sets the input for each source,Output,knob,-10,+10,,
+CS04,CS04 Modular Strip,STUDIO,Suggests the best module order for the source,Low,digital,,,,-2 dB
+CS04,CS04 Modular Strip,STUDIO,Suggests the best module order for the source,Mid freq,digital,,,,2.5 kHz
+CS04,CS04 Modular Strip,STUDIO,Suggests the best module order for the source,Mid,digital,,,,+2 dB
+CS04,CS04 Modular Strip,STUDIO,Suggests the best module order for the source,High,digital,,,,+1.5 dB
+CS04,CS04 Modular Strip,STUDIO,Suggests the best module order for the source,Output,digital,,,,0.0 dB
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Time,knob,1,2000,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Feedback,knob,0,110,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,HPF,knob,20,1k,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,LPF,knob,1k,20k,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Depth,knob,0,100,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Rate,knob,.1,10,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Duck,knob,0,20,,
+DL01,DL01 Echo,STUDIO,Repeats duck while you sing and swell in the gaps,Mix,knob,Dry,Wet,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Heads,selector,,,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Rate,knob,Slow,Fast,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Intensity,knob,0,10,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Bass,knob,-,+,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Treble,knob,-,+,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Wear,knob,0,10,,
+DL02,DL02 Tape Echo,STUDIO,"Wear simulates tape age, heads switch per bar",Mix,knob,Dry,Wet,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Time,knob,20,600ms,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Feedback,knob,0,10,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Mod depth,knob,0,10,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Mod rate,knob,0,10,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Grit,knob,0,10,,
+DL03,DL03 Bbd,STUDIO,Grit adds clock noise to repeats only,Mix,knob,Dry,Wet,,
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Time,digital,,,,1/8 D
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Level,digital,,,,-6 dB
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Pan,digital,,,,L 30
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Filter,digital,,,,2 kHz
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Feedback,digital,,,,30%
+DL04,DL04 Multitap,STUDIO,Each tap has its own filter and pan,Mix,digital,,,,20%
+DL05,DL05 Reverse,STUDIO,Grains follow the tempo and reverse on the beat,Time,digital,,,,1/4
+DL05,DL05 Reverse,STUDIO,Grains follow the tempo and reverse on the beat,Grain size,digital,,,,80 ms
+DL05,DL05 Reverse,STUDIO,Grains follow the tempo and reverse on the beat,Spray,digital,,,,30%
+DL05,DL05 Reverse,STUDIO,Grains follow the tempo and reverse on the beat,Mix,digital,,,,40%
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Drive,knob,0,10,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Ratio,knob,2,Max,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Speed,knob,Slow,Fast,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Bite,knob,Soft,Hard,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Output,knob,-12,+24,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,Mix,knob,Dry,Wet,,
+DY01,DY01 FET 進化版,STUDIO,Bite keeps the transient while Color sets the distortion,SC HPF,knob,Off,300,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Level,knob,0,10,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Output,knob,-12,+24,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Speed,knob,,,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Target,knob,-30,-6,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Emphasis,knob,Flat,Max,,
+DY02,DY02 Opto 進化版,STUDIO,Target rides the vocal like a hand on the fader,Mix,knob,Dry,Wet,,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Threshold,knob,-30,0,,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Ratio,selector,,,1.5/10,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Attack,selector,,,.1/100,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Release,selector,,,50/Auto,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Makeup,knob,0,+20,,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Mix,knob,Dry,Wet,,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,Knee,knob,Hard,Soft,,
+DY03,DY03 Bus 進化版,STUDIO,Punch keep protects transients under the glue,SC HPF,knob,Off,300,,
+DY04,DY04 Gate,STUDIO,Learns bleed versus hits and sets the threshold,Threshold,knob,-80,0,,
+DY04,DY04 Gate,STUDIO,Learns bleed versus hits and sets the threshold,Range,knob,0,-80,,
+DY04,DY04 Gate,STUDIO,Learns bleed versus hits and sets the threshold,Attack,knob,.01,25,,
+DY04,DY04 Gate,STUDIO,Learns bleed versus hits and sets the threshold,Hold,knob,0,2s,,
+DY04,DY04 Gate,STUDIO,Learns bleed versus hits and sets the threshold,Release,knob,5,4s,,
+DY05,DY05 De-ess,STUDIO,Sibilance detector follows the singer's pitch,Freq,digital,,,,6.8 kHz
+DY05,DY05 De-ess,STUDIO,Sibilance detector follows the singer's pitch,Threshold,digital,,,,-24 dB
+DY05,DY05 De-ess,STUDIO,Sibilance detector follows the singer's pitch,Range,digital,,,,-8 dB
+DY05,DY05 De-ess,STUDIO,Sibilance detector follows the singer's pitch,Lookahead,digital,,,,2 ms
+DY06,DY06 Vari-Mu,STUDIO,Time constant adapts to program density,Input,knob,0,10,,
+DY06,DY06 Vari-Mu,STUDIO,Time constant adapts to program density,Threshold,knob,0,10,,
+DY06,DY06 Vari-Mu,STUDIO,Time constant adapts to program density,Time,selector,,,,
+DY06,DY06 Vari-Mu,STUDIO,Time constant adapts to program density,Mu,knob,Soft,Hard,,
+DY06,DY06 Vari-Mu,STUDIO,Time constant adapts to program density,Mix,knob,Dry,Wet,,
+DY07,DY07 Snap,STUDIO,Snap shapes the attack independently of ratio,Threshold,knob,-40,+20,,
+DY07,DY07 Snap,STUDIO,Snap shapes the attack independently of ratio,Compress,knob,1,Max,,
+DY07,DY07 Snap,STUDIO,Snap shapes the attack independently of ratio,Output,knob,-20,+20,,
+DY07,DY07 Snap,STUDIO,Snap shapes the attack independently of ratio,Snap,knob,Soft,Hard,,
+DY07,DY07 Snap,STUDIO,Snap shapes the attack independently of ratio,Mix,knob,Dry,Wet,,
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Threshold,digital,,,,-22 dB
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Ratio,digital,,,,2.5:1
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Knee,digital,,,,6 dB
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Attack,digital,,,,8 ms
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Release,digital,,,,Auto
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Makeup,digital,,,,+3.0 dB
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,Mix,digital,,,,100%
+DY08,DY08 Clean,STUDIO,Auto release reads the groove tempo,SC HPF,digital,,,,90 Hz
+DY09,DY09 Transient,STUDIO,Split bands shape kick and cymbals separately,Attack,digital,,,,+6 dB
+DY09,DY09 Transient,STUDIO,Split bands shape kick and cymbals separately,Sustain,digital,,,,-4 dB
+DY09,DY09 Transient,STUDIO,Split bands shape kick and cymbals separately,Speed,digital,,,,Medium
+DY09,DY09 Transient,STUDIO,Split bands shape kick and cymbals separately,Clip,digital,,,,Off
+DY09,DY09 Transient,STUDIO,Split bands shape kick and cymbals separately,Mix,digital,,,,100%
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Threshold,digital,,,,-24 dB
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Ratio,digital,,,,3:1
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Attack,digital,,,,15 ms
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Release,digital,,,,150 ms
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Range,digital,,,,-6 dB
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Gain,digital,,,,+0.5 dB
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Crossover,digital,,,,240 Hz
+DY10,DY10 Multiband 4,STUDIO,Auto places crossovers from the mix spectrum,Output,digital,,,,0.0 dB
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Threshold,digital,,,,-20 dB
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Ratio,digital,,,,2:1
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Attack,digital,,,,20 ms
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Release,digital,,,,100 ms
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Range,digital,,,,-4 dB
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Gain,digital,,,,+1.0 dB
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Width,digital,,,,1.2 oct
+DY11,DY11 Multiband 6,STUDIO,Each band switches between compressor and dynamic EQ,Output,digital,,,,0.0 dB
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Squash,knob,0,10,,
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Blend,knob,Dry,Wet,,
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Upward,knob,0,10,,
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Tone,knob,Dark,Bright,,
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Speed,selector,,,,
+DY12,DY12 Parallel,STUDIO,Upward mode lifts quiet detail instead of only squashing,Output,knob,-10,+10,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Freq,selector,,,20/400,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Gain,knob,-12,+12,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Contour,knob,0,10,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Freq,selector,,,2k/20k,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Gain,knob,-12,+12,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Width,knob,Narrow,Wide,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Drive,knob,0,10,,
+EQ01,EQ01 Passive 進化版,STUDIO,Contour turns the boost-and-dip trick into one knob,Output,knob,-10,+10,,
+EQ02,EQ02 Surgical 進化版,STUDIO,"Assist finds resonances, Unmask shows clashes with other tracks",Freq,digital,,,,400 Hz
+EQ02,EQ02 Surgical 進化版,STUDIO,"Assist finds resonances, Unmask shows clashes with other tracks",Gain,digital,,,,-3.0 dB
+EQ02,EQ02 Surgical 進化版,STUDIO,"Assist finds resonances, Unmask shows clashes with other tracks",Q,digital,,,,1.20
+EQ02,EQ02 Surgical 進化版,STUDIO,"Assist finds resonances, Unmask shows clashes with other tracks",Output,digital,,,,0.0 dB
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Dip kHz,selector,,,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Dip,knob,0,10,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Peak kHz,selector,,,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Peak,knob,0,10,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Width,knob,Narrow,Wide,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Drive,knob,0,10,,
+EQ03,EQ03 Mid Shaper,STUDIO,Peak band rides with the vocal level automatically,Output,knob,-10,+10,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,HPF,selector,,,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Low Hz,selector,,,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Low,knob,-16,+16,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Mid kHz,selector,,,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Mid,knob,-18,+18,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,High kHz,selector,,,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,High,knob,-16,+16,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Drive,knob,0,10,,
+EQ04,EQ04 Inductor,STUDIO,Iron saturation scales with each band's boost,Output,knob,-10,+10,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Gain,knob,-15,+15,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Freq,knob,1.5k,16k,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Gain,knob,-15,+15,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Freq,knob,.6,7k,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Q,knob,.5,3,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Gain,knob,-15,+15,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Freq,knob,.2,2.5k,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Q,knob,.5,3,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Gain,knob,-15,+15,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Freq,knob,30,450,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,HPF,selector,,,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,LPF,selector,,,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Drive,knob,0,10,,
+EQ05,EQ05 Console,STUDIO,Match copies the tone curve of a reference track,Output,knob,-10,+10,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Hz,selector,,,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Gain,knob,-12,+12,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,kHz,selector,,,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Gain,knob,-12,+12,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,kHz,selector,,,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Gain,knob,-12,+12,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Drive,knob,0,10,,
+EQ06,EQ06 Stepped,STUDIO,Stepped gains glide between steps with no zipper noise,Output,knob,-10,+10,,
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Freq,digital,,,,180 Hz
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Gain,digital,,,,-4.5 dB
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Q,digital,,,,1.6
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Threshold,digital,,,,-28 dB
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Range,digital,,,,-8 dB
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Attack,digital,,,,10 ms
+EQ07,EQ07 Dynamic,STUDIO,Learns each band's threshold from 5 seconds of audio,Release,digital,,,,120 ms
+EQ08,EQ08 Linear,STUDIO,Pre-ring guard limits linear phase smearing,Freq,digital,,,,2.4 kHz
+EQ08,EQ08 Linear,STUDIO,Pre-ring guard limits linear phase smearing,Gain,digital,,,,-1.0 dB
+EQ08,EQ08 Linear,STUDIO,Pre-ring guard limits linear phase smearing,Q,digital,,,,0.7
+EQ08,EQ08 Linear,STUDIO,Pre-ring guard limits linear phase smearing,Output,digital,,,,0.0 dB
+EQ09,EQ09 Tilt,STUDIO,Pivot follows the spectral center of the song,Tilt,knob,Dark,Bright,,
+EQ09,EQ09 Tilt,STUDIO,Pivot follows the spectral center of the song,Pivot Hz,selector,,,,
+EQ09,EQ09 Tilt,STUDIO,Pivot follows the spectral center of the song,Low lift,knob,0,10,,
+EQ09,EQ09 Tilt,STUDIO,Pivot follows the spectral center of the song,Air,knob,0,10,,
+EQ09,EQ09 Tilt,STUDIO,Pivot follows the spectral center of the song,Output,knob,-10,+10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Channel,selector,,,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Gain,knob,0,10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Bass,knob,0,10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Middle,knob,0,10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Treble,knob,0,10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Presence,knob,0,10,,
+GT01,GT01 Amp,STUDIO,Cleans up when you roll back the guitar volume,Master,knob,0,10,,
+GT02,GT02 Cab Ir,STUDIO,Drag the mic across the speaker,Mic distance,digital,,,,4 cm
+GT02,GT02 Cab Ir,STUDIO,Drag the mic across the speaker,Off axis,digital,,,,15 deg
+GT02,GT02 Cab Ir,STUDIO,Drag the mic across the speaker,Room,digital,,,,10%
+GT02,GT02 Cab Ir,STUDIO,Drag the mic across the speaker,Low cut,digital,,,,80 Hz
+GT03,GT03 Pedalboard,STUDIO,"Drag to reorder pedals, tuner always running",Input,digital,,,,0 dB
+GT03,GT03 Pedalboard,STUDIO,"Drag to reorder pedals, tuner always running",Noise gate,digital,,,,-60 dB
+GT03,GT03 Pedalboard,STUDIO,"Drag to reorder pedals, tuner always running",Tuner,digital,,,,E 0 cent
+GT03,GT03 Pedalboard,STUDIO,"Drag to reorder pedals, tuner always running",Output,digital,,,,0 dB
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Gain,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Low,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Lo mid,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Mid Hz,selector,,,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Hi mid,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,High,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Drive,knob,0,10,,
+GT04,GT04 Bass Amp,STUDIO,DI and amp blend is phase aligned automatically,Master,knob,0,10,,
+GT05,GT05 Reamp,STUDIO,Pickup model turns a DI into a different guitar,Level,knob,-20,+10,,
+GT05,GT05 Reamp,STUDIO,Pickup model turns a DI into a different guitar,Impedance,selector,,,,
+GT05,GT05 Reamp,STUDIO,Pickup model turns a DI into a different guitar,Cable,knob,Short,Long,,
+GT05,GT05 Reamp,STUDIO,Pickup model turns a DI into a different guitar,Pickup,knob,Single,Hum,,
+GT05,GT05 Reamp,STUDIO,Pickup model turns a DI into a different guitar,Output,knob,-10,+10,,
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Wave,digital,,,,Saw
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Detune,digital,,,,7 cent
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Cutoff,digital,,,,2.4 kHz
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Resonance,digital,,,,30%
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Attack,digital,,,,10 ms
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Decay,digital,,,,400 ms
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Sustain,digital,,,,70%
+IN01,IN01 Synth,STUDIO,Patch morph between two sounds,Release,digital,,,,600 ms
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Tune,digital,,,,0 st
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Decay,digital,,,,Medium
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Velocity,digital,,,,Soft
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Room,digital,,,,20%
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Comp,digital,,,,On
+IN02,IN02 Drums,STUDIO,Humanize timing by drummer style,Output,digital,,,,0 dB
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Tone,digital,,,,Warm
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Hammer,digital,,,,Soft
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Pedal noise,digital,,,,30%
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Tremolo,digital,,,,40%
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Room,digital,,,,25%
+IN03,IN03 Keys,STUDIO,Pedal and hammer noise follow your playing,Output,digital,,,,0 dB
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Tone,digital,,,,Round
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Pickup,digital,,,,Neck
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Attack,digital,,,,Medium
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Release,digital,,,,Short
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Amp,digital,,,,DI and amp
+IN04,IN04 Bass,STUDIO,Slides and ghost notes from MIDI velocity,Output,digital,,,,0 dB
+IN05,IN05 Organ,STUDIO,Drawbar settings morph with an expression pedal,Drive,digital,,,,Warm
+IN05,IN05 Organ,STUDIO,Drawbar settings morph with an expression pedal,Key click,digital,,,,Low
+IN05,IN05 Organ,STUDIO,Drawbar settings morph with an expression pedal,Rotary,digital,,,,Fast
+IN05,IN05 Organ,STUDIO,Drawbar settings morph with an expression pedal,Reverb,digital,,,,15%
+IN05,IN05 Organ,STUDIO,Drawbar settings morph with an expression pedal,Output,digital,,,,0 dB
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Start,digital,,,,0 ms
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Loop,digital,,,,On
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Pitch,digital,,,,0 st
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Filter,digital,,,,8 kHz
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Attack,digital,,,,2 ms
+IN06,IN06 Sampler,STUDIO,Auto maps slices to keys by transient,Release,digital,,,,300 ms
+LO01,LO01 Low Harm,STUDIO,Phone preview checks small speaker playback,Frequency,digital,,,,80 Hz
+LO01,LO01 Low Harm,STUDIO,Phone preview checks small speaker playback,Harmonics,digital,,,,60%
+LO01,LO01 Low Harm,STUDIO,Phone preview checks small speaker playback,Original,digital,,,,-3 dB
+LO01,LO01 Low Harm,STUDIO,Phone preview checks small speaker playback,Width,digital,,,,Narrow
+LO02,LO02 Sub Gen,STUDIO,Sub tracks the pitch of the bass note,Sub,knob,0,10,,
+LO02,LO02 Sub Gen,STUDIO,Sub tracks the pitch of the bass note,Range Hz,selector,,,,
+LO02,LO02 Sub Gen,STUDIO,Sub tracks the pitch of the bass note,Tune,knob,-12,+12,,
+LO02,LO02 Sub Gen,STUDIO,Sub tracks the pitch of the bass note,Punch,knob,0,10,,
+LO02,LO02 Sub Gen,STUDIO,Sub tracks the pitch of the bass note,Dry,knob,Off,Full,,
+LO03,LO03 Low Focus,STUDIO,Separates kick and bass and keys them to each other,Focus,digital,,,,55 Hz
+LO03,LO03 Low Focus,STUDIO,Separates kick and bass and keys them to each other,Tight,digital,,,,60%
+LO03,LO03 Low Focus,STUDIO,Separates kick and bass and keys them to each other,Mud cut,digital,,,,250 Hz
+LO03,LO03 Low Focus,STUDIO,Separates kick and bass and keys them to each other,Mono below,digital,,,,120 Hz
+LV01,LV01 Voice,LIVE,"One knob sets noise, EQ, comp and limit together",,,,,,
+LV02,LV02 Feedback,LIVE,Ring out learns fixed filters before the show,Sensitivity,led-ring,,,,High
+LV02,LV02 Feedback,LIVE,Ring out learns fixed filters before the show,Max depth,led-ring,,,,-12 dB
+LV02,LV02 Feedback,LIVE,Ring out learns fixed filters before the show,Width,led-ring,,,,1/10 oct
+LV02,LV02 Feedback,LIVE,Ring out learns fixed filters before the show,Release,led-ring,,,,8 s
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Trim,led-ring,,,,+6 dB
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,HPF,led-ring,,,,80 Hz
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Thresh,led-ring,,,,-42 dB
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Range,led-ring,,,,-30
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Low,led-ring,,,,-2
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Mid f,led-ring,,,,1.2k
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Mid,led-ring,,,,+2
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,High,led-ring,,,,+1.5
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Thresh,led-ring,,,,-18 dB
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Ratio,led-ring,,,,3:1
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Amount,led-ring,,,,4 dB
+LV03,LV03 Channel,LIVE,Mic presets set the whole strip,Freq,led-ring,,,,6.5k
+LV04,LV04 Safety limiter,LIVE,Logs every limit event with the time,Release,led-ring,,,,50 ms
+LV04,LV04 Safety limiter,LIVE,Logs every limit event with the time,RMS limit,led-ring,,,,-6 dB
+LV04,LV04 Safety limiter,LIVE,Logs every limit event with the time,Subsonic,led-ring,,,,30 Hz
+LV05,LV05 Auto ducker,LIVE,"Ducks for voices only, ignores claps and noise",Depth,led-ring,,,,-12 dB
+LV05,LV05 Auto ducker,LIVE,"Ducks for voices only, ignores claps and noise",Attack,led-ring,,,,80 ms
+LV05,LV05 Auto ducker,LIVE,"Ducks for voices only, ignores claps and noise",Hold,led-ring,,,,1.2 s
+LV05,LV05 Auto ducker,LIVE,"Ducks for voices only, ignores claps and noise",Release,led-ring,,,,2.0 s
+LV06,LV06 Stream master,LIVE,Rides to the platform loudness target,Ride speed,led-ring,,,,Slow
+LV06,LV06 Stream master,LIVE,Rides to the platform loudness target,Max boost,led-ring,,,,+6 dB
+LV06,LV06 Stream master,LIVE,Rides to the platform loudness target,Ceiling,led-ring,,,,-1.0 dBTP
+LV07,LV07 Speech Agc,LIVE,Holds level for close and distant talkers,Target,led-ring,,,,-18 LUFS
+LV07,LV07 Speech Agc,LIVE,Holds level for close and distant talkers,Max gain,led-ring,,,,+12 dB
+LV07,LV07 Speech Agc,LIVE,Holds level for close and distant talkers,Speed,led-ring,,,,Medium
+LV07,LV07 Speech Agc,LIVE,Holds level for close and distant talkers,Gate,led-ring,,,,-50 dB
+LV08,LV08 Room Noise,LIVE,Learns HVAC and keyboard noise,Reduction,led-ring,,,,-18 dB
+LV08,LV08 Room Noise,LIVE,Learns HVAC and keyboard noise,Sensitivity,led-ring,,,,Mid
+LV08,LV08 Room Noise,LIVE,Learns HVAC and keyboard noise,Voice guard,led-ring,,,,High
+LV09,LV09 Hum Cut,LIVE,Tracks mains drift live,Harmonics,led-ring,,,,8
+LV09,LV09 Hum Cut,LIVE,Tracks mains drift live,Depth,led-ring,,,,-30 dB
+LV09,LV09 Hum Cut,LIVE,Tracks mains drift live,Width,led-ring,,,,Narrow
+LV10,LV10 Voice Fx,LIVE,Anonymous mode for interviews,Pitch,led-ring,,,,-3 st
+LV10,LV10 Voice Fx,LIVE,Anonymous mode for interviews,Formant,led-ring,,,,+2
+LV10,LV10 Voice Fx,LIVE,Anonymous mode for interviews,Robot,led-ring,,,,Off
+LV10,LV10 Voice Fx,LIVE,Anonymous mode for interviews,Mix,led-ring,,,,100%
+LV11,LV11 Mic Switch,LIVE,"Mutes on silence, cough button",Silence,led-ring,,,,-48 dB
+LV11,LV11 Mic Switch,LIVE,"Mutes on silence, cough button",Hold,led-ring,,,,3.0 s
+LV11,LV11 Mic Switch,LIVE,"Mutes on silence, cough button",Fade,led-ring,,,,20 ms
+LV11,LV11 Mic Switch,LIVE,"Mutes on silence, cough button",Duck others,led-ring,,,,-10 dB
+LV12,LV12 Geq 31,LIVE,Feedback guard flags ringing bands,Output,led-ring,,,,0.0 dB
+LV12,LV12 Geq 31,LIVE,Feedback guard flags ringing bands,HPF,led-ring,,,,40 Hz
+LV12,LV12 Geq 31,LIVE,Feedback guard flags ringing bands,LPF,led-ring,,,,18 kHz
+LV13,LV13 Live Peq,LIVE,RTA overlay with peak suggestions,Freq,led-ring,,,,2.5 kHz
+LV13,LV13 Live Peq,LIVE,RTA overlay with peak suggestions,Gain,led-ring,,,,-3 dB
+LV13,LV13 Live Peq,LIVE,RTA overlay with peak suggestions,Q,led-ring,,,,2.0
+LV13,LV13 Live Peq,LIVE,RTA overlay with peak suggestions,HPF,led-ring,,,,90 Hz
+LV13,LV13 Live Peq,LIVE,RTA overlay with peak suggestions,LPF,led-ring,,,,18 kHz
+LV14,LV14 Align,LIVE,Measures delay in one click,Delay,led-ring,,,,12.4 ms
+LV14,LV14 Align,LIVE,Measures delay in one click,Distance,led-ring,,,,4.25 m
+LV14,LV14 Align,LIVE,Measures delay in one click,Air temp,led-ring,,,,22 C
+LV15,LV15 Auto Mixer,LIVE,Last mic hold and open mic limit,Last mic hold,led-ring,,,,On
+LV15,LV15 Auto Mixer,LIVE,Last mic hold and open mic limit,Off atten,led-ring,,,,-15 dB
+LV15,LV15 Auto Mixer,LIVE,Last mic hold and open mic limit,Response,led-ring,,,,Fast
+LV15,LV15 Auto Mixer,LIVE,Last mic hold and open mic limit,Priority,led-ring,,,,Mic 1
+LV16,LV16 Live Gate,LIVE,Key filter ignores stage rumble,Threshold,led-ring,,,,-42 dB
+LV16,LV16 Live Gate,LIVE,Key filter ignores stage rumble,Range,led-ring,,,,-40 dB
+LV16,LV16 Live Gate,LIVE,Key filter ignores stage rumble,Hold,led-ring,,,,80 ms
+LV16,LV16 Live Gate,LIVE,Key filter ignores stage rumble,Release,led-ring,,,,250 ms
+LV17,LV17 Bus Comp,LIVE,Modes switch with OBS scenes,Threshold,led-ring,,,,-20 dB
+LV17,LV17 Bus Comp,LIVE,Modes switch with OBS scenes,Ratio,led-ring,,,,3:1
+LV17,LV17 Bus Comp,LIVE,Modes switch with OBS scenes,Attack,led-ring,,,,10 ms
+LV17,LV17 Bus Comp,LIVE,Modes switch with OBS scenes,Release,led-ring,,,,Auto
+LV17,LV17 Bus Comp,LIVE,Modes switch with OBS scenes,Makeup,led-ring,,,,+3 dB
+LV18,LV18 Pop Guard,LIVE,Catches plug and handling pops,Sensitivity,led-ring,,,,High
+LV18,LV18 Pop Guard,LIVE,Catches plug and handling pops,Mute time,led-ring,,,,40 ms
+LV19,LV19 Av Sync,LIVE,Clap sync measures the offset,Delay,led-ring,,,,66 ms
+LV19,LV19 Av Sync,LIVE,Clap sync measures the offset,Frames,led-ring,,,,2.0 fr
+LV20,LV20 Rta,LIVE,Pink noise reference overlay,Speed,led-ring,,,,Medium
+LV20,LV20 Rta,LIVE,Pink noise reference overlay,Peak hold,led-ring,,,,2 s
+LV20,LV20 Rta,LIVE,Pink noise reference overlay,Weight,led-ring,,,,Z
+LV21,LV21 Test Gen,LIVE,Output stays off until armed,Freq,led-ring,,,,1 kHz
+LV21,LV21 Test Gen,LIVE,Output stays off until armed,Level,led-ring,,,,-20 dBFS
+LV21,LV21 Test Gen,LIVE,Output stays off until armed,Sweep time,led-ring,,,,10 s
+LV22,LV22 Polarity,LIVE,Instant in-phase check,Window,led-ring,,,,200 ms
+LV23,LV23 Loudness,LIVE,ARIB TR-B32 log export,,,,,,
+LV24,LV24 Live Reverb,LIVE,1% CPU and ducks under speech,Decay,led-ring,,,,1.8 s
+LV24,LV24 Live Reverb,LIVE,1% CPU and ducks under speech,Pre-delay,led-ring,,,,30 ms
+LV24,LV24 Live Reverb,LIVE,1% CPU and ducks under speech,Tone,led-ring,,,,Warm
+LV24,LV24 Live Reverb,LIVE,1% CPU and ducks under speech,Mix,led-ring,,,,18%
+LV25,LV25 Live Delay,LIVE,"Tap or MIDI clock, tails spill over on bypass",Time,led-ring,,,,500 ms
+LV25,LV25 Live Delay,LIVE,"Tap or MIDI clock, tails spill over on bypass",Feedback,led-ring,,,,35%
+LV25,LV25 Live Delay,LIVE,"Tap or MIDI clock, tails spill over on bypass",Tone,led-ring,,,,Dark
+LV25,LV25 Live Delay,LIVE,"Tap or MIDI clock, tails spill over on bypass",Mix,led-ring,,,,15%
+LV26,LV26 Mono,LIVE,Auto phase fix for mono viewers,Width,led-ring,,,,100%
+LV26,LV26 Mono,LIVE,Auto phase fix for mono viewers,Low mono,led-ring,,,,120 Hz
+LV27,LV27 Scene Sync,LIVE,Follows OBS scenes to recall presets,,,,,,
+LV28,LV28 Remote Hub,LIVE,Tablet control protected by PIN,,,,,,
+LV29,LV29 Interp Mix,LIVE,Ducks the floor when the interpreter talks,Floor under,led-ring,,,,-14 dB
+LV29,LV29 Interp Mix,LIVE,Ducks the floor when the interpreter talks,Crossfade,led-ring,,,,400 ms
+LV29,LV29 Interp Mix,LIVE,Ducks the floor when the interpreter talks,Interp level,led-ring,,,,0 dB
+LV30,LV30 Recorder,LIVE,Always-on backup recording with markers,,,,,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Mode,selector,,,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Rate,knob,Slow,Fast,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Depth,knob,0,10,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Width,knob,Mono,Wide,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Tone,knob,Dark,Bright,,
+MD01,MD01 Chorus,STUDIO,Width stays mono compatible,Mix,knob,Dry,Wet,,
+MD02,MD02 Flanger,STUDIO,Through-zero sweep synced to tempo,Rate,digital,,,,0.2 Hz
+MD02,MD02 Flanger,STUDIO,Through-zero sweep synced to tempo,Depth,digital,,,,70%
+MD02,MD02 Flanger,STUDIO,Through-zero sweep synced to tempo,Feedback,digital,,,,+60%
+MD02,MD02 Flanger,STUDIO,Through-zero sweep synced to tempo,Manual,digital,,,,3 ms
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Stages,selector,,,,
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Rate,knob,Slow,Fast,,
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Depth,knob,0,10,,
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Feedback,knob,0,10,,
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Center,knob,Low,High,,
+MD03,MD03 Phaser,STUDIO,Center frequency follows the note being played,Mix,knob,Dry,Wet,,
+MD04,MD04 Tremolo Pan,STUDIO,Harmonic mode splits lows and highs,Rate,digital,,,,1/8
+MD04,MD04 Tremolo Pan,STUDIO,Harmonic mode splits lows and highs,Depth,digital,,,,60%
+MD04,MD04 Tremolo Pan,STUDIO,Harmonic mode splits lows and highs,Shape,digital,,,,Sine
+MD04,MD04 Tremolo Pan,STUDIO,Harmonic mode splits lows and highs,Width,digital,,,,100%
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Speed,selector,,,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Accel,knob,0,10,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Horn,knob,0,10,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Drum,knob,0,10,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Mic distance,knob,Near,Far,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Drive,knob,0,10,,
+MD05,MD05 Rotary,STUDIO,Speed ramps follow a footswitch or MIDI,Mix,knob,Dry,Wet,,
+MD06,MD06 Freq Shift,STUDIO,Shift tracks pitch for even detune,Shift,digital,,,,+35 Hz
+MD06,MD06 Freq Shift,STUDIO,Shift tracks pitch for even detune,Ring mod,digital,,,,Off
+MD06,MD06 Freq Shift,STUDIO,Shift tracks pitch for even detune,Feedback,digital,,,,20%
+MD06,MD06 Freq Shift,STUDIO,Shift tracks pitch for even detune,Mix,digital,,,,50%
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Voices,selector,,,,
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Spread,knob,0,10,,
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Rate,knob,0,10,,
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Depth,knob,0,10,,
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Tone,knob,Dark,Bright,,
+MD07,MD07 Ensemble,STUDIO,Voices stay mono compatible,Mix,knob,Dry,Wet,,
+MS01,MS01 Maximizer 進化版,STUDIO,Lock reaches the loudness target automatically,Ceiling,digital,,,,-1.0 dBTP
+MS01,MS01 Maximizer 進化版,STUDIO,Lock reaches the loudness target automatically,Release,digital,,,,Auto
+MS01,MS01 Maximizer 進化版,STUDIO,Lock reaches the loudness target automatically,Stereo,digital,,,,100%
+MS02,MS02 True Peak,STUDIO,Inter-sample peaks caught at 8x and marked on the display,Gain,digital,,,,+4.0 dB
+MS02,MS02 True Peak,STUDIO,Inter-sample peaks caught at 8x and marked on the display,Ceiling,digital,,,,-1.0 dBTP
+MS02,MS02 True Peak,STUDIO,Inter-sample peaks caught at 8x and marked on the display,Release,digital,,,,Auto
+MS02,MS02 True Peak,STUDIO,Inter-sample peaks caught at 8x and marked on the display,Lookahead,digital,,,,1.5 ms
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Band gain,digital,,,,+2.0 dB
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Band ceiling,digital,,,,-0.5 dB
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Release,digital,,,,60 ms
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Crossover,digital,,,,120 Hz
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Out ceiling,digital,,,,-1.0 dBTP
+MS03,MS03 Multiband Limit,STUDIO,"Bands share one ceiling, no pumping across bands",Character,digital,,,,Punch
+MS04,MS04 Clipper,STUDIO,Knee morphs from hard clip to tape-like softness,Drive,digital,,,,+3.5 dB
+MS04,MS04 Clipper,STUDIO,Knee morphs from hard clip to tape-like softness,Ceiling,digital,,,,-0.3 dB
+MS04,MS04 Clipper,STUDIO,Knee morphs from hard clip to tape-like softness,Knee,digital,,,,Soft
+MS04,MS04 Clipper,STUDIO,Knee morphs from hard clip to tape-like softness,Mix,digital,,,,100%
+MS05,MS05 Leveler,STUDIO,Writes the rides back as DAW automation,Target,digital,,,,-18 dB
+MS05,MS05 Leveler,STUDIO,Writes the rides back as DAW automation,Range,digital,,,,6 dB
+MS05,MS05 Leveler,STUDIO,Writes the rides back as DAW automation,Speed,digital,,,,Medium
+MS05,MS05 Leveler,STUDIO,Writes the rides back as DAW automation,Gate,digital,,,,-50 dB
+MS06,MS06 Master Chain,STUDIO,"Every stage is gain matched, chain order is drag and drop",Threshold,digital,,,,-18 dB
+MS06,MS06 Master Chain,STUDIO,"Every stage is gain matched, chain order is drag and drop",Ratio,digital,,,,1.5:1
+MS06,MS06 Master Chain,STUDIO,"Every stage is gain matched, chain order is drag and drop",Attack,digital,,,,30 ms
+MS06,MS06 Master Chain,STUDIO,"Every stage is gain matched, chain order is drag and drop",Release,digital,,,,Auto
+MS06,MS06 Master Chain,STUDIO,"Every stage is gain matched, chain order is drag and drop",Mix,digital,,,,80%
+MS07,MS07 Dither,STUDIO,Auto blank mutes dither in true silence,Bits,selector,,,,
+MS07,MS07 Dither,STUDIO,Auto blank mutes dither in true silence,Shape,selector,,,,
+MS07,MS07 Dither,STUDIO,Auto blank mutes dither in true silence,Output,knob,-10,+10,,
+MT01,MT01 Loudness,STUDIO,Loudness presets for Japanese broadcast and streaming,,,,,,
+MT02,MT02 Spectrum,STUDIO,Compares your mix against a reference curve,Speed,digital,,,,Medium
+MT02,MT02 Spectrum,STUDIO,Compares your mix against a reference curve,Range,digital,,,,-90 dB
+MT02,MT02 Spectrum,STUDIO,Compares your mix against a reference curve,Slope,digital,,,,4.5 dB/oct
+MT02,MT02 Spectrum,STUDIO,Compares your mix against a reference curve,Smoothing,digital,,,,1/6 oct
+MT03,MT03 Spectrogram,STUDIO,Click the spectrogram to hear that band,Scroll,digital,,,,10 s
+MT03,MT03 Spectrogram,STUDIO,Click the spectrogram to hear that band,Floor,digital,,,,-90 dB
+MT03,MT03 Spectrogram,STUDIO,Click the spectrogram to hear that band,Contrast,digital,,,,Mid
+MT03,MT03 Spectrogram,STUDIO,Click the spectrogram to hear that band,Palette,digital,,,,Mono
+MT04,MT04 Phase Scope,STUDIO,Warns before a mono problem happens,Persistence,digital,,,,1 s
+MT04,MT04 Phase Scope,STUDIO,Warns before a mono problem happens,Zoom,digital,,,,1x
+MT05,MT05 Vu Ppm,STUDIO,VU reference calibrated per project,Ref dBFS,selector,,,,
+RS01,RS01 Denoise,STUDIO,Adaptive profile updates as the noise changes,Reduction,digital,,,,-15 dB
+RS01,RS01 Denoise,STUDIO,Adaptive profile updates as the noise changes,Threshold,digital,,,,+3 dB
+RS01,RS01 Denoise,STUDIO,Adaptive profile updates as the noise changes,Smoothing,digital,,,,Mid
+RS01,RS01 Denoise,STUDIO,Adaptive profile updates as the noise changes,Low band,digital,,,,-8 dB
+RS01,RS01 Denoise,STUDIO,Adaptive profile updates as the noise changes,High band,digital,,,,-14 dB
+RS02,RS02 Voice Isolate,STUDIO,Separates voice from music and room,Voice,digital,,,,100%
+RS02,RS02 Voice Isolate,STUDIO,Separates voice from music and room,Background,digital,,,,-24 dB
+RS02,RS02 Voice Isolate,STUDIO,Separates voice from music and room,Reverb,digital,,,,-12 dB
+RS02,RS02 Voice Isolate,STUDIO,Separates voice from music and room,Quality,digital,,,,High
+RS03,RS03 Dehum,STUDIO,Tracks drift in the mains frequency,Base Hz,selector,,,,
+RS03,RS03 Dehum,STUDIO,Tracks drift in the mains frequency,Harmonics,selector,,,,
+RS03,RS03 Dehum,STUDIO,Tracks drift in the mains frequency,Depth,knob,0,10,,
+RS03,RS03 Dehum,STUDIO,Tracks drift in the mains frequency,Width,knob,Narrow,Wide,,
+RS03,RS03 Dehum,STUDIO,Tracks drift in the mains frequency,Buzz,knob,0,10,,
+RS04,RS04 Declick,STUDIO,Every repaired click is marked on the spectrogram,Sensitivity,digital,,,,Mid
+RS04,RS04 Declick,STUDIO,Every repaired click is marked on the spectrogram,Click width,digital,,,,1 ms
+RS04,RS04 Declick,STUDIO,Every repaired click is marked on the spectrogram,Crackle,digital,,,,40%
+RS04,RS04 Declick,STUDIO,Every repaired click is marked on the spectrogram,Low guard,digital,,,,On
+RS05,RS05 Declip,STUDIO,Detects clipped sections automatically,Threshold,digital,,,,-0.5 dB
+RS05,RS05 Declip,STUDIO,Detects clipped sections automatically,Quality,digital,,,,High
+RS05,RS05 Declip,STUDIO,Detects clipped sections automatically,Makeup,digital,,,,-3 dB
+RS05,RS05 Declip,STUDIO,Detects clipped sections automatically,Smooth,digital,,,,Mid
+RS06,RS06 Dereverb,STUDIO,Learns the room tail from silence,Reduction,digital,,,,-10 dB
+RS06,RS06 Dereverb,STUDIO,Learns the room tail from silence,Tail length,digital,,,,0.8 s
+RS06,RS06 Dereverb,STUDIO,Learns the room tail from silence,Early,digital,,,,Keep
+RS06,RS06 Dereverb,STUDIO,Learns the room tail from silence,Smooth,digital,,,,Mid
+RS07,RS07 Mouth Noise,STUDIO,Finds mouth clicks between words,Sensitivity,digital,,,,Mid
+RS07,RS07 Mouth Noise,STUDIO,Finds mouth clicks between words,Click size,digital,,,,Small
+RS07,RS07 Mouth Noise,STUDIO,Finds mouth clicks between words,Freq skew,digital,,,,+10%
+RS07,RS07 Mouth Noise,STUDIO,Finds mouth clicks between words,Fade,digital,,,,2 ms
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Pre-delay,digital,,,,24 ms
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Size,digital,,,,74%
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Decay,digital,,,,2.8 s
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Diffusion,digital,,,,82%
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Damping,digital,,,,6.5 kHz
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Low cut,digital,,,,120 Hz
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,High cut,digital,,,,9.0 kHz
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,ER / late,digital,,,,40 / 60
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Width,digital,,,,100%
+RV01,RV01 Hall,STUDIO,Tail ducks while the dry signal is loud,Mix,digital,,,,22%
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Decay,knob,0.5,6s,,
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Pre-delay,knob,0,200,,
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Damping,knob,Dark,Bright,,
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Low cut,knob,20,500,,
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Width,knob,Mono,Wide,,
+RV02,RV02 Plate,STUDIO,Pre-delay syncs to tempo and ducks under vocals,Mix,knob,Dry,Wet,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Springs,selector,,,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Dwell,knob,0,10,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Tone,knob,Dark,Bright,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Tension,knob,0,10,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Drip,knob,0,10,,
+RV03,RV03 Spring,STUDIO,"Drip reacts to transients, not to sustain",Mix,knob,Dry,Wet,,
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,Pre-delay,digital,,,,12 ms
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,Length,digital,,,,100%
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,Size,digital,,,,110%
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,Low cut,digital,,,,80 Hz
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,High cut,digital,,,,12 kHz
+RV04,RV04 Convolution,STUDIO,IR length trims itself to the song tempo,Mix,digital,,,,20%
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Room,selector,,,,
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Decay,knob,0,10,,
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Mic distance,knob,Near,Far,,
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Speaker tilt,knob,0,10,,
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Tone,knob,Dark,Bright,,
+RV05,RV05 Chamber,STUDIO,Mic distance morphs the chamber realistically,Mix,knob,Dry,Wet,,
+RV06,RV06 Shimmer,STUDIO,Freeze holds a chord pad on demand,Decay,digital,,,,12 s
+RV06,RV06 Shimmer,STUDIO,Freeze holds a chord pad on demand,Shimmer,digital,,,,60%
+RV06,RV06 Shimmer,STUDIO,Freeze holds a chord pad on demand,Pitch,digital,,,,+12 st
+RV06,RV06 Shimmer,STUDIO,Freeze holds a chord pad on demand,Mix,digital,,,,35%
+RV07,RV07 Early,STUDIO,Place the source in the room by dragging,Distance,digital,,,,3.5 m
+RV07,RV07 Early,STUDIO,Place the source in the room by dragging,Angle,digital,,,,15 deg
+RV07,RV07 Early,STUDIO,Place the source in the room by dragging,Room size,digital,,,,Medium
+RV07,RV07 Early,STUDIO,Place the source in the room by dragging,Wall,digital,,,,Wood
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Size,knob,0,10,,
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Gate time,knob,50,800ms,,
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Threshold,knob,0,10,,
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Shape,knob,Flat,Reverse,,
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Tone,knob,Dark,Bright,,
+RV08,RV08 Gated,STUDIO,Gate opens on the snare only and ignores bleed,Mix,knob,Dry,Wet,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Speed ips,selector,,,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Formula,selector,,,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Input,knob,-12,+12,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Saturation,knob,0,10,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Wow,knob,0,10,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Flutter,knob,0,10,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Hiss,knob,Off,Max,,
+SA01,SA01 Tape,STUDIO,Calibrate sets the tape operating level from your input,Output,knob,-10,+10,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Color,selector,,,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Drive,knob,0,10,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Crosstalk,knob,0,10,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Noise,knob,Off,Max,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Width,knob,Narrow,Wide,,
+SA02,SA02 Console Sum,STUDIO,Every channel gets its own analog variance,Output,knob,-10,+10,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Drive,knob,0,10,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Bias,knob,Cold,Hot,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Tone,knob,Dark,Bright,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Tube,selector,,,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Mix,knob,Dry,Wet,,
+SA03,SA03 Tube,STUDIO,Bias follows input dynamics like a real tube,Output,knob,-10,+10,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Iron,selector,,,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Gain,knob,0,+60,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Load,knob,Low,High,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Low weight,knob,0,10,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Top air,knob,0,10,,
+SA04,SA04 Transformer,STUDIO,Load reacts to the source impedance,Output,knob,-10,+10,,
+SA05,SA05 Exciter,STUDIO,Adds harmonics only where the mix lacks them,Tune,digital,,,,4.5 kHz
+SA05,SA05 Exciter,STUDIO,Adds harmonics only where the mix lacks them,Harmonics,digital,,,,35%
+SA05,SA05 Exciter,STUDIO,Adds harmonics only where the mix lacks them,Mix,digital,,,,25%
+SA05,SA05 Exciter,STUDIO,Adds harmonics only where the mix lacks them,Low drive,digital,,,,10%
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Drive,digital,,,,+8 dB
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Shape,digital,,,,Soft
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Bias,digital,,,,0
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Tone,digital,,,,Bright
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Dynamics,digital,,,,+2
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Mix,digital,,,,80%
+SA06,SA06 Saturator,STUDIO,Dynamics makes saturation react to playing strength,Output,digital,,,,-2.0 dB
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Era,selector,,,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Crackle,knob,0,10,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Dust,knob,0,10,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Wow,knob,0,10,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Bandwidth,knob,Narrow,Full,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Mono,knob,Off,Full,,
+SA07,SA07 Lo-Fi,STUDIO,"Era sets crackle, wow and bandwidth in one move",Mix,knob,Dry,Wet,,
+SA08,SA08 Bitcrush,STUDIO,Rate locks to song tempo for rhythmic aliasing,Bits,digital,,,,8 bit
+SA08,SA08 Bitcrush,STUDIO,Rate locks to song tempo for rhythmic aliasing,Rate,digital,,,,11 kHz
+SA08,SA08 Bitcrush,STUDIO,Rate locks to song tempo for rhythmic aliasing,Jitter,digital,,,,2%
+SA08,SA08 Bitcrush,STUDIO,Rate locks to song tempo for rhythmic aliasing,Mix,digital,,,,70%
+ST01,ST01 Imager,STUDIO,Width per band with a live mono check,Low width,digital,,,,Mono
+ST01,ST01 Imager,STUDIO,Width per band with a live mono check,Lo mid width,digital,,,,100%
+ST01,ST01 Imager,STUDIO,Width per band with a live mono check,Hi mid width,digital,,,,140%
+ST01,ST01 Imager,STUDIO,Width per band with a live mono check,High width,digital,,,,150%
+ST01,ST01 Imager,STUDIO,Width per band with a live mono check,Crossover,digital,,,,200 Hz
+ST02,ST02 Mid Side,STUDIO,Compares mid and side balance against a reference,Mid level,knob,-12,+12,,
+ST02,ST02 Mid Side,STUDIO,Compares mid and side balance against a reference,Side level,knob,-12,+12,,
+ST02,ST02 Mid Side,STUDIO,Compares mid and side balance against a reference,Side HPF,knob,Off,500,,
+ST02,ST02 Mid Side,STUDIO,Compares mid and side balance against a reference,Side air,knob,0,10,,
+ST02,ST02 Mid Side,STUDIO,Compares mid and side balance against a reference,Mid low,knob,-,+,,
+ST03,ST03 Phase Align,STUDIO,Auto align finds the best delay and phase,Delay,digital,,,,0.42 ms
+ST03,ST03 Phase Align,STUDIO,Auto align finds the best delay and phase,Phase,digital,,,,+35 deg
+ST03,ST03 Phase Align,STUDIO,Auto align finds the best delay and phase,Polarity,digital,,,,Normal
+ST03,ST03 Phase Align,STUDIO,Auto align finds the best delay and phase,Mix,digital,,,,100%
+ST04,ST04 Center,STUDIO,Haas with an automatic mono compatibility check,Center,knob,Wide,Focus,,
+ST04,ST04 Center,STUDIO,Haas with an automatic mono compatibility check,Haas,knob,0,40ms,,
+ST04,ST04 Center,STUDIO,Haas with an automatic mono compatibility check,Side,selector,,,,
+ST04,ST04 Center,STUDIO,Haas with an automatic mono compatibility check,Low center,knob,0,10,,
+ST04,ST04 Center,STUDIO,Haas with an automatic mono compatibility check,Balance,knob,L,R,,
+ST05,ST05 Phones,STUDIO,Calibrated profiles for common headphone models,Room,digital,,,,Studio A
+ST05,ST05 Phones,STUDIO,Calibrated profiles for common headphone models,Angle,digital,,,,30 deg
+ST05,ST05 Phones,STUDIO,Calibrated profiles for common headphone models,Head size,digital,,,,Medium
+ST05,ST05 Phones,STUDIO,Calibrated profiles for common headphone models,Tracking,digital,,,,Off
+ST06,ST06 Mono Low,STUDIO,Listen solos only what becomes mono,Frequency,knob,20,300,,
+ST06,ST06 Mono Low,STUDIO,Listen solos only what becomes mono,Slope,selector,,,,
+ST06,ST06 Mono Low,STUDIO,Listen solos only what becomes mono,Side boost,knob,-,+,,
+ST06,ST06 Mono Low,STUDIO,Listen solos only what becomes mono,Output,knob,-10,+10,,
+UT01,UT01 Gain,STUDIO,Remembers gain staging per track type,Gain,knob,-24,+24,,
+UT01,UT01 Gain,STUDIO,Remembers gain staging per track type,Balance,knob,L,R,,
+UT01,UT01 Gain,STUDIO,Remembers gain staging per track type,Width,knob,0,200,,
+UT02,UT02 Mono Check,STUDIO,Phone speaker simulation,Mono fold,digital,,,,-3 dB
+UT02,UT02 Mono Check,STUDIO,Phone speaker simulation,Phone speaker,digital,,,,Off
+UT02,UT02 Mono Check,STUDIO,Phone speaker simulation,Low cut,digital,,,,Off
+UT02,UT02 Mono Check,STUDIO,Phone speaker simulation,Level,digital,,,,0 dB
+UT03,UT03 Reference,STUDIO,Loudness matched A/B so louder never wins,Match,digital,,,,-1.2 LU
+UT03,UT03 Reference,STUDIO,Loudness matched A/B so louder never wins,Crossfade,digital,,,,50 ms
+UT03,UT03 Reference,STUDIO,Loudness matched A/B so louder never wins,Loop,digital,,,,Chorus
+UT03,UT03 Reference,STUDIO,Loudness matched A/B so louder never wins,Level,digital,,,,0 dB
+VO01,VO01 Tune,STUDIO,Detects the key and suggests the scale,Speed,digital,,,,20 ms
+VO01,VO01 Tune,STUDIO,Detects the key and suggests the scale,Humanize,digital,,,,40%
+VO01,VO01 Tune,STUDIO,Detects the key and suggests the scale,Vibrato,digital,,,,Natural
+VO01,VO01 Tune,STUDIO,Detects the key and suggests the scale,Formant,digital,,,,Keep
+VO01,VO01 Tune,STUDIO,Detects the key and suggests the scale,Transpose,digital,,,,0 st
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Key,selector,,,,
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Scale,selector,,,,
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Speed,knob,Slow,Hard,,
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Humanize,knob,0,10,,
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Formant,knob,-,+,,
+VO02,VO02 Tune Rt,STUDIO,Low latency and formant safe for live singers,Mix,knob,Dry,Wet,,
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Interval,digital,,,,+3rd
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Level,digital,,,,-3 dB
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Pan,digital,,,,L 40
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Formant,digital,,,,0
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Humanize,digital,,,,25%
+VO03,VO03 Harmony,STUDIO,Harmony follows chords from a MIDI track,Delay,digital,,,,15 ms
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Voices,selector,,,,
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Spread,knob,0,10,,
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Timing,knob,0,10,,
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Pitch var,knob,0,10,,
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Tone,knob,Dark,Bright,,
+VO04,VO04 Doubler,STUDIO,"Doubles with natural timing, not chorus wobble",Mix,knob,Dry,Wet,,
+VO05,VO05 Rider,STUDIO,Listens to the music and rides the vocal against it,Target,digital,,,,-18 dB
+VO05,VO05 Rider,STUDIO,Listens to the music and rides the vocal against it,Range,digital,,,,6 dB
+VO05,VO05 Rider,STUDIO,Listens to the music and rides the vocal against it,Sensitivity,digital,,,,Mid
+VO05,VO05 Rider,STUDIO,Listens to the music and rides the vocal against it,Music,digital,,,,Listening
+VO06,VO06 Formant,STUDIO,Shifts character while keeping timing,Pitch,digital,,,,+2 st
+VO06,VO06 Formant,STUDIO,Shifts character while keeping timing,Formant,digital,,,,+1.5
+VO06,VO06 Formant,STUDIO,Shifts character while keeping timing,Character,digital,,,,Neutral
+VO06,VO06 Formant,STUDIO,Shifts character while keeping timing,Mix,digital,,,,100%
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",HPF,knob,20,300,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",De-ess,knob,0,10,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Breath,knob,0,10,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Body,knob,-,+,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Presence,knob,-,+,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Air,knob,-,+,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Comp,knob,0,10,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Level,knob,-,+,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Plate,knob,0,10,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Echo,knob,0,10,,
+VO07,VO07 Vocal Strip,STUDIO,"Clean, tone, dynamics and space in the right order",Output,knob,-10,+10,,
+VO08,VO08 Breath,STUDIO,Marks breaths so you choose per phrase,Reduction,digital,,,,-12 dB
+VO08,VO08 Breath,STUDIO,Marks breaths so you choose per phrase,Sensitivity,digital,,,,Mid
+VO08,VO08 Breath,STUDIO,Marks breaths so you choose per phrase,Keep,digital,,,,Natural
+VO08,VO08 Breath,STUDIO,Marks breaths so you choose per phrase,Fade,digital,,,,10 ms

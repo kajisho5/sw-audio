@@ -1,4 +1,6 @@
-# 仕様書（Claude Doc 4RsLxmkx4ZSSP5xMSheqJa, node 77d73717-bfe7）のブロック位置メモ（開発用）
+# 仕様書のブロック位置メモ（開発用）
+
+**全文は `docs/spec/SW_AUDIO_spec_v1.0.md` にある（2026-10-06 に Claude Doc から書き出し）。通常はそちらを grep すればよい。** 以下は元の Claude Doc（4RsLxmkx4ZSSP5xMSheqJa, node 77d73717-bfe7）を直接読むときの位置。
 読み方: mcp Claude_Docs read, container {kind: project, id: 4RsLxmkx4ZSSP5xMSheqJa}, ref {object: node, id: 77d73717-bfe7},
 payload {kind: view, parentId: "m5j3x3qndkq.<id>"}（表・リスト）。続きの一覧は {kind: view, outline: true, from: "m5j3x3qndkq.36825"}。
 | 製品 | 表 | DSPリスト | 備考 |

@@ -2,6 +2,11 @@
 
 SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様書 v1.0 初稿」に従う。
 
+## 資料の場所
+
+- 仕様書の全文：`docs/spec/SW_AUDIO_spec_v1.0.md`／プロジェクト資料：`docs/project/`／画面デザイン：`docs/design/canvas/`（`project/<コード>.dc.html` が製品ごとの画面、`index.html` で全体）／デザインシステム：`docs/design/design-system/`
+- 作業ルール（Claude Code 用）：`CLAUDE.md`／残りの作業：`docs/tasks.md`
+
 ## 方式
 
 - **CLAP を正として作り、clap-wrapper で VST3（macOS は AU も）を生成する。** すべて MIT／Apache 2.0 で、売上上限や利用料はない（NOTICE.md）。
