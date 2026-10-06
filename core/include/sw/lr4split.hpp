@@ -50,4 +50,32 @@ private:
     std::array<Xover, 2> ch_{};
 };
 
+// three bands, two crossovers: b1 = AP2(LP1 x), b2 = LP2(HP1 x), b3 = HP2(HP1 x)  (AP = LP + HP of the same LR4 crossover)
+class Lr4Split3 {
+public:
+    void setup(double f1, double f2, double fs) {
+        for (auto& x : ch_) {
+            x.lp1.setup(Svf::Mode::LowPass, f1, fs); x.hp1.setup(Svf::Mode::HighPass, f1, fs);
+            x.a2lo.setup(Svf::Mode::LowPass, f2, fs); x.a2hi.setup(Svf::Mode::HighPass, f2, fs);
+            x.lp2.setup(Svf::Mode::LowPass, f2, fs); x.hp2.setup(Svf::Mode::HighPass, f2, fs);
+        }
+    }
+    void process(int channel, double in, double out[3]) {
+        X& x = ch_[static_cast<size_t>(channel)];
+        const double low = x.lp1.process(in), rest = x.hp1.process(in);
+        out[0] = x.a2lo.process(low) + x.a2hi.process(low);
+        out[1] = x.lp2.process(rest);
+        out[2] = x.hp2.process(rest);
+    }
+
+private:
+    struct Lr4 {
+        Svf a, b;
+        void setup(Svf::Mode m, double fc, double fs) { a.setup(m, fc, fs, 0.70710678, 0); b.setup(m, fc, fs, 0.70710678, 0); }
+        double process(double x) { return b.process(a.process(x)); }
+    };
+    struct X { Lr4 lp1, hp1, a2lo, a2hi, lp2, hp2; };
+    std::array<X, 2> ch_{};
+};
+
 }  // namespace sw

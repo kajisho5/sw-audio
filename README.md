@@ -37,6 +37,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA03 Tube | 真空管の倍音付け。Drive（0〜+24 dB を小信号利得 1 の非対称 tanh で、4× OS）、Bias（Cold＝対称〜Hot＝非対称）、Tube（12AX7／12AT7／EL34）、Tone（1 kHz を軸に ±6 dB の傾き）、Mix、Output。動くバイアス（EVO、既定 On）：入力の包絡（50 ms で戻る）で動作点をずらし、大きい音ほど非対称に歪む | 管ごとのバイアス・ヘッドルーム・ドライブ量、EVO のスイッチ（sa03.evo.on、既定 On）は設計値（下の「SA03 の設計」） |
 | SW SA04 Transformer | トランスとプリアンプの色付け。Iron（Nickel／Steel／Mu：飽和の天井・バイアス・低域の角）、Gain（目盛り 0〜60 ＝ −30〜+30 dB、30 で 0 dB）、Load（送り側のインピーダンス：高域の共振と低域の量を動かす、EVO）、Low weight／Top air、Pad（−20 dB）。低域ほど早く飽和する（2× OS） | 飽和の天井・共振の周波数と量などは設計値（下の「SA04 の設計」） |
 | SW SA05 Exciter | 高域の倍音付け。Tune 以上の帯域を取り出し、偶数次（2 次）・奇数次（3 次）の倍音を、帯域自身のレベルで正規化して（入力の大小によらず）作って足す。Harmonics、Mix、Low drive（低域にも軽く倍音）、Mode（Even／Odd／Both）、Mono low、Auto fill（EVO：1/3 オクターブごとに高域を目標の傾きと比べ、足りない帯域に倍音を最大 +12 dB 多く足す） | 倍音の作り方・目標の傾き（−1.5 dB/oct）・3 領域の分け方は設計値（下の「SA05 の設計」）。共通部品に `ThirdOctaveAnalyzer` を追加 |
+| SW SA06 Saturator | 5 種の歪み（Tape／Tube／Diode／Fold／Fuzz）を 3 帯域（分割 200 Hz・3 kHz、LR4）で使える多機能サチュレーター。帯域ごとに Type・Drive（0〜+24 dB）・Shape（Soft／Medium／Hard）・Bias・Dynamics（EVO：包絡で歪み量を動かす）・Mix、全体に Tone・Output。4× OS（Fold・Fuzz は 8×） | 画面に帯域ごとの区別が無い点は仕様書の要確認のまま。各形の式・Shape の意味は設計値（下の「SA06 の設計」） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -224,6 +225,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **倍音。** Tune 以上（LR4 のハイパス）の帯域 x を、帯域の平均二乗 ms（10 ms）で正規化して 2× OS で作る。偶数次 ＝ (x² − ms)/√ms（正弦波なら 2 次だけで基本波比 −3 dB）、奇数次 ＝ 1.4×(x³/ms − 1.5x)（3 次だけ、基本波は引く、基本波比 −3 dB）、Both は両方の和。生成後に Tune で再度ハイパスして、Tune 未満の混変調と直流を落とす。Harmonics ％ がそのまま倍音の量（35 → 100 ％ で +9.1 dB、テスト）。入力が 25 dB 小さくても倍音の相対量は ±1.5 dB 以内で同じ。Tune の下の音（2 kHz）は 7 kHz より 20 dB 以上少ない。Mix は共通枠の Dry／Wet で、既定 25 ％ のとき、足される倍音は Harmonics × 25 ％。
 - **Low drive／Mono low。** 200 Hz 以下（ローパス 2 次×2）を同じ生成器にかけ、120 Hz のハイパスで直流と基本波を落として、Low drive ％ × 0.5 で足す（100 ％ で 100 Hz の 2 次が基本波比 −9 dB）。Mono low が On のときは左右の和（ミッド）から作り、同じものを両チャンネルに足す。
 - **Auto fill（EVO、区分 B）。** `core/include/sw/bandlevels.hpp` の `ThirdOctaveAnalyzer`（31 バンド、25 Hz〜20 kHz、4096 点・Hann・50 % 重なり、1 秒の平滑、一般の用途に使えるよう共通部品にした。テスト：1 kHz の正弦波が自分のバンドに出る／ピンクノイズは平ら／白色ノイズは 1 バンドごとに約 1 dB 上がる）で入力の左右の和を測り、100 ms ごとに更新。Tune/8〜Tune/1.2（200 Hz 以上）のバンドの平均を基準に、目標は Tune/1.2 から 1.5 dB/oct で下がる線とし、足りない分（目標 − 実測、0〜+12 dB）を 3 領域（Tune〜2 倍、2〜4 倍、4 倍以上）の平均で出して、倍音側の 3 つのフィルタ（ベル 1.4×Tune、ベル 2.8×Tune、ハイシェルフ 5×Tune）に 1 秒で追従させる。8 kHz でカットしたノイズで 10〜15 kHz の倍音が Auto fill で 2 dB 以上増え、ピンクノイズに近い入力では変わらない（±2 dB、テスト）。
+- 遅延 0。
+
+### SA06 の設計（仕様書に数値がない部分）
+
+- **ID。** `sa06.b1.type` 〜 `sa06.b3.mix`（帯域ごとに type・drive・shape・bias・dynamics・mix）と `sa06.tone`・`sa06.output`。共通部品 `Lr4Split3`（`core/include/sw/lr4split.hpp`）で、低域に高い方の分割の全域通過分をそろえ、3 帯域の和の振幅が平ら（50 Hz〜14 kHz で ±0.2 dB、テスト）。Drive 0・Bias 0 のときは帯域をそのまま足す。
+- **形（どれも原点の傾き 1、Shape ごとに）。** Tape：`c·u/(1+|u/c|^k)^(1/k)`、Soft c 1.0・k 2、Medium 0.7・4、Hard 0.5・8（硬いほど天井が低く、膝が鋭い）。Tube：`h·s(tanh(u/h + 0.3) − tanh 0.3)`、h 2.0／1.4／1.0（偶数次が主）。Diode：正側 `ln(1+a·u)/a`、負側 `−ln(1+0.5a·|u|)/(0.5a)`、a 1／3／8（非対称、2 次・3 次の両方）。Fold：`sin(k·u)/k`、k 1／2／4。Fuzz：正側 `tape(u, k)`、負側は天井 0.6、k 2／4／12。実測（1 kHz、−12 dBFS RMS、Drive 12、基本波比）：Tape Soft は 3 次 −18 dB・5 次 −33 dB、Hard は 3 次 −12 dB・5 次 −20 dB（偶数次は −110 dB 未満）、Tube は 2 次 −21 dB・3 次 −31 dB（Soft）、Diode は 2 次 −27 dB・3 次 −25 dB（Soft）。
+- **Bias。** 動作点を 0.5×Bias ずらす（入力に足す）。式は `(f(u + 0.5·Bias) − f(0.5·Bias))` をその点の傾きで割り、小信号の利得を 1 に保つ。形が足した平均値（Bias・非対称が生む直流）は 5 Hz の 1 次で取り除く（足した分だけを引くので線形部分は変わらない）。Tape の Bias 1 で 2 次が −40 dB より大きくなり、Bias 0 では −80 dB 未満（テスト）。
+- **Dynamics（EVO）。** 帯域のピーク包絡（10 ms で戻る）が −18 dBFS を基準に ±18 dB で ±1 になる量 m を取り、ドライブに `Dynamics × 2.4 dB × m` を足す（±5 で ±12 dB）。＋なら大きい音ほど、−なら小さい音ほど歪む。Drive 12 の Tape で、20 dB 大きくしたときの 3 次の増え方が、Dynamics ＋5 で +3 dB 以上、−5 で −3 dB 以上、0 と比べて変わる（テスト）。
+- **OS。** 4×（2 段）、Fold と Fuzz は 8×（3 段、仕様書の推奨どおり）。Drive は 20 ms でなめらかに動く。Drive の分だけ音量が上がる（補正は Output で）。
 - 遅延 0。
 
 ### CS04 の注意
