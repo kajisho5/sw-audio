@@ -63,6 +63,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD01 Chorus | BBD 風のコーラス。Mode（I／II／I+II）、Rate、Depth、Width（左右の LFO 位相 0〜180°）、Tone、Mix。Wide ではモノの和で揺れが打ち消し合う | 設計値は README「MD01 Chorus の設計」。Δ ボタンの有無は画面で確認 |
 | SW MD02 Flanger | フランジャー。Rate（Sync で音符長）、Depth、Feedback ±100 %、Manual、Through zero（報告遅延 480／0）、Sync、Mix | 設計値は README「MD02 Flanger の設計」。Sync 時の LFO 位相は小節線にそろえる。Δ ボタンは無い（仕様書の要確認） |
 | SW MD03 Phaser | 全域通過を 4／6／8／12 段重ねたフェイザー。Rate（Sync で音符長）、Depth、Feedback、Center、Mix、Note follow（音高に Center が追従） | 設計値は README「MD03 Phaser の設計」。音高検出は DY05 から core/include/sw/pitch_tracker.hpp に移して共有。Δ ボタンの有無は画面で確認 |
+| SW MD04 Tremolo Pan | トレモロ／オートパン／ハーモニック（800 Hz で上下を逆位相）。Rate（Sync で音符長）、Depth、Shape（Sine／Triangle／Square／Ramp）、Width | 設計値は README「MD04 Tremolo Pan の設計」。Mix は無い（仕様書どおり）。Δ ボタンは無い（仕様書の要確認） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -461,6 +462,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **実測（テスト）。** ① 全域通過の振幅は 0 ±0.05 dB で平ら（4／6／8／12 段）。② 原音＋遅延音のノッチは N/2 本、最初のノッチは Center × tan(π/2N)（±3 %）。③ Feedback 9（0.81）で応答の山は 12〜16 dB（理論 1/(1−0.81) ＝ 14.4 dB）。
 - **Sync。** LFO の周期を音符長にする（MD02 と同じ：Rate を 120 bpm での周期と読んで最も近い音符長に寄せ、ホストのテンポで鳴らす。再生中で小節線が分かれば位相を小節線にそろえる）。
 - **Note follow（EVO、`md03.evo.on`、既定 Off、区分 B）。** DY05 と同じ音高検出（70〜1000 Hz、自己相関）を `core/include/sw/pitch_tracker.hpp` に移して共有し、Center ← Center × f0 ÷ 220 Hz（0.15 s で追従、無声のときは最後の値を保つ、倍率は 0.25〜8）。どの音でもノッチが同じ倍音の位置に来る（テスト：110／220／330 Hz の正弦で Center が 400／800／1200 Hz ±5 %）。基準 220 Hz は設計値（Center のつまみは「A3 を弾いたときの位置」）。
+
+### MD04 Tremolo Pan の設計（仕様書に数値がない部分）
+
+- **構成。** Mix は無い（全体を処理する、仕様書どおり）。遅延 0。LFO u（−1〜1）は Sine／Triangle／Square／Ramp（Square と Ramp の縁は時定数 2 ms でなめらかにして、クリックを避ける：縁は数 ms かかる。テスト：Square の中間値の時間は 5 % 未満、Ramp は 9 割がゆっくり上昇で下降は 1 割未満）。uni ＝ (u＋1)/2。
+- **Tremolo。** ゲイン ＝ 1 − Depth × (1 − uni)（Depth 100 % で無音まで下がる。テスト：Depth 30／60／100 % で最小 0.7／0.4／0.0 ±0.03）。**Width は右の LFO の位相を左に対して 0°〜180° ずらす**（100 % で左右が逆位相のステレオ・トレモロ、テスト：和が一定）。
+- **Auto pan。** θ ＝ π/4 × (1 ＋ Depth × Width × u)、左 ×√2 cos θ、右 ×√2 sin θ（中央で 1、定パワー：テスト L²＋R² が一定、端で一方が 0・他方が ×√2）。ステレオ入力はバランスとして効かせる。**Depth と Width は掛け合わせた量が振れ幅**（仕様書は Depth と Width の使い分けを書いていない：Depth＝量、Width＝ステレオの広がり）。Width 0 では動かない（テスト）。
+- **Harmonic（EVO 相当）。** 800 Hz（LR4）で上下に分け、低域のゲイン ＝ 1 − Depth × (1 − uni)、高域のゲイン ＝ 1 − Depth × uni（逆位相、和は常に 2 − Depth：テスト、Depth 80 % で 1.2 ±0.12）。Width は Tremolo と同じ。
+- **Rate／Sync。** Rate 0.1〜20 Hz。Sync On（既定）では Rate を「120 bpm での 1 周期」と読んで最も近い音符長に寄せ、ホストのテンポで鳴らす（既定 4 Hz ＝ 1/8、90 bpm なら 1/8 の長さ）。再生中で小節線が分かるときは位相を「次の小節線 − k 周期」にそろえる。テンポが無いときは Hz。
 
 ### CS04 の注意
 
