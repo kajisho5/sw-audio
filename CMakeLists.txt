@@ -4,6 +4,9 @@ if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
 endif()
 project(sw-audio VERSION 0.11.0 LANGUAGES C CXX)
+if (APPLE)
+    enable_language(OBJC OBJCXX)  # clap-wrapper (AUv2 / VST3 on macOS) compiles Objective-C++ sources
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
