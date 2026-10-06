@@ -55,6 +55,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW RV06 Shimmer | 音程を上げた残響が重なるシマー。16 本の FDN の線のうち 8 本の帰還の中に、2 粒の重ね合わせの音程変換（Octave＝2 倍／Fifth＝1.5 倍／Both）を入れる。Decay（1〜60 s）、Shimmer、Interval、Mix、Freeze（EVO、保持したパッドは昇らない）、Duck（既定 On） | 音程変換を線ごとの帰還の中に入れた理由（外側のループは発散した）・窓や割合は設計値（下の「RV06 の設計」）。Pitch「+12 st」は Interval の選択と解釈。Δ ボタンが無い |
 | SW RV07 Early | 初期反射だけのリバーブ。Use／Distance／Angle／Room size／Wall。直接音は遅らせない | 仕様書どおり Mix なし。設計値は README「RV07 の設計」。Δ ボタンなし |
 | SW RV08 Gated | ゲートリバーブ。Size／Gate time／Threshold／Shape／Tone／Mix、Snare key（検出をスネア帯域に絞る） | 設計値は README「RV08 Gated の設計」。被り学習は UI と一緒に作る（CS02 と同じ扱い）。Δ ボタンの有無は画面で確認 |
+| SW DL01 Echo | 3 種の音色（Tape／Analog／Digital）のエコー。Time（Sync で音符長）、Feedback 0〜110 %、ループ内 HPF／LPF、Depth／Rate、Ping-pong、Duck、Mix | 設計値は README「DL01 Echo の設計」。Sync は Time のつまみ位置を 18 の音符長に割り当て（既定 375 ms 位置は 1/4 付点）。画面パネル表記の確認（Hybrid echo processor／Tape delay）と Δ ボタンは未決 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -382,6 +383,16 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **ゲート。** 検出：入力のピーク追従（アタック 5 ms／リリース 15 ms）。Threshold（0〜10）＝ −60〜0 dBFS（1 目盛 6 dB、既定 5 ＝ −30 dBFS）を超えると開く。**一度しきい値−6 dB を下回ってからでないと再び開かない**（ヒステリシス）。開くたびに時間を 0 から数え直すので、**開いている間に次のヒットが来ると延長される**（テスト：0.2 s の 2 発目で 0.3 s でも開いている）。リリースを 15 ms にしたのは、60 ms では 26 dB 下がるのに約 180 ms かかり、150 ms 間隔のスネアが再トリガされなかったため（測定）。開いている間のゲイン g(x) ＝ (1−Shape)＋Shape·x、x ＝ 経過時間 ÷ Gate time。Flat（Shape 0）は全区間 1、Reverse（100 %）は 0 から 1 への直線の立ち上がり。Gate time（50〜800 ms）が過ぎたら 3 ms で閉じる（Reverse は尾が最大のところで切れるのが特徴）。先読みはしない（遅延 0）ので、Reverse は「音の前から立ち上がる」ものではなく、ヒットの後に膨らむ形。
 - **Tone。** 1 kHz を境にした 1 次のチルト（Dark：高域 −6 dB／低域 +6 dB、Bright：逆）。中央で平坦。
 - **進化機能（Snare key、`rv08.evo.on`、既定 Off）。** 検出だけを「約 150〜250 Hz（200 Hz の 4 次バンドパス、Q 2）と 2〜5 kHz（4 次バンドパス）」の和に通す。テスト：−20 dBFS の 3 kHz は開く、60 Hz と 1 kHz は開かない（Off ではどれも開く）。**被りの学習（CS02 と同じ）は UI のキャリブレーション操作と一緒に作る**（CS02 と同じ扱い）。キーを通した分だけ検出レベルは下がるので、On のときは Threshold を少し下げる。
+
+### DL01 Echo の設計（仕様書に数値がない部分）
+
+- **構成。** チャンネルごとに 録音 ＝ フィルタ（リミッタ（入力＋Feedback×返り））→ 遅延線 → 返り（4 点 Hermite 補間、時間は滑らかに追従）。出力は返りだけ（Mix は共通の枠、既定 25 %）。遅延 0。最大 4 s（Sync の 2 小節は 120 bpm 以上で収まり、それより遅いテンポは 4 s で頭打ち）。
+- **Feedback 110 % の頭打ち。** ループ内のソフトリミッタ L·tanh(x/L)（小信号のゲインは 1）。L ＝ Digital 8、Analog 1.6、Tape 1.0。**Feedback 110 % でも 20 秒で暴走せず（全モード・ピーク 8 未満、テスト）鳴り続ける。**
+- **Mode の性格（設計値）。** Tape：リミッタが L ＝ 1 で飽和（0 dBFS の 1 kHz で 3 次高調波が −30 dB より大きい）、9 kHz のローパス、時間の追従 0.12 s（変えるとピッチが滑る）、揺れは Depth 100 % で ±3 ms の正弦（Rate）＋フラッター（6.3 Hz、±0.05 ms × Depth）。Analog（BBD）：5 kHz の 2 次ローパス、追従 0.06 s、揺れ ±2.5 ms。Digital：フラット（0 dBFS の 1 kHz で 3 次高調波 −40 dB 未満）、追従 0.02 s、揺れ ±1 ms。実測：8 kHz の返りは Digital 比で Analog が 6 dB 以上下がり、Tape はその間。
+- **HPF／LPF** はループ内（返りと入力の両方を通る）、2 次。HPF の最小 20 Hz、LPF の最大 20 kHz は **Off（バイパス）**（画面の表記は Off がどちらにも付く想定）。
+- **Ping-pong。** 左の線だけが入力を受け、左の返りは右の線へ、右の返りは左の線へ入る（1 回目の返りは左、2 回目は右。テスト）。Off では左右が別々にエコー。
+- **Sync。** 仕様書は「Time は Sync 時 1/64〜2 小節」としか書いていないため、**Time のつまみの位置を 18 個の音符長（1/64〜2 小節、3連・付点つき。`sw/notes.hpp`）に等分で割り当てる**（今後の DL04／DL05 等と共通）。ホストのテンポが無いときは Time（ms）のまま。既定の 375 ms の位置は 1/4 付点（120 bpm で 750 ms）になる（画面の 375 ms と一致しない）。
+- **Duck。** 入力（左右の平均）が −40〜−10 dBFS の間で 0→全量、返りを Duck dB まで下げる（10 ms で下げ、250 ms で戻す）。実測：12 dB 設定で定常ノイズ中 −12 ±1.5 dB、入力が止まれば戻る。Duck の ID は `dl01.duck`（量を持つため `evo.on` ではない）。
 
 ### CS04 の注意
 

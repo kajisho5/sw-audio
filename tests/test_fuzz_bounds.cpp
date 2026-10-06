@@ -7,6 +7,7 @@
 #include "cs02/cs02.hpp"
 #include "cs03/cs03.hpp"
 #include "cs04/cs04.hpp"
+#include "dl01/dl01.hpp"
 #include "dy01/dy01.hpp"
 #include "dy02/dy02.hpp"
 #include "dy03/dy03.hpp"
@@ -99,6 +100,7 @@ TEST_CASE("fuzz parameter bounds: cs01") { fuzzBounds<sw::cs01::Processor>(sw::c
 TEST_CASE("fuzz parameter bounds: cs02") { fuzzBounds<sw::cs02::Processor>(sw::cs02::specs(), 17u); fuzzBounds<sw::cs02::Processor>(sw::cs02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cs03") { fuzzBounds<sw::cs03::Processor>(sw::cs03::specs(), 17u); fuzzBounds<sw::cs03::Processor>(sw::cs03::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cs04") { fuzzBounds<sw::cs04::Processor>(sw::cs04::specs(), 17u); fuzzBounds<sw::cs04::Processor>(sw::cs04::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: dl01") { fuzzBounds<sw::dl01::Processor>(sw::dl01::specs(), 17u); fuzzBounds<sw::dl01::Processor>(sw::dl01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: dy01") { fuzzBounds<sw::dy01::Processor>(sw::dy01::specs(), 17u); fuzzBounds<sw::dy01::Processor>(sw::dy01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: dy02") { fuzzBounds<sw::dy02::Processor>(sw::dy02::specs(), 17u); fuzzBounds<sw::dy02::Processor>(sw::dy02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: dy03") { fuzzBounds<sw::dy03::Processor>(sw::dy03::specs(), 17u); fuzzBounds<sw::dy03::Processor>(sw::dy03::specs(), 29u); }
