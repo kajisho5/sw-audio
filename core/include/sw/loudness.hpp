@@ -3,6 +3,7 @@
 // at 48 kHz they reproduce the tables in BS.1770. Used by Auto gain, meters (MT01/LV23) and MS01.
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -101,6 +102,66 @@ private:
     double acc_ = 0;
     int blockLen_ = 4800, inBlock_ = 0;
     size_t head_ = 0, filled_ = 0;
+};
+
+// BS.1770-4 gated integrated loudness: 400 ms blocks every 100 ms, absolute gate -70 LUFS, relative gate -10 LU.
+// Block energies go into 0.1 LU histogram bins (fixed memory, any length). forgetSeconds > 0 lets old blocks fade out
+// (exponential weight per block) so that a controller can follow a level change; 0 keeps everything (plain integrated).
+class IntegratedLoudness {
+public:
+    void setup(double fs, int numCh, double forgetSeconds) {
+        k_.assign(static_cast<size_t>(std::max(1, numCh)), KWeighting{});
+        for (auto& k : k_) k.setup(fs);
+        hop_ = std::max(1, static_cast<int>(std::lround(fs * 0.1)));
+        decay_ = forgetSeconds > 0.0 ? std::exp(-0.1 / forgetSeconds) : 1.0;
+        count_.assign(kBins, 0.0); sum_.assign(kBins, 0.0);
+        reset();
+    }
+    void reset() {
+        for (auto& k : k_) k.reset();
+        std::fill(count_.begin(), count_.end(), 0.0); std::fill(sum_.begin(), sum_.end(), 0.0);
+        acc_ = 0; inHop_ = 0; hops_.fill(0.0); nHops_ = 0; blocks_ = 0;
+    }
+    void process(const float* const* ch, int numCh, int n) {
+        numCh = std::min(numCh, static_cast<int>(k_.size()));
+        for (int i = 0; i < n; ++i) {
+            for (int c = 0; c < numCh; ++c) { const double y = k_[static_cast<size_t>(c)].process(ch[c][i]); acc_ += y * y; }
+            if (++inHop_ == hop_) {
+                for (int k = 3; k > 0; --k) hops_[static_cast<size_t>(k)] = hops_[static_cast<size_t>(k - 1)];
+                hops_[0] = acc_ / hop_; acc_ = 0; inHop_ = 0;
+                if (++nHops_ >= 4) addBlock(0.25 * (hops_[0] + hops_[1] + hops_[2] + hops_[3]));
+            }
+        }
+    }
+    // gated integrated loudness in LUFS (-200 when nothing above the absolute gate has been measured)
+    double integrated() const {
+        double c = 0, s = 0;
+        for (size_t b = 0; b < kBins; ++b) { c += count_[b]; s += sum_[b]; }
+        if (c <= 0.0) return -200.0;
+        const double relGate = LoudnessMeter::lufs(s / c) - 10.0;
+        double c2 = 0, s2 = 0;
+        for (size_t b = 0; b < kBins; ++b) if (binLufs(b) >= relGate) { c2 += count_[b]; s2 += sum_[b]; }
+        return c2 > 0.0 ? LoudnessMeter::lufs(s2 / c2) : -200.0;
+    }
+    long long blocks() const { return blocks_; }
+
+private:
+    static constexpr size_t kBins = 701;   // -70.0 .. 0.0 LUFS in 0.1 LU steps (louder blocks go into the top bin)
+    static double binLufs(size_t b) { return -70.0 + 0.1 * static_cast<double>(b); }
+    void addBlock(double ms) {
+        const double l = LoudnessMeter::lufs(ms);
+        if (decay_ < 1.0) for (size_t b = 0; b < kBins; ++b) { count_[b] *= decay_; sum_[b] *= decay_; }
+        ++blocks_;
+        if (l < -70.0) return;   // absolute gate
+        const size_t b = std::min(kBins - 1, static_cast<size_t>(std::lround((l + 70.0) * 10.0)));
+        count_[b] += 1.0; sum_[b] += ms;
+    }
+    std::vector<KWeighting> k_;
+    std::vector<double> count_, sum_;
+    std::array<double, 4> hops_{};
+    double acc_ = 0, decay_ = 1.0;
+    int hop_ = 4800, inHop_ = 0, nHops_ = 0;
+    long long blocks_ = 0;
 };
 
 }  // namespace sw

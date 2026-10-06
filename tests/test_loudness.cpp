@@ -44,3 +44,33 @@ TEST_CASE("silence reads as very low loudness, not NaN") {
     CHECK(m.shortTerm() < -100.0);
     CHECK(std::isfinite(m.shortTerm()));
 }
+
+// ---- gated integrated loudness (BS.1770-4): absolute gate -70 LUFS, relative gate -10 LU
+namespace {
+std::vector<float> sineAt(double dbfs, double seconds, double f = 997.0, double fs = 48000.0) {
+    const double a = std::pow(10.0, dbfs / 20); std::vector<float> x(static_cast<size_t>(seconds * fs));   // peak level (both channels: reads the same LUFS)
+    for (size_t i = 0; i < x.size(); ++i) x[i] = static_cast<float>(a * std::sin(2 * kPi * f * i / fs)); return x;
+}
+}
+TEST_CASE("integrated loudness: a steady -20 dBFS 997 Hz sine in both channels reads -20 LUFS") {
+    IntegratedLoudness m; m.setup(48000.0, 2, 0.0);
+    auto x = sineAt(-20, 10); const float* c[2] = {x.data(), x.data()};
+    for (size_t off = 0; off < x.size(); off += 480) { const float* p[2] = {c[0] + off, c[1] + off}; m.process(p, 2, 480); }
+    CHECK(m.integrated() == doctest::Approx(-20.0).epsilon(0.002));
+}
+TEST_CASE("integrated loudness: silence is gated out, and so is a part more than 10 LU below the rest") {
+    IntegratedLoudness m; m.setup(48000.0, 2, 0.0);
+    auto run = [&](const std::vector<float>& x) { for (size_t off = 0; off + 480 <= x.size(); off += 480) { const float* p[2] = {x.data() + off, x.data() + off}; m.process(p, 2, 480); } };
+    run(sineAt(-20, 15)); run(std::vector<float>(48000 * 15, 0.0f));
+    CHECK(m.integrated() == doctest::Approx(-20.0).epsilon(0.003));
+    run(sineAt(-45, 15));                                                 // 25 LU lower: below the relative gate
+    CHECK(m.integrated() == doctest::Approx(-20.0).epsilon(0.003));
+    IntegratedLoudness q; q.setup(48000.0, 2, 0.0);
+    CHECK(q.integrated() < -100.0);                                       // nothing measured yet
+}
+TEST_CASE("integrated loudness with a forgetting time follows level changes") {
+    IntegratedLoudness m; m.setup(48000.0, 2, 5.0);
+    auto run = [&](const std::vector<float>& x) { for (size_t off = 0; off + 480 <= x.size(); off += 480) { const float* p[2] = {x.data() + off, x.data() + off}; m.process(p, 2, 480); } };
+    run(sineAt(-30, 20)); run(sineAt(-24, 40));
+    CHECK(m.integrated() == doctest::Approx(-24.0).epsilon(0.02));       // the old -30 part has faded out
+}

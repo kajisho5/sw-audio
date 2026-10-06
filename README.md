@@ -44,6 +44,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW DY10 Multiband 4 | 4 帯域マルチバンドコンプ。4 次 LR で 3 か所のクロスオーバー（240 Hz／2 kHz／8 kHz、足すと平ら）、帯域ごとにしきい値・レシオ・アタック・リリース・Range・Gain・Solo・Bypass。クロスオーバー同士は 1 オクターブ以上離す（押し返す） | 帯域の ID は dy10.b1〜b4、クロスオーバーは dy10.x1〜x3。Auto（クロスオーバー解析）は画面と一緒に作る（下の「DY10 の設計」） |
 | SW DY11 Multiband 6 | 6 帯域のダイナミクス。帯域分割なし、6 本の「動く」フィルタを直列に置く（遅延 0、帯域ごとに Compress／Expand／Dynamic EQ を混在できる）。Compress・Expand は隣の帯域との中点までを覆う広いベル（両端はシェルフ）、Dynamic EQ は Width のベル。しきい値・レシオ・アタック・リリース・Range・Gain | 帯域の ID は dy11.b1〜b6。ニー 6 dB・検出の RMS 10 ms は設計値（下の「DY11 の設計」） |
 | SW DY12 Parallel | パラレル圧縮とアップワード圧縮。Squash（しきい値 0〜−40 dBFS、10:1 固定、−12 dBFS の基準レベルで音量が変わらない自動メイクアップ）、Blend（潰した音の混ぜ量、既定 30 %）、Upward（原音側で小さい音を最大 +12 dB、−60 dBFS 以下は持ち上げない）、Tone（潰した側だけの 1 次の傾き ±6 dB）、Speed（Fast／Med／Slow／Auto） | 共通の Mix は無い（Blend が兼ねる、仕様どおり）。メイクアップは静的、Upward の曲線は設計値（下の「DY12 の設計」） |
+| SW MS01 Maximizer | マスタリング用マキシマイザー。Gain（0〜+24 dB）→ 遅い段（Character X：比率 1〜4・ニー 0〜12 dB、Y：アタック 1〜30 ms）→ 速い段（先読み 2 ms の PeakLimiter、True peak 4×）→ TPDF ディザー。Lock（EVO）：出力の Integrated ラウドネスを測って Gain を Target へ寄せ（時定数 10 秒）、30 秒以上・0.3 LU 以内・安定で固定。Ceiling、Release（右端 Auto）、Stereo、Low end guard | 遅延 112 サンプル@48 kHz（先読み 96＋補間 16）。固定した Gain のホストへの書き戻しは画面と一緒に作る（下の「MS01 の設計」） |
 | SW MS02 True Peak | 先読みブリックウォール＋標本間ピーク検出（4x/8x）、TPDF ディザー | 下の「MS02 の保証範囲」 |
 | SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
@@ -144,6 +145,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Upward（原音側のみ）。** 10 ms の RMS が −60 dBFS 以下は 0、−50〜−40 は全量（Upward 10 で +12 dB）、−20 で 0 に戻る滑らかな曲線（設計値）。アタック 20 ms、リリース 100 ms。−50 dBFS で +12 dB、−30 dBFS で約 +6 dB、−6 dBFS で 0、−70 dBFS で 0（テスト）。
 - **Tone。** 1 kHz の 1 次ローパスで低域・高域に分け、低域を −Tone dB、高域を +Tone dB（Bright で高域が上がる）。潰した側だけにかかり、Dry は変わらない。
 - **出力。** (1 − Blend) × Dry（Upward 後）＋ Blend × 潰した音。Blend 0 で Dry のみ、100 で潰した音のみ。遅延 0。
+
+### MS01 の設計（仕様書に数値がない部分）
+
+- **2 段。** 遅い段は、しきい値（Ceiling − 6 dB）を超えた分を比率 1＋3×X/100（Clean 1:1 〜 Dense 4:1）、ニー 12×X/100 dB で下げる（検出は 10 ms でリリースするピーク、リリースは Release の 3 倍＝20〜1000 ms、Auto は 300 ms）。アタックは 30^(Y/100) ms（Smooth 1 ms 〜 Punch 30 ms。2 ms 時点の遅い段の GR は Smooth の方が 2 dB 以上深い、テスト）。メイクアップは足さない（足すと既定の X 50 で Gain 0 のまま音量が変わるため）。速い段は `sw::PeakLimiter`（MS02 と同じ、先読み 2 ms ＝ 96 サンプル、True peak On なら 4× の補間検出＋余白 16 で遅延 112）で、Ceiling −0.02 dB の余白付き。Auto のリリースは、短い圧縮 40 ms・100 ms 以上続く圧縮は 400 ms。X を上げると、速い段が受け持つ平均の GR が 0.5 dB 以上減る（テスト）。
+- **Low end guard。** 遅い段の検出側だけに 120 Hz の −12 dB ローシェルフ。速い段は Ceiling を守るため全帯域のまま（低域を検出から外すと天井を超えうる）。
+- **Lock。** 出力（ディザー前）の BS.1770 Integrated（ゲート付き）を、10 秒で古い分が薄れる重み（設計値）で測り、0.1 秒ごとに `Gain += (Target − Integrated) × 0.1 / 10`。2 秒は測るだけ。30 秒以上経ち、Target との差が 0.3 LU 未満、かつ直近 5 秒の Integrated の変動が 0.15 LU 未満になったら固定（以後 Gain は動かない）。実測：−26 dBFS RMS の定常ノイズで Target −14 LUFS に対し 47 秒で Gain 6.05 dB に固定、積算値 −13.8 LUFS。同じ入力なら毎回同じ固定値（テスト）。Lock の On/Off、Target の変更で測り直す。**固定値は `gainDb()` で読める**。パラメータ（Gain）へ書き戻してホストに保存させる処理は、プラグイン層が画面の「Lock」操作と一緒に作る（音声スレッドからホストのパラメータを書けないため）。
+- 共通部品に `IntegratedLoudness`（`core/include/sw/loudness.hpp`、BS.1770-4 のゲート付き Integrated：400 ms ブロック・100 ms 刻み、絶対ゲート −70 LUFS、相対ゲート −10 LU、0.1 LU のヒストグラムで固定メモリ）を追加。MT01・LV23 でも使う。
+- Low lat（先読み 0.5 ms・IIR 補間で約 24 サンプル）は EVO バー（画面）と一緒に作る。
 
 ### CS04 の注意
 
