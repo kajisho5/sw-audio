@@ -43,6 +43,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW DY09 Transient | トランジェントシェイパー。速い／遅い／さらに遅い 3 つの包絡の比（dB）で頭（Attack）と余韻（Sustain）を ±15 dB 足し引き（音量に左右されない）。Speed（Fast／Medium／Slow）、Clip（Off／Soft／Hard、2× OS、0 dBFS）、Mode：Smooth／Split bands（150 Hz・4 kHz の LR4 で 3 帯域に分けて帯域ごとに整形、足すと平ら） | 帯域ごとの ID は dy09.b1〜b3（Low／Mid／High）と解釈。時定数と量の式は設計値（下の「DY09 の設計」） |
 | SW DY10 Multiband 4 | 4 帯域マルチバンドコンプ。4 次 LR で 3 か所のクロスオーバー（240 Hz／2 kHz／8 kHz、足すと平ら）、帯域ごとにしきい値・レシオ・アタック・リリース・Range・Gain・Solo・Bypass。クロスオーバー同士は 1 オクターブ以上離す（押し返す） | 帯域の ID は dy10.b1〜b4、クロスオーバーは dy10.x1〜x3。Auto（クロスオーバー解析）は画面と一緒に作る（下の「DY10 の設計」） |
 | SW DY11 Multiband 6 | 6 帯域のダイナミクス。帯域分割なし、6 本の「動く」フィルタを直列に置く（遅延 0、帯域ごとに Compress／Expand／Dynamic EQ を混在できる）。Compress・Expand は隣の帯域との中点までを覆う広いベル（両端はシェルフ）、Dynamic EQ は Width のベル。しきい値・レシオ・アタック・リリース・Range・Gain | 帯域の ID は dy11.b1〜b6。ニー 6 dB・検出の RMS 10 ms は設計値（下の「DY11 の設計」） |
+| SW DY12 Parallel | パラレル圧縮とアップワード圧縮。Squash（しきい値 0〜−40 dBFS、10:1 固定、−12 dBFS の基準レベルで音量が変わらない自動メイクアップ）、Blend（潰した音の混ぜ量、既定 30 %）、Upward（原音側で小さい音を最大 +12 dB、−60 dBFS 以下は持ち上げない）、Tone（潰した側だけの 1 次の傾き ±6 dB）、Speed（Fast／Med／Slow／Auto） | 共通の Mix は無い（Blend が兼ねる、仕様どおり）。メイクアップは静的、Upward の曲線は設計値（下の「DY12 の設計」） |
 | SW MS02 True Peak | 先読みブリックウォール＋標本間ピーク検出（4x/8x）、TPDF ディザー | 下の「MS02 の保証範囲」 |
 | SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
@@ -136,6 +137,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **検出。** 帯域の形に合わせたバンドパス（シェルフ側はローパス／ハイパス）→ RMS 10 ms、左右の大きい方。ゲイン変化は 16 サンプルごとに係数を更新（EQ07 と同じ方式、補間つき）。
 - **動作。** Compress は 6 dB のソフトニーで、しきい値を超えた分を（1 − 1/レシオ）で下げる。Expand はしきい値より下の分を（レシオ − 1）倍で下げる（20 dB 下・レシオ 2 → −20 dB を Range で頭打ち）。Dynamic EQ はベルのゲインが Compress と同じ式で動く。Range は動的ゲインの下限、Gain は常時足す静的なゲイン。
 - 何もしない設定（既定：しきい値 0 dB）で 40 Hz〜16 kHz の正弦波が ±0.3 dB 以内（6 本のベル／シェルフが直列で平ら）。遅延 0。
+
+### DY12 の設計（仕様書に数値がない部分）
+
+- **潰す側。** しきい値 −4×Squash dBFS、10:1、6 dB のソフトニー、検出は Program（RMS とピークの混合）、左右の大きい方。メイクアップは「−12 dBFS RMS の基準レベルで失う分」を静的に足す（Squash 5＝しきい値 −20 で +7.2 dB、Squash 10 で +25 dB、Squash 0 は 0）。**静的なので、アタックの間は頭がメイクアップ込みで通る**（Blend 40・Squash 8 のドラムでピークは Dry より最大 +6 dB 以内、テストの範囲）。メイクアップを GR に追従させると、定常な信号で圧縮そのものが打ち消されて 10:1 でなくなるため、静的にした。ヘッドを守る先読みは遅延 0 の仕様で持たない。Speed Auto は 2 段（3 ms／80 ms と 100 ms／800 ms の小さい方）。
+- **Upward（原音側のみ）。** 10 ms の RMS が −60 dBFS 以下は 0、−50〜−40 は全量（Upward 10 で +12 dB）、−20 で 0 に戻る滑らかな曲線（設計値）。アタック 20 ms、リリース 100 ms。−50 dBFS で +12 dB、−30 dBFS で約 +6 dB、−6 dBFS で 0、−70 dBFS で 0（テスト）。
+- **Tone。** 1 kHz の 1 次ローパスで低域・高域に分け、低域を −Tone dB、高域を +Tone dB（Bright で高域が上がる）。潰した側だけにかかり、Dry は変わらない。
+- **出力。** (1 − Blend) × Dry（Upward 後）＋ Blend × 潰した音。Blend 0 で Dry のみ、100 で潰した音のみ。遅延 0。
 
 ### CS04 の注意
 
