@@ -74,6 +74,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW ST05 Phones | ヘッドホンでスピーカーの部屋を聴く。Speakers（Nearfield／Mains／Car）、Room、Angle、Head size、Phones profile（Closed／Open／Earbud の汎用カーブ）、Tracking（頭の向きの土台）。モデルから作った 4 本の両耳 IR を畳み込む（遅延 0） | 設計値は README「ST05 Phones の設計」。IR は録音ではなくモデル（仕様書の収録は未対応）。ヘッドホンは機種名でなく種類別、測定データ読み込みと Tracking の機器は未対応。CPU は 256 サンプルで平均約 27 %、512 以上を推奨 |
 | SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
 | SW VO01 Tune | ピッチ補正（Auto）。PSOLA の音程エンジン＋Scale／Key／Speed／Humanize／Vibrato／Formant／Transpose、キー検出の提案。遅延は 1450 サンプル（仕様書の見積もり 512 は低い男声の 1 周期が入らず満たせない） | 設計値は README「音程エンジンと VO01 Tune の設計」。Graph 編集・Detect MIDI・Snap・Reference は画面／MIDI／ARA が要るので保存だけ。Δ ボタンは無い（仕様書の要確認） |
+| SW VO02 Tune Rt | ライブ向けのピッチ補正。Key（12）、Scale（Maj／Min／Chr）、Speed（Slow〜Hard）、Humanize、Formant（母音だけ動かす）、Mix。不安定な区間は補正を弱める。遅延 1085 サンプル | 設計値は README「VO02 Tune Rt の設計」。遅延は仕様書の見積もり 128 サンプルとは違う（110 Hz 以上限定の短縮版でも 1 周期ぶん要る）。Key の ♯・♭は 12 段にした |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -568,6 +569,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **実測（テスト）。** 235 Hz（58.1 半音）は C メジャーで B（59）へ、226 Hz は A（57）へ（±0.08 半音）。Chromatic で 228 Hz → A#。Key（D メジャー）や Custom（C と G だけ → 220 Hz が G）も動く。Transpose +7 で 66.0 ±0.1。Speed 0 なら 0.1 s 後に新しい音へ、300 ms なら 0.1 s 後はまだ動かず 1.2 s 後に着く。Vibrato：±0.6 半音のビブラートの標準偏差が Natural で 0.25 超、Reduce で Natural の 0.6 倍未満、Flat で 0.35 倍未満。Humanize 0／50／100 % で 0.4 半音の誤差が 0／0.12／0.24 半音残る。Formant の Keep／Follow、無声ノイズの素通し（±1 dB）、Graph（補正なし）も確認。
 - **View／Detect MIDI／Snap to grid／Reference は画面・MIDI・ARA が要るので、保存だけで効かない**（Graph は補正なしの Auto）。トラックはモノ（ステレオ入力は和にして、左右同じ音を出す）。Mix は無い。
 - **進化機能（キー検出、区分 B）。** 聞いた音の高さのクラス（30 秒で薄まる時間重みのヒストグラム）を Krumhansl–Schmuckler のメジャーの型と 12 のキーで相関させ、`suggestedKey()` と確からしさを出す（提案だけ、Scale は書き換えない）。テスト：E メジャーの旋律で E（4）、確からしさ 0.6 超、無音では 0。
+
+### VO02 Tune Rt の設計（仕様書に数値がない部分）
+
+- **構成。** VO01 と同じ音程エンジン（`PitchAnalyzer`＋`PsolaSynth`＋`PitchCorrector`）の**ライブ向け設定**：最低音 110 Hz（音程の窓が短い）、粒は 1.5 周期、**不安定な区間は補正を弱める**（連続する 2 つの印で音高が 2.5 半音以上跳んだら、次の 4 つの印は 30 % の強さで補正：誤検出をそのまま歌わせない。テスト：定常 0.2 半音上ずりの完全補正 −0.2 に対し、跳んだ直後は 0.3 倍、弱めなしなら +0.8）。出力は処理した音だけ（Mix は共通の枠、既定 100 %）。トラックはモノ。
+- **遅延（仕様書の見積もり 128 サンプルとは違う）：1085 サンプル（22.6 ms@48 kHz）。** 同じ理由（粒の右半分と音程の窓が入る前に出せない）で、周期の短い高い声（110 Hz 以上）に限って短くしてある。**110 Hz 未満は動かさない。** 128 サンプルにするには別の方式（因果的な粒、検出の短縮）が要る。
+- **パラメータ。** Key（12）、Scale（Maj／Min（自然短音階）／Chr）。**Speed は Slow〜Hard ＝ 100〜0 ms（Skew k ＝ 2、つまみが逆向き。中央が 25 ms ＝ 既定）。** Humanize 0〜10（VO01 の 0〜100 %）、既定 3。**Formant −3〜+3（半音相当）：声の母音だけを動かし、音高は動かさない**（テスト：基本周波数が同じで、エネルギーが 700 Hz から 700×2^(3/12) Hz へ移る）。Mix は 0〜100 %。ビブラートは残す（Natural）。
+- **音階の切り替わり。** 新しい音に移ったとき、ビブラートを取り出すためのゆっくりした中心を歌い手の位置から始め直す（音の段差をビブラートと誤って残さない。VO01 の実測を直した：Natural でもステップ後に 0.5 半音程度の戻りに収まる）。
 
 ### CS04 の注意
 

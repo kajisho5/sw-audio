@@ -29,10 +29,10 @@ public:
     };
     void setSettings(const Settings& s) { s_ = s; }
     const Settings& settings() const { return s_; }
-    void reset() { have_ = false; haveN_ = false; cn_ = 0.0; note_ = -1; cc_ = c_ = 0.0; prevM_ = 0.0; unstable_ = 0; hist_.fill(0.0); lastOut_ = lastM_ = 0.0; }
+    void reset() { have_ = false; haveN_ = false; cn_ = 0.0; lastN_ = -1000; note_ = -1; cc_ = c_ = 0.0; prevM_ = 0.0; unstable_ = 0; hist_.fill(0.0); lastOut_ = lastM_ = 0.0; }
     void ratio(double f0, bool voiced, double dt, double& r, double& fm) override {
         r = 1.0; fm = 1.0;
-        if (!voiced || f0 <= 0.0) { have_ = false; haveN_ = false; return; }
+        if (!voiced || f0 <= 0.0) { have_ = false; haveN_ = false; lastN_ = -1000; return; }
         const double m = 69.0 + 12.0 * std::log2(f0 / 440.0);
         // key histogram (pitch class of the nearest semitone), 30 s decay
         { const double dec = std::exp(-dt / 30.0); for (auto& h : hist_) h *= dec; const int pc = ((static_cast<int>(std::lround(m)) % 12) + 12) % 12; hist_[static_cast<size_t>(pc)] += dt; }
@@ -42,6 +42,7 @@ public:
         if (!haveN_ || std::abs(m - cn_) > 1.5) cn_ = m; else cn_ += kn * (m - cn_);
         haveN_ = true;
         const int n = nearestNote(cn_);
+        if (n != lastN_) { if (lastN_ != -1000) c_ = cn_; lastN_ = n; }   // a new note: the slow centre starts from where the singer is, so the step is not mistaken for vibrato
         const double tau = s_.speedMs * 0.001;
         if (tau <= 1e-6) cc_ = n; else cc_ += (n - cc_) * (1.0 - std::exp(-dt / tau));
         const double v = m - c_;
@@ -89,7 +90,7 @@ private:
     Settings s_;
     bool have_ = false, haveN_ = false;
     double cn_ = 0.0;
-    int note_ = -1, unstable_ = 0;
+    int note_ = -1, unstable_ = 0, lastN_ = -1000;
     double cc_ = 0.0, c_ = 0.0, prevM_ = 0.0, lastOut_ = 0.0, lastM_ = 0.0;
     std::array<double, 12> hist_{};
 };
