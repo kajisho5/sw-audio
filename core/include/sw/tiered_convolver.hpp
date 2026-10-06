@@ -29,9 +29,12 @@ public:
         scratch_.assign(256, 0.0f); s2_ = scratch_; s3_ = scratch_;
         stage_ = 0;
         if (phase != 0) {
+            // phase 1: 3/4 of a tier-2 block and 1/2 of a tier-3 block ahead (RV04's two channels); phases 2 and 3 (ST05's four convolvers) put the heavy blocks in yet other calls
+            static const int calls2[4] = {0, 3, 2, 1}, calls3[4] = {0, 16, 8, 24};
+            const int p = phase & 3;
             std::vector<float> z(256, 0.0f); float* pz[1] = {z.data()};
-            if (has2_) for (int i = 0; i < 3 * kB2 / 4 / 256; ++i) t2_.process(pz, 1, 256);
-            if (has3_) for (int i = 0; i < kB3 / 2 / 256; ++i) t3_.process(z.data(), 256);
+            if (has2_) for (int i = 0; i < calls2[p] * kB2 / 4 / 256; ++i) t2_.process(pz, 1, 256);
+            if (has3_) for (int i = 0; i < calls3[p] * 256 / 256; ++i) t3_.process(z.data(), 256);
         }
     }
     int latencySamples() const { return 0; }
