@@ -83,6 +83,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW VO08 Breath | Reduce／Remove／Mark only、Reduction・Sensitivity・Keep・Fade。規則による息の検出。遅延 1024 サンプル | 設計値は README「VO08 Breath の設計」。学習モデルとフレーズごとの選択は未実装 |
 | SW RS01 Denoise | 短時間 FFT（2048）のスペクトル抑圧。Profile・Adaptive（最小値統計）・Reduction・Threshold・Smoothing・Low/High band・Artifact guard・Learn。遅延 2048 | 設計値は README「RS01 Denoise の設計」。共通部品 sw/stft.hpp。定常な純音は雑音として覚える。Low lat は未実装 |
 | SW RS03 Dehum | 基本波と倍音のノッチ列（Base 50/60/Auto、Harmonics、Depth、Width、Buzz）。Track で ±2 Hz を追従。遅延 0 | 設計値は README「RS03 Dehum の設計」。Width は Q 60〜8、Buzz は設計値 |
+| SW RS04 Declick | AR モデルの励起で検出して補間（Click／Crackle／Both、Sensitivity、Click width、Crackle %、Low guard）。遅延 512。共通部品 sw/ar_repair.hpp | 設計値は README「RS04 Declick の設計」。2 ms 級のクリックは直りにくい。Repair ボタンの役割は未定 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -655,6 +656,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Track（On）。** 基本波の周波数を ±2 Hz の範囲で追う：信号を 300 Hz のローパスで 1.5 kHz に間引き、1 秒の窓で最初の 4 倍音までを 0.25 Hz 刻みの 17 周波数に射影し、ピーク（放物線補間。中央値の 2 倍以上のときだけ）へ推定を半分ずつ寄せる。全ノッチが推定に追従する。テスト：51.5 Hz のハムを 9 秒後に −25 dB 以上（Track Off は −15 dB 未満）、50→51 Hz に流れるハムも −15 dB 以上。**追従は秒単位**（速く揺れるハムには間に合わない）。
 - **Base Auto。** 50／60 Hz の両方を探し、強いほうに 2 回続けて決まったら切り替える（テスト：60 Hz のハムで 5〜8 秒に −25 dB 以上）。
 - 遅延 0。仕様書の要確認（画面の Unit A／B／C は修復機に意味が無い）は、パラメータに含めていない。
+
+### RS04 Declick の設計（仕様書に数値がない部分）
+
+- **共通部品 `sw/ar_repair.hpp`。** Levinson-Durbin の AR 当てはめと、欠けた区間の最小二乗補間（Janssen／Godsill-Rayner：励起の二乗和を最小にする。帯幅 p の対称正定値 Toeplitz 系を帯 Cholesky で解く）。RS05 でも使う。
+- **処理。** 128 サンプルごと・チャンネルごとに、直近 1024 サンプルへ 32 次の AR を当てはめ、励起 e の頑健な尺度 σ ＝ 中央値|e| ／ 0.6745 を出す。これから出力へ出る 128 サンプルのうち、|e| が T×σ を超えたところをクリックの頭とし、1・2・4 … サンプル（Click width まで）のうち、補間したあとの励起が T×σ 以下になる最小の長さで置き換える。**Click width を超える長さのものは触らない**（受け入れられなければ飛ばす）。遅延 512 サンプル（補間に必要な先読み。最大 5 ms ＝ 240 ＋ 32 ＜ 512 − 128）。
+- **Target。** Click：T ＝ 7／5／3.5（Sensitivity Low／Mid／High）、全量置換。Crackle：T ＝ 4.5／3.5／2.8、長さは最大 0.2 ms、置換は Crackle %（x ＋ c（補間 − x））。Both：Click のあとに Crackle。**Low guard** On：窓のエネルギーの 90 % 超が 150 Hz 以下（バスドラムの打撃）のとき T を 1.6 倍にする。
+- **確かめたこと（テスト）。** ランダムなクリック 1・3・12 サンプルで励起との誤差が 20 dB 以上下がる、Click width 0.3 ms と 1 ms で 48 サンプル（1 ms）のクリックの補修が分かれる（8 dB 以上）、Sensitivity High が Low より 5 件以上多く拾う、Crackle 0／50／100 % でスパイクの残りが 1.0／0.1〜0.6／0.35 未満、キック風のバーストは −40 dB 以上変わらない。
+- **限界。** 2 ms（96 サンプル）級のクリックは補間が合わず、あまり直らない（実測で 3.6 dB 改善）。規則正しい繰り返し（例：+−+− の波形）は AR が予測してしまうので、クリックとして見つからない（端だけが見える）。テストのクリックはランダムな雑音のバースト。
+- 画面の「Repair」ボタンの役割は未定のまま（仕様書の要確認）。直したクリックの印は `clicksRepaired()`（回数）まで。
 
 ### CS04 の注意
 
