@@ -66,6 +66,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD04 Tremolo Pan | トレモロ／オートパン／ハーモニック（800 Hz で上下を逆位相）。Rate（Sync で音符長）、Depth、Shape（Sine／Triangle／Square／Ramp）、Width | 設計値は README「MD04 Tremolo Pan の設計」。Mix は無い（仕様書どおり）。Δ ボタンは無い（仕様書の要確認） |
 | SW MD05 Rotary | 回転スピーカー。Speed（Stop／Slow／Fast、ホーンとドラムは別の慣性）、Accel、Horn／Drum、Mic distance、Drive、Mix。ドップラー・音量変化・キャビネット共振、遅延 48 サンプル固定 | 設計値は README「MD05 Rotary の設計」。MIDI／フットスイッチ（CC64・CC1・Note）での Speed 切替は未実装（ホストのノート入力をプラグイン層に通す作業） |
 | SW MD06 Freq Shift | 周波数シフター（IIR ヒルベルト対）。Shift ±2000 Hz（対数対称）、Direction、Ring mod、Feedback、LFO、Mix、Pitch track（シフト量を音高に比例） | 設計値は README「MD06 Freq Shift の設計」。対数対称カーブ Curve::SymLog を param.hpp に追加。Δ ボタンは無い（仕様書の要確認） |
+| SW MD07 Ensemble | ストリングアンサンブル風の多重コーラス。Voices（2／3／4／6）、Spread、Rate、Depth、Tone、Mix。声の位相を等間隔に置き、モノの和で 1 次の揺れが打ち消し合う | 設計値は README「MD07 Ensemble の設計」。Δ ボタンの有無は画面で確認 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -490,6 +491,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Feedback（0〜100 %）。** 出力をリミッタ（L ＝ 4）を通して入力へ戻す：コピーが 1 回ごとに s Hz ずつ上がる螺旋（テスト：Feedback 50 % で 1100／1200／1300 Hz が 6 dB ずつ下がる）。100 % でも暴走しない。
 - **LFO。** On のとき、シフト量 × sin(2π × 0.25 Hz × t)（+s から 0 を通って −s まで揺れる。設計値：仕様書は LFO の速さを書いていない）。
 - **Pitch track（EVO、`md06.evo.on`、既定 Off、区分 B）。** 音高検出（DY05 と共有）でシフト量 × f0 ÷ 220 Hz（Shift のつまみ値は A3 を弾いたときのシフト量）。0.15 s で追従、無声のときは最後の値を保つ（倍率は 0.25〜8）。テスト：110／220／440 Hz の正弦で 20／40／80 Hz ±6 %。
+
+### MD07 Ensemble の設計（仕様書に数値がない部分）
+
+- **構成。** 遅延線（中心 10 ms）の N 本のタップ（Voices ＝ 2／3／4／6、既定 4）。各声は 2 つの LFO で動く：**遅い揺れ**（Rate 0〜10 ＝ 0.15 × 20^(Rate/10) Hz ＝ 0.15〜3 Hz、振れ ±Depth/10 × 4 ms）と**速い揺れ**（遅い揺れの 12 倍の速さ、振れはその 1/4。テスト：振幅の比 −12 dB ±1.5）（設計値）。出力は遅延音だけ（Mix は共通の枠、既定 50 %）。遅延 0。
+- **モノ互換（MD01 と同じ構成を声部数ぶん）。** 各声の位相を円周に等間隔に置く（遅い揺れは v/N、速い揺れは −v/N 周期）：**全声の遅延の変化量の和が常にほぼ 0**（テスト：2／3／4／6 声で和の最大値が揺れ幅の 1 % 未満）なので、L＋R では 1 次の揺れが打ち消し合う（テスト：Spread 10、1 kHz の正弦で、片側の側波帯（3 Hz 離れ）が −30 dB より大きいのに、L＋R では 20 dB 以上小さい）。
+- **Spread（0〜10）。** 声を中央（0）から全幅（10）まで等間隔に並べる：声 v の位置 p ＝ 0.5 ＋ Spread/10 × (v/(N−1) − 0.5)。**パンは線形**（左 1 − p、右 p：左右のゲインの和が常に 1 なので、モノの和の打ち消しが保たれる。定パワーだとこの和が位置によって変わり、打ち消しが崩れる）。出力は単位パワーに正規化（左右の平均、テスト：Voices 2〜6 × Spread 0／5／10 で、白色ノイズの出力が入力 −2.7 dB ±1.2：差は Tone 100 の 14 kHz ローパスが白色ノイズの上端を削る分）。
+- **Tone。** MD01 と同じ（遅延音のローパス 2.5〜14 kHz、120 Hz のハイパス）。ヒスは付けない（仕様書にない）。
 
 ### CS04 の注意
 
