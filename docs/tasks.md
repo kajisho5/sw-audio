@@ -8,7 +8,7 @@
 1. **CI を通す。** `.github/workflows/build.yml`（Windows MSVC／macOS ユニバーサル＋AU／Linux）はまだ一度も動かしていない。失敗したら直す。Mac 版（AU）はここで初めてできる。
 2. ~~**アナログ出力段を仕様どおり非対称にする。**~~ 済（v0.11.1、README「Drive 段の設計」）。元の記述： 仕様書は EQ01 の Drive を「非対称ソフトクリップ1段、2× OS、音量補正つき」と定め、EQ03・EQ04 も「EQ01 と同じ出力段」。今の `core/include/sw/drive.hpp` は対称の tanh（ヘッドルーム +6 dBFS は決定事項なので維持）。偶数次倍音が出ることをテストで確かめる。
 
-## 製品（済 82・残り 57）
+## 製品（済 84・残り 55）
 
 ### EQ
 - [x] EQ01 Passive 進化版 — Contour turns the boost-and-dip trick into one knob
@@ -113,8 +113,8 @@
 - [x] VO04 Doubler — Doubles with natural timing, not chorus wobble
 - [x] VO05 Rider — Listens to the music and rides the vocal against it
 - [x] VO06 Formant — Shifts character while keeping timing
-- [ ] VO07 Vocal Strip — Clean, tone, dynamics and space in the right order
-- [ ] VO08 Breath — Marks breaths so you choose per phrase
+- [x] VO07 Vocal Strip — Clean, tone, dynamics and space in the right order
+- [x] VO08 Breath — Marks breaths so you choose per phrase
 
 ### RS
 - [ ] RS01 Denoise — Adaptive profile updates as the noise changes

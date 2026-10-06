@@ -79,6 +79,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW VO04 Doubler | 声部 1／2／4／8、Spread・Timing（遅延 0.5〜30 ms の不規則なゆっくりした動き）・Pitch var・Tone・Mix。遅延 0 | 設計値は README「VO04 Doubler の設計」。フレーズの頭は休止中に遅延を最小に戻し、以後は変化率 0.5 % 以内で戻る |
 | SW VO05 Rider | 音楽を外部サイドチェーンで聴いて、ボーカルを Target（音楽に対する相対値）へライド。Range・Sensitivity・Breath skip・Ride・Write automation。遅延 0 | 設計値は README「VO05 Rider の設計」。SW Link は未実装（サイドチェーンのみ）。音楽を 1 秒聴くまで動かない |
 | SW VO06 Formant | Pitch ±12・Formant ±5（母音だけ動く）・Character 4 種・Keep timing・Smooth・Mix。遅延 1450 サンプル | 設計値は README「VO06 Formant の設計」。遅延は仕様書の見積もり 512 とは違う。Keep timing Off は声色が音程に追従する設計（タイミングは常に保つ） |
+| SW VO07 Vocal Strip | HPF→De-ess→Breath→Body/Presence/Air→Comp→Level→Plate/Echo 送り→Output の順の声のストリップ。遅延 0 | 設計値は README「VO07 Vocal Strip の設計」。DY05・DY02・RV02・DL01 のコアを内部で使用。段間の音量合わせはコンプの自動メイクアップのみ |
+| SW VO08 Breath | Reduce／Remove／Mark only、Reduction・Sensitivity・Keep・Fade。規則による息の検出。遅延 1024 サンプル | 設計値は README「VO08 Breath の設計」。学習モデルとフレーズごとの選択は未実装 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -616,6 +618,25 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Keep timing。** On（既定）：母音は Formant（と Character）でしか動かない。**Off：声色が音程に追従する**（Pitch +n で母音も n 半音動く、テープのように声が大きくも小さくも聞こえる）。**どちらでもタイミングは同じ**（リアルタイムでは遅延を変えずに時間を伸び縮みさせられないため、「タイミングを保たない」動作は作っていない。仕様書の語感とは違う設計）。
 - **Smooth。** On：Pitch／Formant の変更を 40 ms の時定数でなめらかに追従（次の印ごと）。Off（既定）：次の印で新しい値にそのまま切り替える。
 - 仕様書の要確認：既定は 0（画面は +2 st・+1.5）。進化機能の「声域に合わせた自動補正」は未実装。
+
+### VO07 Vocal Strip の設計（仕様書に数値がない部分）
+
+- **順序。** HPF → De-ess → Breath → Body／Presence／Air → Comp → Level → 送り（Plate・Echo）→ Output（共通の枠）。**遅延 0。** 仕様書の「DY05・EQ05・DY02・RV02・DL01 の簡略版」は、DY05・DY02・RV02・DL01 の**コアをそのまま内部で使い**、パラメータを固定して必要な 1 つのつまみだけを出す形にした（EQ だけは Drive が不要なので、固定周波数の 3 つのフィルタを自前で持つ）。
+- **HPF** 20〜300 Hz（2 次、既定 80 Hz）。**De-ess**＝DY05（Split、6.5 kHz、しきい値 −30 dB、Pitch follow On）の Range ＝ −1.5 dB × De-ess（最大 −15 dB）。純音ではなく高域ノイズで確かめた（テスト：ヒス −30 dBFS で De-ess 10 は −3 dB 超、500 Hz の音は変わらない）。0 のときも DY05 の分割（位相は all-pass、振幅は平ら）は通る。
+- **Breath（自前）。** 40 ms のレベルが直近のフレーズのピーク（1 秒に 6 dB 下がる保持）より 15 dB 以上低く、かつ雑音的（20 ms の零交差率 0.12/サンプル超）なとき、ゲインを 1.5 dB × Breath（最大 −15 dB）下げる（10 ms／60 ms）。低い零交差率の小さな音（弱く歌った音）は息として扱わない（テスト）。
+- **Body／Presence／Air。** 200 Hz（Q 0.8）／3 kHz（Q 0.9）のベルと、ハイシェルフ（角 6.5 kHz。12 kHz で ±6 dB に近づけるため、仕様書の「12 kHz」は角ではなく効きの位置と解釈：測定で ±6 dB から 1.2 dB 以内）。0 のフィルタは通さない。
+- **Comp。** DY02 のコア（Level ＝ Comp、Speed Prog、Auto makeup On：音量が保たれる）。**段間の音量合わせは、コンプの自動メイクアップだけにした。** EQ の Body／Presence／Air は「聞こえる変化」が目的なので、音量の補正はかけない（広帯域の音楽では補正が EQ の効果を打ち消すため。仕様書の「段の間の音量は自動で整える」に対する設計判断）。
+- **Level** ±12 dB はコンプの後。**Plate／Echo は送り**：Level の後の音を RV02（Decay 1.8 s、プリディレイ 20 ms、Low cut 120 Hz）と DL01（Analog、8 分音符（テンポ無しは 250 ms）、Feedback 30 %、HPF 200 Hz、LPF 6 kHz）へ送り、戻りは 0.5 × つまみ／10（つまみ 10 で −6 dB）。つまみ 0 で完全に無音の戻り（テスト）。Echo はホストのテンポに従う（60 bpm で 500 ms）。
+- 進化機能（区分 A）は「正しい処理順」そのもの（`.evo.on` のスイッチは無い）。
+
+### VO08 Breath の設計（仕様書に数値がない部分）
+
+- **検出（規則による初期版。仕様書の「後期版で学習モデル」は未実装）。** 4 ms ごとに 12 ms の窓で、次の 3 つがすべて成り立つフレームを「息」とする：①雑音的（零交差率が Sensitivity Low／Mid／High で 0.16／0.12／0.09 を超え、約 12 kHz に間引いたコピーの正規化自己相関のピークが 0.6 未満＝有声音でない）、②フレーズのピーク（4 秒保持、1 秒に 3 dB 下がる）より 20／15／10 dB 以上小さい、③無音でない（−80 dBFS 超）。**2 フレーム続いたら息の開始**（息の頭から約 16 ms）、条件を外れた最初のフレームで終了。
+- **遅延 1024 サンプル（21.3 ms@48 kHz）。** 判定は入力で、ゲインは 1024 サンプル遅らせた信号にかかる。判定が出る時点で出力側は息の最初の約 5 ms 前にいるため、**Fade が約 5 ms より長いと、一部は息の中でフェードする**。
+- **Mode。** Reduce：ゲインを Reduction × Keep の係数だけ下げる。Remove：60 dB 下げる（Reduction は使わない）。Mark only：音は変えず、`breathActive()`／`breathCount()` を表示用に出す。
+- **Keep（設計値）。** Natural は Reduction の 0.6 倍（息が聞こえる程度に残す）、Less は 1.0 倍、None は 1.5 倍（−40 dB で頭打ち）。
+- **Fade** 1〜50 ms（Log）：下げ切るまでの時間（dB で直線）。**戻りは最大 10 ms**（息の終わりの判定は、次のフレーズの頭より約 10 ms 前に出るため。長いフェードで次のフレーズを覆わない）。テスト：Fade 50 ms で 24 dB の下げのうち 3〜21 dB の区間が約 37 ms、1 ms でほぼ即時。
+- フレーズごとに残す・消すを選ぶ機能（区分 B・C）は、音声の取り込みが必要なため未実装（保存用の値も無し）。Δ ボタンは無い（仕様書どおり）。
 
 ### CS04 の注意
 
