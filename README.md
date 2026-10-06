@@ -64,6 +64,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD02 Flanger | フランジャー。Rate（Sync で音符長）、Depth、Feedback ±100 %、Manual、Through zero（報告遅延 480／0）、Sync、Mix | 設計値は README「MD02 Flanger の設計」。Sync 時の LFO 位相は小節線にそろえる。Δ ボタンは無い（仕様書の要確認） |
 | SW MD03 Phaser | 全域通過を 4／6／8／12 段重ねたフェイザー。Rate（Sync で音符長）、Depth、Feedback、Center、Mix、Note follow（音高に Center が追従） | 設計値は README「MD03 Phaser の設計」。音高検出は DY05 から core/include/sw/pitch_tracker.hpp に移して共有。Δ ボタンの有無は画面で確認 |
 | SW MD04 Tremolo Pan | トレモロ／オートパン／ハーモニック（800 Hz で上下を逆位相）。Rate（Sync で音符長）、Depth、Shape（Sine／Triangle／Square／Ramp）、Width | 設計値は README「MD04 Tremolo Pan の設計」。Mix は無い（仕様書どおり）。Δ ボタンは無い（仕様書の要確認） |
+| SW MD05 Rotary | 回転スピーカー。Speed（Stop／Slow／Fast、ホーンとドラムは別の慣性）、Accel、Horn／Drum、Mic distance、Drive、Mix。ドップラー・音量変化・キャビネット共振、遅延 48 サンプル固定 | 設計値は README「MD05 Rotary の設計」。MIDI／フットスイッチ（CC64・CC1・Note）での Speed 切替は未実装（ホストのノート入力をプラグイン層に通す作業） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -470,6 +471,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Auto pan。** θ ＝ π/4 × (1 ＋ Depth × Width × u)、左 ×√2 cos θ、右 ×√2 sin θ（中央で 1、定パワー：テスト L²＋R² が一定、端で一方が 0・他方が ×√2）。ステレオ入力はバランスとして効かせる。**Depth と Width は掛け合わせた量が振れ幅**（仕様書は Depth と Width の使い分けを書いていない：Depth＝量、Width＝ステレオの広がり）。Width 0 では動かない（テスト）。
 - **Harmonic（EVO 相当）。** 800 Hz（LR4）で上下に分け、低域のゲイン ＝ 1 − Depth × (1 − uni)、高域のゲイン ＝ 1 − Depth × uni（逆位相、和は常に 2 − Depth：テスト、Depth 80 % で 1.2 ±0.12）。Width は Tremolo と同じ。
 - **Rate／Sync。** Rate 0.1〜20 Hz。Sync On（既定）では Rate を「120 bpm での 1 周期」と読んで最も近い音符長に寄せ、ホストのテンポで鳴らす（既定 4 Hz ＝ 1/8、90 bpm なら 1/8 の長さ）。再生中で小節線が分かるときは位相を「次の小節線 − k 周期」にそろえる。テンポが無いときは Hz。
+
+### MD05 Rotary の設計（仕様書に数値がない部分）
+
+- **構成。** 入力（左右の平均）→ Drive（小信号の利得 1 のソフトクリップ、0〜+18 dB）→ 800 Hz（LR4）で分け、**高域はホーン、低域はドラム**の回転体へ。回転体ごとに 2 本のマイク（±60°）に届く：ドップラー（遅延 ＝ 1 ms − R·cos(θ−φ)/343 m/s：ホーン R ＝ 0.18 m で ±0.52 ms、ドラム R ＝ 0.12 m で ±0.35 ms、テスト：中心 48 サンプル、振れ ±25.2／±16.8 サンプル）と音量変化（g ＝ ((1−k)＋k(1＋cos(θ−φ))/2) ÷ (1−k/2)、k ＝ ホーン 0.7／ドラム 0.45 ×（1 − 0.5 × Mic distance）：1 回転の平均が 1。Far（右端）で振れが半分）。左右のマイクの出力がそのまま L／R。キャビネット共振（設計値）：ホーン 2.5 kHz +1.5 dB（Q 1）、ドラム 110 Hz +2 dB（Q 0.9）。Mix は共通の枠（既定 100 %）。
+- **Speed と Accel（物理モデルの追従）。** Stop 0 Hz、Slow ホーン 0.8／ドラム 0.67 Hz、Fast 6.7／5.7 Hz（設計値）。目標へ指数的に近づく：時定数 ＝ ホーン 0.3＋0.2×Accel 秒（Accel 0 で 0.3 s、5 で 1.3 s、10 で 2.3 s）、**ドラムはその 3 倍**（慣性が別）。テスト：Slow→Fast の 1 時定数後にホーンが 63 % ±2 %、ドラムが 28 % ±2 %。Stop へ向かうと両方が止まる。
+- **Horn／Drum（0〜10）。** 音量 ＝ v÷7（7 で 1、10 で +3.1 dB、0 で無音）。
+- **遅延 48 サンプル固定（仕様書どおり）。** ドップラーの中心遅延 1 ms（サンプルレートに比例：96 kHz で 96）を報告する。
+- **MIDI／フットスイッチ（EVO、CC64・CC1・Note）はまだ**：ホストのノート入力をプラグイン層に通す作業が要る（Speed のパラメータそのものはオートメーションできる）。docs/tasks.md に残す。
 
 ### CS04 の注意
 
