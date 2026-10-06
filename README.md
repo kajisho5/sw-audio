@@ -69,6 +69,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD07 Ensemble | ストリングアンサンブル風の多重コーラス。Voices（2／3／4／6）、Spread、Rate、Depth、Tone、Mix。声の位相を等間隔に置き、モノの和で 1 次の揺れが打ち消し合う | 設計値は README「MD07 Ensemble の設計」。Δ ボタンの有無は画面で確認 |
 | SW ST01 Imager | 4 帯域のステレオ幅調整（LR4 分割、帯域ごとに S を 0〜200 %）。Crossover 1〜3、Mono check（監視用）、帯域ごとの相関メーターと広げすぎの印 | 設計値は README「ST01 Imager の設計」。画面の描画は UI の作業。Δ ボタンは無い（仕様書の要確認） |
 | SW ST02 Mid Side | M/S のレベルと音色。Mid level／Side level ±12 dB、Side HPF、Side air、Mid low、Encode（M/S のまま入出力） | 設計値は README「ST02 Mid Side の設計」。参照曲との M/S バランス比較（区分 B）は画面側 |
+| SW ST03 Phase Align | 2 本のマイクの時間と位相を合わせる。Delay 0〜20 ms（0.01 ms 刻み）、Phase ±180°（ヒルベルト対で全帯域を回す）、Polarity、Mix。外部サイドチェーンに基準のマイク。Auto align（相互相関で遅延、低域の相関が最大になる位相／反転を選ぶ） | 設計値は README「ST03 Phase Align の設計」。Auto align の analyse() は画面がメインスレッドで呼ぶ（画面は未作成）。『Δ Compare』の名前は要確認 |
 | SW ST04 Center | センターと広がりと Haas。Center（S を +6 dB〜−∞）、Haas 0〜40 ms（遅らせる側を選ぶ）、Low center、Balance、Link、Mono safe（モノの和の櫛形の落ち込みを自動で浅く） | 設計値は README「ST04 Center の設計」。Link の意味は仕様書にないため設計値（遅れ 1 ms あたり +0.35 dB）。確認が要る |
 | SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
@@ -530,6 +531,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Link（既定 On）。** 仕様書は「Link」の意味を書いていない。**設計値：Haas で遅らせた側のレベルを遅れ 1 ms あたり 0.35 dB（最大 +6 dB）持ち上げて、先に届く側に像が引かれるのを和らげる**（Off なら補正なし）。確認が要る（README の注意）。
 - **Balance（L〜R、±100 %）。** 線形：大きい側はそのまま、反対側を 0 まで下げる（テスト：+50 % で左が 0.5 倍）。
 - **進化機能 Mono safe（`st04.evo.on`、既定 Off、区分 A）。** 遅らせた側をモノに足すと、最初のノッチの深さは 20 log10((1−r)/(1+r)) dB（r ＝ 遅らせた側／反対側のレベル比）。**−10 dB より深いとき（r ＞ 0.52）、r ＝ 0.52（−5.7 dB）まで遅らせた側を下げ、その側に 20 kHz × (0.52/r)² のローパス（3 kHz 以上）をかける。** テスト：5 ms・等レベルでモノの和の 100 Hz の落ち込みが −25 dB 未満（Off）から −10 dB ±1.5（On）に、12 kHz は 10 dB 以上下がる。`monoCombDepthDb()` と `delayedSideGainDb()` を画面用に出す。
+
+### ST03 Phase Align の設計（仕様書に数値がない部分）
+
+- **構成。** トラックを Delay（0〜20 ms、**0.01 ms に丸める**、Skew k ＝ 2、4 点 Hermite、20 ms で追従）だけ遅らせ、Phase（−180〜+180°）で位相を回し、Polarity で反転する。外部サイドチェーン（参照のマイク）は出力に足さない（聞こえない）。出力は処理したトラックだけ（Mix は共通の枠、既定 100 %）。遅延 0（遅らせるだけなので、早い方のトラックに挿す）。
+- **Phase（設計値）。** 「全域通過で回す」を、全帯域に同じ角度を与える IIR ヒルベルト対（MD06 と同じ `sw/hilbert.hpp`）で実現：out ＝ cos φ·i ＋ sin φ·q。**|Phase| が 0.05° 未満は完全な素通し（20 ms でクロスフェード）**、それ以上は対を通る（対そのものの全域通過の位相と約 2 サンプルの群遅延を含む。振幅は変わらない：テスト 0.1 dB 以内）。テスト：120／400／1500／6000 Hz で、角度の差が ±2.5° で一定、±180 は反転。
+- **進化機能 Auto align（区分 B）。** `startAutoAlign()` で音声スレッドが 4 秒ぶん（トラックと参照のモノの和）を録り（状態 Collecting → Ready）、**`analyse()` を画面（メインスレッド）が呼ぶ**（FFT を使うので実時間では回さない。画面はまだ無い）：① 0〜20 ms で |相互相関| が最大のラグを FFT で求める（0.01 ms に丸める）。② そのラグで遅らせたトラックを 250 Hz 未満に絞り、三つの候補を比べる：素通し（C0 ＝ Σxy）、反転（−C0）、回転器（A ＝ Σiy、B ＝ Σqy、角 ＝ atan2(B,A)、値 ＝ √(A²＋B²)：閉形式で探索なし）。**最大のものを採る**（単なる遅れだけのコピーには Phase 0・Normal が返る：回転器は素通しより必ず相関が小さいため）。③ 正規化相関が 0.1 未満（無音・無関係・参照がトラックより早い）は失敗（Failed）でパラメータは動かさない。成功すると Delay・Phase・Polarity の 3 つを `takeParamWrite` でホストへジェスチャとして返す。テスト：1.25／3.37／9／17.5 ms のコピーでラグが ±0.011 ms、反転コピーで Polarity が反転、回転器を通した参照（70°）で 70° ±3°（遅れは対の群遅延ぶん 0.06 ms 以内）。
+- **要確認（仕様書）：** 画面の「Δ Compare」は合わせる前後の比較で、共通の Δ とは別。名前を変えるか決める。
 
 ### CS04 の注意
 
