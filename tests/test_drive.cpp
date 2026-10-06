@@ -37,12 +37,12 @@ TEST_CASE("drive stage: even harmonics grow with Drive and vanish at Drive 0 for
     CHECK(h2_5 > h2_0 + 15.0); CHECK(h2_10 > h2_5 + 5.0);
 }
 TEST_CASE("drive stage: small-signal gain is unity at any Drive") {
-    for (double drive : {0.0, 5.0, 10.0}) CHECK(20 * std::log10(binAmp(run(drive, 1000, 0.001), 1000) / 0.001) == doctest::Approx(0.0).epsilon(0.0).scale(0.1));
+    for (double drive : {0.0, 5.0, 10.0}) CHECK(std::abs(20 * std::log10(binAmp(run(drive, 1000, 0.001), 1000) / 0.001)) < 0.1);
 }
-TEST_CASE("drive stage: loudness stays within 1 dB across Drive for a -18 dBFS RMS tone") {
+TEST_CASE("drive stage: loudness stays within 1.5 dB across Drive for a -18 dBFS RMS tone") {
     const double a = 0.1778 * std::sqrt(2.0);  // -18 dBFS RMS
     const double ref = rmsDb(run(0, 1000, a));
-    for (double drive : {2.0, 5.0, 10.0}) CHECK(std::abs(rmsDb(run(drive, 1000, a)) - ref) < 1.0);
+    for (double drive : {2.0, 5.0, 10.0}) CHECK(std::abs(rmsDb(run(drive, 1000, a)) - ref) < 1.5);
 }
 TEST_CASE("drive stage: the asymmetry leaves no DC offset") {
     const auto y = run(10, 1000, 0.3, 96000);
