@@ -1,6 +1,7 @@
 // parameter IDs, defaults and automation flags reconciled with the spec document (仕様書 v1.0, 2026-10-05)
 #include "doctest.h"
 #include "dy01/dy01.hpp"
+#include "dy02/dy02.hpp"
 #include "dy03/dy03.hpp"
 #include "dy04/dy04.hpp"
 #include "dy07/dy07.hpp"
@@ -17,6 +18,7 @@ std::vector<std::string> ids(const std::vector<ParamSpec>& s) { std::vector<std:
 }
 TEST_CASE("parameter IDs follow the spec") {
     CHECK(ids(dy01::specs()) == std::vector<std::string>{"dy01.drive", "dy01.ratio", "dy01.speed", "dy01.bite", "dy01.color", "dy01.out", "dy01.mix", "dy01.schpf"});
+    CHECK(ids(dy02::specs()) == std::vector<std::string>{"dy02.level", "dy02.out", "dy02.speed", "dy02.target", "dy02.emph", "dy02.mix", "dy02.evo.on", "dy02.automakeup"});
     CHECK(ids(dy03::specs()) == std::vector<std::string>{"dy03.thresh", "dy03.ratio", "dy03.attack", "dy03.release", "dy03.makeup", "dy03.mix", "dy03.knee", "dy03.schpf", "dy03.evo.on"});
     CHECK(ids(dy04::specs()) == std::vector<std::string>{"dy04.thresh", "dy04.range", "dy04.attack", "dy04.hold", "dy04.release", "dy04.mode", "dy04.key.hpf", "dy04.key.lpf", "dy04.key.hpffreq", "dy04.key.lpffreq", "dy04.listen"});
     CHECK(ids(dy07::specs()) == std::vector<std::string>{"dy07.thresh", "dy07.ratio", "dy07.out", "dy07.snap", "dy07.mix", "dy07.knee"});
