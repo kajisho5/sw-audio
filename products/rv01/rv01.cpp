@@ -38,7 +38,6 @@ constexpr TapDesign kTaps[5][10] = {
     {{3, .8, -.3}, {6, .7, .3}, {10, .6, -.5}, {15, .5, .5}, {22, .4, -.2}, {30, .3, .2}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}},
     {{2, .9, -.7}, {3.5, .85, .7}, {5, .8, -.4}, {7, .75, .5}, {9.5, .65, -.8}, {12, .6, .8}, {15, .5, -.3}, {18, .45, .4}, {22, .35, -.6}, {27, .3, .6}}};
 constexpr double kApMs[4] = {3.0, 2.2, 7.9, 5.8};
-constexpr double kLateEnergyPerSecond = 0.033;   // energy of the FDN's impulse response is about this x the decay time (measured), so the late part is scaled to unit energy
 double sizeScale(double sizePct) { return 0.4 + 1.2 * sizePct * 0.01; }
 }
 
@@ -72,7 +71,6 @@ void Processor::prepare(double sampleRate, int) {
     pre_.assign(static_cast<size_t>(0.5 * fs_) + 8, 0.0f);
     erBuf_.assign(static_cast<size_t>(0.25 * fs_) + 8, 0.0f);
     for (int k = 0; k < 4; ++k) { ap_[static_cast<size_t>(k)].len = std::max(1, static_cast<int>(std::lround(kApMs[k] * 0.001 * fs_))); ap_[static_cast<size_t>(k)].buf.assign(static_cast<size_t>(ap_[static_cast<size_t>(k)].len), 0.0f); ap_[static_cast<size_t>(k)].pos = 0; }
-    lateTrim_ = 1.0 / std::sqrt(kLateEnergyPerSecond * target_[Decay]);
     prePos_ = erPos_ = 0; preLen_ = target_[PreDelay] * 0.001 * fs_; env_ = 0.0; duckGain_ = 1.0;
     for (auto& g : tapGain_) g.fill(0.0);
     width_.reset(fs_, 20.0, target_[Width] * 0.01);
@@ -80,6 +78,7 @@ void Processor::prepare(double sampleRate, int) {
     erG_.reset(fs_, 20.0, std::sqrt(er)); lateG_.reset(fs_, 20.0, std::sqrt(1.0 - er));
     for (auto& f : sideHp_) f.setup(Svf::Mode::HighPass, 120.0, fs_, 0.70710678, 0);
     updateLines(); fdn_.snapLengths(); updateFilters();
+    lateTrim_ = 1.0 / std::sqrt(Fdn::kEnergyConstant * target_[Decay] / fdn_.meanLengthSeconds());
     prepared_ = true;
 }
 
@@ -100,6 +99,7 @@ void Processor::setParam(int id, double v) {
 void Processor::snapToTargets() {
     if (!prepared_) return;
     updateLines(); fdn_.snapLengths(); updateFilters();
+    lateTrim_ = 1.0 / std::sqrt(Fdn::kEnergyConstant * target_[Decay] / fdn_.meanLengthSeconds());
     preLen_ = target_[PreDelay] * 0.001 * fs_;
     for (LinearSmoother* s : {&width_, &erG_, &lateG_}) s->skip(1 << 30);
 }
@@ -125,7 +125,7 @@ void Processor::process(float** ch, int numCh, int n) {
         nl += tapL[static_cast<size_t>(k)] * tapL[static_cast<size_t>(k)]; nr += tapR[static_cast<size_t>(k)] * tapR[static_cast<size_t>(k)];
     }
     for (int k = 0; k < 10; ++k) { tapL[static_cast<size_t>(k)] /= std::sqrt(nl); tapR[static_cast<size_t>(k)] /= std::sqrt(nr); }   // unit energy per side
-    const double lateTrimTarget = 1.0 / std::sqrt(kLateEnergyPerSecond * target_[Decay]);
+    const double lateTrimTarget = 1.0 / std::sqrt(Fdn::kEnergyConstant * target_[Decay] / fdn_.meanLengthSeconds());
     for (int i = 0; i < n; ++i) {
         const double eg = erG_.next(), lg = lateG_.next(), w = width_.next();
         lateTrim_ += 0.0005 * (lateTrimTarget - lateTrim_);

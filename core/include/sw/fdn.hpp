@@ -23,12 +23,17 @@ public:
         for (int i = 0; i < n_; ++i) {
             const size_t k = static_cast<size_t>(i);
             sgnIn_[k] = ((i * 7 + 3) % 5 < 2) ? -1.0 : 1.0;
+            sgnIn2_[k] = ((i * 5 + 2) % 7 < 3) ? -1.0 : 1.0;   // the right input's pattern (stereo-in plates)
             // Walsh rows 1 and 2 (1 is the all-ones row, which would only pass the mean): sequency patterns with different periods
             sgnL_[k] = ((i >> 1) & 1) ? -1.0 : 1.0;
             sgnR_[k] = ((i & 1) ^ ((i >> 2) & 1)) ? -1.0 : 1.0;
         }
     }
     int lines() const { return n_; }
+    // mean of the target line lengths in seconds. The energy of the impulse response is about kEnergyConstant x decay / this (energy keeps circulating,
+    // and a shorter loop hands it out more often): used to scale the late reverb to unit energy whatever the algorithm, size and decay
+    double meanLengthSeconds() const { double a = 0; for (int i = 0; i < n_; ++i) a += target_[static_cast<size_t>(i)]; return a / n_ / fs_; }
+    static constexpr double kEnergyConstant = 0.002;   // seconds (measured: Hall at the default size gives 0.033 x decay for a 60 ms mean length)
     void clear() { for (int i = 0; i < n_; ++i) { std::fill(buf_[static_cast<size_t>(i)].begin(), buf_[static_cast<size_t>(i)].end(), 0.0f); lp_[static_cast<size_t>(i)] = 0; } }
     // target lengths in samples (fractional); the lines glide there
     void setLength(int i, double samples) { target_[static_cast<size_t>(i)] = std::max(4.0, samples); }
@@ -38,7 +43,12 @@ public:
     void setModulation(double depthSamples, double rateHz) { modDepth_ = depthSamples; modInc_ = rateHz / fs_; }
     void setFreeze(bool on) { freeze_ = on; }
     // one mono input sample -> two output samples
-    void process(double in, double& outL, double& outR) {
+    void process(double in, double& outL, double& outR) { run(in, in, false, outL, outR); }
+    // two inputs, injected with different +-1 patterns -> two outputs
+    void processStereo(double inL, double inR, double& outL, double& outR) { run(inL, inR, true, outL, outR); }
+
+private:
+    void run(double in, double in2, bool stereo, double& outL, double& outR) {
         if (ctl_ == 0) { ctl_ = 32; updateGains(); }
         --ctl_;
         const double fz = freezeGain_ += ((freeze_ ? 1.0 : 0.0) - freezeGain_) * 0.0005;
@@ -56,14 +66,13 @@ public:
             s[k] = lp_[k] * (g_[k] + (0.99995 - g_[k]) * fz);
             sum += s[k]; l += sgnL_[k] * s[k]; r += sgnR_[k] * s[k];
         }
-        const double mean2 = 2.0 * sum / n_, inj = in * inG / std::sqrt(static_cast<double>(n_));
-        for (int i = 0; i < n_; ++i) { const size_t k = static_cast<size_t>(i); buf_[k][pos_ & mask_] = static_cast<float>(s[k] - mean2 + sgnIn_[k] * inj); }
+        const double mean2 = 2.0 * sum / n_, invN = inG / std::sqrt(static_cast<double>(n_));
+        for (int i = 0; i < n_; ++i) { const size_t k = static_cast<size_t>(i); const double inj = stereo ? (sgnIn_[k] * in + sgnIn2_[k] * in2) * invN : sgnIn_[k] * in * invN; buf_[k][pos_ & mask_] = static_cast<float>(s[k] - mean2 + inj); }
         ++pos_;
         const double norm = 1.0 / std::sqrt(static_cast<double>(n_));
         outL = l * norm; outR = r * norm;
     }
 
-private:
     double read(size_t k, double delay) const {   // 4-point Hermite
         const double rp = static_cast<double>(pos_) - delay;
         const double fl = std::floor(rp); const double f = rp - fl;
@@ -79,7 +88,7 @@ private:
     bool freeze_ = false;
     size_t mask_ = 0, pos_ = 0;
     std::array<std::vector<float>, kMax> buf_;
-    std::array<double, kMax> len_{}, target_{}, lp_{}, g_{}, phase_{}, sgnIn_{}, sgnL_{}, sgnR_{};
+    std::array<double, kMax> len_{}, target_{}, lp_{}, g_{}, phase_{}, sgnIn_{}, sgnIn2_{}, sgnL_{}, sgnR_{};
 };
 
 }  // namespace sw
