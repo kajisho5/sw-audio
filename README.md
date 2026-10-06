@@ -35,6 +35,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA01 Tape | テープレコーダー。簡略化したヒステリシス飽和（2× OS）、Formula（A／B／C＝ヘッドルーム 0／+3／−3 dB）、Speed（7.5／15／30 ips）ごとのヘッドバンプと高域損失（Repro）、Wow・Flutter（補間付き可変遅延）、Hiss、Input／Output。遅延は 48 サンプル固定。Calibrate（EVO）は 5 秒の入力から Input を決める | Calibrate の開始ボタンは画面と一緒に作る（コアは startCalibrate() と書き戻しを持つ）。値はすべて設計値（下の「SA01 の設計」） |
 | SW SA02 Console Sum | アナログ卓のサミング風の色付け。Color（Iron／Clean／Punch／Vint）、Drive、Crosstalk（左右の漏れ −80〜−40 dB）、Noise、Width（0〜150 %）、Output、Group（同じ番号のインスタンスが 1 台の卓として互いに負荷をかける）。インスタンスごとの個体差（EVO：種を状態に保存） | Group の効かせ方・個体差の幅・色の設計は設計値（下の「SA02 の設計」）。Unit A／B／C は共通機能と一緒に後で |
 | SW SA03 Tube | 真空管の倍音付け。Drive（0〜+24 dB を小信号利得 1 の非対称 tanh で、4× OS）、Bias（Cold＝対称〜Hot＝非対称）、Tube（12AX7／12AT7／EL34）、Tone（1 kHz を軸に ±6 dB の傾き）、Mix、Output。動くバイアス（EVO、既定 On）：入力の包絡（50 ms で戻る）で動作点をずらし、大きい音ほど非対称に歪む | 管ごとのバイアス・ヘッドルーム・ドライブ量、EVO のスイッチ（sa03.evo.on、既定 On）は設計値（下の「SA03 の設計」） |
+| SW SA04 Transformer | トランスとプリアンプの色付け。Iron（Nickel／Steel／Mu：飽和の天井・バイアス・低域の角）、Gain（目盛り 0〜60 ＝ −30〜+30 dB、30 で 0 dB）、Load（送り側のインピーダンス：高域の共振と低域の量を動かす、EVO）、Low weight／Top air、Pad（−20 dB）。低域ほど早く飽和する（2× OS） | 飽和の天井・共振の周波数と量などは設計値（下の「SA04 の設計」） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -209,6 +210,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **動くバイアス。** 入力のピーク包絡（アタック即時、50 ms で戻る）に応じてバイアスを `0.35×tanh(4×包絡)` だけ足す。Drive 5・1 kHz の 2 次は、−26 dBFS RMS → −6 dBFS RMS で、Off では −33.8 → −18.9 dB（+14.9 dB）、On では −31.6 → −12.6 dB（+19.0 dB）。大きいバーストのあと 50 ms の時定数で戻る。仕様書の表に項目がないため、スイッチ `sa03.evo.on`（Off／On、既定 On：製品の売りのため）を末尾に足した（共通章の「EVO スイッチ（案）」）。
 - **Tone。** 1 kHz の低域シェルフ（−Tone）と高域シェルフ（＋Tone）、Q 0.5（MS06 の Tilt と同じ）。
 - 遅延 0。Mix・Output は共通枠。
+
+### SA04 の設計（仕様書に数値がない部分）
+
+- **信号の流れ。** Pad（−20 dB）→ Gain（目盛り − 30 dB）→ Low weight（120 Hz のローシェルフ 0〜+6 dB）・Top air（8 kHz のハイシェルフ 0〜+6 dB）→ トランスの等価回路（低域の損失 ＝ 角 12 Hz 付近のハイパス、高域の共振 ＝ ベル）→ 分割飽和。Gain は信号をそのまま持ち上げるので、大きく上げるほど飽和に深く入る（プリアンプの挙動）。小信号の利得は目盛り 30 で 0 dB、40 で +10 dB、0 で −30 dB（±0.5 dB、テスト）。
+- **Iron（設計値）。** 飽和の天井（Nickel 3.0／Steel 2.0／Mu 1.0、直線値）、バイアス（0.03／0.05／0.10）、低域の角（8／12／18 Hz）。**低域（150 Hz 以下の 1 次分割）の天井は高域の 1/3**で、低域ほど早く飽和する（50 Hz の 3 次は 1 kHz より 6 dB 以上多い、テスト）。−30 dBFS RMS・Gain +12 dB・1 kHz で Mu ＞ Steel ＞ Nickel の順に 3 次が 2 dB 以上ずつ増える。
+- **Load（EVO）。** 高域の共振：中心 26 kHz（上限は Fs×0.45）→ 14 kHz、ゲイン 0 → +4 dB、Q 1.2。低域：ハイパスの角を（1＋1.5×Load）倍、50 Hz のローシェルフを −1.5×Load dB。Load 1 は 0 に比べ 16 kHz が +2 dB 以上、30 Hz が −1 dB 以下、1 kHz は ±0.7 dB 以内で同じ（テスト）。既定（0.5）で 100 Hz〜10 kHz は ±0.8 dB 以内で平ら。
+- 遅延 0。
 
 ### CS04 の注意
 
