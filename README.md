@@ -39,6 +39,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA05 Exciter | 高域の倍音付け。Tune 以上の帯域を取り出し、偶数次（2 次）・奇数次（3 次）の倍音を、帯域自身のレベルで正規化して（入力の大小によらず）作って足す。Harmonics、Mix、Low drive（低域にも軽く倍音）、Mode（Even／Odd／Both）、Mono low、Auto fill（EVO：1/3 オクターブごとに高域を目標の傾きと比べ、足りない帯域に倍音を最大 +12 dB 多く足す） | 倍音の作り方・目標の傾き（−1.5 dB/oct）・3 領域の分け方は設計値（下の「SA05 の設計」）。共通部品に `ThirdOctaveAnalyzer` を追加 |
 | SW SA06 Saturator | 5 種の歪み（Tape／Tube／Diode／Fold／Fuzz）を 3 帯域（分割 200 Hz・3 kHz、LR4）で使える多機能サチュレーター。帯域ごとに Type・Drive（0〜+24 dB）・Shape（Soft／Medium／Hard）・Bias・Dynamics（EVO：包絡で歪み量を動かす）・Mix、全体に Tone・Output。4× OS（Fold・Fuzz は 8×） | 画面に帯域ごとの区別が無い点は仕様書の要確認のまま。各形の式・Shape の意味は設計値（下の「SA06 の設計」） |
 | SW SA07 Lo-Fi | レコード・古いテープ風の劣化。Era（1950／1970／1990／Tape：選ぶと Crackle・Wow・Bandwidth をまとめて書き込む、EVO）、Crackle（確率で出るパチパチ音、4 kHz で鳴る）、Dust（細かい粒）、Wow（可変遅延、SA01 と同じ）、Bandwidth（上限 3〜20 kHz、右端 Full）、Mono、Mix。遅延は 48 サンプル固定 | 音の作り方・Era の値は設計値（下の「SA07 の設計」）。Era の書き込みは複数パラメータ対応の共通プラグイン層を使う |
+| SW SA08 Bitcrush | ビット数とサンプルレートを落とす。Bits（1〜24、整数）、Rate（200 Hz〜fs、LOG）、Jitter（ホールド周期の揺れ）、Pre filter／Post filter（折り返し・鏡像の除去）、Dither、Tempo lock（EVO、Rate を拍の周波数の整数倍に寄せる）、Mix。遅延 0 | 音の作り方は設計値（下の「SA08 の設計」）。Tempo lock のスイッチは画面に無い。Δ ボタンも無い |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -243,6 +244,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Crackle。** 1 秒あたり Crackle/10 × 30 個のランダムなパチッ（確率はサンプルごと）。大きさは 0.3〜1.0（二乗の分布）、10 で最大 −24 dBFS（3 で −38 dBFS）、4 kHz・Q 2 のバンドパスで鳴らす。実測：Crackle 10 の無音入力で RMS −61 dBFS、4 秒に 20〜800 個。**Dust。** 1 秒あたり Dust/10 × 600 個の 1 サンプルの粒（符号ランダム）、最大 −50 dBFS（0 で −66）、RMS は Dust 10 で −75 dBFS より大きい。乱数は prepare で種を固定するので、書き出しは毎回同じ（テスト）。
 - **Era。** 1950：Crackle 6・Wow 4・Bandwidth 4.5 kHz・ローカット 150 Hz、1970：3・2・10 kHz・60 Hz、1990：0・0.5・16 kHz・30 Hz、Tape：0・3・12 kHz・40 Hz（設計値）。Era を変えると、3 つのパラメータ値と、`takeParamWrite()` の 3 回の書き込み（それぞれジェスチャー開始・値・終了）が出る。**Era のあとで同じイベントの中、または手で指定された値は、そのパラメータの保留中の書き込みを取り消す**（最初は取り消さず、clap-validator の `param-set-events` が「flush と process で値が同じ」を満たさず不合格になった）。状態を読み込んだ直後は `snapToTargets()` で保留中の書き込みを捨てるので、保存された Crackle などが Era のプリセットで上書きされることはない。共通のプラグイン層は、1 回の処理で最大 8 個のパラメータ書き込みを出せるようにした。
 - 遅延 48 サンプル固定（Wow が 0 でも同じ。2× OS は使わず、実際の遅延も 48〜52 サンプル以内、テスト）。
+
+### SA08 の設計（仕様書に数値がない部分）
+
+- **信号の流れ。** 入力 → Pre filter（LR4 ローパス、遮断 0.45 × Rate）→ サンプルホールド（周期 fs / Rate サンプル、小数の端数は繰り越す）→ 量子化（Bits）→ Post filter（同じ LR4）。Mix は共通枠。Rate が fs（48000）以上のときはホールドを行わず量子化だけ（Rate の最大は 48000 Hz 固定。96 kHz 以上のホストでは最大でも fs の半分）。
+- **量子化。** 振幅 ±1 を 2^(Bits−1) 段に割り、四捨五入（中央が 0 の方式）。Bits 1 は −1／0／＋1 の 3 値、Bits 24 は 2^−23 刻みで float の入力とほぼ同じ（差 1e-6 未満、テスト）。Bits は整数に丸める。8 bit・振幅 0.7 の正弦波で信号対量子化雑音比 約 46〜51 dB（理論値 6.02 × 8 + 1.76 − 3.1 dB。テストの範囲）。
+- **Jitter。** ホールドの周期を毎回 ±(Jitter/100 × 50) % ランダムに振る（Jitter 100 ％で ±50 %、周期は最小 1 サンプル）。平均周期は変わらない。乱数は prepare で種を固定（書き出しは毎回同じ、テスト）。左右は同じ周期で動かす（像が左右にずれないように）。
+- **Dither。** 量子化の直前に ±1 LSB の三角分布の雑音を足す。振幅 0.25 LSB の 1 kHz 正弦波が、Off では消え（−100 dB 未満）、On では ±3 dB で残る（テスト）。
+- **Tempo lock。** ホストのテンポ（拍の周波数 bpm / 60 Hz）が分かるとき、Rate を拍の周波数の最も近い整数倍に寄せる。テンポが無いときは何もしない。Rate のつまみの値は動かさず、実際に使う値だけを変える（CLAP の `param-set-events` を守るため。パラメータ ID は `sa08.evo.on`）。仕様書の「要確認」どおり、画面にスイッチは無い。
+- ホールドの周期が整数サンプルにならない Rate では、ホールドの切り替わりが最も近いサンプルになる（補間はしない。それがこの効果の音）。遅延は 0。
 
 ### CS04 の注意
 
