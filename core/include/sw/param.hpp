@@ -7,7 +7,7 @@
 
 namespace sw {
 
-enum class Curve { Lin, Log, Skew, Step, Fader };
+enum class Curve { Lin, Log, Skew, Step, Fader, SymLog };   // SymLog: -max .. +max, logarithmic away from the middle (`skew` = K, default 2000; min is ignored)
 
 struct ParamSpec {
     const char* id;
@@ -40,6 +40,10 @@ struct ParamSpec {
                 return std::min(max, 40.0 * (x - 0.75));
             }
             case Curve::Skew: return min + (max - min) * std::pow(x, skew);
+            case Curve::SymLog: {   // v = sign(u) max ((1 + K)^|u| - 1) / K, u = 2x - 1 (K = skew if > 1, else 2000)
+                const double k = skew > 1.0 ? skew : 2000.0, u = 2.0 * x - 1.0;
+                return (u < 0 ? -1.0 : 1.0) * max * (std::pow(1.0 + k, std::abs(u)) - 1.0) / k;
+            }
             case Curve::Step: {
                 if (steps.empty()) return min;
                 const int n = numSteps();
@@ -65,6 +69,11 @@ struct ParamSpec {
                 if (v < 0.0) return 0.5 + (v + 20.0) / 80.0;
                 return std::clamp(0.75 + v / 40.0, 0.0, 1.0);
             case Curve::Skew: return std::clamp(std::pow(std::clamp((v - min) / (max - min), 0.0, 1.0), 1.0 / skew), 0.0, 1.0);
+            case Curve::SymLog: {
+                const double k = skew > 1.0 ? skew : 2000.0, a = std::clamp(std::abs(v) / max, 0.0, 1.0);
+                const double u = (v < 0 ? -1.0 : 1.0) * std::log(1.0 + k * a) / std::log(1.0 + k);
+                return std::clamp(0.5 * (u + 1.0), 0.0, 1.0);
+            }
             case Curve::Step: {
                 const int n = numSteps();
                 if (n < 2) return 0.0;

@@ -56,3 +56,13 @@ TEST_CASE("skip(n) advances the smoother exactly like n calls to next()") {
     CHECK(b.skip(300) == doctest::Approx(a.current()));
     CHECK(b.skip(5000) == 15.0);
 }
+
+TEST_CASE("SymLog curve is symmetric about the middle and logarithmic away from it") {
+    ParamSpec p{"t", "t", -2000, 2000, 35, Curve::SymLog};
+    CHECK(p.toValue(0.5) == doctest::Approx(0.0).epsilon(1e-9)); CHECK(p.toValue(0.0) == doctest::Approx(-2000.0)); CHECK(p.toValue(1.0) == doctest::Approx(2000.0));
+    for (double x : {0.1, 0.25, 0.4}) CHECK(p.toValue(x) == doctest::Approx(-p.toValue(1.0 - x)));
+    double prev = -1e9; for (int i = 0; i <= 100; ++i) { const double v = p.toValue(i / 100.0); CHECK(v >= prev); prev = v; }
+    for (double v : {-2000.0, -500.0, -35.0, -1.0, 1.0, 35.0, 500.0, 2000.0}) CHECK(p.toValue(p.toNorm(v)) == doctest::Approx(v).epsilon(1e-6));
+    CHECK(p.toValue(p.toNorm(0.0)) == doctest::Approx(0.0).scale(1.0).epsilon(1e-9));
+    CHECK(p.toNorm(35.0) > 0.7); CHECK(p.toNorm(35.0) < 0.78);   // +35 Hz sits at about three quarters (log scale away from the middle)
+}
