@@ -67,6 +67,9 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MD05 Rotary | 回転スピーカー。Speed（Stop／Slow／Fast、ホーンとドラムは別の慣性）、Accel、Horn／Drum、Mic distance、Drive、Mix。ドップラー・音量変化・キャビネット共振、遅延 48 サンプル固定 | 設計値は README「MD05 Rotary の設計」。MIDI／フットスイッチ（CC64・CC1・Note）での Speed 切替は未実装（ホストのノート入力をプラグイン層に通す作業） |
 | SW MD06 Freq Shift | 周波数シフター（IIR ヒルベルト対）。Shift ±2000 Hz（対数対称）、Direction、Ring mod、Feedback、LFO、Mix、Pitch track（シフト量を音高に比例） | 設計値は README「MD06 Freq Shift の設計」。対数対称カーブ Curve::SymLog を param.hpp に追加。Δ ボタンは無い（仕様書の要確認） |
 | SW MD07 Ensemble | ストリングアンサンブル風の多重コーラス。Voices（2／3／4／6）、Spread、Rate、Depth、Tone、Mix。声の位相を等間隔に置き、モノの和で 1 次の揺れが打ち消し合う | 設計値は README「MD07 Ensemble の設計」。Δ ボタンの有無は画面で確認 |
+| SW ST01 Imager | 4 帯域のステレオ幅調整（LR4 分割、帯域ごとに S を 0〜200 %）。Crossover 1〜3、Mono check（監視用）、帯域ごとの相関メーターと広げすぎの印 | 設計値は README「ST01 Imager の設計」。画面の描画は UI の作業。Δ ボタンは無い（仕様書の要確認） |
+| SW ST02 Mid Side | M/S のレベルと音色。Mid level／Side level ±12 dB、Side HPF、Side air、Mid low、Encode（M/S のまま入出力） | 設計値は README「ST02 Mid Side の設計」。参照曲との M/S バランス比較（区分 B）は画面側 |
+| SW ST06 Mono Low | 低域をモノにする。Frequency 20〜300 Hz、Slope 6／12／24／48 dB/oct（S だけをハイパス）、Side boost、Output、Listen（消える成分の試聴） | 設計値は README「ST06 Mono Low の設計」 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -498,6 +501,25 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **モノ互換（MD01 と同じ構成を声部数ぶん）。** 各声の位相を円周に等間隔に置く（遅い揺れは v/N、速い揺れは −v/N 周期）：**全声の遅延の変化量の和が常にほぼ 0**（テスト：2／3／4／6 声で和の最大値が揺れ幅の 1 % 未満）なので、L＋R では 1 次の揺れが打ち消し合う（テスト：Spread 10、1 kHz の正弦で、片側の側波帯（3 Hz 離れ）が −30 dB より大きいのに、L＋R では 20 dB 以上小さい）。
 - **Spread（0〜10）。** 声を中央（0）から全幅（10）まで等間隔に並べる：声 v の位置 p ＝ 0.5 ＋ Spread/10 × (v/(N−1) − 0.5)。**パンは線形**（左 1 − p、右 p：左右のゲインの和が常に 1 なので、モノの和の打ち消しが保たれる。定パワーだとこの和が位置によって変わり、打ち消しが崩れる）。出力は単位パワーに正規化（左右の平均、テスト：Voices 2〜6 × Spread 0／5／10 で、白色ノイズの出力が入力 −2.7 dB ±1.2：差は Tone 100 の 14 kHz ローパスが白色ノイズの上端を削る分）。
 - **Tone。** MD01 と同じ（遅延音のローパス 2.5〜14 kHz、120 Hz のハイパス）。ヒスは付けない（仕様書にない）。
+
+### ST01 Imager の設計（仕様書に数値がない部分）
+
+- **構成。** 左右それぞれを 4 次 Linkwitz-Riley の 4 帯域に分け（`sw::Lr4Split4`、既定 200 Hz／2 kHz／8 kHz、オクターブ以上離す規則つき）、帯域ごとに M ＝ (L＋R)/2、S ＝ (L−R)/2、S × 幅（0〜200 %）、L ＝ M＋S、R ＝ M−S。帯域を足し戻す（大きさは平ら：幅 100 % の全帯域で L／R の位相も保たれる。テスト）。**Mix は無い**（全体を処理）。遅延 0。モノのトラックは触らずに通す（幅という概念がないため）。
+- **実測（テスト）。** 幅 50／200 % で、その帯域の S だけが −6／+6 dB（±1 dB）、他の帯域は ±1.2 dB 以内、M は幅によらず ±0.2 dB。**幅 0 でも S は −∞ にならない：隣り合う帯域がクロスオーバーで位相をずらし合うため（40 Hz〜14 kHz の 4 点で 15 dB 以上、中間帯域で約 −20 dB）**。
+- **Mono check（監視用、Auto 不可：`automatable=false`）。** 左右とも (L＋R)/2 を出す。
+- **相関メーターと印（EVO、区分 A、画面用の値）。** 帯域ごとに「出力の L と R の相関」（300 ms の平均）を出し（`correlation(band)`：同相 ＋1、逆相 −1、無相関 0、無音は 1）、**相関が 0 未満で信号があるとき「広げすぎ」の印**（`overWide(band)`）。テスト：同相の正弦で ＋1、逆相で −1（印が付く）、独立なノイズで ±0.15 以内。画面の描画は UI の作業。
+
+### ST02 Mid Side の設計（仕様書に数値がない部分）
+
+- **構成。** M ＝ (L＋R)/2、S ＝ (L−R)/2、L ＝ M＋S、R ＝ M−S（左右がそのまま入った信号は何も変えずに通る。テスト：既定で 0.01 dB 以内）。Mid level／Side level ±12 dB（10 ms の滑らかな追従）、**Side HPF**（Off ＋ 20〜500 Hz、S だけ、2 次 Butterworth：最小の 20 Hz が Off、角で −3 dB）、**Side air**（S の 10 kHz ハイシェルフ、0〜10 ＝ 0〜+6 dB）、**Mid low**（M の 100 Hz ローシェルフ ±6 dB）。Mix は無い。遅延 0。
+- **Encode（Off／On）。** On のとき入力はすでに M（左）と S（右）で、出力も M／S のまま（行列を通さない）。同じ処理がそのまま効く（テスト：M +6 dB、S −6 dB）。
+- **進化機能（参照曲との M/S バランスの帯域別比較、区分 B）** は画面側の解析なので、コアには入れていない。
+
+### ST06 Mono Low の設計（仕様書に数値がない部分）
+
+- **構成。** M ＝ (L＋R)/2 には触れず、S ＝ (L−R)/2 だけに Frequency（20〜300 Hz、既定 120 Hz）の**ハイパス**（Slope 6／12／24／48 dB/oct ＝ 1 次／2 次 1 段／2 次 2 段（4 次）／2 次 4 段（8 次）、Butterworth）をかけ、Side boost（Frequency の 1 オクターブ上から効くハイシェルフ ±6 dB）、L ＝ M＋ S′、R ＝ M − S′、Output ±10 dB。Mix は無い。遅延 0。
+- **実測（テスト）。** 角（Frequency）で S が −3.01 dB ±0.3（どの Slope でも）、1 オクターブ下で Butterworth の理論値 ±0.7 dB、M は 30／120 Hz でも ±0.01 dB。Frequency 未満では出力がモノ（L と R の差 −40 dB 以下、200 Hz・48 dB/oct）。Frequency を 30／120／300 Hz に動かすと角も動く。
+- **Listen（EVO、監視用、Auto 不可）。** 「モノにして消える成分」＝ Frequency 未満の S だけを両チャンネルに出す（同じ次数のローパス：40 Hz の側音がほぼそのまま、4 kHz は −40 dB 以下、M は無音）。
 
 ### CS04 の注意
 

@@ -73,6 +73,9 @@
 #include "sa06/sa06.hpp"
 #include "sa07/sa07.hpp"
 #include "sa08/sa08.hpp"
+#include "st01/st01.hpp"
+#include "st02/st02.hpp"
+#include "st06/st06.hpp"
 
 namespace {
 template <class C, class = void> struct HasTempo : std::false_type {};
@@ -177,3 +180,6 @@ TEST_CASE("fuzz parameter bounds: sa05") { fuzzBounds<sw::sa05::Processor>(sw::s
 TEST_CASE("fuzz parameter bounds: sa06") { fuzzBounds<sw::sa06::Processor>(sw::sa06::specs(), 17u); fuzzBounds<sw::sa06::Processor>(sw::sa06::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: sa07") { fuzzBounds<sw::sa07::Processor>(sw::sa07::specs(), 17u); fuzzBounds<sw::sa07::Processor>(sw::sa07::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: sa08") { fuzzBounds<sw::sa08::Processor>(sw::sa08::specs(), 17u); fuzzBounds<sw::sa08::Processor>(sw::sa08::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: st01") { fuzzBounds<sw::st01::Processor>(sw::st01::specs(), 17u); fuzzBounds<sw::st01::Processor>(sw::st01::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: st02") { fuzzBounds<sw::st02::Processor>(sw::st02::specs(), 17u); fuzzBounds<sw::st02::Processor>(sw::st02::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: st06") { fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 17u); fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 29u); }
