@@ -34,6 +34,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW EQ09 Tilt | 傾き・低域・最高域、Auto pivot（曲のスペクトル中心にピボットが追従） | — |
 | SW SA01 Tape | テープレコーダー。簡略化したヒステリシス飽和（2× OS）、Formula（A／B／C＝ヘッドルーム 0／+3／−3 dB）、Speed（7.5／15／30 ips）ごとのヘッドバンプと高域損失（Repro）、Wow・Flutter（補間付き可変遅延）、Hiss、Input／Output。遅延は 48 サンプル固定。Calibrate（EVO）は 5 秒の入力から Input を決める | Calibrate の開始ボタンは画面と一緒に作る（コアは startCalibrate() と書き戻しを持つ）。値はすべて設計値（下の「SA01 の設計」） |
 | SW SA02 Console Sum | アナログ卓のサミング風の色付け。Color（Iron／Clean／Punch／Vint）、Drive、Crosstalk（左右の漏れ −80〜−40 dB）、Noise、Width（0〜150 %）、Output、Group（同じ番号のインスタンスが 1 台の卓として互いに負荷をかける）。インスタンスごとの個体差（EVO：種を状態に保存） | Group の効かせ方・個体差の幅・色の設計は設計値（下の「SA02 の設計」）。Unit A／B／C は共通機能と一緒に後で |
+| SW SA03 Tube | 真空管の倍音付け。Drive（0〜+24 dB を小信号利得 1 の非対称 tanh で、4× OS）、Bias（Cold＝対称〜Hot＝非対称）、Tube（12AX7／12AT7／EL34）、Tone（1 kHz を軸に ±6 dB の傾き）、Mix、Output。動くバイアス（EVO、既定 On）：入力の包絡（50 ms で戻る）で動作点をずらし、大きい音ほど非対称に歪む | 管ごとのバイアス・ヘッドルーム・ドライブ量、EVO のスイッチ（sa03.evo.on、既定 On）は設計値（下の「SA03 の設計」） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -200,6 +201,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **個体差（EVO）。** 種（1〜65535）はパラメータではなく**隠れた状態**で、インスタンスを作ったとき（時刻・カウンタ・アドレスから）決まり、共通のプラグイン層が状態の末尾（`SWX1`＋長さ＋バイト列）に保存・復元する（`saveExtra`／`loadExtra`。以前の状態は末尾がなくても読める）。最初はパラメータ（`sa02.seed`）にして、最初の処理でホストへ値を書き戻したが、clap-validator の `param-set-wrong-namespace`（パラメータ値が勝手に変わらないこと）が不合格になったため、この形に変えた。種から、左右別のゲイン ±0.3 dB、飽和の始まり ±0.5 dB（ドライブの差）、ノイズ ±1 dB、トーンの角 ±3 % を作る（同じ種なら出力はビット単位で同じ、種が違えば違う。テスト）。そのため Width 0 の左右逆相でも、ゲイン差の分（約 −30 dB）が残る。Unit A／B／C はこの上に重ねる共通機能で、後から。
 - **Group。** 同じプロセス内で Group 番号が同じインスタンスが、ロックフリーの共有領域（8 グループ × 64 スロット）に自分の平均二乗（約 100 ms の平滑）を出し、互いの合計を読んで **ドライブを最大 +3 dB 増やす**（3·tanh(√(他の合計) ÷ 0.3)、設計値）。別のグループには影響しない（テスト：隣が −6 dBFS で 3 次が 0.5 dB 以上増える）。ホストがプラグインを別プロセスで動かすと届かない（SW Link と同じ制約）。
 - 遅延 0。
+
+### SA03 の設計（仕様書に数値がない部分）
+
+- **整形。** `BiasShaper4x`（`BiasShaper2x` を 2 段重ねた 4× OS、`core/include/sw/shaper.hpp`）。ドライブ ＝ Drive × 2.4 dB × 管ごとの倍率（12AX7 1.0、12AT7 0.8、EL34 0.7）、バイアス＝ 管ごとの中心値（0.30／0.18／0.08）× 2 × Bias（Cold 0、中央＝その管の値、Hot＝2 倍）、ヘッドルーム 2.0／2.0／1.4（設計値）。小信号の利得 1（−50 dBFS で ±0.15 dB）。
+- **実測**（1 kHz、−12 dBFS RMS、Drive 6、EVO Off、基本波比の 2 次／3 次）：12AX7 −20.0／−26.2 dB（偶数次が先）、12AT7 −26.0／−30.2 dB、EL34 −31.9／−26.7 dB（奇数次が先）。Bias Cold は 2 次が −80 dB 未満、Hot は −35 dB より大きい（テスト）。
+- **動くバイアス。** 入力のピーク包絡（アタック即時、50 ms で戻る）に応じてバイアスを `0.35×tanh(4×包絡)` だけ足す。Drive 5・1 kHz の 2 次は、−26 dBFS RMS → −6 dBFS RMS で、Off では −33.8 → −18.9 dB（+14.9 dB）、On では −31.6 → −12.6 dB（+19.0 dB）。大きいバーストのあと 50 ms の時定数で戻る。仕様書の表に項目がないため、スイッチ `sa03.evo.on`（Off／On、既定 On：製品の売りのため）を末尾に足した（共通章の「EVO スイッチ（案）」）。
+- **Tone。** 1 kHz の低域シェルフ（−Tone）と高域シェルフ（＋Tone）、Q 0.5（MS06 の Tilt と同じ）。
+- 遅延 0。Mix・Output は共通枠。
 
 ### CS04 の注意
 
