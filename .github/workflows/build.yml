@@ -50,10 +50,10 @@ jobs:
           if [ "${{ matrix.shards }}" = "1" ]; then
             cmake --build build --config Release --parallel 4
           else
-            # this shard's products (every Nth sw_add_plugin line) + the unit tests on shard 0
+            # this shard's products (every Nth sw_add_plugin line; sw-<code>-plugin_all = CLAP + VST3 + AUv2 on macOS) + the unit tests on shard 0
             T=""; i=0
             for c in $(grep -o 'sw_add_plugin([a-z][a-z0-9]*' CMakeLists.txt | sed 's/sw_add_plugin(//'); do
-              if [ $((i % ${{ matrix.shards }})) = ${{ matrix.shard }} ]; then T="$T sw-$c-plugin_all"   # CLAP + VST3 (+ AUv2 on macOS); fi
+              if [ $((i % ${{ matrix.shards }})) = ${{ matrix.shard }} ]; then T="$T sw-$c-plugin_all"; fi
               i=$((i + 1))
             done
             if [ "${{ matrix.shard }}" = "0" ]; then T="$T sw-tests"; fi
