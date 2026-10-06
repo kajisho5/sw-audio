@@ -46,6 +46,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW DY12 Parallel | パラレル圧縮とアップワード圧縮。Squash（しきい値 0〜−40 dBFS、10:1 固定、−12 dBFS の基準レベルで音量が変わらない自動メイクアップ）、Blend（潰した音の混ぜ量、既定 30 %）、Upward（原音側で小さい音を最大 +12 dB、−60 dBFS 以下は持ち上げない）、Tone（潰した側だけの 1 次の傾き ±6 dB）、Speed（Fast／Med／Slow／Auto） | 共通の Mix は無い（Blend が兼ねる、仕様どおり）。メイクアップは静的、Upward の曲線は設計値（下の「DY12 の設計」） |
 | SW MS01 Maximizer | マスタリング用マキシマイザー。Gain（0〜+24 dB）→ 遅い段（Character X：比率 1〜4・ニー 0〜12 dB、Y：アタック 1〜30 ms）→ 速い段（先読み 2 ms の PeakLimiter、True peak 4×）→ TPDF ディザー。Lock（EVO）：出力の Integrated ラウドネスを測って Gain を Target へ寄せ（時定数 10 秒）、30 秒以上・0.3 LU 以内・安定で固定。Ceiling、Release（右端 Auto）、Stereo、Low end guard | 遅延 112 サンプル@48 kHz（先読み 96＋補間 16）。固定した Gain のホストへの書き戻しは画面と一緒に作る（下の「MS01 の設計」） |
 | SW MS02 True Peak | 先読みブリックウォール＋標本間ピーク検出（4x/8x）、TPDF ディザー | 下の「MS02 の保証範囲」 |
+| SW MS03 Multiband Limit | 4 帯域マルチバンドリミッター。LR4 で分割（120 Hz／1 kHz／6 kHz、足すと平ら）、帯域ごとに Gain（0〜+12 dB）・Ceiling・Release、先読み 2 ms の帯域リミッター、最後に True peak リミッターで Out ceiling を必ず守る。Character（Clean／Punch／Dense）、Link bands（EVO：合成後に天井を超える分を、帯域ごとのピークの大きさに応じて配分） | 遅延 184 サンプル@48 kHz（仕様書の見積もり約 200 より少し短い、下の「MS03 の設計」） |
 | SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
 | SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
@@ -153,6 +154,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Lock。** 出力（ディザー前）の BS.1770 Integrated（ゲート付き）を、10 秒で古い分が薄れる重み（設計値）で測り、0.1 秒ごとに `Gain += (Target − Integrated) × 0.1 / 10`。2 秒は測るだけ。30 秒以上経ち、Target との差が 0.3 LU 未満、かつ直近 5 秒の Integrated の変動が 0.15 LU 未満になったら固定（以後 Gain は動かない）。実測：−26 dBFS RMS の定常ノイズで Target −14 LUFS に対し 47 秒で Gain 6.05 dB に固定、積算値 −13.8 LUFS。同じ入力なら毎回同じ固定値（テスト）。Lock の On/Off、Target の変更で測り直す。**固定値は `gainDb()` で読める**。パラメータ（Gain）へ書き戻してホストに保存させる処理は、プラグイン層が画面の「Lock」操作と一緒に作る（音声スレッドからホストのパラメータを書けないため）。
 - 共通部品に `IntegratedLoudness`（`core/include/sw/loudness.hpp`、BS.1770-4 のゲート付き Integrated：400 ms ブロック・100 ms 刻み、絶対ゲート −70 LUFS、相対ゲート −10 LU、0.1 LU のヒストグラムで固定メモリ）を追加。MT01・LV23 でも使う。
 - Low lat（先読み 0.5 ms・IIR 補間で約 24 サンプル）は EVO バー（画面）と一緒に作る。
+
+### MS03 の設計（仕様書に数値がない部分）
+
+- **段の構成と遅延。** 帯域リミッター（先読み 2 ms ＝ 96）→ 合成 → 「配分段」（合成を見る先読み 1 ms ＝ 48 の `PeakLimiter`）→ 最終段（True peak 4×、先読み 0.5 ms ＝ 24 ＋ 補間 16 ＝ 40）。合計 **184 サンプル@48 kHz**（仕様書の見積もり約 200：帯域 96＋最終段約 100 より少し短い。最終段が残りだけを受け持つため先読みを短くした）。Link を切り替えても遅延は変わらない。最終段が Out ceiling を必ず守る（Link On／Off とも、+12 dB のノイズでサンプルピークが Out ceiling −0.1 dB 以内）。
+- **Link bands。** 配分段は合成の波形にかかる「あるべきゲイン g」を先読み付きで求める。Link Off では g を合成にそのままかけ（全帯域が一緒に下がる＝従来のポンピング）、On では帯域 i にかけるゲインを `g^αᵢ`、αᵢ ＝ eᵢ·Σe ÷ Σe²（eᵢ は帯域のピーク、立ち上がり即時・50 ms で戻る包絡）とする。**帯域のピークが同相で重なった最悪の場合に和が g 倍になる**条件から出した式で、帯域が同じ大きさなら α＝1（通常のゲイン）、特に大きい帯域だけが多く下がる。実測（80 Hz のバーストが 0.85、2 kHz の定常音 0.5、Out ceiling −1 dBTP）：バースト中の 2 kHz の音量は、Link Off で −9.5 dB、On で −9.0 dB（バーストなしでは −6.3 dB）。最初の案（シェア×4、5 ms の包絡）は、バーストの立ち上がりで無関係な帯域に責任が回り、かえって悪化したので上の式に変えた。配分後の残りは最終段が受ける。
+- **Character（設計値）。** 帯域リミッターのリリースの倍率：Clean ×1、Punch ×0.5、Dense ×2。Dense は帯域のリミッターの前に、帯域の天井の 1.25 倍で効く tanh の丸めを置く（ニーの丸さ）。`PeakLimiter` のアタック（先読みの長さ）は変えない。
+- **帯域の端の応答。** LR4 のまま（単独の帯域に 500 Hz を通すと隣の帯域に −24.6 dB の漏れがあり、帯域 2 の天井 −12 dB で止めても全体のピークは約 −10 dBFS になる、テストで確認）。
+- Low lat（先読み 0.5 ms）は EVO バー（画面）と一緒に作る。
 
 ### CS04 の注意
 
