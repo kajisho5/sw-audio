@@ -1,30 +1,58 @@
-// SW AUDIO core — analog output stage (EQ01 / EQ03 / EQ04 / EQ06 family): Drive 0..10 = input 0..+18 dB into a
-// tanh stage at 2x oversampling, small-signal unity gain (spec: 「Drive：出力段（EQ01 と同じモジュール）」)
+// SW AUDIO core — analog output stage (EQ01 / EQ03 / EQ04 family):
+// Drive 0..10 = input 0..+18 dB into ONE asymmetric soft-clip stage at 2x oversampling, with level compensation.
+// (spec: 「Drive：偶数次寄りの非対称ソフトクリップ1段、2× OS。ドライブ量に応じて出力を自動で下げ、Drive を回しても音量がほぼ変わらない」)
+//
+//   v = g x / h + b                      g = Drive gain (1..7.94), h = headroom (2.0 = +6 dBFS, decision), b = bias (design value)
+//   y = h s (tanh(v) - tanh(b)) / g      s = 1 / sech^2(b): slope 1 at x = 0, so small signals pass at unity for any Drive
+//
+// The bias moves the operating point off the centre of the tanh, so the two half-waves clip differently:
+// the 2nd harmonic leads the 3rd (b = 0.3 gives 2nd -21 dB / 3rd -30 dB at Drive 10 with a 0.18 sine; measured in tests/test_drive.cpp).
+// Level compensation: the 1/g makes the stage's small-signal gain constant and takes the clipped peaks down by the same amount
+// the input was raised, so a -18 dBFS RMS tone changes by < 1 dB across Drive 0..10.
+// The asymmetry shifts the mean of the output; the shift (output minus input) is high-passed at 5 Hz inside the 2x loop.
+// Only the added distortion is filtered, so the linear path and Drive 0 at normal levels are untouched.
 #pragma once
 #include "sw/oversample.hpp"
-#include "sw/saturate.hpp"
 #include "sw/smooth.hpp"
 #include <array>
+#include <cmath>
 
 namespace sw {
 
 class DriveStage {
 public:
-    void prepare(double fs, double drive010) { drive_.reset(fs, 20.0, drive010 * 1.8); os_ = {}; sat_.setHeadroom(2.0); sat_.setDriveDb(drive_.current()); }  // headroom +6 dBFS (design)
+    static constexpr double kHeadroom = 2.0;  // +6 dBFS (decision)
+    static constexpr double kBias = 0.3;      // operating-point offset (design value; README "Drive 段の設計")
+    static constexpr double kDcHz = 5.0;      // DC removal of the distortion product
+
+    void prepare(double fs, double drive010) {
+        drive_.reset(fs, 20.0, drive010 * 1.8); os_ = {}; dc_ = {};
+        dcA_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (2.0 * fs));
+        tb_ = std::tanh(kBias); s_ = 1.0 / (1.0 - tb_ * tb_);
+        update(drive_.current());
+    }
     void set(double drive010) { drive_.setTarget(drive010 * 1.8); }
-    void snap() { drive_.skip(1 << 30); sat_.setDriveDb(drive_.current()); }
-    void tick() { if (drive_.isSmoothing()) sat_.setDriveDb(drive_.next()); }  // once per sample, before process()
+    void snap() { drive_.skip(1 << 30); update(drive_.current()); }
+    void tick() { if (drive_.isSmoothing()) update(drive_.next()); }  // once per sample, before process()
     double process(int ch, double x) {
         double up[2];
         os_[static_cast<size_t>(ch)].up(x, up);
-        up[0] = sat_.process(up[0]); up[1] = sat_.process(up[1]);
+        for (double& u : up) u = shape(static_cast<size_t>(ch), u);
         return os_[static_cast<size_t>(ch)].down(up);
     }
 
 private:
+    void update(double driveDb) { g_ = std::pow(10.0, driveDb / 20.0); }
+    double shape(size_t ch, double u) {
+        const double y = kHeadroom * s_ * (std::tanh(g_ * u / kHeadroom + kBias) - tb_) / g_;
+        const double d = y - u;                           // added distortion, incl. the DC shift
+        dc_[ch] = dcA_ * dc_[ch] + (1.0 - dcA_) * d;      // its mean
+        return u + (d - dc_[ch]);
+    }
     LinearSmoother drive_;
     std::array<Oversampler2x, 2> os_{};
-    Saturator sat_;
+    std::array<double, 2> dc_{};
+    double g_ = 1.0, dcA_ = 0.0, tb_ = 0.0, s_ = 1.0;
 };
 
 }  // namespace sw
