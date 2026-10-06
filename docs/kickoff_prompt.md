@@ -6,7 +6,7 @@
 
 SW AUDIO の開発を引き継いで、おまかせで進めてください。
 
-最初に CLAUDE.md、README.md、docs/tasks.md を読んでください。仕様の正は docs/spec/SW_AUDIO_spec_v1.0.md です。
+最初に CLAUDE.md、README.md、docs/tasks.md を読んでください。仕様の正は docs/spec/SW_AUDIO_spec_v1.0.md です。画面デザイン（docs/design/canvas）は別に追加するので、空でも DSP の作業は進めてください。
 
 次の順で進めてください。
 1. tools/setup_linux.sh で環境を用意し、tools/validate_all.sh で現状（23 製品、単体テスト 221 件、両 validator で不合格 0）を再現する。

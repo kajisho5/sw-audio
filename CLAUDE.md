@@ -16,7 +16,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 | 製品の仕様（パラメータ表・DSP・遅延・CPU・進化機能・要確認） | `docs/spec/SW_AUDIO_spec_v1.0.md`（製品コードで検索。例 `grep -n "### SW DY01" -A80`） |
 | 画面に描いた値・範囲 | `docs/project/04_parameters.csv`、製品一覧 `docs/project/03_product_lineup.csv` |
 | 決定事項・ブランド・デザイン規定 | `docs/project/05_decisions_and_status.md`、`01_design_system.md`、`02_design_tokens.json` |
-| 画面デザイン（UI を作るとき） | `docs/design/canvas/project/<コード>.dc.html`（製品ごとの画面）、`docs/design/design-system/project/`（トークン・部品・ロゴ） |
+| 画面デザイン（UI を作るとき） | `docs/design/canvas/project/<コード>.dc.html`（製品ごとの画面。容量のため別 zip で追加する。入っていなければ依頼者に頼む）、`docs/design/design-system/project/`（トークン・部品・ロゴ） |
 | これまでの決定・設計値・仕様との差 | `README.md`（製品表の「注意」、「決定事項」「〜の設計」「〜の注意」の各節） |
 | 残りの作業 | `docs/tasks.md` |
 
