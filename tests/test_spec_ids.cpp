@@ -4,6 +4,7 @@
 #include "dy02/dy02.hpp"
 #include "dy03/dy03.hpp"
 #include "dy04/dy04.hpp"
+#include "dy05/dy05.hpp"
 #include "dy07/dy07.hpp"
 #include "dy08/dy08.hpp"
 #include "ms02/ms02.hpp"
@@ -21,6 +22,7 @@ TEST_CASE("parameter IDs follow the spec") {
     CHECK(ids(dy02::specs()) == std::vector<std::string>{"dy02.level", "dy02.out", "dy02.speed", "dy02.target", "dy02.emph", "dy02.mix", "dy02.evo.on", "dy02.automakeup"});
     CHECK(ids(dy03::specs()) == std::vector<std::string>{"dy03.thresh", "dy03.ratio", "dy03.attack", "dy03.release", "dy03.makeup", "dy03.mix", "dy03.knee", "dy03.schpf", "dy03.evo.on"});
     CHECK(ids(dy04::specs()) == std::vector<std::string>{"dy04.thresh", "dy04.range", "dy04.attack", "dy04.hold", "dy04.release", "dy04.mode", "dy04.key.hpf", "dy04.key.lpf", "dy04.key.hpffreq", "dy04.key.lpffreq", "dy04.listen"});
+    CHECK(ids(dy05::specs()) == std::vector<std::string>{"dy05.mode", "dy05.freq", "dy05.thresh", "dy05.range", "dy05.lookahead", "dy05.listen", "dy05.evo.on"});
     CHECK(ids(dy07::specs()) == std::vector<std::string>{"dy07.thresh", "dy07.ratio", "dy07.out", "dy07.snap", "dy07.mix", "dy07.knee"});
     CHECK(ids(dy08::specs()) == std::vector<std::string>{"dy08.thresh", "dy08.ratio", "dy08.knee", "dy08.attack", "dy08.release", "dy08.evo.on", "dy08.makeup", "dy08.mix", "dy08.schpf", "dy08.detector", "dy08.lookahead", "dy08.sc"});
     CHECK(ids(ms02::specs()) == std::vector<std::string>{"ms02.gain", "ms02.ceiling", "ms02.release", "ms02.lookahead", "ms02.tp", "ms02.isp", "ms02.link", "ms02.dither"});
