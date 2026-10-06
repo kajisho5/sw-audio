@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SW EQ01 Passive, option 2</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0c0c0d}
+.p{font-family:'Barlow Condensed',sans-serif;color:#e6e6e6;box-sizing:border-box}
+.p *{box-sizing:border-box}
+.tb{height:40px;flex:none;background:#0c0c0d;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid #000}
+.logo{font-family:Michroma,sans-serif;font-size:9px;letter-spacing:.3em;color:#8e8e8e;margin-right:8px}
+.code{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;color:#0c0c0d;background:var(--acc)}
+.nm{font-family:Michroma,sans-serif;font-size:11px;letter-spacing:.18em;color:#f0f0f0;margin-left:4px}
+.sp{flex:1}
+.tb button{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:500;letter-spacing:.06em;color:#cfcfcf;background:#1a1a1c;border:1px solid #2c2c2f;border-radius:4px;height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.tb button.on{color:#0c0c0d;background:var(--acc);border-color:var(--acc)}
+.strip{height:3px;flex:none;background:var(--acc)}
+.knob{position:relative;width:var(--s);height:var(--s);flex:none}
+.scale{position:absolute;inset:-11px;border-radius:50%;background:repeating-conic-gradient(from 225deg,rgba(236,236,236,.75) 0deg 1.6deg,transparent 1.6deg 27deg);-webkit-mask:radial-gradient(closest-side,transparent 80%,#000 81%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);-webkit-mask-composite:source-in;mask:radial-gradient(closest-side,transparent 80%,#000 81%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);mask-composite:intersect}
+.zero{position:absolute;left:50%;top:-15px;width:0;height:0;margin-left:-4px;border-left:4px solid transparent;border-right:4px solid transparent;border-top:6px solid #f2f2f2}
+.cap{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 38% 30%,#5a5b60 0%,#27282b 45%,#101012 100%);box-shadow:0 5px 9px rgba(0,0,0,.65),inset 0 1px 1px rgba(255,255,255,.2)}
+.cap::before{content:"";position:absolute;inset:16%;border-radius:50%;background:radial-gradient(circle at 40% 32%,#3d3e42,#19191b 72%);box-shadow:inset 0 1px 2px rgba(0,0,0,.85),0 1px 0 rgba(255,255,255,.07)}
+.cap.alu{background:radial-gradient(circle at 38% 30%,#f4f4f4 0%,#bdbdbd 40%,#6e6e6e 100%)}
+.cap.alu::before{background:repeating-conic-gradient(#dadada 0deg 6deg,#b4b4b4 6deg 12deg);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.ptr{position:absolute;inset:0;border-radius:50%}
+.ptr i{position:absolute;left:50%;top:6%;width:3px;height:30%;margin-left:-1.5px;border-radius:2px;background:var(--acc);box-shadow:0 0 3px rgba(0,0,0,.6)}
+.cap.alu+.ptr i{background:#161616;box-shadow:none}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#dcdcdc;text-shadow:0 1px 0 rgba(0,0,0,.75);text-align:center;white-space:nowrap}
+.ctl{display:flex;flex-direction:column;align-items:center;gap:6px}
+.ctl .knob{margin:11px}
+.rng{display:flex;justify-content:space-between;font-size:10px;font-weight:500;letter-spacing:.04em;color:#9a9a9a;margin-top:-12px}
+.ear{width:44px;flex:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:22px 0;box-shadow:inset -1px 0 0 rgba(0,0,0,.5),inset 1px 0 0 rgba(255,255,255,.18)}
+.hole{width:20px;height:11px;border-radius:6px;background:#070708;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.2)}
+.tog{width:14px;height:34px;flex:none;border-radius:7px;background:#0b0b0c;box-shadow:inset 0 2px 3px #000,0 1px 0 rgba(255,255,255,.12);position:relative}
+.tog i{position:absolute;left:2px;top:3px;width:10px;height:16px;border-radius:5px;background:linear-gradient(90deg,#8a8a8a,#f2f2f2 45%,#7a7a7a)}
+.tog.dn i{top:15px}
+.plate{font-family:Michroma,sans-serif;letter-spacing:.2em;color:#f2f2f2}
+.eng{font-size:11px;font-weight:500;letter-spacing:.24em;color:#a9a9a9;text-transform:uppercase}
+.box{border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:10px 12px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:inset 0 1px 0 rgba(0,0,0,.5)}
+.boxhd{font-size:11px;font-weight:600;letter-spacing:.24em;color:#bdbdbd;text-transform:uppercase}
+.heat{width:9px;height:9px;border-radius:2px;background:#2a2b2e}
+.heat.on{background:radial-gradient(circle at 40% 35%,#dce9ff,#3b7fe6 60%,#0f2f6b);box-shadow:0 0 6px rgba(59,127,230,.8)}
+</style>
+</helmet>
+<div class="p" style="width:960px;height:420px;display:flex;flex-direction:column;background:#0c0c0d;--acc:#3b7fe6;--acc2:#9cc0ff;overflow:hidden">
+<div class="tb"><span class="logo">SEVENTHWELL</span><span class="code">EQ01</span><span class="nm">PASSIVE</span><span class="sp"></span><button style="min-width:150px;justify-content:space-between">Default<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button><button class="on">A</button><button>B</button><button aria-label="Undo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button><button aria-label="Redo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button><button>2× OS</button><button>100%</button><button aria-label="Bypass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"></path><path d="M6.3 7.3a8 8 0 1 0 11.4 0"></path></svg></button></div>
+<div class="strip"></div>
+<div style="flex:1;display:flex;min-height:0">
+<div class="ear" style="background:linear-gradient(90deg,#173f85,#3b7fe6 50%,#173f85)"><div class="hole"></div><div class="hole"></div></div>
+<div style="flex:1;background:radial-gradient(rgba(255,255,255,.04) 1px,transparent 1.3px) 0 0/3px 3px,linear-gradient(#2c2d30,#1c1d20);padding:18px 26px 14px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.6)">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:baseline;gap:16px"><span class="plate" style="font-size:20px">SW EQ01</span><span class="eng">Passive tone shaper</span></div>
+<div style="display:flex;align-items:center;gap:20px">
+<div style="display:flex;align-items:center;gap:8px"><span class="eng">In</span><div class="tog"><i></i></div></div>
+<div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#dce9ff,#3b7fe6 45%,#0f2f6b);box-shadow:0 0 12px rgba(59,127,230,.85),0 0 0 3px #111,0 0 0 4px #555"></div>
+</div>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div class="box">
+<div class="boxhd">Low</div>
+<div style="display:flex;align-items:center;gap:2px">
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap alu"></div><div class="ptr" style="transform:rotate(-10deg)"><i></i></div></div><div class="rng" style="width:76px"><span>20</span><span>400</span></div><div class="lbl">Freq</div></div>
+<div class="ctl"><div class="knob" style="--s:84px"><div class="scale"></div><div class="zero"></div><div class="cap"></div><div class="ptr" style="transform:rotate(45deg)"><i></i></div></div><div class="rng" style="width:102px"><span>-12</span><span>+12</span></div><div class="lbl">Gain</div></div>
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(-54deg)"><i></i></div></div><div class="rng" style="width:76px"><span>0</span><span>10</span></div><div class="lbl">Contour</div></div>
+</div>
+</div>
+<div class="box">
+<div class="boxhd">Air</div>
+<div style="display:flex;align-items:center;gap:2px">
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap alu"></div><div class="ptr" style="transform:rotate(75deg)"><i></i></div></div><div class="rng" style="width:76px"><span>2k</span><span>20k</span></div><div class="lbl">Freq</div></div>
+<div class="ctl"><div class="knob" style="--s:84px"><div class="scale"></div><div class="zero"></div><div class="cap"></div><div class="ptr" style="transform:rotate(34deg)"><i></i></div></div><div class="rng" style="width:102px"><span>-12</span><span>+12</span></div><div class="lbl">Gain</div></div>
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(27deg)"><i></i></div></div><div class="rng" style="width:76px"><span>Narrow</span><span>Wide</span></div><div class="lbl">Width</div></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 6px;align-items:start">
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(-40deg)"><i></i></div></div><div class="rng" style="width:76px"><span>0</span><span>10</span></div><div class="lbl">Drive</div></div>
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="zero"></div><div class="cap"></div><div class="ptr" style="transform:rotate(0deg)"><i></i></div></div><div class="rng" style="width:76px"><span>-10</span><span>+10</span></div><div class="lbl">Output</div></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div style="display:flex;gap:3px"><div class="heat on"></div><div class="heat on"></div><div class="heat on"></div><div class="heat"></div><div class="heat"></div></div><span class="eng" style="font-size:10px;letter-spacing:.16em">Heat</span></div>
+<div style="display:flex;align-items:center;justify-content:center;gap:6px"><span class="eng" style="font-size:10px;letter-spacing:.12em">LR</span><div class="tog"><i></i></div><span class="eng" style="font-size:10px;letter-spacing:.12em">MS</span></div>
+</div>
+</div>
+
+<div style="display:flex;justify-content:space-between"><span class="eng" style="font-size:10px">Seventhwell audio</span><span class="eng" style="font-size:10px">Model EQ01</span></div>
+</div>
+<div class="ear" style="background:linear-gradient(90deg,#173f85,#3b7fe6 50%,#173f85)"><div class="hole"></div><div class="hole"></div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

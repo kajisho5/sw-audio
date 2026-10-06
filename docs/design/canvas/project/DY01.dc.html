@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SW DY01 FET</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0c0c0d}
+.p{font-family:'Barlow Condensed',sans-serif;color:#e6e6e6;box-sizing:border-box}
+.p *{box-sizing:border-box}
+.tb{height:40px;flex:none;background:#0c0c0d;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid #000}
+.logo{font-family:Michroma,sans-serif;font-size:9px;letter-spacing:.3em;color:#8e8e8e;margin-right:8px}
+.code{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;color:#0c0c0d;background:var(--acc)}
+.nm{font-family:Michroma,sans-serif;font-size:11px;letter-spacing:.18em;color:#f0f0f0;margin-left:4px}
+.sp{flex:1}
+.tb button{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:500;letter-spacing:.06em;color:#cfcfcf;background:#1a1a1c;border:1px solid #2c2c2f;border-radius:4px;height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.tb button.on{color:#0c0c0d;background:var(--acc);border-color:var(--acc)}
+.strip{height:3px;flex:none;background:var(--acc)}
+.knob{position:relative;width:var(--s);height:var(--s);flex:none}
+.scale{position:absolute;inset:-11px;border-radius:50%;background:repeating-conic-gradient(from 225deg,rgba(236,236,236,.75) 0deg 1.6deg,transparent 1.6deg 27deg);-webkit-mask:radial-gradient(closest-side,transparent 80%,#000 81%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);-webkit-mask-composite:source-in;mask:radial-gradient(closest-side,transparent 80%,#000 81%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);mask-composite:intersect}
+.cap{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 38% 30%,#5a5b60 0%,#27282b 45%,#101012 100%);box-shadow:0 5px 9px rgba(0,0,0,.65),inset 0 1px 1px rgba(255,255,255,.2)}
+.cap::before{content:"";position:absolute;inset:16%;border-radius:50%;background:radial-gradient(circle at 40% 32%,#3d3e42,#19191b 72%);box-shadow:inset 0 1px 2px rgba(0,0,0,.85),0 1px 0 rgba(255,255,255,.07)}
+.ptr{position:absolute;inset:0;border-radius:50%}
+.ptr i{position:absolute;left:50%;top:6%;width:3px;height:30%;margin-left:-1.5px;border-radius:2px;background:var(--acc);box-shadow:0 0 3px rgba(0,0,0,.6)}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#dcdcdc;text-shadow:0 1px 0 rgba(0,0,0,.75);text-align:center;white-space:nowrap}
+.ctl{display:flex;flex-direction:column;align-items:center;gap:6px}
+.ctl .knob{margin:11px}
+.rng{display:flex;justify-content:space-between;font-size:10px;font-weight:500;letter-spacing:.04em;color:#a4a4a4;margin-top:-12px}
+.ear{width:44px;flex:none;display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:22px 0;box-shadow:inset -1px 0 0 rgba(0,0,0,.5),inset 1px 0 0 rgba(255,255,255,.18)}
+.hole{width:20px;height:11px;border-radius:6px;background:#070708;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.2)}
+.led{width:8px;height:8px;flex:none;border-radius:50%;background:radial-gradient(circle at 40% 35%,#ffffff,var(--acc) 60%,#3a2405);box-shadow:0 0 7px var(--acc)}
+.led.off{background:radial-gradient(circle at 40% 35%,#4a4a4a,#1c1c1c);box-shadow:none}
+.btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.12em;color:#d5d5d5;background:linear-gradient(#3b3c40,#222326);border:1px solid #0d0d0e;border-radius:3px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 3px rgba(0,0,0,.5);height:24px;min-width:44px;padding:0 10px;cursor:pointer}
+.btn.on{color:#111;background:linear-gradient(var(--acc2),var(--acc))}
+.tog{width:14px;height:34px;flex:none;border-radius:7px;background:#0b0b0c;box-shadow:inset 0 2px 3px #000,0 1px 0 rgba(255,255,255,.12);position:relative}
+.tog i{position:absolute;left:2px;top:3px;width:10px;height:16px;border-radius:5px;background:linear-gradient(90deg,#8a8a8a,#f2f2f2 45%,#7a7a7a)}
+.plate{font-family:Michroma,sans-serif;letter-spacing:.2em;color:#f2f2f2}
+.eng{font-size:11px;font-weight:500;letter-spacing:.24em;color:#b0b0b0;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:8px}
+</style>
+</helmet>
+<div class="p" style="width:960px;height:380px;display:flex;flex-direction:column;background:#0c0c0d;--acc:#f0ad3d;--acc2:#ffd890;overflow:hidden">
+<div class="tb"><span class="logo">SEVENTHWELL</span><span class="code">DY01</span><span class="nm">FET</span><span class="sp"></span><button style="min-width:150px;justify-content:space-between">Vocal grab<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button><button class="on">A</button><button>B</button><button aria-label="Undo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button><button aria-label="Redo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button><button>2× OS</button><button>100%</button><button aria-label="Bypass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"></path><path d="M6.3 7.3a8 8 0 1 0 11.4 0"></path></svg></button></div>
+<div class="strip"></div>
+<div style="flex:1;display:flex;min-height:0">
+<div class="ear" style="background:linear-gradient(90deg,#8a5410,#f0ad3d 50%,#8a5410)"><div class="hole"></div><div class="hole"></div></div>
+<div style="flex:1;background:repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px),linear-gradient(#4b4d52,#2c2d31);padding:14px 24px 12px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -1px 0 rgba(0,0,0,.6)">
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:baseline;gap:16px"><span class="plate" style="font-size:20px">SW DY01</span><span class="eng">FET limiting amplifier</span></div>
+<div style="display:flex;align-items:center;gap:20px"><div class="row"><span class="eng">Power</span><div class="tog"><i></i></div></div><div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 38% 32%,#fff3d6,#f0ad3d 45%,#6b3f05);box-shadow:0 0 12px rgba(240,173,61,.85),0 0 0 3px #111,0 0 0 4px #666"></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between">
+<div class="ctl"><div class="knob" style="--s:84px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(20deg)"><i></i></div></div><div class="rng" style="width:102px"><span>Off</span><span>48</span></div><div class="lbl">Input</div></div>
+<div class="ctl"><div class="knob" style="--s:84px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(-10deg)"><i></i></div></div><div class="rng" style="width:102px"><span>Off</span><span>24</span></div><div class="lbl">Output</div></div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div class="ctl"><div class="knob" style="--s:44px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(60deg)"><i></i></div></div><div class="rng" style="width:64px"><span>Slow</span><span>Fast</span></div><div class="lbl" style="font-size:11px">Attack</div></div>
+<div class="ctl"><div class="knob" style="--s:44px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(-20deg)"><i></i></div></div><div class="rng" style="width:64px"><span>Slow</span><span>Fast</span></div><div class="lbl" style="font-size:11px">Release</div></div>
+</div>
+<div style="width:240px;height:146px;flex:none;border-radius:6px;background:#0b0b0c;padding:8px;box-shadow:inset 0 2px 6px #000,0 1px 0 rgba(255,255,255,.12)"><svg viewBox="0 0 214 124" width="224" height="130" style="display:block;border-radius:3px"><rect width="214" height="124" fill="#efe3c2"></rect><path d="M30.4 75.7 A100 100 0 0 1 144.5 47.3" fill="none" stroke="#2a2a2a" stroke-width="1.2"></path><path d="M144.5 47.3 A100 100 0 0 1 183.6 75.7" fill="none" stroke="#c4302b" stroke-width="4"></path><g stroke="#2a2a2a" stroke-width="1.2"><line x1="30.4" y1="75.7" x2="22.7" y2="69.3"></line><line x1="51.1" y1="57.1" x2="45.5" y2="48.8"></line><line x1="69.5" y1="47.3" x2="65.8" y2="38"></line><line x1="84.5" y1="42.6" x2="82.2" y2="32.9"></line><line x1="101.8" y1="40.1" x2="101.3" y2="30.1"></line><line x1="124.4" y1="41.5" x2="126.1" y2="31.7"></line></g><g stroke="#c4302b" stroke-width="1.2"><line x1="144.5" y1="47.3" x2="148.2" y2="38"></line><line x1="157" y1="53.4" x2="162" y2="44.7"></line><line x1="168.6" y1="61.2" x2="174.8" y2="53.3"></line><line x1="183.6" y1="75.7" x2="191.3" y2="69.3"></line></g><g font-family="Barlow Condensed, sans-serif" font-size="10" font-weight="600" fill="#2a2a2a" text-anchor="middle"><text x="15" y="63">20</text><text x="40" y="40">10</text><text x="62" y="29">7</text><text x="80" y="23">5</text><text x="101" y="20">3</text><text x="128" y="22">1</text></g><g font-family="Barlow Condensed, sans-serif" font-size="10" font-weight="600" fill="#c4302b" text-anchor="middle"><text x="152" y="29">0</text><text x="167" y="36">1</text><text x="181" y="45">2</text><text x="199" y="63">3</text></g><text x="107" y="90" text-anchor="middle" font-family="Michroma, sans-serif" font-size="13" fill="#2a2a2a">VU</text><line x1="107" y1="140" x2="107" y2="34" stroke="#151515" stroke-width="1.6" transform="rotate(-24 107 140)"></line><rect x="0" y="104" width="214" height="20" fill="#18181a"></rect><text x="107" y="117" text-anchor="middle" font-family="Michroma, sans-serif" font-size="6.5" letter-spacing="2" fill="#8a8a8a">SEVENTHWELL</text><path d="M0 0 H214 V34 Q107 58 0 28 Z" fill="#ffffff" fill-opacity="0.12"></path></svg></div>
+<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">
+<span class="lbl" style="margin-bottom:3px">Ratio</span>
+<div class="row"><div class="led off"></div><button class="btn">4</button></div>
+<div class="row"><div class="led"></div><button class="btn on">8</button></div>
+<div class="row"><div class="led off"></div><button class="btn">12</button></div>
+<div class="row"><div class="led off"></div><button class="btn">20</button></div>
+<div class="row"><div class="led off"></div><button class="btn">All</button></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start">
+<span class="lbl" style="margin-bottom:3px">Meter</span>
+<div class="row"><div class="led"></div><button class="btn on">GR</button></div>
+<div class="row"><div class="led off"></div><button class="btn">+8</button></div>
+<div class="row"><div class="led off"></div><button class="btn">+4</button></div>
+<div class="row"><div class="led off"></div><button class="btn">Off</button></div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+<div class="ctl"><div class="knob" style="--s:54px"><div class="scale"></div><div class="cap"></div><div class="ptr" style="transform:rotate(135deg)"><i></i></div></div><div class="rng" style="width:76px"><span>Dry</span><span>Wet</span></div><div class="lbl">Mix</div></div>
+<div class="row"><span class="eng" style="font-size:10px;letter-spacing:.16em">SC HPF</span><div class="tog"><i></i></div></div>
+</div>
+</div>
+<div style="display:flex;justify-content:space-between"><span class="eng" style="font-size:10px">Seventhwell audio</span><span class="eng" style="font-size:10px">Model DY01</span></div>
+</div>
+<div class="ear" style="background:linear-gradient(90deg,#8a5410,#f0ad3d 50%,#8a5410)"><div class="hole"></div><div class="hole"></div></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":380}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

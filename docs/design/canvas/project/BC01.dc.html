@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SW BC01 Voice</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0c0c0d}
+.p{font-family:'Barlow Condensed',sans-serif;color:#e6e6e6;box-sizing:border-box}
+.p *{box-sizing:border-box}
+.tb{height:40px;flex:none;background:#0c0c0d;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid #000}
+.logo{font-family:Michroma,sans-serif;font-size:9px;letter-spacing:.3em;color:#8e8e8e;margin-right:8px}
+.code{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;color:#0c0c0d;background:var(--acc)}
+.nm{font-family:Michroma,sans-serif;font-size:11px;letter-spacing:.18em;color:#f0f0f0;margin-left:4px}
+.sp{flex:1}
+.tb button{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:500;letter-spacing:.06em;color:#cfcfcf;background:#1a1a1c;border:1px solid #2c2c2f;border-radius:4px;height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.tb button.on{color:#0c0c0d;background:var(--acc);border-color:var(--acc)}
+.strip{height:3px;flex:none;background:var(--acc)}
+.knob{position:relative;width:var(--s);height:var(--s);flex:none}
+.scale{position:absolute;inset:-14px;border-radius:50%;background:repeating-conic-gradient(from 225deg,rgba(20,20,20,.7) 0deg 1.4deg,transparent 1.4deg 13.5deg);-webkit-mask:radial-gradient(closest-side,transparent 86%,#000 87%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);-webkit-mask-composite:source-in;mask:radial-gradient(closest-side,transparent 86%,#000 87%),conic-gradient(from 138deg,transparent 0deg 84deg,#000 84deg);mask-composite:intersect}
+.arc{position:absolute;inset:-6px;border-radius:50%;background:conic-gradient(from 225deg,#151515 0deg 168deg,transparent 168deg);-webkit-mask:radial-gradient(closest-side,transparent 92%,#000 93%);mask:radial-gradient(closest-side,transparent 92%,#000 93%)}
+.cap{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 38% 30%,#5a5b60 0%,#27282b 45%,#101012 100%);box-shadow:0 10px 20px rgba(0,0,0,.35),0 3px 6px rgba(0,0,0,.4),inset 0 1px 1px rgba(255,255,255,.2)}
+.cap::before{content:"";position:absolute;inset:14%;border-radius:50%;background:repeating-conic-gradient(#202124 0deg 4deg,#2a2b2f 4deg 8deg);box-shadow:inset 0 2px 4px rgba(0,0,0,.85),0 1px 0 rgba(255,255,255,.08)}
+.ptr{position:absolute;inset:0;border-radius:50%}
+.ptr i{position:absolute;left:50%;top:5%;width:5px;height:24%;margin-left:-2.5px;border-radius:3px;background:#f2f2f2}
+.pill{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;height:44px;border-radius:22px;border:1.5px solid #151515;background:transparent;color:#151515;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.pill.on{background:#151515;color:#f2f2f2}
+.chip{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;height:30px;padding:0 12px;border-radius:4px;border:1px solid #b9b9b4;background:#f7f7f4;color:#2a2a2a;cursor:pointer}
+.chip.on{background:#151515;border-color:#151515;color:#f2f2f2}
+.led{width:8px;height:8px;flex:none;border-radius:50%;background:radial-gradient(circle at 40% 35%,#c4ffc9,#2bd14a 60%,#0d6a22);box-shadow:0 0 6px rgba(43,209,74,.7)}
+.led.off{background:#9a9a96;box-shadow:none}
+.mlbl{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#3a3a3a;width:34px}
+.mbar{flex:1;height:10px;border-radius:2px;-webkit-mask:repeating-linear-gradient(to right,#000 0 6px,transparent 6px 8px);mask:repeating-linear-gradient(to right,#000 0 6px,transparent 6px 8px)}
+.plate{font-family:Michroma,sans-serif;letter-spacing:.2em;color:#151515}
+.eng{font-size:11px;font-weight:600;letter-spacing:.24em;color:#5a5a58;text-transform:uppercase}
+</style>
+</helmet>
+<div class="p" style="width:520px;height:600px;display:flex;flex-direction:column;background:#0c0c0d;--acc:#f2f2f2;--acc2:#ffffff;overflow:hidden">
+<div class="tb"><span class="logo">SEVENTHWELL</span><span class="code">BC01</span><span class="nm">VOICE</span><span class="sp"></span><button style="min-width:110px;justify-content:space-between">Talk stream<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button><button class="on">A</button><button>B</button><button aria-label="Bypass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"></path><path d="M6.3 7.3a8 8 0 1 0 11.4 0"></path></svg></button></div>
+<div class="strip"></div>
+<div style="flex:1;background:radial-gradient(rgba(0,0,0,.035) 1px,transparent 1.2px) 0 0/3px 3px,linear-gradient(#f1f1ee,#dcdcd7);padding:20px 26px 22px;display:flex;flex-direction:column;justify-content:space-between;align-items:center;color:#151515">
+<div style="width:100%;display:flex;align-items:baseline;justify-content:space-between"><div style="display:flex;align-items:baseline;gap:12px"><span class="plate" style="font-size:18px">SW BC01</span><span class="eng">Voice strip</span></div><span class="eng" style="font-size:10px">OBS and DAW</span></div>
+<div style="display:flex;gap:6px"><button class="chip">Narration</button><button class="chip on">Stream</button><button class="chip">Meeting</button><button class="chip">Singing</button></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+<div class="knob" style="--s:170px;margin:16px"><div class="scale"></div><div class="arc"></div><div class="cap"></div><div class="ptr" style="transform:rotate(33deg)"><i></i></div></div>
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:15px;font-weight:600;letter-spacing:.24em;text-transform:uppercase">Voice</span><span style="font-family:'Space Mono',monospace;font-size:15px;color:#3a3a3a">62%</span></div>
+</div>
+<div style="width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+<button class="pill on"><span class="led"></span>Noise</button>
+<button class="pill"><span class="led off"></span>EQ</button>
+<button class="pill on"><span class="led"></span>Comp</button>
+<button class="pill on"><span class="led"></span>Limit</button>
+</div>
+<div style="width:100%;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:center;gap:10px"><span class="mlbl">In</span><div class="mbar" style="background:linear-gradient(to right,transparent 0 66%,rgba(0,0,0,.14) 66%),linear-gradient(to right,#25b843 0 72%,#e2b82c 72% 88%,#d63a35 88%)"></div></div>
+<div style="display:flex;align-items:center;gap:10px"><span class="mlbl">GR</span><div class="mbar" style="background:linear-gradient(to right,#3a3a3a 0 22%,rgba(0,0,0,.14) 22%)"></div></div>
+<div style="display:flex;align-items:center;gap:10px"><span class="mlbl">Out</span><div class="mbar" style="background:linear-gradient(to right,transparent 0 74%,rgba(0,0,0,.14) 74%),linear-gradient(to right,#25b843 0 72%,#e2b82c 72% 88%,#d63a35 88%)"></div></div>
+<div style="display:flex;justify-content:space-between;margin-top:4px"><span class="eng" style="font-size:10px">Target -14 LUFS</span><span style="font-family:'Space Mono',monospace;font-size:12px;color:#3a3a3a">Now -14.6</span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":520,"height":600}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

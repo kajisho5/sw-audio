@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SW MS01 Maximizer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0c0c0d}
+.p{font-family:'Barlow Condensed',sans-serif;color:#e6e6e6;box-sizing:border-box}
+.p *{box-sizing:border-box}
+.tb{height:40px;flex:none;background:#0c0c0d;display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid #000}
+.logo{font-family:Michroma,sans-serif;font-size:9px;letter-spacing:.3em;color:#8e8e8e;margin-right:8px}
+.code{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:3px;color:#0c0c0d;background:var(--acc)}
+.nm{font-family:Michroma,sans-serif;font-size:11px;letter-spacing:.18em;color:#f0f0f0;margin-left:4px}
+.sp{flex:1}
+.tb button{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:500;letter-spacing:.06em;color:#cfcfcf;background:#1a1a1c;border:1px solid #2c2c2f;border-radius:4px;height:26px;padding:0 9px;display:flex;align-items:center;gap:6px;cursor:pointer}
+.tb button.on{color:#0c0c0d;background:var(--acc);border-color:var(--acc)}
+.strip{height:3px;flex:none;background:var(--acc)}
+.ptr{position:absolute;inset:0;border-radius:50%}
+.dk{position:relative;width:var(--s);height:var(--s);flex:none;border-radius:50%;background:conic-gradient(from 225deg,var(--acc) 0deg var(--v),#2c2d31 var(--v) 270deg,transparent 270deg)}
+.dk::before{content:"";position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle at 40% 32%,#303135,#17181a 75%);box-shadow:0 2px 5px rgba(0,0,0,.6)}
+.dk .ptr i{position:absolute;left:50%;top:14%;height:22%;width:2px;margin-left:-1px;border-radius:1px;background:#f2f2f2}
+.lbl{font-size:12px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#dcdcdc;text-align:center;white-space:nowrap}
+.val{font-family:'Space Mono',monospace;font-size:11px;color:#a7a7a7;text-align:center;white-space:nowrap}
+.ctl{display:flex;flex-direction:column;align-items:center;gap:6px}
+.dbtn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:500;letter-spacing:.06em;color:#c9c9c9;background:#1d1e22;border:1px solid #2b2c31;border-radius:4px;height:26px;padding:0 10px;cursor:pointer}
+.dbtn.on{background:var(--acc);color:#0c0c0d;border-color:var(--acc)}
+.disp{background:#0a0b0c;border-radius:6px;box-shadow:inset 0 2px 8px rgba(0,0,0,.9),0 1px 0 rgba(255,255,255,.06)}
+.bar{width:10px;height:340px;-webkit-mask:repeating-linear-gradient(to top,#000 0 3px,transparent 3px 5px);mask:repeating-linear-gradient(to top,#000 0 3px,transparent 3px 5px)}
+.col{display:flex;flex-direction:column;align-items:center;gap:8px}
+.ro{font-family:'Space Mono',monospace;font-size:12px;color:#f2f2f2;padding:3px 6px;border-radius:4px;background:#0a0b0c;min-width:52px;text-align:center}
+.track{position:relative;width:40px;height:340px}
+.slot{position:absolute;left:17px;top:0;bottom:0;width:6px;border-radius:3px;background:#050506;box-shadow:inset 0 1px 2px #000,0 1px 0 rgba(255,255,255,.08)}
+.fcap{position:absolute;left:0;width:40px;height:22px;border-radius:3px;background:linear-gradient(#f2f2f2,#a8a8a8 48%,#7d7d7d 52%,#cfcfcf);box-shadow:0 3px 5px rgba(0,0,0,.6)}
+.fcap i{position:absolute;left:4px;right:4px;top:10px;height:2px;background:var(--acc)}
+.rk{display:flex;flex-direction:column;justify-content:space-between;height:340px;font-size:10px;color:#6b6d72;text-align:right}
+.stat{padding:8px 12px;display:flex;flex-direction:column;gap:2px}
+.stat span:first-child{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#8d8d8d}
+.stat span:last-child{font-family:'Space Mono',monospace;font-size:18px;color:#f2f2f2}
+</style>
+</helmet>
+<div class="p" style="width:760px;height:520px;display:flex;flex-direction:column;background:#151619;--acc:#f0ad3d;--acc2:#ffd890;overflow:hidden">
+<div class="tb"><span class="logo">SEVENTHWELL</span><span class="code">MS01</span><span class="nm">MAXIMIZER</span><span class="sp"></span><button style="min-width:130px;justify-content:space-between">Streaming -14<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></button><button class="on">A</button><button>B</button><button aria-label="Undo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button><button aria-label="Redo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button><button aria-label="Bypass"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"></path><path d="M6.3 7.3a8 8 0 1 0 11.4 0"></path></svg></button></div>
+<div class="strip"></div>
+<div style="flex:1;display:flex;gap:18px;padding:14px;min-height:0">
+<div style="display:flex;gap:12px;align-items:flex-end;flex:none">
+<div class="col"><span class="ro" style="min-width:36px">-3.1</span><div style="display:flex;gap:3px"><div class="bar" style="background:linear-gradient(to top,transparent 0 82%,rgba(20,21,23,.9) 82%),linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)"></div><div class="bar" style="background:linear-gradient(to top,transparent 0 79%,rgba(20,21,23,.9) 79%),linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)"></div></div><span class="lbl">In</span></div>
+<div class="rk" style="margin-bottom:30px"><span>0</span><span>-6</span><span>-12</span><span>-18</span><span>-24</span><span>-30</span></div>
+<div class="col"><span class="ro">-6.2</span><div class="track"><div class="slot"></div><div class="fcap" style="top:40%"><i></i></div></div><span class="lbl">Threshold</span></div>
+<div class="col"><span class="ro">-1.0</span><div class="track"><div class="slot"></div><div class="fcap" style="top:5%"><i></i></div></div><span class="lbl">Ceiling</span></div>
+<div class="col"><span class="ro" style="min-width:36px;color:#f0ad3d">4.6</span><div style="width:10px;height:340px;background:#1d1e22;border-radius:2px;position:relative;overflow:hidden"><div style="position:absolute;left:0;right:0;top:0;height:18%;background:#f0ad3d"></div></div><span class="lbl">GR</span></div>
+<div class="col"><span class="ro" style="min-width:36px">-1.0</span><div style="display:flex;gap:3px"><div class="bar" style="background:linear-gradient(to top,transparent 0 91%,rgba(20,21,23,.9) 91%),linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)"></div><div class="bar" style="background:linear-gradient(to top,transparent 0 90%,rgba(20,21,23,.9) 90%),linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)"></div></div><span class="lbl">Out</span></div>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+<div class="disp" style="height:150px;overflow:hidden;flex:none">
+<svg viewBox="0 0 436 150" width="100%" height="150" preserveAspectRatio="none" style="display:block">
+<line x1="0" y1="75" x2="436" y2="75" stroke="#ffffff" stroke-opacity="0.08"></line>
+<path d="M0 75 L0 48 L12 38 L24 44 L36 30 L48 36 L60 26 L72 34 L84 24 L96 40 L108 28 L120 22 L132 36 L144 30 L156 24 L168 42 L180 30 L192 26 L204 38 L216 28 L228 22 L240 34 L252 26 L264 30 L276 40 L288 24 L300 28 L312 22 L324 36 L336 26 L348 30 L360 24 L372 38 L384 28 L396 22 L408 34 L420 26 L436 30 L436 75 Z" fill="#8a8c92" fill-opacity="0.45"></path>
+<path d="M0 75 L0 102 L12 112 L24 106 L36 120 L48 114 L60 124 L72 116 L84 126 L96 110 L108 122 L120 128 L132 114 L144 120 L156 126 L168 108 L180 120 L192 124 L204 112 L216 122 L228 128 L240 116 L252 124 L264 120 L276 110 L288 126 L300 122 L312 128 L324 114 L336 124 L348 120 L360 126 L372 112 L384 122 L396 128 L408 116 L420 124 L436 120 L436 75 Z" fill="#8a8c92" fill-opacity="0.45"></path>
+<path d="M0 0 L0 6 L30 12 L60 8 L90 22 L120 14 L150 30 L180 10 L210 18 L240 26 L270 12 L300 20 L330 34 L360 16 L390 22 L436 14 L436 0 Z" fill="#f0ad3d" fill-opacity="0.6"></path>
+<text x="8" y="144" font-family="Barlow Condensed, sans-serif" font-size="11" fill="#6b6d72">Gain reduction history, 10 s</text>
+</svg>
+</div>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+<div class="disp stat"><span>Integrated</span><span>-14.1 LUFS</span></div>
+<div class="disp stat"><span>Short-term</span><span>-13.2 LUFS</span></div>
+<div class="disp stat"><span>True peak</span><span>-1.0 dBTP</span></div>
+<div class="disp stat"><span>Max GR</span><span style="color:#f0ad3d">-4.6 dB</span></div>
+</div>
+<div style="display:flex;align-items:center;gap:16px">
+<div class="ctl"><div class="dk" style="--s:56px;--v:100deg"><div class="ptr" style="transform:rotate(-35deg)"><i></i></div></div><div class="lbl">Release</div><div class="val">Auto</div></div>
+<div style="display:flex;flex-direction:column;gap:6px;flex:1">
+<span class="lbl" style="text-align:left">Character</span>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px"><button class="dbtn">Transparent</button><button class="dbtn on">Punch</button><button class="dbtn">Loud</button><button class="dbtn">Warm</button></div>
+</div>
+</div>
+<div style="display:flex;gap:6px"><button class="dbtn on">True peak</button><button class="dbtn">Dither off</button><button class="dbtn">Link 100%</button><button class="dbtn">Gain match</button></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
