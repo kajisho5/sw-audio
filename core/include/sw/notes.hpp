@@ -19,4 +19,11 @@ inline const char* noteName(int i) {
 inline int noteIndexFromNorm(double x) { return std::clamp(static_cast<int>(std::lround(std::clamp(x, 0.0, 1.0) * (kNumNotes - 1))), 0, kNumNotes - 1); }
 inline double noteSeconds(int i, double bpm) { return noteQuarters(i) * 60.0 / std::max(bpm, 1.0); }
 
+// the note whose length at `bpm` is closest (in the log domain) to `seconds`
+inline int noteNearest(double seconds, double bpm) {
+    int best = 0; double bd = 1e30;
+    for (int i = 0; i < kNumNotes; ++i) { const double d = std::abs(std::log(noteSeconds(i, bpm) / std::max(seconds, 1e-6))); if (d < bd) { bd = d; best = i; } }
+    return best;
+}
+
 }  // namespace sw
