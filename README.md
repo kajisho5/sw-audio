@@ -1,0 +1,200 @@
+# SW AUDIO — プラグイン本体
+
+SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様書 v1.0 初稿」に従う。
+
+## 方式
+
+- **CLAP を正として作り、clap-wrapper で VST3（macOS は AU も）を生成する。** すべて MIT／Apache 2.0 で、売上上限や利用料はない（NOTICE.md）。
+- **DSP 本体はフレームワークに依存しない C++17。** `core/`（共通部品）と `products/`（製品ごとの処理）に置き、プラグイン層（`plugin/`）からも、将来の OBS 用エンジンからも同じものを呼ぶ。
+- ホストに見せる値は仕様書どおり、連続値は正規化 0〜1、段階式は段番号。パラメータの番号（ParamId の並び）は保存データの互換のため**一度公開したら並べ替えない**。
+
+## 現在の製品（v0.11.0、22本）
+
+画面はまだ無い（DAW の汎用パラメータ画面で操作する）。共通機能は Auto gain・Δ（MS07 は Δ のみ）。
+
+| 製品 | 中身 | 注意 |
+| --- | --- | --- |
+| SW CS01 Inductor Strip | プリ（鉄心風の飽和、低域ほど強い、2× OS）→ EQ（EQ04 と同じ回路：HPF 18 dB/oct、60 Hz・12 kHz の固定シェルフ、段階式の中域ベル）→ フィードバック型コンプ（アタックは 2〜20 ms で自動、Mix はコンプ部だけの並列）。Order で EQ／コンプの順番を入れ替え（10 ms でクロスフェード）、Link でステレオ連動 | Mic profile（初期値を書き込む EVO）は画面と一緒に作る |
+| SW CS02 Console Strip | 入力 HPF 18 dB/oct・LPF 12 dB/oct → ダイナミクス（ゲート 0.1／20／100 ms 固定 → VCA フィードフォワードのコンプ、アタック 3 ms）と EQ（100 Hz・10 kHz シェルフ、600 Hz・3 kHz ベル Q1）を Route の順に → フェーダー（0 dB を 75 % の位置） | しきい値の 0 dB＝−18 dBFS（仕様書の案）。被り学習（区分 B）は画面と一緒に作る |
+| SW CS03 Stepped Strip | トランス風プリ（目盛り 30 で 0 dB、Hi Z で高域の負荷と偶数次倍音）→ EQ06 方式の段階式 EQ（比例 Q・Glide）→ アタック・リリース自動のコンプ | Hi Z の負荷（8 kHz で −2.5 dB）と非対称の量は設計値。入力レベル合わせ（EVO）は画面と一緒に作る |
+| SW EQ01 Passive | 低域シェルフ＋Air ベル（Width）、Contour（シェルフの Q 0.707〜3.0 で「盛り上げて少し上を削る」形を1本で）、出力段 Drive、LR／MS | MS モードは「Mid だけに EQ、Side は素通し」と解釈した（仕様書に MS の動作の記述がない。確認事項） |
+| SW EQ02 Surgical | 24 バンド（Bell／シェルフ／カット 6〜96 dB/oct／Notch）、バンドごとのダイナミック（Range・Thresh）、Stereo／Mid／Side の配置、Zero latency／Natural／Linear | 下の「EQ02 の設計」 |
+| SW EQ03 Mid Shaper | 中域の Dip（0〜−10 dB）と Peak（0〜+10 dB）、Width は両バンド共通、Ride（200 Hz〜5 kHz の RMS が −18 dBFS より大きいほど Peak を下げる） | Ride の下げ幅（基準から +12 dB で Peak が 0）は設計値 |
+| SW EQ04 Inductor | HPF 18 dB/oct、低域シェルフ（Q 1.0 で約 +1 dB の盛り上がり。実測 +0.95 dB、上側に −0.94 dB の小さなへこみも出る）、中域ベル Q 0.9、高域シェルフ、Iron（ブーストした分だけ 2× OS で飽和、低域ほど強い） | Iron の帯域ごとの強さは設計値 |
+| SW EQ05 Console | 4バンドのコンソールEQ、HPF/LPF、Drive | — |
+| SW EQ06 Stepped | 2 dB 刻みの3バンドEQ、比例Q、段の間を 30 ms でつなぐ Glide | — |
+| SW EQ07 Dynamic | 6 バンドのダイナミック EQ。バンドと同じ周波数・Q のバンドパスで検出（External で外部サイドチェーン）、6 dB ソフトニー、実効ゲイン＝Gain＋Range×動作量。Spectral（短時間 FFT 1024 点・ホップ 256 で、帯域内の突出した成分だけを動かす。遅延 1024） | 下の「EQ07 の解釈と設計値」 |
+| SW EQ08 Linear | 24 バンド。Linear（全バンドの合成振幅から FIR、分割 FFT 畳み込み）／Minimum（IIR、遅延 0）／Mixed（200 Hz より下は最小位相、上は直線位相）。新旧カーネルは 20 ms でクロスフェード。Pre-ring guard（バンドごとに前鳴りを見積もり、超えるものだけ最小位相へ） | 下の「EQ08 の注意」 |
+| SW EQ09 Tilt | 傾き・低域・最高域、Auto pivot（曲のスペクトル中心にピボットが追従） | — |
+| SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
+| SW DY04 Gate | ゲート／エキスパンダー（1:2）／ダッカー、4 dB のヒステリシスとホールド、キー HPF/LPF、キー試聴、外部サイドチェーン | 既定の Threshold は −80 dBFS（開きっぱなし、仕様書どおり） |
+| SW DY07 Snap | VCA コンプ。RMS 検出、深く超えるほど速くなるアタック、120 dB/秒の一定速度リリース、Snap（打楽器の頭を ±6 dB） | Threshold 0 dB ＝ −18 dBFS（仕様書の案） |
+| SW DY08 Clean | 透明なデジタルコンプ。Peak/RMS/Program 検出、SC HPF、5 ms 先読み、テンポ同期の Auto release、外部サイドチェーン | — |
+| SW MS02 True Peak | 先読みブリックウォール＋標本間ピーク検出（4x/8x）、TPDF ディザー | 下の「MS02 の保証範囲」 |
+| SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
+| SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
+| SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
+| SW LV16 Live Gate | LIVE 用ゲート／ダッカー。Key HPF（120 Hz・24 dB/oct）で床鳴りではゲートが開かない、外部サイドチェーン | 床鳴りの帯域を測って自動で置く学習は未実装（固定 120 Hz） |
+| SW LV17 Bus Comp | LIVE 用バスコンプ。Speech／Music／Band で検出方式とニーが変わる（OBS シーン連動は LV27 から Mode を切り替える）、Auto release 2段 | — |
+
+### 仕様書との照合（v0.5.1）
+
+仕様書（Claude Doc）のパラメータ表と照合した。範囲・既定値・カーブ・オートメーション可否・ID を合わせた。
+- EQ05・EQ06・EQ09・MS07：一致していた。
+- EQ01・EQ03・EQ04（v0.6.0 で追加）：仕様書の表と処理方式の記述を先に読んでから実装した。
+- DY03・DY07・DY08・MS02：既定値と範囲は一致。ID の命名だけ直した（例：`dy08.threshold` → `dy08.thresh`）。DY07・DY08 の Ratio は「右端 5 % は ∞」を表示と処理の両方で実装した。
+- DY04：Threshold の既定値を −80 dBFS に直した（仮の値 −40 は誤り）。ID を直し、Listen をオートメーション不可にした。
+- MS04：省いていた Listen を仕様どおり追加した（オートメーション不可）。
+- LV04・LV16・LV17：仕様書は簡略形式でパラメータ表がないため、画面の値を既定値とした。
+
+ホスト内部の番号（状態の保存に使う）は変えていないので、保存済みの設定はそのまま読める。
+
+### 決定事項（2026-10-06、お任せで確定）
+
+1. **ヘッドルーム。** すべてのアナログ系の段（EQ01・EQ03・EQ04・EQ05・EQ06 の Drive、CS01・CS03 のプリ）は、飽和の上限を +6 dBFS にそろえた。Drive 0 なら通常のレベルでほぼ色が付かない（EQ05 で、ピーク −7 dBFS の音の変化が 0.2 dB 未満であることを確認）。
+2. **EQ07 の Shelf／Cut の向き。** 1 kHz 未満なら低域側、以上なら高域側で確定。
+3. **EQ08・EQ02 のカーネル長。** 既定は仕様書どおり 2048。Length（2048／4096／8192）を末尾に足し、精度が要るときは遅延と引き換えに長くできる（8192 で 100 Hz・Q4 のベルの誤差 0.1 dB 未満を確認）。
+4. **MS モード（EQ01・EQ08）。** 「EQ は Mid だけ、Side は素通し（Linear では同じ遅延で揃える）」で確定。バンドごとの配置がない製品では、これが実用上意味のある唯一の動き。
+
+### EQ02 の設計（仕様書に数値がない部分）
+
+- **Zero latency の高域補正。** ベルの Q は、中心周波数の 1/16 から中心までの範囲でアナログ原型との差が最小になる値を数値で求める（設定が変わったときだけ計算して使い回す）。15 kHz・Q1・+12 dB のベルで、中心より下の誤差は 0.28 dB 以内（補正なしは 2.88 dB、RBJ の帯域幅換算式は 1.99 dB）。中心より上は、IIR ではナイキスト周波数で必ず 0 dB に戻るため原型に合わない（Natural・Linear で直す）。Notch は RBJ の帯域幅換算式。
+- **Natural。** Zero latency のあとに、位相だけをアナログ原型に近づける 65 タップの FIR（遅延 32 サンプル）を足す。振幅は Zero latency と同じ（仕様書どおり）。12 kHz のベルで、原型との位相差は Zero latency の半分以下になる。
+- **Linear。** EQ08 と同じエンジン（2048 タップ、遅延 1024＋128）。ダイナミックのバンドは、静的な部分を FIR に入れ、動く分だけを最小位相の IIR で後に足す。
+- **ダイナミック。** 検出はバンドの帯域（Bell／Notch はバンドパス、シェルフはその側の LP／HP）のピーク包絡、アタック 5 ms・リリース 80 ms。しきい値から 12 dB 上で Range 全量に達する（いずれも設計値）。カットにはダイナミックを付けない。
+- **Assist／Unmask（解析ボタン）** は画面と一緒に作る。
+
+### EQ07 の解釈と設計値
+
+- **Shelf／Cut の向き。** 仕様書に記述がないため、周波数が 1 kHz 未満なら低域側（ローシェルフ／ローカット）、以上なら高域側とした（確認事項）。Cut は Q に従う 12 dB/oct。
+- **動作量。** しきい値を超えた量（6 dB ソフトニー）を Range の大きさで割り、1 で頭打ち。Range −12 なら、帯域がしきい値より 12 dB 上で −12 dB 全量（その間は比率 ∞ の圧縮と同じ）。Range が正なら同じ量だけ持ち上げる。Cut と Notch はダイナミックの対象外。
+- **Spectral。** 平方根ハン窓・75 % 重なりで、何もしなければ遅延 1024 のまま元の音に戻る（誤差 1e-4 未満を確認）。ビンごとに、帯域内の平均レベルより 6 dB 上から効き始め、12 dB 上で全量（設計値）。ノイズに埋もれた 1.5 kHz の音で確かめると、通常モードは周りのノイズも 6 dB 以上下げるが、Spectral は音だけを下げる。
+- **Auto thresh（5 秒の学習ボタン）** は画面と一緒に作る。
+
+### EQ08 の注意（仕様書との照合で見つけた点）
+
+- **カーネル長と低域の精度。** 仕様書の 2048 タップ（48 kHz）で作ると、低域の誤差が大きい。実測（目標の振幅との差）は次のとおり。
+
+  | カーネル長（48 kHz） | 100 Hz・Q4 のベル | 30 Hz ローカット 24 dB/oct（20 Hz で） | 遅延 |
+  | --- | --- | --- | --- |
+  | 2048（仕様書） | −1.41 dB | +4.11 dB | 21.3 ms |
+  | 4096 | −0.40 dB | +0.75 dB | 42.7 ms |
+  | 8192 | −0.04 dB | −0.02 dB | 85.3 ms |
+
+  今は仕様書どおり 2048。`kernelLengthFor()` の1か所で変えられる。長さを選べるようにする（例：Low／High／Max）かどうかは要決定。
+- **仕様書内の食い違い。** 「カーネル長は 21.3 ms 分」と「48 kHz で 2048 タップ」は一致しない（2048 タップは 42.7 ms。21.3 ms はその半分＝遅延）。「2048 タップ、遅延 21.3 ms」と解釈した。
+- **Pre-ring guard のしきい値。** 「主ピーク比 −60 dB（案）」は仕様書どおり。ただし主ピークの直前まで数えると、ふつうのベルでもほぼ全部が引っかかって直線位相の意味がなくなる。そこで、主ピークより 3 ms 以上前の前鳴りだけを数えることにした（設計値）。急峻なローカットや低域の鋭いベルが対象になる。
+- **カット。** EQ08 には Slope の設定がないため、Lo cut／Hi cut は Q に従う 12 dB/oct とした。
+- **Mid/side。** EQ01 と同じく「Mid だけに EQ、Side は同じ遅延だけ遅らせて素通し」と解釈した（バンドごとの配置がないため。確認事項）。
+- **カーネルの再計算。** 仕様書は別スレッドだが、今は音声スレッドで 20 ms に1回まで（1回あたり数ミリ秒以下）。別スレッド化は今後の作業。
+
+### clap-validator の「極小値で遅い」警告について
+
+clap-validator の process-audio-denormals が、処理の軽い製品（DY04・DY07・DY08・EQ07・EQ09・LV16・LV17・MS07 など、回によって出たり出なかったりする）で「極小値の処理が約2倍遅い」と警告することがある（DY07 は3回中2回、1.8〜2.4倍で揺れる）。この項目は、検証ツール側で入力バッファを乱数で埋める時間まで計っている。そのため処理が軽い製品や入力端子が2つある製品ほど、ツール側の時間の比重が大きくなる。
+
+ビルド済みプラグインを自作ホストで計った、極小値入力と通常入力の処理時間の比は次のとおり。DY04 1.01、DY07 0.92、DY08 0.49、EQ07 0.79、EQ09 1.10、LV16 1.19、LV17 0.72（EQ05 0.62）。
+
+途中で、ゲートが閉じているときに毎サンプルの倍率計算が遅い経路に入る点を見つけて直した（DY04 は 1.19 → 1.01）。Wine 上の Windows 版でも、v0.5.0 の検証で DY04 に同じ警告が1回出た。
+
+### MS02 の保証範囲
+
+20 kHz 以下の成分では、厳密な帯域制限補間（16 倍 FFT）で測った真のピークが天井＋0.1 dB 以内に収まることを確認した（実測は天井 −1.00 dBTP に対し −0.95）。20 kHz を超えナイキスト周波数（48 kHz なら 24 kHz）近くまで強い成分がある素材を深くリミッティングすると、厳密補間では最大で約 +0.4 dB 超えうる。この帯域は放送規格の計測器（ITU-R BS.1770）でも低めに読まれる。
+
+## 全製品共通の部品
+
+| 部品 | ファイル | 中身 |
+| --- | --- | --- |
+| 共通の処理枠 | `core/include/sw/shell.hpp` | 仕様書の順番で、製品の処理を In・Auto gain・Output・Δ で包む。原音側は製品の遅延に合わせてずらす |
+| ラウドネス計測 | `core/include/sw/loudness.hpp` | ITU-R BS.1770 の K 特性、400 ms（Momentary）と 3 秒（Short-term）。Auto gain と、今後の計測系（MT01・LV23・MS01）で使う |
+| モーフ | `core/include/sw/morph.hpp` | A／B の補間規則（周波数は対数、dB は直線、段階式は 0.5 で切替）。画面の A／B 操作と一緒にプラグインへ組み込む |
+| プラグイン層 | `plugin/clap/clap_adapter.hpp` | 製品のパラメータ表と DSP を渡すだけで CLAP になる共通の型。ホストのパラメータ番号は製品分のあとに共通分（Auto gain、Delta）を足す |
+| ダイナミクス | `core/include/sw/dynamics.hpp` | 圧縮カーブ（ニー付き）、アタック/リリース、ピーク/RMS/Program 検出、トゥルーピーク検出、先読みブリックウォール・リミッター |
+| 帯域フィルタ | `core/include/sw/bandfilter.hpp` | 1バンド分の SVF（Bell／シェルフ／Notch／6〜96 dB/oct のカット）、高域の形崩れ補正 |
+| FFT・FIR 設計・畳み込み | `fft.hpp`・`fir_design.hpp`・`convolver.hpp` | 基数2の FFT、アナログ原型の振幅から直線位相／最小位相（ケプストラム法）の FIR、一様分割 overlap-save 畳み込み（新旧カーネルのクロスフェード付き）。EQ02 の Linear でも使う |
+| 出力段 | `core/include/sw/drive.hpp` | Drive 0〜10（入力 0〜+18 dB）、2× OS の tanh、小信号で利得1。EQ01・EQ03・EQ04 で共通 |
+| ゲート | `core/include/sw/gate.hpp` | ゲート／エキスパンダー／ダッカー、ピーク包絡、4 dB ヒステリシス、ホールド、dB 上のアタック/リリース |
+| FIR オーバーサンプラー | `core/include/sw/oversample_fir.hpp` | 直線位相 4x/8x/16x、遅延は整数（48 サンプル）、20 kHz まで平坦、像 −80 dB 以下 |
+| 外部サイドチェーン | `shell.hpp`・`clap_adapter.hpp` | 製品が processWithSidechain を持つと、プラグインに2つ目の入力端子「Sidechain」が付き、共通枠が信号を渡す |
+
+### 製品の足し方
+
+1. `products/<code>/<code>.hpp/.cpp` に DSP とパラメータ表（仕様書の順）を書き、`tests/test_<code>.cpp` にテストを書く。
+2. `plugin/clap/<code>_clap.cpp` に数行の定義（名前・分類・Output/In/Mix の番号）を書き、最後に `SW_CLAP_ENTRY(<code>, 型名)`。
+3. `CMakeLists.txt` の `SW_PRODUCTS` に加え、`sw_add_plugin(<code> "<表示名>" <AU の4文字>)` を1行足す。
+
+- Auto gain：原音と処理後の 3 秒ラウドネスを比べて補正。追従 2 秒、±18 dB まで、−60 LUFS 以下の無音では補正を保持。既定は Off。
+- Δ：「Auto gain 補正後の処理音 − 原音」に Output をかけて出す。製品の遅延に合わせて揃えるので、遅延だけの処理ならちょうど 0 になる。
+
+## 検証結果（v0.11.0、2026-10-06、22本すべて）
+
+| 項目 | Linux x86_64 | Windows x64（MinGW でクロスビルド、Wine 上で実行） | macOS |
+| --- | --- | --- | --- |
+| 単体テスト（211件） | 全合格（AddressSanitizer・UBSan 付きでも全合格） | —（同じソース） | GitHub Actions で実施予定 |
+| CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。上記の警告が出た製品は32合格） | 各 0不合格（32合格・12対象外。DY04 は警告1件で31合格） | 未実施 |
+| VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 各 47合格・0不合格 | 未実施 |
+| AU：auval | — | — | 未実施 |
+
+`tools/validate_all.sh` で、ビルド・単体テスト・全プラグインの両検証を一括で実行できる（Linux）。
+
+「対象外」は、まだ持っていない機能（画面、ノート入出力など）を調べる検査。Wine は本物の Windows ではないため、実際の DAW での確認が別途必要。
+
+周波数特性の実測（Drive 0、−60 dBFS、48 kHz）は `docs/eq05_response.png`。
+
+## ビルド
+
+必要なもの：CMake 3.21 以上、C++17 コンパイラ、git、ネット接続（CLAP SDK・clap-wrapper・VST3 SDK を初回に自動取得）。
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
+
+できたプラグインは `build/plugins/`（Windows は `build/plugins/CLAP` と `build/plugins/VST3`）。
+
+- macOS のユニバーサル版：`-DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"` を構成時に付ける。
+- Linux から Windows 版を作る：`-DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64.cmake -DSW_BUILD_TESTS=OFF`（g++-mingw-w64-x86-64-posix が必要）。
+
+## 自動ビルド（GitHub Actions）
+
+`.github/workflows/build.yml` が、push のたびに Windows・macOS・Linux で ビルド → 単体テスト → CLAP 検証 → VST3 検証 →（macOS は AU 検証）まで行い、プラグインを成果物として保存する。**このワークフローはまだ一度も実行していない。** 初回は失敗箇所が出る前提で、直しながら通す。
+
+## インストール先
+
+| OS | CLAP | VST3 | AU |
+| --- | --- | --- | --- |
+| Windows | `C:\Program Files\Common Files\CLAP\` | `C:\Program Files\Common Files\VST3\` | — |
+| macOS | `~/Library/Audio/Plug-Ins/CLAP/` | `~/Library/Audio/Plug-Ins/VST3/` | `~/Library/Audio/Plug-Ins/Components/` |
+| Linux | `~/.clap/` | `~/.vst3/` | — |
+
+VST3 は `SW EQ05 Console.vst3` フォルダごと置く。
+
+## 署名について
+
+ここで作るものは**署名なし**。macOS ではダウンロードしたプラグインが Gatekeeper に止められる。自分で試すだけなら `xattr -dr com.apple.quarantine <プラグインのパス>` で解除できる。配布するには Apple の Developer ID による署名と公証（notarization）が必要。
+
+## フォルダ構成
+
+```
+core/include/sw/   共通部品：パラメータのカーブ、スムーザー、TPT SVF、2倍オーバーサンプラー、サチュレーター、表示書式、FTZ、
+                   ラウドネス計測、共通の処理枠（Shell）、モーフ
+products/eq05/     SW EQ05 Console の DSP とパラメータ表
+plugin/clap/       共通のプラグイン層（clap_adapter.hpp）、EQ05 の定義（eq05_clap.cpp）と書き出し口（eq05_entry.cpp）
+tests/             単体テスト（doctest）
+tools/             周波数特性の測定ツール
+cmake/             MinGW 用ツールチェーン
+.github/workflows/ 自動ビルド
+```
+
+## まだやっていないこと
+
+- 画面（キャンバスの HTML を WebView で流用する予定）
+- 残り117製品
+- DY04 の Learn（かぶりと打撃を学習してしきい値を決める EVO）
+- DY08 の「Auto release が On の間は Release を Auto と表示する」（画面側で対応）
+- モーフのプラグインへの組み込み（画面の A／B 操作と一緒に）、EVO バー（Low lat、オーバーサンプリング倍率の選択）、Unit A／B／C
+- 64 bit 浮動小数での入出力（VST3 validator の情報表示より。32 bit で動作）
+
+## 手早いテスト（開発中）
+
+`./build_tests.sh` は CMake を使わずに単体テストだけを作る。`third_party/doctest.h`（doctest 2.4.11 の単一ヘッダー）を置いてから使う。正式な手順は上の CMake。

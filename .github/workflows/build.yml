@@ -1,0 +1,89 @@
+# Build, test and validate SW AUDIO plugins on Windows / macOS / Linux.
+# Artifacts: CLAP + VST3 (+ AU on macOS). Unsigned builds (see README).
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            validator_zip: windows.zip
+          - os: macos-latest
+            validator_zip: macos-universal.zip
+          - os: ubuntu-22.04
+            validator_zip: ubuntu-22.04.zip
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          EXTRA=""
+          if [ "$RUNNER_OS" = "macOS" ]; then EXTRA="-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"; fi
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release $EXTRA
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validate CLAP (clap-validator)
+        run: |
+          curl -sL -o cv.zip "https://github.com/free-audio/clap-validator/releases/download/0.4.1/clap-validator-0.4.1-127-g152b982-${{ matrix.validator_zip }}"
+          mkdir cv && cd cv && unzip -q ../cv.zip
+          for t in *.tar.gz; do [ -f "$t" ] && tar xzf "$t"; done
+          CV=$(find . -type f \( -name clap-validator -o -name clap-validator.exe \) | head -1)
+          chmod +x "$CV"
+          cd ..
+          find build -maxdepth 4 -name "*.clap" -not -path "*/cpm/*" -print0 | while IFS= read -r -d '' CLAP; do
+            echo "== validating $CLAP"
+            "cv/$CV" validate "$CLAP" || exit 1
+          done
+
+      - name: Build Steinberg VST3 validator
+        run: |
+          cp -R build/cpm/vst3sdk vst3sdk-v
+          rm -rf vst3sdk-v/public.sdk/samples/vst-hosting/editorhost vst3sdk-v/public.sdk/samples/vst-hosting/audiohost vst3sdk-v/public.sdk/samples/vst-hosting/inspectorapp
+          cmake -S vst3sdk-v -B vst3b -DCMAKE_BUILD_TYPE=Release -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_RUN_VST_VALIDATOR=OFF -DSMTG_CREATE_PLUGIN_LINK=OFF
+          cmake --build vst3b --config Release --target validator --parallel
+
+      - name: Validate VST3
+        run: |
+          V=$(find vst3b -type f \( -name validator -o -name validator.exe \) | head -1)
+          find build -maxdepth 4 -type d -name "*.vst3" -not -path "*/cpm/*" -print0 | while IFS= read -r -d '' VST3; do
+            echo "== validating $VST3"
+            "$V" "$VST3" || exit 1
+          done
+
+      - name: Validate AU (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          find build -maxdepth 4 -name "*.component" -not -path "*/cpm/*" -exec cp -R {} ~/Library/Audio/Plug-Ins/Components/ \;
+          killall -9 AudioComponentRegistrar || true
+          for SUB in $(auval -a | awk '$3 == "SvWl" {print $2}'); do
+            echo "== auval aufx $SUB SvWl"
+            auval -v aufx "$SUB" SvWl || exit 1
+          done
+
+      - name: Collect plugins
+        run: |
+          mkdir -p dist
+          find build -maxdepth 4 \( -name "*.clap" -o -name "*.vst3" -o -name "*.component" \) -not -path "*/cpm/*" -exec cp -R {} dist/ \;
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sw-audio-${{ runner.os }}
+          path: dist

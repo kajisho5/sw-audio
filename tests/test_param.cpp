@@ -1,0 +1,58 @@
+#include "doctest.h"
+#include "sw/param.hpp"
+#include "sw/smooth.hpp"
+#include <cmath>
+using namespace sw;
+
+TEST_CASE("LIN curve maps normalized to value and back") {
+    ParamSpec p{"g", "Gain", -15.0, 15.0, 0.0, Curve::Lin};
+    CHECK(p.toValue(0.5) == doctest::Approx(0.0));
+    CHECK(p.toValue(1.0) == doctest::Approx(15.0));
+    CHECK(p.toNorm(7.5) == doctest::Approx(0.75));
+}
+TEST_CASE("LOG curve is geometric between min and max") {
+    ParamSpec p{"f", "Freq", 1500.0, 16000.0, 8000.0, Curve::Log};
+    CHECK(p.toValue(0.0) == doctest::Approx(1500.0));
+    CHECK(p.toValue(1.0) == doctest::Approx(16000.0));
+    CHECK(p.toValue(0.5) == doctest::Approx(std::sqrt(1500.0 * 16000.0)));
+    CHECK(p.toNorm(p.toValue(0.3)) == doctest::Approx(0.3));
+}
+TEST_CASE("SKW curve uses x^k") {
+    ParamSpec p{"a", "Attack", 0.1, 200.0, 10.0, Curve::Skew, 3.0};
+    CHECK(p.toValue(0.5) == doctest::Approx(0.1 + 199.9 * 0.125));
+    CHECK(p.toNorm(p.toValue(0.42)) == doctest::Approx(0.42));
+}
+TEST_CASE("STEP curve snaps to the nearest listed value") {
+    ParamSpec p{"h", "HPF", 0.0, 200.0, 0.0, Curve::Step, 1.0, {0, 40, 80, 120, 200}};
+    CHECK(p.numSteps() == 5);
+    CHECK(p.toValue(0.5) == doctest::Approx(80.0));
+    CHECK(p.toValue(0.6) == doctest::Approx(80.0));
+    CHECK(p.toNorm(120.0) == doctest::Approx(0.75));
+}
+TEST_CASE("normalized input outside 0..1 is clamped") {
+    ParamSpec p{"g", "Gain", -15.0, 15.0, 0.0, Curve::Lin};
+    CHECK(p.toValue(-0.2) == doctest::Approx(-15.0));
+    CHECK(p.toValue(1.5) == doctest::Approx(15.0));
+}
+TEST_CASE("linear smoother reaches the target exactly after the ramp time") {
+    LinearSmoother s;
+    s.reset(48000.0, 20.0, 0.0);
+    s.setTarget(1.0);
+    double v = 0, prev = -1;
+    bool mono = true;
+    for (int i = 0; i < 480; ++i) { v = s.next(); if (v < prev) mono = false; prev = v; }
+    CHECK(v == doctest::Approx(0.5).epsilon(0.01));
+    for (int i = 480; i < 960; ++i) { v = s.next(); if (v < prev) mono = false; prev = v; }
+    CHECK(v == 1.0);
+    CHECK(mono);
+    CHECK_FALSE(s.isSmoothing());
+}
+
+TEST_CASE("skip(n) advances the smoother exactly like n calls to next()") {
+    LinearSmoother a, b;
+    a.reset(48000.0, 20.0, -15.0); b.reset(48000.0, 20.0, -15.0);
+    a.setTarget(15.0); b.setTarget(15.0);
+    for (int i = 0; i < 300; ++i) a.next();
+    CHECK(b.skip(300) == doctest::Approx(a.current()));
+    CHECK(b.skip(5000) == 15.0);
+}
