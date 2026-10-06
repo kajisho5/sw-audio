@@ -65,15 +65,14 @@ jobs:
         if: matrix.shard == 0
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Inspect plugin bundles (macOS)
+      - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
-        continue-on-error: true
         run: |
-          ls build/plugins | head -20
-          C=$(find build/plugins -maxdepth 1 -name "*.clap" | head -1)
-          echo "== $C"; find "$C" -maxdepth 4 | head -20
-          plutil -p "$C/Contents/Info.plist" || true
-          file "$C/Contents/MacOS/"* || true
+          # CMake writes every bundle skeleton (Info.plist) at configure time; only this shard's bundles contain a binary
+          find build/plugins -maxdepth 1 -type d \( -name "*.clap" -o -name "*.vst3" -o -name "*.component" \) -print0 | while IFS= read -r -d '' B; do
+            if [ -z "$(ls -A "$B/Contents/MacOS" 2>/dev/null)" ]; then rm -rf "$B"; fi
+          done
+          ls build/plugins
 
       - name: Validate CLAP (clap-validator)
         run: |
