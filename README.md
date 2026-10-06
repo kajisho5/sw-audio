@@ -77,6 +77,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW VO02 Tune Rt | ライブ向けのピッチ補正。Key（12）、Scale（Maj／Min／Chr）、Speed（Slow〜Hard）、Humanize、Formant（母音だけ動かす）、Mix。不安定な区間は補正を弱める。遅延 1085 サンプル | 設計値は README「VO02 Tune Rt の設計」。遅延は仕様書の見積もり 128 サンプルとは違う（110 Hz 以上限定の短縮版でも 1 周期ぶん要る）。Key の ♯・♭は 12 段にした |
 | SW VO03 Harmony | ハーモニー 4 声（Scale／Fixed／MIDI は Scale 同等）、Interval ±7 度、Level・Pan・Formant・Humanize・Delay。遅延 1450 サンプル | 設計値は README「VO03 Harmony の設計」。遅延は仕様書の見積もり 512 サンプルとは違う。MIDI 入力は未実装（Scale と同じ動作）。Key／Scale は末尾に追加 |
 | SW VO04 Doubler | 声部 1／2／4／8、Spread・Timing（遅延 0.5〜30 ms の不規則なゆっくりした動き）・Pitch var・Tone・Mix。遅延 0 | 設計値は README「VO04 Doubler の設計」。フレーズの頭は休止中に遅延を最小に戻し、以後は変化率 0.5 % 以内で戻る |
+| SW VO05 Rider | 音楽を外部サイドチェーンで聴いて、ボーカルを Target（音楽に対する相対値）へライド。Range・Sensitivity・Breath skip・Ride・Write automation。遅延 0 | 設計値は README「VO05 Rider の設計」。SW Link は未実装（サイドチェーンのみ）。音楽を 1 秒聴くまで動かない |
+| SW VO06 Formant | Pitch ±12・Formant ±5（母音だけ動く）・Character 4 種・Keep timing・Smooth・Mix。遅延 1450 サンプル | 設計値は README「VO06 Formant の設計」。遅延は仕様書の見積もり 512 とは違う。Keep timing Off は声色が音程に追従する設計（タイミングは常に保つ） |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -596,6 +598,24 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Spread。** MD07 と同じ線形パン（左 1−p、右 p）で中央〜全幅、出力は平均して単位パワー（1／2／4／8 声とも入力の −18 dB 雑音で ±1.5 dB 以内）。
 - **Tone。** 重ねた音だけを傾ける：3 kHz の高域シェルフ ±8 dB と 400 Hz の低域シェルフ ∓4 dB（50 % で平ら。100 % ‑ 0 % の差は 8 kHz で 16 dB、100 Hz で −8 dB）。
 - 入力がステレオのとき L/R はそれぞれの遅延線に入る。進化機能（区分 A）は仕様書どおり「周期的でないずれ方」で実現し、`.evo.on` のスイッチは持たない（画面に無い）。
+
+### VO05 Rider の設計（仕様書に数値がない部分）
+
+- **音楽は外部サイドチェーンで受ける**（SW Link は未実装。サイドチェーンが無い、または音楽が −50 dBFS 未満のときは「Music: not listening」で、ライドは動かさず保持する）。
+- **検出。** ボーカル：K 特性、150 Hz〜5 kHz（4 次）、200 ms の指数平均（歌っている間だけ更新。休止・息継ぎでは値を保つ。最初の 200 ms は累積平均）。音楽：K 特性、全帯域、3 秒の指数平均（最初の 3 秒は累積平均で、無音からの立ち上がりをライドしない。**音楽を 1 秒聴くまではライドを動かさない**）。
+- **ライド。** 目標 ＝ clamp((音楽の LUFS ＋ Target) − ボーカルの LUFS, −Range, +Range)。Target は「音楽に対するボーカルの相対値」（仕様書の −40〜−6 dB、既定 −18）。Sensitivity（Low／Mid／High）＝ 時定数 2／0.8／0.3 秒、不感帯 1.5／0.75／0.25 dB（誤差が不感帯を超えたら動き始め、0.03 dB まで目標に寄せて止まる）。テスト：ボーカル −30、音楽 −20 dBFS（Target −18）でライド −8 dB（±0.8）、音楽が 6 dB 大きいとライドも 6 dB 上（±0.6）。
+- **Breath skip（On）。** ボーカルの 40 ms の瞬時レベルが、直近のピーク（1 秒に 6 dB の速さで下がる保持）より 15 dB 以上低いとき、またはボーカルが −50 dBFS 未満のときはライドを保持する（息継ぎを持ち上げない。テスト：0.7 秒の息継ぎ（フレーズより 20 dB 低い）でライドは −6 dB 以下のまま、Off では 3 dB 以上持ち上がる）。**ピークの保持が下がりきる約 3 秒以上の長い息継ぎは、通常の小さな声として扱う。**
+- **書き出し。** MS05 と同じ仕組み（`vo05.evo.on` ＝ Write automation On で Ride をホストへ書く。Off では Ride パラメータ（ホストのオートメーション）がそのままゲイン）。遅延 0。Output・Mix・Δ は無い（仕様書の「要確認：Δ ボタンが無い」のとおり）。
+
+### VO06 Formant の設計（仕様書に数値がない部分）
+
+- **構成。** VO01 と同じ音程エンジン（`PitchAnalyzer`＋`PsolaSynth`）に、固定の比を返す `RatioSource` をつないだもの。音の長さ・タイミングは変えない（PSOLA は各印の時刻を保つ）。Mix は共通の枠（既定 100 %）。入力がステレオのときは足してモノ。
+- **遅延：1450 サンプル（30.2 ms@48 kHz）。** VO01 と同じ設定のため（仕様書の見積もり 512 サンプルとは違う）。
+- **Pitch ±12 半音、Formant ±5。** Formant は **1 ＝ 母音の 1 半音ぶん**（スペクトル包絡だけが動き、基本周波数は動かない。テスト：基本周波数は 1.5 Hz 以内で同じ、700 Hz のエネルギーが ±4 で 700×2^(±4/12) へ移る）。
+- **Character（設計値）。** 2 つのつまみに足す半音数（Pitch／Formant）：Neutral 0／0、Deep −2／−3、Bright 0／+2、Child +4／+4。
+- **Keep timing。** On（既定）：母音は Formant（と Character）でしか動かない。**Off：声色が音程に追従する**（Pitch +n で母音も n 半音動く、テープのように声が大きくも小さくも聞こえる）。**どちらでもタイミングは同じ**（リアルタイムでは遅延を変えずに時間を伸び縮みさせられないため、「タイミングを保たない」動作は作っていない。仕様書の語感とは違う設計）。
+- **Smooth。** On：Pitch／Formant の変更を 40 ms の時定数でなめらかに追従（次の印ごと）。Off（既定）：次の印で新しい値にそのまま切り替える。
+- 仕様書の要確認：既定は 0（画面は +2 st・+1.5）。進化機能の「声域に合わせた自動補正」は未実装。
 
 ### CS04 の注意
 
