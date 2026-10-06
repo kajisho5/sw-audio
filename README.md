@@ -36,6 +36,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA02 Console Sum | アナログ卓のサミング風の色付け。Color（Iron／Clean／Punch／Vint）、Drive、Crosstalk（左右の漏れ −80〜−40 dB）、Noise、Width（0〜150 %）、Output、Group（同じ番号のインスタンスが 1 台の卓として互いに負荷をかける）。インスタンスごとの個体差（EVO：種を状態に保存） | Group の効かせ方・個体差の幅・色の設計は設計値（下の「SA02 の設計」）。Unit A／B／C は共通機能と一緒に後で |
 | SW SA03 Tube | 真空管の倍音付け。Drive（0〜+24 dB を小信号利得 1 の非対称 tanh で、4× OS）、Bias（Cold＝対称〜Hot＝非対称）、Tube（12AX7／12AT7／EL34）、Tone（1 kHz を軸に ±6 dB の傾き）、Mix、Output。動くバイアス（EVO、既定 On）：入力の包絡（50 ms で戻る）で動作点をずらし、大きい音ほど非対称に歪む | 管ごとのバイアス・ヘッドルーム・ドライブ量、EVO のスイッチ（sa03.evo.on、既定 On）は設計値（下の「SA03 の設計」） |
 | SW SA04 Transformer | トランスとプリアンプの色付け。Iron（Nickel／Steel／Mu：飽和の天井・バイアス・低域の角）、Gain（目盛り 0〜60 ＝ −30〜+30 dB、30 で 0 dB）、Load（送り側のインピーダンス：高域の共振と低域の量を動かす、EVO）、Low weight／Top air、Pad（−20 dB）。低域ほど早く飽和する（2× OS） | 飽和の天井・共振の周波数と量などは設計値（下の「SA04 の設計」） |
+| SW SA05 Exciter | 高域の倍音付け。Tune 以上の帯域を取り出し、偶数次（2 次）・奇数次（3 次）の倍音を、帯域自身のレベルで正規化して（入力の大小によらず）作って足す。Harmonics、Mix、Low drive（低域にも軽く倍音）、Mode（Even／Odd／Both）、Mono low、Auto fill（EVO：1/3 オクターブごとに高域を目標の傾きと比べ、足りない帯域に倍音を最大 +12 dB 多く足す） | 倍音の作り方・目標の傾き（−1.5 dB/oct）・3 領域の分け方は設計値（下の「SA05 の設計」）。共通部品に `ThirdOctaveAnalyzer` を追加 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -216,6 +217,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **信号の流れ。** Pad（−20 dB）→ Gain（目盛り − 30 dB）→ Low weight（120 Hz のローシェルフ 0〜+6 dB）・Top air（8 kHz のハイシェルフ 0〜+6 dB）→ トランスの等価回路（低域の損失 ＝ 角 12 Hz 付近のハイパス、高域の共振 ＝ ベル）→ 分割飽和。Gain は信号をそのまま持ち上げるので、大きく上げるほど飽和に深く入る（プリアンプの挙動）。小信号の利得は目盛り 30 で 0 dB、40 で +10 dB、0 で −30 dB（±0.5 dB、テスト）。
 - **Iron（設計値）。** 飽和の天井（Nickel 3.0／Steel 2.0／Mu 1.0、直線値）、バイアス（0.03／0.05／0.10）、低域の角（8／12／18 Hz）。**低域（150 Hz 以下の 1 次分割）の天井は高域の 1/3**で、低域ほど早く飽和する（50 Hz の 3 次は 1 kHz より 6 dB 以上多い、テスト）。−30 dBFS RMS・Gain +12 dB・1 kHz で Mu ＞ Steel ＞ Nickel の順に 3 次が 2 dB 以上ずつ増える。
 - **Load（EVO）。** 高域の共振：中心 26 kHz（上限は Fs×0.45）→ 14 kHz、ゲイン 0 → +4 dB、Q 1.2。低域：ハイパスの角を（1＋1.5×Load）倍、50 Hz のローシェルフを −1.5×Load dB。Load 1 は 0 に比べ 16 kHz が +2 dB 以上、30 Hz が −1 dB 以下、1 kHz は ±0.7 dB 以内で同じ（テスト）。既定（0.5）で 100 Hz〜10 kHz は ±0.8 dB 以内で平ら。
+- 遅延 0。
+
+### SA05 の設計（仕様書に数値がない部分）
+
+- **倍音。** Tune 以上（LR4 のハイパス）の帯域 x を、帯域の平均二乗 ms（10 ms）で正規化して 2× OS で作る。偶数次 ＝ (x² − ms)/√ms（正弦波なら 2 次だけで基本波比 −3 dB）、奇数次 ＝ 1.4×(x³/ms − 1.5x)（3 次だけ、基本波は引く、基本波比 −3 dB）、Both は両方の和。生成後に Tune で再度ハイパスして、Tune 未満の混変調と直流を落とす。Harmonics ％ がそのまま倍音の量（35 → 100 ％ で +9.1 dB、テスト）。入力が 25 dB 小さくても倍音の相対量は ±1.5 dB 以内で同じ。Tune の下の音（2 kHz）は 7 kHz より 20 dB 以上少ない。Mix は共通枠の Dry／Wet で、既定 25 ％ のとき、足される倍音は Harmonics × 25 ％。
+- **Low drive／Mono low。** 200 Hz 以下（ローパス 2 次×2）を同じ生成器にかけ、120 Hz のハイパスで直流と基本波を落として、Low drive ％ × 0.5 で足す（100 ％ で 100 Hz の 2 次が基本波比 −9 dB）。Mono low が On のときは左右の和（ミッド）から作り、同じものを両チャンネルに足す。
+- **Auto fill（EVO、区分 B）。** `core/include/sw/bandlevels.hpp` の `ThirdOctaveAnalyzer`（31 バンド、25 Hz〜20 kHz、4096 点・Hann・50 % 重なり、1 秒の平滑、一般の用途に使えるよう共通部品にした。テスト：1 kHz の正弦波が自分のバンドに出る／ピンクノイズは平ら／白色ノイズは 1 バンドごとに約 1 dB 上がる）で入力の左右の和を測り、100 ms ごとに更新。Tune/8〜Tune/1.2（200 Hz 以上）のバンドの平均を基準に、目標は Tune/1.2 から 1.5 dB/oct で下がる線とし、足りない分（目標 − 実測、0〜+12 dB）を 3 領域（Tune〜2 倍、2〜4 倍、4 倍以上）の平均で出して、倍音側の 3 つのフィルタ（ベル 1.4×Tune、ベル 2.8×Tune、ハイシェルフ 5×Tune）に 1 秒で追従させる。8 kHz でカットしたノイズで 10〜15 kHz の倍音が Auto fill で 2 dB 以上増え、ピンクノイズに近い入力では変わらない（±2 dB、テスト）。
 - 遅延 0。
 
 ### CS04 の注意
