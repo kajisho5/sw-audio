@@ -10,8 +10,8 @@
 namespace tu {
 constexpr double kPi = 3.14159265358979323846, kFs = 48000.0;
 // portable Gaussian noise (std::normal_distribution differs between standard libraries)
-struct Noise {
-    std::mt19937 rng; explicit Noise(unsigned seed = 1) : rng(seed) {}
+struct Gauss {
+    std::mt19937 rng; explicit Gauss(unsigned seed = 1) : rng(seed) {}
     double uni() { return (rng() + 0.5) / 4294967296.0; }
     double gauss() { return std::sqrt(-2 * std::log(uni())) * std::cos(2 * kPi * uni()); }
 };
@@ -30,7 +30,7 @@ inline std::vector<float> sine(double rmsDbfs, double seconds, double f = 1000, 
     std::vector<float> x(static_cast<size_t>(n)); for (int i = 0; i < n; ++i) x[static_cast<size_t>(i)] = static_cast<float>(a * std::sin(2 * kPi * f * i / fs)); return x;
 }
 inline std::vector<float> noise(double rmsDbfs, double seconds, unsigned seed = 1) {
-    Noise nz(seed); const double a = std::pow(10.0, rmsDbfs / 20); std::vector<float> x(static_cast<size_t>(seconds * kFs)); for (auto& v : x) v = static_cast<float>(a * nz.gauss()); return x;
+    Gauss nz(seed); const double a = std::pow(10.0, rmsDbfs / 20); std::vector<float> x(static_cast<size_t>(seconds * kFs)); for (auto& v : x) v = static_cast<float>(a * nz.gauss()); return x;
 }
 inline double rmsDb(const std::vector<float>& x, size_t a, size_t b) { double s = 0; for (size_t i = a; i < b; ++i) s += static_cast<double>(x[i]) * x[i]; return 10 * std::log10(s / static_cast<double>(b - a) + 1e-20); }
 inline double rmsDb(const std::vector<float>& x) { return rmsDb(x, x.size() / 2, x.size()); }

@@ -10,7 +10,7 @@ using Set = std::vector<std::pair<int, double>>;
 Processor make(Set set = {}) { Processor p; for (auto& s : set) p.setParam(s.first, s.second); p.prepare(kFs, 256); p.snapToTargets(); return p; }
 // drum-like loop: decaying 90 Hz hits + a little noise, every 0.25 s
 std::vector<float> loop(double peak, double seconds) {
-    std::vector<float> x(static_cast<size_t>(seconds * kFs), 0.0f); Noise nz(5);
+    std::vector<float> x(static_cast<size_t>(seconds * kFs), 0.0f); Gauss nz(5);
     for (size_t i = 0; i < x.size(); ++i) { const double t = static_cast<double>(i % 12000) / kFs; x[i] = static_cast<float>(peak * std::exp(-t * 18) * (std::sin(2 * kPi * 90 * t) + 0.15 * nz.gauss())); }
     return x;
 }

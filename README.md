@@ -33,6 +33,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW EQ08 Linear | 24 バンド。Linear（全バンドの合成振幅から FIR、分割 FFT 畳み込み）／Minimum（IIR、遅延 0）／Mixed（200 Hz より下は最小位相、上は直線位相）。新旧カーネルは 20 ms でクロスフェード。Pre-ring guard（バンドごとに前鳴りを見積もり、超えるものだけ最小位相へ） | 下の「EQ08 の注意」 |
 | SW EQ09 Tilt | 傾き・低域・最高域、Auto pivot（曲のスペクトル中心にピボットが追従） | — |
 | SW SA01 Tape | テープレコーダー。簡略化したヒステリシス飽和（2× OS）、Formula（A／B／C＝ヘッドルーム 0／+3／−3 dB）、Speed（7.5／15／30 ips）ごとのヘッドバンプと高域損失（Repro）、Wow・Flutter（補間付き可変遅延）、Hiss、Input／Output。遅延は 48 サンプル固定。Calibrate（EVO）は 5 秒の入力から Input を決める | Calibrate の開始ボタンは画面と一緒に作る（コアは startCalibrate() と書き戻しを持つ）。値はすべて設計値（下の「SA01 の設計」） |
+| SW SA02 Console Sum | アナログ卓のサミング風の色付け。Color（Iron／Clean／Punch／Vint）、Drive、Crosstalk（左右の漏れ −80〜−40 dB）、Noise、Width（0〜150 %）、Output、Group（同じ番号のインスタンスが 1 台の卓として互いに負荷をかける）。インスタンスごとの個体差（EVO：種を状態に保存） | Group の効かせ方・個体差の幅・色の設計は設計値（下の「SA02 の設計」）。Unit A／B／C は共通機能と一緒に後で |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -190,6 +191,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Wow・Flutter。** 中心 1 ms（48 サンプル@48 kHz）の補間つき（4 点 Hermite）可変遅延。Wow は 0.62 Hz と約 1.4 Hz の揺れ、最大振れ 0.4 ms（Wow 10）、Flutter は 6.1／約 9.7／14.3 Hz、最大振れ 16 µs。ゆっくりした不規則なずれ（0.35 秒）が揺れの周波数を少し動かす。遅延の報告値は常に 48（2× OS の数サンプルの群遅延は報告しない、共通章の方針どおり）。
 - **Hiss。** Off（−90）で完全な無音、−50〜−90 dBFS で RMS がその値（±1.5 dB、テスト）。高域寄りの形（白色 0.3 ＋ 1.5 kHz ハイパス）、Speed が遅いほど +3 dB 付近まで増える（7.5：×1.4、15：×1、30：×0.7）。左右は別のノイズ。
 - **Calibrate。** `startCalibrate()` から 5 秒の入力の平均二乗を測り、Input ＝ −18 dBFS − 平均レベル（±12 dB）。結果は `takeParamWrite()`（MS05 と同じ仕組み）でホストに書き戻される。−24 dBFS RMS のノイズで +6 dB（±0.7）、−50 dBFS では +12 dB で頭打ち（テスト）。ボタンは画面と一緒に作る。
+
+### SA02 の設計（仕様書に数値がない部分）
+
+- **共通部品。** `core/include/sw/shaper.hpp` の `BiasShaper2x`（`y = h·s·(tanh(g·x/h + b) − tanh b)/g`、2× OS、歪みで出る直流は 2× のループ内で 5 Hz ハイパス、小信号の利得 1。テスト `tests/test_shaper.cpp`）。SA03・SA04・SA06 などでも使う。
+- **色。** 低域（160 Hz 以下の 1 次分割）と残りを別の整形にかける。Iron：低域にドライブ +6 dB（Drive 4 で全量）・バイアス 0.05、Clean：ドライブ ×0.5、Punch：ヘッドルーム 1.5（硬め）＋ 6 kHz の +1.2 dB シェルフ、Vint：低域 +3 dB・バイアス 0.45（偶数次が主）＋ 13 kHz ローパス＋ 60 Hz の +1.5 dB。Drive 0〜10 ＝ 0〜+15 dB（設計値）。実測の傾向（1 kHz、−12 dBFS RMS、Drive 8）：Clean は Iron より 3 次が 4 dB 以上低く、Iron の 60 Hz は 1 kHz より 3 次が 6 dB 以上高く、Vint は 2 次が 3 次より大きい（テスト）。
+- **Crosstalk。** 漏れ ＝ 10^((−80 ＋ 4×値)/20)（0 で −80 dB、10 で −40 dB、実測 −40±2.5）。Noise は −100〜−70 dBFS RMS（Off は 0、白色、左右別、個体差 ±1 dB）。Width は M/S のサイドを 0〜1.5 倍。
+- **個体差（EVO）。** パラメータ `sa02.seed`（0〜65535、オートメーション不可、状態に保存）。0 のとき最初の prepare で自動で決め、`takeParamWrite()` で一度だけプラグイン層に渡す。種から、左右別のゲイン ±0.3 dB、飽和の始まり ±0.5 dB（ドライブの差）、ノイズ ±1 dB、トーンの角 ±3 % を作る（同じ種なら出力はビット単位で同じ、種が違えば違う。テスト）。そのため Width 0 の左右逆相でも、ゲイン差の分（約 −30 dB）が残る。Unit A／B／C はこの上に重ねる共通機能で、後から。
+- **Group。** 同じプロセス内で Group 番号が同じインスタンスが、ロックフリーの共有領域（8 グループ × 64 スロット）に自分の平均二乗（約 100 ms の平滑）を出し、互いの合計を読んで **ドライブを最大 +3 dB 増やす**（3·tanh(√(他の合計) ÷ 0.3)、設計値）。別のグループには影響しない（テスト：隣が −6 dBFS で 3 次が 0.5 dB 以上増える）。ホストがプラグインを別プロセスで動かすと届かない（SW Link と同じ制約）。
+- 遅延 0。
 
 ### CS04 の注意
 
