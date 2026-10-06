@@ -48,6 +48,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MS02 True Peak | 先読みブリックウォール＋標本間ピーク検出（4x/8x）、TPDF ディザー | 下の「MS02 の保証範囲」 |
 | SW MS03 Multiband Limit | 4 帯域マルチバンドリミッター。LR4 で分割（120 Hz／1 kHz／6 kHz、足すと平ら）、帯域ごとに Gain（0〜+12 dB）・Ceiling・Release、先読み 2 ms の帯域リミッター、最後に True peak リミッターで Out ceiling を必ず守る。Character（Clean／Punch／Dense）、Link bands（EVO：合成後に天井を超える分を、帯域ごとのピークの大きさに応じて配分） | 遅延 184 サンプル@48 kHz（仕様書の見積もり約 200 より少し短い、下の「MS03 の設計」） |
 | SW MS04 Clipper | 直線位相 FIR で 4x/8x/16x、硬いクリップからテープ風まで連続で変わる Knee、Gain match、Listen（削った成分だけを試聴） | 遅延は全倍率で 48 サンプル（仕様書の見積もり 20〜40 より長い） |
+| SW MS05 Leveler | 自動フェーダー。K 特性の短時間ラウドネス（Source：Vocal 150 Hz〜5 kHz／Mix 全帯域／Bass 250 Hz 以下の長い窓）を Target へ寄せる Ride（±Range、Speed 3 秒／1 秒／0.3 秒）。Gate 以下では動かない。Write automation On の間は Ride をプラグインが自分で動かし、ホストに操作（ジェスチャー開始・値・終了）として通知する。Off では Ride パラメータ（ホストのオートメーション）がそのままゲイン | Ride を書き出す仕組みを共通のプラグイン層（CLAP）に追加。VST3／AU への伝わり方と DAW ごとの記録の挙動は、主要 DAW での確認が必要（下の「MS05 の設計」） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
 | SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
 | SW LV16 Live Gate | LIVE 用ゲート／ダッカー。Key HPF（120 Hz・24 dB/oct）で床鳴りではゲートが開かない、外部サイドチェーン | 床鳴りの帯域を測って自動で置く学習は未実装（固定 120 Hz） |
@@ -162,6 +163,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Character（設計値）。** 帯域リミッターのリリースの倍率：Clean ×1、Punch ×0.5、Dense ×2。Dense は帯域のリミッターの前に、帯域の天井の 1.25 倍で効く tanh の丸めを置く（ニーの丸さ）。`PeakLimiter` のアタック（先読みの長さ）は変えない。
 - **帯域の端の応答。** LR4 のまま（単独の帯域に 500 Hz を通すと隣の帯域に −24.6 dB の漏れがあり、帯域 2 の天井 −12 dB で止めても全体のピークは約 −10 dBFS になる、テストで確認）。
 - Low lat（先読み 0.5 ms）は EVO バー（画面）と一緒に作る。
+
+### MS05 の設計（仕様書に数値がない部分）
+
+- **検出。** 入力の K 特性（BS.1770 の 2 段）をかけた信号に、Source ごとの重みを足す：Vocal は 150 Hz ハイパス＋5 kHz ローパス（各 12 dB/oct×2 段）、Mix は K 特性のみ、Bass は 250 Hz ローパス（窓も 400 ms の指数平均で長め。他は 200 ms の指数平均＝約 400 ms の窓、設計値）。ラウドネス ＝ −0.691 ＋ 10 log10(全チャンネルの平均二乗の和)。左右同じ信号は片チャンネルより 3 dB 大きく数える（BS.1770 どおり）。Gate は重みなしの RMS（dBFS）に対して判定し、以下では Ride を保持する。
+- **動き。** 64 サンプルごとに、`Ride += (clamp(Target − ラウドネス, −Range, +Range) − Ride) × (1 − exp(−dt/τ))`、τ は Slow 3 秒・Medium 1 秒・Fast 0.3 秒（設計値）。補正は 64 サンプルの中で直線補間。実測：RMS −26 dBFS の定常音で Target −18 LUFS に対し Ride は約 +5.7 dB に収まり、Range 6 で −10 dBFS の音は −6 dB で止まる（テスト）。
+- **Write automation。** 共通のプラグイン層（`clap_adapter.hpp`）に「コアが自分でパラメータを動かす」仕組みを追加した。コアが `takeParamWrite(id, plain)` を実装すると、各サブブロックの終わりに CLAP の出力イベントとして、ジェスチャー開始 → 値（0.02 dB 以上動いたとき）→ ジェスチャー終了を出す。On の間、Ride パラメータへのホストからの値はコアが無視する（自分が書いた値の戻りと衝突しないため）。Off にすると Ride はホストのオートメーションに従い、1 サブブロックの補間でつながる。VST3 は clap-wrapper が出力イベントを編集開始／値変更／編集終了に、AU もパラメータ変更通知に変換する（clap-wrapper の機能。実際の DAW で記録されるかは未確認で、主要 DAW での動作確認が必要）。**この項目の動作の保証範囲は、コアの単体テストと clap-validator／Steinberg validator の合格まで。**
+- 遅延 0。
 
 ### CS04 の注意
 

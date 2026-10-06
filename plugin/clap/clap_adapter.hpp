@@ -25,6 +25,11 @@
 
 namespace sw::clapad {
 
+// cores that write a parameter themselves (MS05 Ride) implement takeParamWrite(id, plain): bit 0 begin gesture, bit 1 value, bit 2 end gesture
+template <class C, class = void> struct HasParamWrite : std::false_type {};
+template <class C>
+struct HasParamWrite<C, std::void_t<decltype(std::declval<C&>().takeParamWrite(std::declval<int&>(), std::declval<double&>()))>> : std::true_type {};
+
 // optional trait: static constexpr bool kAutoGain = false; -> the product has no Auto gain parameter
 template <class P, class = void> struct AutoGainEnabled : std::true_type {};
 template <class P> struct AutoGainEnabled<P, std::void_t<decltype(P::kAutoGain)>> : std::bool_constant<P::kAutoGain> {};
@@ -144,6 +149,7 @@ private:
             float* chans[2] = {ob.data32[0] + pos, nch > 1 ? ob.data32[1] + pos : ob.data32[0] + pos};
             const float* sc[2] = {scCh > 0 ? scBase[0] + pos : nullptr, scCh > 1 ? scBase[1] + pos : nullptr};
             s->shell_.process(chans, static_cast<int>(nch), static_cast<int>(next - pos), scCh > 0 ? sc : nullptr, scCh);
+            if constexpr (HasParamWrite<typename P::Core>::value) s->emitParamWrite(pr->out_events, next - 1);
             pos = next;
         }
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
@@ -221,6 +227,25 @@ private:
         if (!parseValue(spec(static_cast<int>(id)), text, v)) return false;
         *out = plainToHost(static_cast<int>(id), v);
         return true;
+    }
+    // the core moved a parameter itself: tell the host as a gesture (begin / value / end) so the track's automation can record it
+    void emitParamWrite(const clap_output_events_t* out, uint32_t time) {
+        int id = 0; double plain = 0;
+        const int f = shell_.core().takeParamWrite(id, plain);
+        if (!f || !out) return;
+        auto gesture = [&](uint16_t type) {
+            clap_event_param_gesture_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = type; e.header.flags = CLAP_EVENT_IS_LIVE;
+            e.param_id = static_cast<clap_id>(id); out->try_push(out, &e.header);
+        };
+        if (f & 1) gesture(CLAP_EVENT_PARAM_GESTURE_BEGIN);
+        if (f & 2) {
+            clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = CLAP_EVENT_IS_LIVE;
+            e.param_id = static_cast<clap_id>(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1;
+            e.value = plainToHost(id, plain);
+            host_values_[static_cast<size_t>(id)].store(e.value);
+            out->try_push(out, &e.header);
+        }
+        if (f & 4) gesture(CLAP_EVENT_PARAM_GESTURE_END);
     }
     static void paramsFlush(const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t*) {
         for (uint32_t i = 0, n = in->size(in); i < n; ++i) self(p)->handleEvent(in->get(in, i));
