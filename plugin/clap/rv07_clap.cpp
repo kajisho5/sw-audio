@@ -12,7 +12,7 @@ struct Rv07 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_REVERB, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.rv07", "SW RV07 Early", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.11.0", "Early reflections", f};
+                                                   "https://seventh-well.com", "", "", "0.12.0", "Early reflections", f};
         return &d;
     }
 };

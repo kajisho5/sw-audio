@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.11.0＋CS04：23 製品が完成（単体テスト 221 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0、Windows（Wine 上）は CS04 以外の 22 本で不合格 0）。
+現状は v0.12.0：76 製品が完成（単体テスト 800 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 41＝MD07 まで Windows・macOS・Linux で全ジョブ成功）。
 
 ## 話し方・進め方
 
@@ -71,5 +71,5 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ib
 
 ## 次にやること
 
-`docs/tasks.md` の「先にやること」から：① CI を通す → ② アナログ出力段を仕様どおり非対称に → ③ 残り 116 製品を仕様書の順に（次は DY01）。
+`docs/tasks.md` の「先にやること」から：残りの製品を仕様書の順に（次は VO01。VO01・02・03・06 は共通の音程エンジンが要る）。
 1 製品ごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。

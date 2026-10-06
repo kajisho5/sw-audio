@@ -12,7 +12,7 @@ struct Eq03 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.eq03", "SW EQ03 Mid Shaper", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.11.0", "Passive midrange shaper with ride", f};
+                                                   "https://seventh-well.com", "", "", "0.12.0", "Passive midrange shaper with ride", f};
         return &d;
     }
 };

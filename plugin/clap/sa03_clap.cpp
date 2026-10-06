@@ -12,7 +12,7 @@ struct Sa03 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DISTORTION, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.sa03", "SW SA03 Tube", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.11.0", "Tube harmonics with moving bias", f};
+                                                   "https://seventh-well.com", "", "", "0.12.0", "Tube harmonics with moving bias", f};
         return &d;
     }
 };

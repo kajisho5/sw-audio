@@ -12,7 +12,7 @@ struct Lo02 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_FILTER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lo02", "SW LO02 Sub Gen", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.11.0", "Phase-locked sub-octave generator", f};
+                                                   "https://seventh-well.com", "", "", "0.12.0", "Phase-locked sub-octave generator", f};
         return &d;
     }
 };
