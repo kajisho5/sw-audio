@@ -236,9 +236,15 @@ private:
     }
     // the core moved a parameter itself: tell the host as a gesture (begin / value / end) so the track's automation can record it
     void emitParamWrite(const clap_output_events_t* out, uint32_t time) {
-        int id = 0; double plain = 0;
-        const int f = shell_.core().takeParamWrite(id, plain);
-        if (!f || !out) return;
+        for (int guard = 0; guard < 8; ++guard) {   // a core may have several parameters to write (SA07 Era writes three)
+            int id = 0; double plain = 0;
+            const int f = shell_.core().takeParamWrite(id, plain);
+            if (!f) return;
+            writeOne(out, time, id, plain, f);
+        }
+    }
+    void writeOne(const clap_output_events_t* out, uint32_t time, int id, double plain, int f) {
+        if (!out) return;
         auto gesture = [&](uint16_t type) {
             clap_event_param_gesture_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = type; e.header.flags = CLAP_EVENT_IS_LIVE;
             e.param_id = static_cast<clap_id>(id); out->try_push(out, &e.header);

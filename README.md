@@ -38,6 +38,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA04 Transformer | トランスとプリアンプの色付け。Iron（Nickel／Steel／Mu：飽和の天井・バイアス・低域の角）、Gain（目盛り 0〜60 ＝ −30〜+30 dB、30 で 0 dB）、Load（送り側のインピーダンス：高域の共振と低域の量を動かす、EVO）、Low weight／Top air、Pad（−20 dB）。低域ほど早く飽和する（2× OS） | 飽和の天井・共振の周波数と量などは設計値（下の「SA04 の設計」） |
 | SW SA05 Exciter | 高域の倍音付け。Tune 以上の帯域を取り出し、偶数次（2 次）・奇数次（3 次）の倍音を、帯域自身のレベルで正規化して（入力の大小によらず）作って足す。Harmonics、Mix、Low drive（低域にも軽く倍音）、Mode（Even／Odd／Both）、Mono low、Auto fill（EVO：1/3 オクターブごとに高域を目標の傾きと比べ、足りない帯域に倍音を最大 +12 dB 多く足す） | 倍音の作り方・目標の傾き（−1.5 dB/oct）・3 領域の分け方は設計値（下の「SA05 の設計」）。共通部品に `ThirdOctaveAnalyzer` を追加 |
 | SW SA06 Saturator | 5 種の歪み（Tape／Tube／Diode／Fold／Fuzz）を 3 帯域（分割 200 Hz・3 kHz、LR4）で使える多機能サチュレーター。帯域ごとに Type・Drive（0〜+24 dB）・Shape（Soft／Medium／Hard）・Bias・Dynamics（EVO：包絡で歪み量を動かす）・Mix、全体に Tone・Output。4× OS（Fold・Fuzz は 8×） | 画面に帯域ごとの区別が無い点は仕様書の要確認のまま。各形の式・Shape の意味は設計値（下の「SA06 の設計」） |
+| SW SA07 Lo-Fi | レコード・古いテープ風の劣化。Era（1950／1970／1990／Tape：選ぶと Crackle・Wow・Bandwidth をまとめて書き込む、EVO）、Crackle（確率で出るパチパチ音、4 kHz で鳴る）、Dust（細かい粒）、Wow（可変遅延、SA01 と同じ）、Bandwidth（上限 3〜20 kHz、右端 Full）、Mono、Mix。遅延は 48 サンプル固定 | 音の作り方・Era の値は設計値（下の「SA07 の設計」）。Era の書き込みは複数パラメータ対応の共通プラグイン層を使う |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -235,6 +236,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Dynamics（EVO）。** 帯域のピーク包絡（10 ms で戻る）が −18 dBFS を基準に ±18 dB で ±1 になる量 m を取り、ドライブに `Dynamics × 2.4 dB × m` を足す（±5 で ±12 dB）。＋なら大きい音ほど、−なら小さい音ほど歪む。Drive 12 の Tape で、20 dB 大きくしたときの 3 次の増え方が、Dynamics ＋5 で +3 dB 以上、−5 で −3 dB 以上、0 と比べて変わる（テスト）。
 - **OS。** 4×（2 段）、Fold と Fuzz は 8×（3 段、仕様書の推奨どおり）。Drive は 20 ms でなめらかに動く。Drive の分だけ音量が上がる（補正は Output で）。
 - 遅延 0。
+
+### SA07 の設計（仕様書に数値がない部分）
+
+- **信号の流れ。** 入力 → Wow（共通部品 `WobbleDelay`＝`core/include/sw/wobble.hpp`、中心 1 ms ＝ 48 サンプル@48 kHz 固定、4 点 Hermite、SA01 と同じ揺れ。最大の振れ 0.4 ms＋Flutter 成分 16 µs（Tape 年代は 2 倍））→ 年代ごとのローカット（150／60／30／40 Hz）→ Bandwidth（LR4 のローパス、右端 Full の 20 kHz はバイパス）→ Mono（サイドを 1 − Mono ％ に）→ Crackle・Dust を足す。Mix は共通枠。
+- **Crackle。** 1 秒あたり Crackle/10 × 30 個のランダムなパチッ（確率はサンプルごと）。大きさは 0.3〜1.0（二乗の分布）、10 で最大 −24 dBFS（3 で −38 dBFS）、4 kHz・Q 2 のバンドパスで鳴らす。実測：Crackle 10 の無音入力で RMS −61 dBFS、4 秒に 20〜800 個。**Dust。** 1 秒あたり Dust/10 × 600 個の 1 サンプルの粒（符号ランダム）、最大 −50 dBFS（0 で −66）、RMS は Dust 10 で −75 dBFS より大きい。乱数は prepare で種を固定するので、書き出しは毎回同じ（テスト）。
+- **Era。** 1950：Crackle 6・Wow 4・Bandwidth 4.5 kHz・ローカット 150 Hz、1970：3・2・10 kHz・60 Hz、1990：0・0.5・16 kHz・30 Hz、Tape：0・3・12 kHz・40 Hz（設計値）。Era を変えると、3 つのパラメータ値と、`takeParamWrite()` の 3 回の書き込み（それぞれジェスチャー開始・値・終了）が出る。**Era のあとで同じイベントの中、または手で指定された値は、そのパラメータの保留中の書き込みを取り消す**（最初は取り消さず、clap-validator の `param-set-events` が「flush と process で値が同じ」を満たさず不合格になった）。状態を読み込んだ直後は `snapToTargets()` で保留中の書き込みを捨てるので、保存された Crackle などが Era のプリセットで上書きされることはない。共通のプラグイン層は、1 回の処理で最大 8 個のパラメータ書き込みを出せるようにした。
+- 遅延 48 サンプル固定（Wow が 0 でも同じ。2× OS は使わず、実際の遅延も 48〜52 サンプル以内、テスト）。
 
 ### CS04 の注意
 
