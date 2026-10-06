@@ -40,6 +40,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW SA06 Saturator | 5 種の歪み（Tape／Tube／Diode／Fold／Fuzz）を 3 帯域（分割 200 Hz・3 kHz、LR4）で使える多機能サチュレーター。帯域ごとに Type・Drive（0〜+24 dB）・Shape（Soft／Medium／Hard）・Bias・Dynamics（EVO：包絡で歪み量を動かす）・Mix、全体に Tone・Output。4× OS（Fold・Fuzz は 8×） | 画面に帯域ごとの区別が無い点は仕様書の要確認のまま。各形の式・Shape の意味は設計値（下の「SA06 の設計」） |
 | SW SA07 Lo-Fi | レコード・古いテープ風の劣化。Era（1950／1970／1990／Tape：選ぶと Crackle・Wow・Bandwidth をまとめて書き込む、EVO）、Crackle（確率で出るパチパチ音、4 kHz で鳴る）、Dust（細かい粒）、Wow（可変遅延、SA01 と同じ）、Bandwidth（上限 3〜20 kHz、右端 Full）、Mono、Mix。遅延は 48 サンプル固定 | 音の作り方・Era の値は設計値（下の「SA07 の設計」）。Era の書き込みは複数パラメータ対応の共通プラグイン層を使う |
 | SW SA08 Bitcrush | ビット数とサンプルレートを落とす。Bits（1〜24、整数）、Rate（200 Hz〜fs、LOG）、Jitter（ホールド周期の揺れ）、Pre filter／Post filter（折り返し・鏡像の除去）、Dither、Tempo lock（EVO、Rate を拍の周波数の整数倍に寄せる）、Mix。遅延 0 | 音の作り方は設計値（下の「SA08 の設計」）。Tempo lock のスイッチは画面に無い。Δ ボタンも無い |
+| SW LO01 Low Harm | 低域を倍音で聞こえるようにする。Frequency（40〜200 Hz）以下から 2〜5 次の倍音を作って足す。Harmonics、Original（元の低域の残し量 −24〜0 dB）、Width（Narrow／Medium／Wide ＝ 最高次数 3／4／5）、Preview（Off／Phone safe／Club、監視用で Auto 不可）。遅延 0 | 倍音の作り方・Preview のフィルタは設計値（下の「LO01 の設計」）。2× OS は使っていない（理由は同節）。Preview On の警告表示は UI 側。Δ ボタンが無い |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -253,6 +254,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Dither。** 量子化の直前に ±1 LSB の三角分布の雑音を足す。振幅 0.25 LSB の 1 kHz 正弦波が、Off では消え（−100 dB 未満）、On では ±3 dB で残る（テスト）。
 - **Tempo lock。** ホストのテンポ（拍の周波数 bpm / 60 Hz）が分かるとき、Rate を拍の周波数の最も近い整数倍に寄せる。テンポが無いときは何もしない。Rate のつまみの値は動かさず、実際に使う値だけを変える（CLAP の `param-set-events` を守るため。パラメータ ID は `sa08.evo.on`）。仕様書の「要確認」どおり、画面にスイッチは無い。
 - ホールドの周期が整数サンプルにならない Rate では、ホールドの切り替わりが最も近いサンプルになる（補間はしない。それがこの効果の音）。遅延は 0。
+
+### LO01 の設計（仕様書に数値がない部分）
+
+- **信号の流れ。** LR4 で Frequency を境に低域と残りに分ける（足し戻すと振幅は平坦、テスト：40 Hz〜8 kHz で ±0.1 dB）。低域から倍音を作り、Frequency の半分より下を 2 次ハイパス 2 段で捨てて（DC・サブを残さない）足す。出力 ＝ 残り ＋ Original × 低域 ＋ 倍音。
+- **倍音の作り方。** 低域をピークフォロワ（立ち上がり即時・戻り 0.3 秒）で割って ±1 に正規化し、チェビシェフ多項式 T2〜T5 を重み 1／0.7／0.5／0.35 で足し、フォロワの値を掛け戻す。入力が正弦波なら T_k はちょうど k 次倍音だけを出すので、**倍音の量は入力の大きさに依存しない**（入力 −20 dB 下げても倍音比 ±1 dB、テスト）。重みは使う次数の二乗和が 1 になるよう正規化し、Harmonics 100 ％で倍音全体の RMS が低域の RMS と等しい（30 ％で −10.5 dB）。Width は最高次数：Narrow 2〜3 次、Medium 2〜4 次、Wide 2〜5 次（仕様書は「倍音の帯域」とだけ書いてあるため設計値）。Width を替えても倍音の総量は変わらない（±1 dB、テスト）。
+- **実測（50 Hz・0.3、Frequency 80 Hz、Harmonics 100 ％、Wide）。** 2〜5 次が低域に対し −2.7／−5.8／−8.7／−11.7 dB（設計値の ±1.5 dB 以内）。6 次（300 Hz）は 2 次より約 28 dB 低い。フォロワの戻りが 0.15 秒だと 23 dB だったので 0.3 秒にした（戻りの揺れが 2 倍周期で次数の境目を濁すため）。Narrow／Medium の次数の外側は 2 次より 26〜35 dB 低い。
+- **2× OS は使っていない（仕様書からの差）。** 倍音は 5 次の多項式で、入力は 200 Hz 以下の LR4 ローパス後（2 kHz で −80 dB 以下）なので、折り返しが出る周波数に成分がない。10 kHz の正弦波を入れても 20 kHz・100 Hz に −70 dB 以上の成分が出ないことをテストで確かめた。
+- **Preview（監視用・Auto 不可）。** Phone safe：300 Hz の LR4 ハイパス＋1.2 kHz に +3 dB・Q 2.5 の小さな山（設計値）。60 Hz の正弦波が 30 dB 以上下がり、Harmonics 100 ％だと Harmonics 0 より 15 dB 以上大きく聞こえる（テスト）。Club：28 Hz の 2 次ハイパスだけ（50 Hz −0.4 dB、15 Hz −11 dB）。どちらも常に動かしておき、10 ms で切り替える（クリック防止）。Preview は書き出しにも乗るため、On のままだと警告を出す仕様は画面側の作業（UI）で、DSP 側にはない。
+- 無音入力は完全な 0。−90 dBFS より小さい入力は倍音を作らない（T2・T4 は入力 0 でオフセットを持つため）。左右は独立に処理する。遅延 0。
 
 ### CS04 の注意
 
