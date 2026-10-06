@@ -17,6 +17,9 @@ public:
         const size_t bins = static_cast<size_t>(B_ + 1);
         cur_.assign(static_cast<size_t>(P_), std::vector<cd>(bins));
         next_ = cur_;
+        stage_ = cur_;
+        usedStage_ = usedCur_ = usedNext_ = P_;
+        pend_.assign(static_cast<size_t>(P_) * static_cast<size_t>(B_), 0.0);
         for (auto& c : ch_) {
             c.fdl.assign(static_cast<size_t>(P_), std::vector<cd>(bins));
             c.in.assign(static_cast<size_t>(2 * B_), 0.0);
@@ -32,20 +35,40 @@ public:
     bool fading() const { return fadeLeft_ > 0; }
     // immediate: replace without a crossfade (prepare / first kernel). Otherwise fade from the current kernel.
     void setKernel(const std::vector<double>& h, bool immediate) {
-        if (fadeLeft_ > 0) { cur_.swap(next_); fadeLeft_ = 0; }  // finish a running fade first
-        auto& dst = immediate ? cur_ : next_;
-        for (int p = 0; p < P_; ++p) {
-            std::fill(work_.begin(), work_.end(), cd(0, 0));
-            for (int n = 0; n < B_; ++n) {
-                const size_t i = static_cast<size_t>(p * B_ + n);
-                if (i < h.size()) work_[static_cast<size_t>(n)] = h[i];
-            }
+        beginKernel(h);
+        while (!stepKernel(P_)) {}
+        commitKernel(immediate);
+    }
+    // the same in three steps, so that a long kernel can be transformed a few partitions at a time (no stall in the audio thread):
+    // beginKernel copies h; stepKernel(n) transforms up to n partitions and returns true when all are done; commitKernel starts the (cross)fade
+    // length: the number of taps that are not zero (-1: all); only that many partitions are transformed and multiplied afterwards
+    void beginKernel(const std::vector<double>& h, int length = -1) {
+        usedStage_ = length < 0 ? P_ : std::clamp((length + B_ - 1) / B_, 1, P_);
+        const size_t span = std::min(static_cast<size_t>(usedStage_) * static_cast<size_t>(B_), pend_.size());
+        const size_t copy = std::min(h.size(), span);
+        std::copy(h.begin(), h.begin() + static_cast<std::ptrdiff_t>(copy), pend_.begin());
+        std::fill(pend_.begin() + static_cast<std::ptrdiff_t>(copy), pend_.begin() + static_cast<std::ptrdiff_t>(span), 0.0);
+        partNext_ = 0;
+    }
+    bool stepKernel(int maxParts) {
+        const int end = std::min(usedStage_, partNext_ + std::max(1, maxParts));
+        for (int p = partNext_; p < end; ++p) {
+            for (int n = 0; n < B_; ++n) work_[static_cast<size_t>(n)] = pend_[static_cast<size_t>(p) * static_cast<size_t>(B_) + static_cast<size_t>(n)];
+            std::fill(work_.begin() + B_, work_.end(), cd(0, 0));
             fft_.forward(work_);
-            for (int k = 0; k <= B_; ++k) dst[static_cast<size_t>(p)][static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
+            for (int k = 0; k <= B_; ++k) stage_[static_cast<size_t>(p)][static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
         }
+        partNext_ = end;
+        return partNext_ >= usedStage_;
+    }
+    void commitKernel(bool immediate) {
+        if (fadeLeft_ > 0) { cur_.swap(next_); std::swap(usedCur_, usedNext_); fadeLeft_ = 0; }  // finish a running fade first
+        auto& dst = immediate ? cur_ : next_;
+        dst.swap(stage_);
+        (immediate ? usedCur_ : usedNext_) = usedStage_;
         if (!immediate) {
             fadeLeft_ = fadeLen_;
-            for (int c = 0; c < nch_; ++c) convolveInto(next_, ch_[static_cast<size_t>(c)], ch_[static_cast<size_t>(c)].outNext);  // current block too
+            for (int c = 0; c < nch_; ++c) convolveInto(next_, usedNext_, ch_[static_cast<size_t>(c)], ch_[static_cast<size_t>(c)].outNext);  // current block too
         }
     }
     void process(float** ch, int numCh, int n) {
@@ -58,7 +81,7 @@ public:
                 const double y = s.out[static_cast<size_t>(pos_)];
                 ch[c][i] = static_cast<float>(fadeLeft_ > 0 ? y + g * (s.outNext[static_cast<size_t>(pos_)] - y) : y);
             }
-            if (fadeLeft_ > 0 && --fadeLeft_ == 0) { cur_.swap(next_); for (auto& s : ch_) s.out.swap(s.outNext); }
+            if (fadeLeft_ > 0 && --fadeLeft_ == 0) { cur_.swap(next_); std::swap(usedCur_, usedNext_); for (auto& s : ch_) s.out.swap(s.outNext); }
             if (++pos_ == B_) { pos_ = 0; block(nch); }
         }
     }
@@ -66,12 +89,15 @@ public:
 private:
     using cd = std::complex<double>;
     struct Ch { std::vector<std::vector<cd>> fdl; std::vector<double> in, out, outNext; };
-    void convolveInto(const std::vector<std::vector<cd>>& K, const Ch& s, std::vector<double>& out) {
+    void convolveInto(const std::vector<std::vector<cd>>& K, int used, const Ch& s, std::vector<double>& out) {
         std::fill(acc_.begin(), acc_.end(), cd(0, 0));
-        for (int p = 0; p < P_; ++p) {
+        for (int p = 0; p < used; ++p) {
             const auto& X = s.fdl[static_cast<size_t>((head_ - p + P_) % P_)];
             const auto& H = K[static_cast<size_t>(p)];
-            for (int k = 0; k <= B_; ++k) acc_[static_cast<size_t>(k)] += X[static_cast<size_t>(k)] * H[static_cast<size_t>(k)];
+            for (int k = 0; k <= B_; ++k) {   // by hand (see fft.hpp): complex multiply-accumulate without the NaN-checking library call
+                const cd x = X[static_cast<size_t>(k)], h = H[static_cast<size_t>(k)];
+                acc_[static_cast<size_t>(k)] += cd(x.real() * h.real() - x.imag() * h.imag(), x.real() * h.imag() + x.imag() * h.real());
+            }
         }
         for (int k = 0; k <= B_; ++k) work_[static_cast<size_t>(k)] = acc_[static_cast<size_t>(k)];
         for (int k = 1; k < B_; ++k) work_[static_cast<size_t>(2 * B_ - k)] = std::conj(acc_[static_cast<size_t>(k)]);
@@ -87,13 +113,15 @@ private:
             auto& X = s.fdl[static_cast<size_t>(head_)];
             for (int k = 0; k <= B_; ++k) X[static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
             std::copy(s.in.begin() + B_, s.in.end(), s.in.begin());  // slide: this block becomes the next "previous"
-            convolveInto(cur_, s, s.out);
-            if (fadeLeft_ > 0) convolveInto(next_, s, s.outNext);
+            convolveInto(cur_, usedCur_, s, s.out);
+            if (fadeLeft_ > 0) convolveInto(next_, usedNext_, s, s.outNext);
         }
     }
     int B_ = 64, P_ = 1, nch_ = 2, head_ = 0, pos_ = 0, fadeLen_ = 960, fadeLeft_ = 0;
     Fft fft_;
-    std::vector<std::vector<cd>> cur_, next_;
+    std::vector<std::vector<cd>> cur_, next_, stage_;
+    std::vector<double> pend_;
+    int partNext_ = 0, usedStage_ = 1, usedCur_ = 1, usedNext_ = 1;
     std::array<Ch, 2> ch_{};
     std::vector<cd> work_, acc_, acc2_;
 };

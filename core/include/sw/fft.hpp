@@ -34,7 +34,9 @@ private:
                 for (int k = 0; k < half; ++k) {
                     std::complex<double> w = tw_[static_cast<size_t>(k * step)];
                     if (inv) w = std::conj(w);
-                    const std::complex<double> u = x[static_cast<size_t>(i + k)], v = x[static_cast<size_t>(i + k + half)] * w;
+                    const std::complex<double> u = x[static_cast<size_t>(i + k)], b = x[static_cast<size_t>(i + k + half)];
+                    // by hand: operator* of std::complex<double> goes through __muldc3 (NaN handling) unless -ffast-math, and is several times slower
+                    const std::complex<double> v(b.real() * w.real() - b.imag() * w.imag(), b.real() * w.imag() + b.imag() * w.real());
                     x[static_cast<size_t>(i + k)] = u + v;
                     x[static_cast<size_t>(i + k + half)] = u - v;
                 }

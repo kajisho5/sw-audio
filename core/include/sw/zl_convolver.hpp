@@ -17,7 +17,8 @@ public:
         tail_.setFadeSamples(fadeLen_);
         headCur_.assign(static_cast<size_t>(B_), 0.0); headNext_ = headCur_;
         tailK_.assign(static_cast<size_t>(std::max(block, maxKernel - block)), 0.0);
-        for (auto& c : hist_) c.assign(static_cast<size_t>(2 * B_), 0.0);
+        sz_ = 1; while (sz_ < static_cast<size_t>(2 * B_)) sz_ <<= 1;
+        for (auto& c : hist_) c.assign(2 * sz_, 0.0);   // every sample is written twice (at i and i + sz_) so that the last B samples are always contiguous
         pos_ = 0; fadeLeft_ = 0;
         dry_.assign(static_cast<size_t>(B_), 0.0f);
     }
@@ -40,26 +41,23 @@ public:
             // history first (dry input), then the tail convolver overwrites p in place with its output
             for (int c = 0; c < nch; ++c) {
                 auto& hist = hist_[static_cast<size_t>(c)];
-                for (int i = 0; i < m; ++i) { hist[static_cast<size_t>(pos_ + i) % hist.size()] = p[c][i]; }
+                for (int i = 0; i < m; ++i) { const size_t at = static_cast<size_t>(pos_ + i) & (sz_ - 1); hist[at] = p[c][i]; hist[at + sz_] = p[c][i]; }
             }
             tail_.process(p, nch, m);
             for (int i = 0; i < m; ++i) {
                 const double g = fadeLeft_ > 0 ? 1.0 - static_cast<double>(fadeLeft_) / fadeLen_ : 0.0;
                 for (int c = 0; c < nch; ++c) {
                     const auto& hist = hist_[static_cast<size_t>(c)];
-                    const size_t sz = hist.size();
-                    const size_t newest = static_cast<size_t>(pos_ + i) % sz;
+                    const double* x = hist.data() + sz_ + (static_cast<size_t>(pos_ + i) & (sz_ - 1));   // x[-k] is the sample k back
+                    const double* hc = headCur_.data();
                     double a = 0.0, b = 0.0;
-                    for (int k = 0; k < B_; ++k) {
-                        const double x = hist[(newest + sz - static_cast<size_t>(k)) % sz];
-                        a += headCur_[static_cast<size_t>(k)] * x;
-                        if (fadeLeft_ > 0) b += headNext_[static_cast<size_t>(k)] * x;
-                    }
+                    for (int k = 0; k < B_; ++k) a += hc[k] * x[-k];
+                    if (fadeLeft_ > 0) { const double* hn = headNext_.data(); for (int k = 0; k < B_; ++k) b += hn[k] * x[-k]; }
                     p[c][i] = static_cast<float>(p[c][i] + (fadeLeft_ > 0 ? a + g * (b - a) : a));
                 }
                 if (fadeLeft_ > 0 && --fadeLeft_ == 0) headCur_.swap(headNext_);
             }
-            pos_ = (pos_ + m) % static_cast<int>(hist_[0].size());
+            pos_ = (pos_ + m) & static_cast<int>(sz_ - 1);
         }
     }
 
@@ -67,6 +65,7 @@ private:
     void finishFade() { headCur_.swap(headNext_); fadeLeft_ = 0; }
     Convolver tail_;
     int B_ = 256, nch_ = 2, fadeLen_ = 960, fadeLeft_ = 0, pos_ = 0;
+    size_t sz_ = 512;
     std::vector<double> headCur_, headNext_, tailK_;
     std::vector<float> dry_;
     std::array<std::vector<double>, 2> hist_{};

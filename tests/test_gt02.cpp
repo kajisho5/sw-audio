@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "gt02/gt02.hpp"
 #include "sw/zl_convolver.hpp"
+#include "sw/tiered_convolver.hpp"
 #include "tu.hpp"
 using namespace sw;
 using namespace sw::gt02;
@@ -47,6 +48,20 @@ TEST_CASE("GT02 zero-latency convolution equals direct convolution, with and wit
     CHECK(!c.fading());
     worst = 0; for (size_t n = 10000; n < z.size(); ++n) { double d = 0; for (size_t k = 0; k < h2.size(); ++k) d += h2[k] * z[n - k]; worst = std::max(worst, std::abs(d - zz[n])); }
     CHECK(worst < 1e-5);
+}
+TEST_CASE("GT02 (core) tiered convolution of a long kernel equals direct convolution, loaded in steps, with a crossfade") {
+    Gauss g(9); std::vector<double> h1(30000), h2(30000); for (auto& v : h1) v = 0.02 * g.gauss(); for (auto& v : h2) v = 0.02 * g.gauss();
+    TieredConvolver c; c.prepare(40000, 960); c.setKernel(h1, true);
+    std::vector<float> x(40000); for (auto& v : x) v = static_cast<float>(0.3 * g.gauss()); std::vector<float> y = x;
+    for (size_t off = 0; off < y.size(); off += 200) c.process(y.data() + off, static_cast<int>(std::min<size_t>(200, y.size() - off)));
+    double worst = 0; for (size_t n = 0; n < x.size(); n += 7) { double d = 0; for (size_t k = 0; k < h1.size() && k <= n; ++k) d += h1[k] * x[n - k]; worst = std::max(worst, std::abs(d - y[n])); }
+    CHECK(worst < 1e-4);
+    c.beginKernel(h2); int steps = 0; while (!c.stepKernel(4)) ++steps; CHECK(steps >= 1); c.commitKernel(false);
+    std::vector<float> z(60000); for (auto& v : z) v = static_cast<float>(0.3 * g.gauss()); std::vector<float> zz = z;
+    for (size_t off = 0; off < zz.size(); off += 256) c.process(zz.data() + off, static_cast<int>(std::min<size_t>(256, zz.size() - off)));
+    CHECK(!c.fading());
+    worst = 0; for (size_t n = 35000; n < z.size(); n += 11) { double d = 0; for (size_t k = 0; k < h2.size() && k <= n; ++k) d += h2[k] * z[n - k]; worst = std::max(worst, std::abs(d - zz[n])); }
+    CHECK(worst < 1e-4);
 }
 TEST_CASE("GT02 no delay: the impulse response starts at once") {
     Processor q; CHECK(q.latencySamples() == 0);
