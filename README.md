@@ -87,6 +87,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW RS05 Declip | クリップした山の AR 補間（Threshold・Quality・Makeup・Smooth・Detect）。窓内の見積もりを挟んで高次数でも悪化しない。遅延 1024 | 設計値は README「RS05 Declip の設計」。極端に切れた信号（60 % 近く）は改善 2〜5 dB |
 | SW RS06 Dereverb | 後部残響の統計的抑制（STFT 1024・Polack 型）。Reduction・Tail length・Early・Smooth・Learn room（Tail へ書き込み）。遅延 1024 | 設計値は README「RS06 Dereverb の設計」。実際の声では残響時間の測定が難しい（無音の隙間が要る） |
 | SW RS07 Mouth Noise | RS04 の検出に「語と語の間か」の重み。Sensitivity・Click size・Freq skew・Fade。遅延 512 | 設計値は README「RS07 Mouth Noise の設計」。Click size Large は約 1 ms まで（先読み 512 の制約） |
+| SW CR01 Filter | 2 極の ZDF 状態変数フィルタ（LP/BP/HP/Notch、2×OS）。Envelope/LFO/Sidechain で変調。直近 10 秒の範囲に正規化する進化機能。遅延 0 | 設計値は README「CR01 Filter の設計」。4 極は未実装。LFO は 1 小節 1 周期（設計値）。進化機能の On/Off は末尾に追加した cr01.evo.on |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -690,6 +691,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Fade** 0.5〜10 ms：クリックの長さを RS04 と同じ方法（補間後の励起が T×σ 以下になる最小の長さ）で決めたあと、補修区間を**前後に Fade/2（最大 60 サンプル）広げて補間し直す**（補修の両端がきれいな信号の上に載る）。
 - **作る過程で直したもの：** 窓より長い 40 ms の範囲を読んで窓の外を参照していた（ASan で検出、窓の範囲に制限）。
 - 画面の補助機能（語と語の間だけを見つける区間表示）は、検出の内部で完結しており、表示用の値は `clicksRepaired()` まで。
+
+### CR01 Filter の設計（仕様書に数値がない部分）
+
+- **フィルタ。** 2 極の ZDF 状態変数フィルタ（LP／BP／HP／Notch、2× オーバーサンプリング）。Resonance 0〜100 ％ → 減衰 k ＝ 2(1 − 0.95 r)（最小 0.1：カットオフでのピークは 1/k で最大 +20 dB）。Drive 0〜100 ％ → 入力ゲイン G ＝ 1 ＋ 9d の tanh（小信号のゲインは 1）と、バンドパス状態の tanh を d でブレンド（**Drive 0 は完全に線形**：最初は常に tanh を通していて、Drive 0 でも 400 Hz の 3 次高調波が −28.6 dB 出ていたため）。仕様書の「2極・4極」の 4 極は未実装（表に切り替えが無い）。Mix・Output は無い（仕様書の表のとおり）。
+- **Mod source。** Envelope（入力のピーク包絡、アタック 3 ms・リリース 120 ms）、LFO（**ホストのテンポで 1 小節に 1 周期**、テンポ不明は 0.5 Hz。仕様書に LFO の速さのつまみが無いための設計値）、Sidechain（外部サイドチェーン。無ければ入力）。変調量 m（0〜1）で、カットオフを 2^(5 × Env amount × m) 倍（±100 ％ ＝ ±5 オクターブ）。
+- **進化機能 `cr01.evo.on`（末尾に追加）。** On（既定）：m ＝ 直近 10 秒の最大・最小（0.5 秒ブロック 20 個の最大・最小、−70 dB 未満の無音は最小に数えない、幅は最低 6 dB）に対する位置。音量に関係なく Env amount が全域で効く（テスト：−6 dB 始まりと −36 dB 始まりの 12 dB の揺れで、通過量の差が 4 dB 以内で同じ）。Off：m ＝ (レベル ＋ 40 dB)/40 dB。**最初は「最大は保持して 10 秒で 6 dB 下げる」方式にしたが、初期値が広すぎて収まらず、ブロック最大・最小方式に変えた。**
+- 画面のΔボタンは無い（仕様書の要確認のとおり）。
 
 ### CS04 の注意
 
