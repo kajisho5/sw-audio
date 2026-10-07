@@ -12,6 +12,9 @@
 #pragma once
 #include "gui_bridge.hpp"
 #include "gui_view.hpp"
+#ifdef SW_SKIN_HEADER
+#include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
+#endif
 #include "sw/denormal.hpp"
 #include "sw/param.hpp"
 #include "sw/shell.hpp"
@@ -187,7 +190,13 @@ private:
         e.param_id = static_cast<clap_id>(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = host_values_[static_cast<size_t>(id)].load();
         out->try_push(out, &e.header);
     }
+#ifdef SW_SKIN_HEADER
+    static constexpr uint32_t kGuiW = gui_assets::kSkinW, kGuiH = gui_assets::kSkinH + 22;   // the design and the strip of level meters under it
+    static gui::Skin skin() { return {gui_assets::kSkinCss, gui_assets::kSkinCssSize, gui_assets::kSkinHtml, gui_assets::kSkinHtmlSize}; }
+#else
     static constexpr uint32_t kGuiW = 960, kGuiH = 550;
+    static gui::Skin skin() { return {}; }
+#endif
     static bool guiIsApiSupported(const clap_plugin_t*, const char* api, bool floating) { return !floating && gui::platformApi() && api && !std::strcmp(api, gui::platformApi()); }
     static bool guiPreferredApi(const clap_plugin_t*, const char** api, bool* floating) { if (!gui::platformApi()) return false; *api = gui::platformApi(); *floating = false; return true; }
     static bool guiCreate(const clap_plugin_t* p, const char* api, bool floating) {
@@ -195,7 +204,7 @@ private:
         if (!guiIsApiSupported(p, api, floating)) return false;
         s->guiDestroyView();
         std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
-        const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, init, f.latencyMs());
+        const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, init, f.latencyMs(), skin());
         s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_);
         s->view_ = gui::createView(html, [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
         return s->view_ != nullptr;

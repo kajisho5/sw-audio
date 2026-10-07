@@ -1,0 +1,6 @@
+{
+  "DY01": {"input": 0},
+  "DY02": {"peak reduction": 1},
+  "EQ06": {"hz": [0], "khz": [2, 4], "gain": [1, 3, 5]},
+  "RV06": {"pitch": 2}
+}

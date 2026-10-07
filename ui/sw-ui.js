@@ -107,36 +107,47 @@
     }
     function applyAll(values) { values.forEach((v, i) => { if (i < host.length && vals[i] !== v) { vals[i] = v; bridge.begin(i); bridge.set(i, v); bridge.end(i); const w = widgets.get(i); if (w) w(v); } }); }
 
-    // ---- toolbar
-    const tb = el('div', 'tb');
-    tb.append(el('span', 'logo', 'SEVENTHWELL'), el('span', 'code', prod.code), el('span', 'nm', prod.name.toUpperCase()), el('span', 'sp'));
-    const live = el('span', 'live'); live.append(el('span', 'dot'), el('span', '', ''));
-    tb.insertBefore(live, tb.querySelector('.sp'));
-    const bA = el('button', 'on', 'A'), bB = el('button', '', 'B'), bU = el('button', '', '↶'), bR = el('button', '', '↷');
-    bU.title = 'Undo'; bR.title = 'Redo';
-    tb.append(bA, bB, bU, bR);
+    // ---- toolbar (the design's own in skin mode)
+    let bA, bB, bU, bR, skinBox = null;
     const extraBtn = {};
-    host.filter(h => h.extra).forEach(h => { const b = el('button', '', h.p.name); b.onclick = () => setValue(h.i, vals[h.i] > 0.5 ? 0 : 1); extraBtn[h.i] = b; widgets.set(h.i, v => b.classList.toggle('on', v > 0.5)); tb.append(b); });
-    box.append(tb, el('div', 'strip'));
-    function refreshTb() { bU.disabled = !undo.length; bR.disabled = !redo.length; }
+    if (opt.skin) {
+      const sh = root.attachShadow ? (root.shadowRoot || root.attachShadow({ mode: 'open' })) : root;
+      const st = document.createElement('style'); st.textContent = opt.skin.css;
+      const hold = document.createElement('div'); hold.innerHTML = opt.skin.html; skinBox = hold.firstElementChild;
+      sh.append(st, skinBox);
+      root.removeChild(box);
+      const q = a => skinBox.querySelector('[data-act="' + a + '"]') || el('button');
+      bA = q('A'); bB = q('B'); bU = q('undo'); bR = q('redo');
+    } else {
+      const tb = el('div', 'tb');
+      tb.append(el('span', 'logo', 'SEVENTHWELL'), el('span', 'code', prod.code), el('span', 'nm', prod.name.toUpperCase()), el('span', 'sp'));
+      const live = el('span', 'live'); live.append(el('span', 'dot'), el('span', '', ''));
+      tb.insertBefore(live, tb.querySelector('.sp'));
+      bA = el('button', 'on', 'A'); bB = el('button', '', 'B'); bU = el('button', '', '↶'); bR = el('button', '', '↷');
+      bU.title = 'Undo'; bR.title = 'Redo';
+      tb.append(bA, bB, bU, bR);
+      host.filter(h => h.extra).forEach(h => { const b = el('button', '', h.p.name); b.onclick = () => setValue(h.i, vals[h.i] > 0.5 ? 0 : 1); extraBtn[h.i] = b; widgets.set(h.i, v => b.classList.toggle('on', v > 0.5)); tb.append(b); });
+      box.append(tb, el('div', 'strip'));
+    }
+    function refreshTb() { bU.disabled = !undo.length; bR.disabled = !redo.length; if (skinBox) { bU.style.opacity = undo.length ? '' : '.4'; bR.style.opacity = redo.length ? '' : '.4'; } }
     bU.onclick = () => { const e = undo.pop(); if (!e) return; redo.push(e); vals[e.i] = e.from; bridge.begin(e.i); bridge.set(e.i, e.from); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.from); refreshTb(); };
     bR.onclick = () => { const e = redo.pop(); if (!e) return; undo.push(e); vals[e.i] = e.to; bridge.begin(e.i); bridge.set(e.i, e.to); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.to); refreshTb(); };
     function pickAB(which) {
       if (which === ab) return; slots[ab] = vals.slice(); if (!slots[which]) slots[which] = vals.slice();
       ab = which; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); applyAll(slots[which]);
     }
-    bA.onclick = () => pickAB('A'); bB.onclick = () => pickAB('B'); refreshTb();
+    bA.onclick = () => pickAB('A'); bB.onclick = () => pickAB('B'); if (skinBox) { bA.classList.add('on'); bB.classList.remove('on'); } refreshTb();
 
     // ---- body
-    const body = el('div', 'body'); box.appendChild(body);
-    const sections = groupParams(host.filter(h => !h.extra));
+    const body = el('div', 'body'); if (!skinBox) box.appendChild(body);
+    const sections = skinBox ? [] : groupParams(host.filter(h => !h.extra));
     for (const s of sections) {
       const sec = el('div', 'sec' + (s.kind === 'faders' ? ' wide' : '')); if (s.title) sec.append(el('div', 'sect', s.title));
       const row = el('div', 'row' + (s.kind === 'faders' ? ' faders' : '')); sec.append(row); body.append(sec);
       for (const it of s.items) row.append(s.kind === 'faders' ? fader(it) : control(it, s.title && it.p.name.startsWith(s.title + ' ') ? it.p.name.slice(s.title.length + 1) : it.p.name));
     }
 
-    if ((prod.actions || []).length) {
+    if ((prod.actions || []).length && !skinBox) {
       const sec = el('div', 'sec'); sec.append(el('div', 'sect', 'Actions')); const row = el('div', 'row'); sec.append(row); body.insertBefore(sec, body.firstChild);
       prod.actions.forEach(a => {
         const b = el('button', 'dbtn', a.label); let on = false;
@@ -209,15 +220,52 @@
       return w;
     }
 
+
+    // ---- skin: tie the design's controls to the parameters (data-p, data-v, data-toggle, data-dial)
+    function bindSkin() {
+      skinBox.querySelectorAll('.ctl[data-p]').forEach(ctl => {
+        const i = +ctl.dataset.p, h = host[i]; if (!h) return; const p = h.p, c = h.c;
+        const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr'), val = ctl.querySelector('.val');
+        const upd = v => { const x = c.norm(v), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(p, v, c); };
+        widgets.set(i, upd); upd(vals[i]);
+        let drag = null; dial.style.touchAction = 'none'; dial.style.cursor = 'ns-resize';
+        dial.addEventListener('pointerdown', e => { dial.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: c.norm(vals[i]) }; bridge.begin(i); });
+        dial.addEventListener('pointermove', e => { if (!drag) return; setValue(i, c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
+        const end = () => { if (!drag) return; drag = null; bridge.end(i); };
+        dial.addEventListener('pointerup', end); dial.addEventListener('pointercancel', end);
+        dial.addEventListener('dblclick', () => { bridge.begin(i); setValue(i, p.def); bridge.end(i); });
+        dial.addEventListener('wheel', e => { e.preventDefault(); bridge.begin(i); setValue(i, c.value(clamp(c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
+      });
+      const pair = {};
+      skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => {
+        const i = +b.dataset.p, h = host[i]; if (!h) return; const p = h.p, c = h.c;
+        if (b.dataset.toggle) {
+          b.addEventListener('click', () => { bridge.begin(i); setValue(i, vals[i] > 0.5 ? p.steps[0] : p.steps[1]); bridge.end(i); });
+          (pair[i] = pair[i] || []).push(v => b.classList.toggle('on', c.norm(v) > 0.5));
+        } else {
+          const t = +b.dataset.v;
+          b.addEventListener('click', () => { bridge.begin(i); setValue(i, t); bridge.end(i); });
+          (pair[i] = pair[i] || []).push(v => b.classList.toggle('on', Math.abs(v - t) < 1e-9));
+        }
+      });
+      Object.keys(pair).forEach(k => { const fs = pair[k], prev = widgets.get(+k); const upd = v => { if (prev) prev(v); fs.forEach(f => f(v)); }; widgets.set(+k, upd); upd(vals[+k]); });
+    }
+    if (skinBox) bindSkin();
+
     // ---- EVO bar and live readouts
     const bar = el('div', 'evobar'); const evoT = el('span', 'evot', prod.evo || ''); const cpu = el('span', 'cpu');
     const mk = lab => { const m = el('span', 'mtr'); const bars = [el('i'), el('i')]; bars.forEach(b => m.append(b)); m.title = lab; return { m, bars }; };
     const mi = mk('IN'), mo = mk('OUT');
-    bar.append(el('span', 'evo', 'EVO'), evoT, el('span', 'sp'), el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu); box.append(bar);
+    if (skinBox) {
+      const strip = document.createElement('div'); strip.style.cssText = 'height:22px;background:#0c0c0d;display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:0 10px;border-top:1px solid #000;box-sizing:border-box';
+      strip.append(el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu);
+      const st2 = document.createElement('style'); st2.textContent = '.ml{font-size:9px;color:#8e8e8e;font-family:Barlow Condensed,sans-serif}.mtr{display:inline-flex;flex-direction:column;gap:2px;width:70px}.mtr i{display:block;height:4px;width:0;background:#6fbf73;border-radius:1px}.mtr i.hot{background:#d9534f}.cpu{font-family:Space Mono,monospace;font-size:10px;color:#8e8e8e}';
+      skinBox.parentNode.append(st2, strip);
+    } else { bar.append(el('span', 'evo', 'EVO'), evoT, el('span', 'sp'), el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu); box.append(bar); }
     const lvl = db => Math.max(0, Math.min(1, (db + 60) / 60)) * 100 + '%';
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
-      if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
+      if (skinBox) { /* the design has no latency chip */ } else if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
       const mt = inf.meters; if (mt) { [mi.bars[0], mi.bars[1], mo.bars[0], mo.bars[1]].forEach((b, k) => { b.style.width = lvl(mt[k]); b.classList.toggle('hot', mt[k] > -1); }); }
       cpu.textContent = inf.cpu !== undefined ? 'CPU ' + inf.cpu.toFixed(1) + ' %' : '';
     }

@@ -53,14 +53,22 @@ inline std::string codeOf(const char* clapId) {
     return c;
 }
 
-inline std::string page(const std::string& code, const std::vector<ParamSpec>& specs, bool autoGain, bool delta, const std::vector<double>& plain, double latencyMs) {
+// the design of the product (css, markup) when the plug-in was built with its skin header; otherwise the generated layout
+struct Skin { const unsigned char* css = nullptr; unsigned long cssSize = 0; const unsigned char* html = nullptr; unsigned long htmlSize = 0; };
+
+inline std::string page(const std::string& code, const std::vector<ParamSpec>& specs, bool autoGain, bool delta, const std::vector<double>& plain, double latencyMs, const Skin& skin = {}) {
     std::string h = "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>";
     h.append(reinterpret_cast<const char*>(gui_assets::kCss), gui_assets::kCssSize);
-    h += "#app{width:960px;height:550px;position:relative}</style></head><body><div id=\"app\"></div><script>";
+    h += "body{margin:0;background:#0c0c0d}#app{position:relative}</style></head><body><div id=\"app\"></div><script>";
     h.append(reinterpret_cast<const char*>(gui_assets::kJs), gui_assets::kJsSize);
     h += "</script><script>var SWBOOT={product:" + metaJson(code) + ",params:" + specsJson(specs) + ",traits:{autoGain:" + (autoGain ? "true" : "false") + ",delta:" + (delta ? "true" : "false") + "},values:[";
     for (size_t i = 0; i < plain.size(); ++i) h += (i ? "," : "") + num(plain[i]);
-    h += "],latencyMs:" + num(latencyMs) + "};</script><script>";
+    h += "],latencyMs:" + num(latencyMs) + "};</script>";
+    if (skin.html) {   // text/plain scripts: no escaping needed as long as the markup has no closing script tag (checked when it is generated)
+        h += "<script type=\"text/plain\" id=\"swskincss\">"; h.append(reinterpret_cast<const char*>(skin.css), skin.cssSize);
+        h += "</script><script type=\"text/plain\" id=\"swskin\">"; h.append(reinterpret_cast<const char*>(skin.html), skin.htmlSize); h += "</script>";
+    }
+    h += "<script>";
     h.append(reinterpret_cast<const char*>(gui_assets::kHostJs), gui_assets::kHostJsSize);
     h += "</script></body></html>";
     return h;

@@ -57,6 +57,27 @@ add_custom_command(OUTPUT ${SW_GUI_ASSETS}
     COMMENT "Embedding the plug-in screen")
 add_custom_target(sw-gui-assets DEPENDS ${SW_GUI_ASSETS})
 
+# ---- the product designs (docs/design/canvas) as one header per plug-in (build/gen/skins/skin_<code>.hpp); needs beautifulsoup4
+execute_process(COMMAND ${Python3_EXECUTABLE} -c "import bs4" RESULT_VARIABLE SW_HAVE_BS4 OUTPUT_QUIET ERROR_QUIET)
+if (NOT SW_HAVE_BS4 EQUAL 0)
+    message(STATUS "Installing beautifulsoup4 (reads the design files)")
+    execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install --user beautifulsoup4 RESULT_VARIABLE SW_PIP)
+    if (NOT SW_PIP EQUAL 0)
+        message(FATAL_ERROR "python3 needs the beautifulsoup4 package: pip install beautifulsoup4")
+    endif()
+endif()
+set(SW_SKIN_DIR ${CMAKE_BINARY_DIR}/gen/skins)
+set(SW_SKIN_OUT "")
+foreach(code IN LISTS SW_PRODUCTS)
+    list(APPEND SW_SKIN_OUT ${SW_SKIN_DIR}/skin_${code}.hpp)
+endforeach()
+file(GLOB SW_CANVAS_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/docs/design/canvas/project/*.dc.html)
+add_custom_command(OUTPUT ${SW_SKIN_OUT}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/gen_skins.py --emit ${SW_SKIN_DIR}
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/gen_skins.py ${CMAKE_SOURCE_DIR}/ui/specs.json ${SW_CANVAS_FILES}
+    COMMENT "Generating the product screens from the design canvas")
+add_custom_target(sw-gui-skins DEPENDS ${SW_SKIN_OUT})
+
 # ---- the plug-in window's platform view: WKWebView (macOS), WebView2 (Windows), none on Linux
 add_library(sw-gui-view STATIC)
 target_include_directories(sw-gui-view PUBLIC plugin/clap)
@@ -104,7 +125,9 @@ if (SW_BUILD_PLUGINS)
         add_library(sw-${code}-impl STATIC plugin/clap/${code}_clap.cpp)
         target_link_libraries(sw-${code}-impl PUBLIC sw-${code} clap sw-gui-view)
         target_include_directories(sw-${code}-impl PUBLIC ${CMAKE_BINARY_DIR}/gen)
-        add_dependencies(sw-${code}-impl sw-gui-assets)
+        add_dependencies(sw-${code}-impl sw-gui-assets sw-gui-skins)
+        target_include_directories(sw-${code}-impl PRIVATE ${SW_SKIN_DIR})
+        target_compile_definitions(sw-${code}-impl PRIVATE SW_SKIN_HEADER="skin_${code}.hpp")
         set(formats CLAP VST3)
         if (APPLE)
             list(APPEND formats AUV2)

@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SUDO=""; command -v sudo >/dev/null 2>&1 && [ "$(id -u)" != 0 ] && SUDO=sudo
-$SUDO apt-get update -q && $SUDO apt-get install -y -q cmake ninja-build g++ git curl unzip python3 >/dev/null
+$SUDO apt-get update -q && $SUDO apt-get install -y -q cmake ninja-build g++ git curl unzip python3 python3-pip python3-bs4 >/dev/null
 BIN="$HOME/.local/bin"; mkdir -p "$BIN"
 if ! command -v clap-validator >/dev/null 2>&1; then
   tmp=$(mktemp -d); curl -sL -o "$tmp/cv.zip" https://github.com/free-audio/clap-validator/releases/download/0.4.1/clap-validator-0.4.1-127-g152b982-ubuntu-22.04.zip
