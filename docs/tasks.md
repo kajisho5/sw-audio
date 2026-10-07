@@ -134,12 +134,12 @@
 - [x] CR06 One Knob — One knob drives six effects with tuned macro curves
 
 ### IN
-- [ ] IN01 Synth — Patch morph between two sounds
-- [ ] IN02 Drums — Humanize timing by drummer style
-- [ ] IN03 Keys — Pedal and hammer noise follow your playing
-- [ ] IN04 Bass — Slides and ghost notes from MIDI velocity
-- [ ] IN05 Organ — Drawbar settings morph with an expression pedal
-- [ ] IN06 Sampler — Auto maps slices to keys by transient
+- [ ] IN01 Synth — Patch morph between two sounds （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
+- [ ] IN02 Drums — Humanize timing by drummer style （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
+- [ ] IN03 Keys — Pedal and hammer noise follow your playing （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
+- [ ] IN04 Bass — Slides and ghost notes from MIDI velocity （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
+- [ ] IN05 Organ — Drawbar settings morph with an expression pedal （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
+- [ ] IN06 Sampler — Auto maps slices to keys by transient （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 
 ### MT
 - [ ] MT01 Loudness — Loudness presets for Japanese broadcast and streaming
