@@ -89,6 +89,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW RS07 Mouth Noise | RS04 の検出に「語と語の間か」の重み。Sensitivity・Click size・Freq skew・Fade。遅延 512 | 設計値は README「RS07 Mouth Noise の設計」。Click size Large は約 1 ms まで（先読み 512 の制約） |
 | SW CR01 Filter | 2 極の ZDF 状態変数フィルタ（LP/BP/HP/Notch、2×OS）。Envelope/LFO/Sidechain で変調。直近 10 秒の範囲に正規化する進化機能。遅延 0 | 設計値は README「CR01 Filter の設計」。4 極は未実装。LFO は 1 小節 1 周期（設計値）。進化機能の On/Off は末尾に追加した cr01.evo.on |
 | SW CR02 Stutter | 拍に同期した直前スライスの繰り返し（Grid・Gate・Repeat・Pitch・Reverse・Filter・Mix・16 ステップのパターン）。Randomize は拍位置と入力の立ち上がりで重み付け。遅延 0 | 設計値は README「CR02 Stutter の設計」。4/4 を仮定。Randomize・Clear は UI ボタン用のメソッド（パラメータではない） |
+| SW CR03 Granular | 入力の過去から切り出した粒（Cloud/Scatter/Glitch、Grain・Density・Spray・Pitch・Spread・Mix・Freeze input）。Harmony は直近 4 秒の 12 音分布から粒の音程を構成音へ。遅延 0 | 設計値は README「CR03 Granular の設計」。Harmony の On/Off は末尾ではなく表の最後の cr03.evo.on。和音の入力には向かない |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -706,6 +707,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **繰り返し。** パターンが On のステップの頭で、**ちょうど今までに通り過ぎた入力の最後の（ステップ長 ÷ Repeat）サンプル**を取り込み、Repeat 回繰り返す（遅延 0）。Gate ＝ 各繰り返しの開いている割合（両端に 1 ms のフェード）、Pitch ＝ 再生速度（整数半音、スライスより先へ行けば頭に戻る）、Reverse ＝ 逆再生、Filter ＝ 繰り返しに 2 次のローパス（**20 kHz は外す**：LP が 20 kHz でも位相が回って、そのままの繰り返しにならなかったため）、Mix ＝ そのステップの間だけ原音と混ぜる（traits の Mix は使わず、製品の中で処理）。Off のステップは原音のまま（ビット単位で一致）。
 - **Pattern。** `cr02.step01〜step16`（Auto 不可、既定は x.x. x..x x.x. x...）。**Randomize・Clear は `randomize()`・`clearPattern()` のメソッド（画面のボタンが呼び、16 個のステップのパラメータをホストへ書く）。** 最初は `cr02.random`・`cr02.clear` というボタン用パラメータを作り、コアが処理して takeParamWrite で自分を Off に戻していたが、clap-validator の param-set-events（フラッシュと process で同じ値になること）に不合格になったため、パラメータをやめた（コアが自分でパラメータを書き換える製品は、この検査と両立しない）。
 - **Randomize（進化機能・区分 A）。** 拍の中の位置で確率を決める（拍の頭 0.85、8 分の裏 0.6、16 分の裏 0.35、その他 0.4）。直近の 1 小節で入力に立ち上がり（5 ms と 100 ms の包絡の比 2.8 倍以上）があったステップは確率を ＋0.3（最大 0.95）。テスト：400 回の平均が 0.85／0.6／0.35 の ±0.06 以内、立ち上がりがあるステップの密度は 0.35 から 0.55 超へ。
+- 画面のΔボタンは無い（仕様書の要確認のとおり）。
+
+### CR03 Granular の設計（仕様書に数値がない部分）
+
+- **粒。** 入力の過去から切り出した Hann 窓の粒。Density 回/秒で生まれる（間隔は 1/Density の 0.7〜1.3 倍）、同時に最大 64、再生速度 2^(Pitch/12)、**重なりの数（Density × 粒の長さ）で正規化**（Hann の平均二乗 3/8 も補正して、密度を変えてもレベルは変わらない。テスト：Density 10 と 80 で 3 dB 以内、30 で入力の ±4 dB 以内。最初は 3/8 を忘れて入力より約 6 dB 小さかった）。粒は過去だけを読むので遅延 0。Mix は共通の枠（ウェットだけ返す）。
+- **Mode。** Cloud：粒の長さ × 速度だけ過去から読み、Spray ％ で最大 0.5 秒まで余分にさかのぼる。Scatter：直近 2 秒のどこからでも。Glitch：開始位置を粒の長さの 1〜4 個分前に揃え（格子）、1/4 は逆再生、1/3 は直前の開始位置・長さを繰り返す。**Spread：** Mono（中央）／Narrow（±0.3）／Wide（±1）のランダムなパン（定電力）。**Freeze input：** 書き込みを止め、粒は固まった直近の音を読み続ける（テスト：入力が止まったあとも −35 dB 超が 2 秒以上続き、Off では −80 dB 未満）。
+- **Harmony（進化機能 `cr03.evo.on`、On）。** 0.125 秒ごとに入力の 12 音の分布を測り（直近 8192 サンプルの FFT、60 Hz〜2 kHz のスペクトルのピークを 12 音へ）、直近 4 秒（32 フレーム）の分布の強い音（最大の半分以上、最大 4 つ）を「和音」とする。粒の音程は、その粒の元の音（粒の元の区間の真ん中に最も近いフレームの最強の音 s）に対して、s ＋ k が和音の構成音になる k のうち Pitch に最も近いもの（±6 半音、上位 2 つから 65 %／35 %）にする。和音が見つからないとき（−60 dBFS 未満）は Pitch のまま。テスト：C・E・G を 0.5 秒ずつ回す入力（和音 ＝ C E G）で Pitch +5 のとき、Off では出力の音のうち構成音（C・E・G）が占める割合が 0.6 未満、On では 0.8 超。**限界：** 和音（同時に鳴る複数の音）を入力すると、1 つの k では構成音のまま保てない（旋律・単音の入力向け）。
 - 画面のΔボタンは無い（仕様書の要確認のとおり）。
 
 ### CS04 の注意

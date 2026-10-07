@@ -5,6 +5,7 @@
 #include <type_traits>
 #include "cr01/cr01.hpp"
 #include "cr02/cr02.hpp"
+#include "cr03/cr03.hpp"
 #include "cs01/cs01.hpp"
 #include "cs02/cs02.hpp"
 #include "cs03/cs03.hpp"
@@ -131,6 +132,7 @@ template <class P> void fuzzBounds(const std::vector<sw::ParamSpec>& specs, unsi
 
 TEST_CASE("fuzz parameter bounds: cr01") { fuzzBounds<sw::cr01::Processor>(sw::cr01::specs(), 17u); fuzzBounds<sw::cr01::Processor>(sw::cr01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cr02") { fuzzBounds<sw::cr02::Processor>(sw::cr02::specs(), 17u); fuzzBounds<sw::cr02::Processor>(sw::cr02::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: cr03") { fuzzBounds<sw::cr03::Processor>(sw::cr03::specs(), 17u); fuzzBounds<sw::cr03::Processor>(sw::cr03::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cs01") { fuzzBounds<sw::cs01::Processor>(sw::cs01::specs(), 17u); fuzzBounds<sw::cs01::Processor>(sw::cs01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cs02") { fuzzBounds<sw::cs02::Processor>(sw::cs02::specs(), 17u); fuzzBounds<sw::cs02::Processor>(sw::cs02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: cs03") { fuzzBounds<sw::cs03::Processor>(sw::cs03::specs(), 17u); fuzzBounds<sw::cs03::Processor>(sw::cs03::specs(), 29u); }
