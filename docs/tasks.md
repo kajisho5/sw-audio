@@ -185,6 +185,17 @@
 - [x] LV29 Interp Mix — Ducks the floor when the interpreter talks
 - [x] LV30 Recorder — Always-on backup recording with markers
 
+## 画面（UI）
+
+方式：Web 画面（HTML/CSS/JS）を各 OS の Web ビューに載せる（macOS＝WKWebView、Windows＝WebView2、Linux は画面なし）。画面は各製品のパラメータ表（`products/*/` の `specs()`）から自動で組み立てる共通ランタイム `ui/sw-ui.js`（デザインシステムのデジタル系パネル）で、`ui/host.js` がプラグインとの通信（`plugin/clap/gui_bridge.hpp`）を受け持つ。
+- [x] 共通ランタイム：ノブ・ボタン・セレクター・フェーダー、値の入力、A/B、Undo/Redo、Auto gain／Delta、EVO バー、レイテンシと CPU の表示（`ui/`、全 132 製品を Chromium で描画して確認）。
+- [x] 曲線と値の書式が C++ と一致することのテスト（`tests/ui/curves.test.js`、8055 点）。
+- [x] プラグイン側：CLAP の gui 拡張、画面→ホストのジェスチャ（begin／value／end）の待ち行列、CPU の実測、macOS／Windows のビュー（`gui_mac.mm`／`gui_win.cpp`）。**macOS と Windows での実機確認は未実施（CI のビルドとバリデータだけ）**。
+- [ ] 製品ごとの専用表示（EQ カーブ、メーター、スペクトル、スコープ、ゲインリダクション、ダイナミクスのカーブなど。`docs/design/canvas/project/<コード>.dc.html` の絵に合わせる。コアから値を渡す口も要る）。
+- [ ] 製品ごとのボタン（コアのメソッドを呼ぶもの：Tap、Learn、Ring out、Measure、Randomize／Clear、Mic など）：`bridge.call` の先をアダプターに繋ぐ。
+- [ ] Blender 描画のノブ・パネル素材（デザインシステムの画像）、フォントの同梱（いまは端末のフォント）、ラックイヤー・LIVE 筐体の意匠。
+- [ ] Linux の画面（X11 への埋め込み）、ウィンドウの拡大縮小。
+
 ## 製品のあと
 
 - 画面（キャンバス docs/design/canvas/project/<コード>.dc.html を WebView で流用）。共通機能のうちモーフ（A/B）・EVO バー・Unit A/B/C・Low lat は画面と一緒に。
