@@ -121,6 +121,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MS06 Master Chain | マスタリング用のチェーン。EQ（Tilt ±6 dB・80 Hz／12 kHz のシェルフ・Bell 200 Hz〜8 kHz）・Comp・Saturate・Width（Mono below）・Limit を、並び順 120 通りの 1 つ（オートメーション不可、設定と一緒に保存）で並べて使う。各段に On。Gain match（既定 On）は、各段の出力をチェーン入力のラウドネスに合わせる | Comp 以外の項目は仕様書の案。Reference A/B は監視用のスイッチだけで、参照曲の読み込みと整列は UT03・画面と一緒（下の「MS06 の設計」） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
 | SW LV01 Voice | LIVE 用の声の 1 ノブ。Use（Narration／Stream／Meeting／Singing）と Voice で Noise（多帯域エキスパンダー）・EQ・Comp・Limit（−1 dBFS）を同時に動かす。遅延 0 | 設計値は README「LV01 Voice の設計」。Limit は先読みなしのためサンプルピークのみ保証 |
+| SW LV02 Feedback | LIVE 用のハウリング抑制。FFT 検出（持続と倍音関係）、12 枠のベルフィルタ（FIXED／LIVE）、Ring out、Release で戻る。遅延 0 | 設計は README「LV02 Feedback・LV03 Channel の設計」。操作ボタンの画面は未実装 |
+| SW LV03 Channel | LIVE 用のチャンネルストリップ。Trim・HPF・Gate・EQ 3 バンド・Feedback guard・Comp・De-ess・Out、Mic の種類で全体を書き込む。遅延 0 | Copy／Paste は画面と一緒に作る。設計は README「LV02 Feedback・LV03 Channel の設計」 |
 | SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
 | SW LV16 Live Gate | LIVE 用ゲート／ダッカー。Key HPF（120 Hz・24 dB/oct）で床鳴りではゲートが開かない、外部サイドチェーン | 床鳴りの帯域を測って自動で置く学習は未実装（固定 120 Hz） |
 | SW LV17 Bus Comp | LIVE 用バスコンプ。Speech／Music／Band で検出方式とニーが変わる（OBS シーン連動は LV27 から Mode を切り替える）、Auto release 2段 | — |
@@ -807,6 +809,15 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Limit。** −1 dBFS（サンプルピーク）、先読みなし・即座に効く、リリース 80 ms。**仕様書は「−1 dBTP 目標、先読みなし」で、先読みなしではサンプル間ピークまでは保証できないため、保証するのはサンプルピークのみ**（トゥルーピークの厳密な制限が必要なら LV04 の True peak モード）。
 - **Mute。** 押している間 5 ms で無音へ、離すと 5 ms で戻る（自動化不可）。段の値（`stage()`）は表示用に公開している。
 - テスト（9 件）：表、Voice 0 のビット一致、段の値、部屋のノイズが 8 dB 以上下がり声は ±4 dB に収まる、床が部屋に追従、低域カットと presence、Comp と −1 dBFS の天井、Mute、モノ・端数ブロック・prepare 前。
+
+### LV02 Feedback・LV03 Channel の設計（仕様書に数値がない部分）
+
+- **共通部品 `sw/feedback.hpp`（FeedbackGuard）。** 仕様書は「別スレッドの FFT 解析」だが、スレッドを持たず、オーディオスレッドで 4096 点（ハン窓）の FFT を 2048 サンプルごとに 1 回行う（固定バッファ、1 フレーム約 0.3 ms）。候補は「−70 dBFS 以上の局所最大で、周囲（8〜20 ビン離れ）より感度のしきい値（Low 18／Mid 14／High 10 dB）以上突き出し、4〜5 ビン離れより 12 dB 以上高い（純音）」もの。フレームをまたいで追い（1.5 ビン以内、1 フレームで 3 dB より下がらない）、持続フレーム数（Low 8／Mid 5／High 3、約 0.34／0.21／0.13 秒）に達したらハウリングと判定する。**倍音関係：** 別の持続音の整数倍（2〜6 倍、±2 %）で、その音が同じかより大きいときは楽音とみなして削らない。
+- **フィルタ。** ベル型のカット（幅は Width、深さは検出の突き出し量 −4 dB を下限 6 dB・上限 Max depth に）。同じ場所（1/6 oct 以内）で再検出されるたびに +3 dB 深くなり（Max depth まで）、Release 秒のあいだ検出されなければ 1 秒かけて戻り、枠が空く。FIXED は Ring out と Lock filters で作り、消えない。枠が全部埋まったら LIVE のうち最後に検出された時刻が最も古いものを入れ替える。
+- **LV02。** 枠は 12（F1〜F12）。Ring out／Lock filters／Clear live は**操作ボタンなのでパラメータではなくメソッド**（CR02 と同じ扱い。画面のボタンは未実装）。Ring out 中は 2 フレームで確定し、しきい値を 4 dB 下げ、FIXED で Max depth に登録する。FIXED は保存データに入る（LIVE は入らない）。Width は oct 単位の値（1/20〜1/3）。
+- **LV03。** 処理順は Trim（と Ø）→ HPF → Gate → EQ（Low 100 Hz シェルフ、Mid ベル Q 1、High 8 kHz シェルフ）→ Feedback guard（LV02 と同じ部品の LIVE 4 枠、感度 Mid・−12 dB・1/10 oct・8 秒）→ Comp → De-ess → Out。Gate はヒステリシス付き、アタック 1 ms・ホールド 100 ms・リリース 200 ms、キーは HPF 後の左右連動。Comp は連動・プログラム検出・ニー 6 dB・10／120 ms、メイクアップなし（Out がその役）。De-ess は「Freq より上の帯域の大きさ（−34 dBFS を超えた分の 0.8 倍）」で動く高域シェルフ（肩 0.7×Freq）を Amount まで下げる方式で、先読みなし・遅延 0。
+- **Mic（進化機能）。** 種類を選ぶと Out 以外の 14 項目を `takeParamWrite` で書き込む（SA07 の Era と同じ方式。同じ回に値が来ればその項目の書き込みは取り消す）。Handheld は仕様書の既定値、Lavalier（Trim 14／HPF 100／High +3 …）、Headset、Podium（Trim 18／HPF 120 …）は設計値（表は `micPreset()`）。**Copy／Paste は画面側の仕事で未実装。** アダプターの書き込み上限は 1 ブロック 8 件から 32 件に上げた。
+- テスト：LV02 は 9 件（表、持続するハウリングの検出と削り、Max depth、感度の違い、Release と FIXED、Ring out と Clear live、楽音の倍音を削らない、揺れる声で作動しない、保存と読込）、LV03 は 10 件（表、Trim／Ø、HPF、Gate、EQ、Comp 9 dB、De-ess の上限、Feedback guard の On／Off、Mic の書き込みと取り消し、不正入力）。
 
 ### CS04 の注意
 
