@@ -13,7 +13,7 @@ struct Eq05 {
         static const char* const features[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {
             CLAP_VERSION_INIT, "com.seventh-well.sw-audio.eq05", "SW EQ05 Console", "SEVENTHWELL",
-            "https://seventh-well.com", "", "", "0.12.0", "Four band console EQ", features};
+            "https://seventh-well.com", "", "", "0.13.0", "Four band console EQ", features};
         return &d;
     }
 };

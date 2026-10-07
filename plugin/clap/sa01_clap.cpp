@@ -12,7 +12,7 @@ struct Sa01 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DISTORTION, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.sa01", "SW SA01 Tape", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.12.0", "Tape saturation, head bump and wow", f};
+                                                   "https://seventh-well.com", "", "", "0.13.0", "Tape saturation, head bump and wow", f};
         return &d;
     }
 };

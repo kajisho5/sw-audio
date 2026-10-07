@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.12.0：76 製品が完成（単体テスト 800 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 41＝MD07 まで Windows・macOS・Linux で全ジョブ成功）。
+現状は v0.13.0：132 製品が完成（単体テスト 1319 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 69＝LV30・GT03 まで Windows・macOS・Linux で全ジョブ成功）。残りは RS02（学習済みモデルが要る・保留）と画面（UI）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 
@@ -71,5 +71,5 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ib
 
 ## 次にやること
 
-`docs/tasks.md` の「先にやること」から：残りの製品を仕様書の順に（次は VO01。VO01・02・03・06 は共通の音程エンジンが要る）。
-1 製品ごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
+`docs/tasks.md` の UI の項目（画面の実装、ホストのトラック名・MIDI・SW Link・OBS 連携など、コアに口だけある部分）と、RS02。
+1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。

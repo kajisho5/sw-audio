@@ -12,7 +12,7 @@ struct St03 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.st03", "SW ST03 Phase Align", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.12.0", "Time and phase alignment of two microphones", f};
+                                                   "https://seventh-well.com", "", "", "0.13.0", "Time and phase alignment of two microphones", f};
         return &d;
     }
 };

@@ -12,7 +12,7 @@ struct Ms01 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_LIMITER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.ms01", "SW MS01 Maximizer", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.12.0", "Maximizer with loudness lock", f};
+                                                   "https://seventh-well.com", "", "", "0.13.0", "Maximizer with loudness lock", f};
         return &d;
     }
 };

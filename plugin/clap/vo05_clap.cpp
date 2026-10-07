@@ -12,7 +12,7 @@ struct Vo05 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.vo05", "SW VO05 Rider", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.12.0", "Rides the vocal against the music", f};
+                                                   "https://seventh-well.com", "", "", "0.13.0", "Rides the vocal against the music", f};
         return &d;
     }
 };

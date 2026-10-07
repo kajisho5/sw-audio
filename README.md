@@ -13,7 +13,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **DSP 本体はフレームワークに依存しない C++17。** `core/`（共通部品）と `products/`（製品ごとの処理）に置き、プラグイン層（`plugin/`）からも、将来の OBS 用エンジンからも同じものを呼ぶ。
 - ホストに見せる値は仕様書どおり、連続値は正規化 0〜1、段階式は段番号。パラメータの番号（ParamId の並び）は保存データの互換のため**一度公開したら並べ替えない**。
 
-## 現在の製品（v0.12.0、76本）
+## 現在の製品（v0.13.0、132本）
 
 画面はまだ無い（DAW の汎用パラメータ画面で操作する）。共通機能は Auto gain・Δ（MS07 は Δ のみ）。
 
@@ -960,14 +960,14 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 - Auto gain：原音と処理後の 3 秒ラウドネスを比べて補正。追従 2 秒、±18 dB まで、−60 LUFS 以下の無音では補正を保持。既定は Off。
 - Δ：「Auto gain 補正後の処理音 − 原音」に Output をかけて出す。製品の遅延に合わせて揃えるので、遅延だけの処理ならちょうど 0 になる。
 
-## 検証結果（v0.12.0、2026-10-06、76本）
+## 検証結果（v0.13.0、2026-10-07、132本）
 
 | 項目 | Linux x86_64（このクラウド環境） | Windows x64・macOS（GitHub Actions） |
 | --- | --- | --- |
-| 単体テスト（800件） | 全合格（AddressSanitizer・UBSan 付きでも全合格） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**最後に全ジョブが成功した実行：run 41（commit 845119a、MD07 まで）。それ以降の製品（ST01〜ST05）は実行待ち** |
-| CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 41：成功） |
-| VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 41：成功） |
-| AU：auval | — | macOS で実行（run 41：成功） |
+| 単体テスト（1319件） | 全合格（AddressSanitizer・UBSan 付きでも全合格） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 69（commit 08a7228、LV30 と GT03 まで全 132 本）** |
+| CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 69：成功） |
+| VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 69：成功） |
+| AU：auval | — | macOS で実行（run 69：成功） |
 
 v0.11.0（23本）の時点では Windows を MinGW でクロスビルドして Wine 上で検証していた（CS04 以外の 22 本で不合格 0）。現在の Windows の根拠は上の GitHub Actions（MSVC）で、Wine での再検証はしていない。
 

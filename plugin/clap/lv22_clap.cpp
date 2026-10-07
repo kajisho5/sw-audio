@@ -14,7 +14,7 @@ struct Lv22 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv22", "SW LV22 Polarity", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.12.0", "Instant in-phase / out-of-phase check", f};
+                                                   "https://seventh-well.com", "", "", "0.13.0", "Instant in-phase / out-of-phase check", f};
         return &d;
     }
 };
