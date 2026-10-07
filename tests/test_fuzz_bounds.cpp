@@ -46,6 +46,7 @@
 #include "lo01/lo01.hpp"
 #include "lo02/lo02.hpp"
 #include "lo03/lo03.hpp"
+#include "lv01/lv01.hpp"
 #include "lv04/lv04.hpp"
 #include "lv16/lv16.hpp"
 #include "lv17/lv17.hpp"
@@ -184,6 +185,7 @@ TEST_CASE("fuzz parameter bounds: gt05") { fuzzBounds<sw::gt05::Processor>(sw::g
 TEST_CASE("fuzz parameter bounds: lo01") { fuzzBounds<sw::lo01::Processor>(sw::lo01::specs(), 17u); fuzzBounds<sw::lo01::Processor>(sw::lo01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: lo02") { fuzzBounds<sw::lo02::Processor>(sw::lo02::specs(), 17u); fuzzBounds<sw::lo02::Processor>(sw::lo02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: lo03") { fuzzBounds<sw::lo03::Processor>(sw::lo03::specs(), 17u); fuzzBounds<sw::lo03::Processor>(sw::lo03::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: lv01") { fuzzBounds<sw::lv01::Processor>(sw::lv01::specs(), 17u); fuzzBounds<sw::lv01::Processor>(sw::lv01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: lv04") { fuzzBounds<sw::lv04::Processor>(sw::lv04::specs(), 17u); fuzzBounds<sw::lv04::Processor>(sw::lv04::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: lv16") { fuzzBounds<sw::lv16::Processor>(sw::lv16::specs(), 17u); fuzzBounds<sw::lv16::Processor>(sw::lv16::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: lv17") { fuzzBounds<sw::lv17::Processor>(sw::lv17::specs(), 17u); fuzzBounds<sw::lv17::Processor>(sw::lv17::specs(), 29u); }

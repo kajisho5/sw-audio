@@ -120,6 +120,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MS05 Leveler | 自動フェーダー。K 特性の短時間ラウドネス（Source：Vocal 150 Hz〜5 kHz／Mix 全帯域／Bass 250 Hz 以下の長い窓）を Target へ寄せる Ride（±Range、Speed 3 秒／1 秒／0.3 秒）。Gate 以下では動かない。Write automation On の間は Ride をプラグインが自分で動かし、ホストに操作（ジェスチャー開始・値・終了）として通知する。Off では Ride パラメータ（ホストのオートメーション）がそのままゲイン | Ride を書き出す仕組みを共通のプラグイン層（CLAP）に追加。VST3／AU への伝わり方と DAW ごとの記録の挙動は、主要 DAW での確認が必要（下の「MS05 の設計」） |
 | SW MS06 Master Chain | マスタリング用のチェーン。EQ（Tilt ±6 dB・80 Hz／12 kHz のシェルフ・Bell 200 Hz〜8 kHz）・Comp・Saturate・Width（Mono below）・Limit を、並び順 120 通りの 1 つ（オートメーション不可、設定と一緒に保存）で並べて使う。各段に On。Gain match（既定 On）は、各段の出力をチェーン入力のラウドネスに合わせる | Comp 以外の項目は仕様書の案。Reference A/B は監視用のスイッチだけで、参照曲の読み込みと整列は UT03・画面と一緒（下の「MS06 の設計」） |
 | SW MS07 Dither | TPDF ディザー＋再量子化、ノイズシェーピング 4種、Auto blank（完全な無音は完全な無音で出す） | シェーピングは (1 − z⁻¹)ⁿ（n＝1〜4、常に安定）。量子化後に音量を変えないよう Auto gain は持たない |
+| SW LV01 Voice | LIVE 用の声の 1 ノブ。Use（Narration／Stream／Meeting／Singing）と Voice で Noise（多帯域エキスパンダー）・EQ・Comp・Limit（−1 dBFS）を同時に動かす。遅延 0 | 設計値は README「LV01 Voice の設計」。Limit は先読みなしのためサンプルピークのみ保証 |
 | SW LV04 Safety limiter | LIVE 用。遅延0の Zero モード／トゥルーピークモード、長時間 RMS 制限、制限イベントの記録 | True peak モードのイベント記録はブロック単位 |
 | SW LV16 Live Gate | LIVE 用ゲート／ダッカー。Key HPF（120 Hz・24 dB/oct）で床鳴りではゲートが開かない、外部サイドチェーン | 床鳴りの帯域を測って自動で置く学習は未実装（固定 120 Hz） |
 | SW LV17 Bus Comp | LIVE 用バスコンプ。Speech／Music／Band で検出方式とニーが変わる（OBS シーン連動は LV27 から Mode を切り替える）、Auto release 2段 | — |
@@ -788,6 +789,24 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **UT02 Mono Check。** Mono は (L+R)×Mono fold（−3 dB で等パワー和、無相関の素材は 0 dB、モノ素材は +3 dB）、Side は (L−R)/2 を両チャンネルへ、Left／Right はそのチャンネルを両方へ。Phone speaker は LO01 と同じ小型スピーカー模擬（300 Hz の 4 次ハイパス＋1.2 kHz に +3 dB・Q 2.5）。Low cut は Off＋20〜300 Hz（最下段が Off）の 2 次ハイパス。Level は最後に掛ける。監視専用なので Stereo 以外・Phone・Low cut が有効なときは `exportWarning()` が true（書き出し前の警告用。画面は未実装）。
 - **UT03 Reference。** 参照曲 B／C は `loadReference(スロット, バイト列)` で読む。**WAV（PCM 8/16/24/32 bit、float 32/64、extensible）と AIFF（PCM 8〜32 bit）に対応。仕様書にある FLAC・MP3 は未対応**（デコーダーを自作する範囲を超えるため。読めないファイルは false を返す）。ホストのサンプルレートへは窓付き sinc（Blackman、片側 32 タップ、ダウンサンプルはカットオフを下げる）で変換。ラウドネス合わせは「入力の統合ラウドネス（30 秒の記憶）− 参照曲全体の統合ラウドネス」を参照曲に掛ける（±24 dB で頭打ち、入力が絶対ゲート未満のあいだは 0 dB）。画面に出す補正量は `matchDb()`。Loop は Intro＝先頭 20 秒、Verse＝20〜40 秒、Chorus＝ファイル中でいちばん大きい 20 秒（100 ms ブロックの平均二乗、1 秒刻み）、Custom＝`setLoopRegion()`。20 秒以下のファイルは全体をループ。Sync play On でホストの再生位置（アダプターに任意フック `setPlayhead(秒, 再生中か)` を追加）に区間内で追従、ホストが止まっていれば参照曲は無音。Off（またはホストが時刻を出さない）なら区間の頭から自走。Crossfade は等パワー、0 ms は即切り替え。Level は参照曲だけに掛ける。ループの端と位置の飛びには 5 ms のフェードを入れる。Source A のときは入力と**ビット単位で同じ**。読み込んだ参照曲は保存データに含めない（ファイルなので画面が読み直す）。
 - テスト：UT01 は各パラメータの式・ビット同一・トラック分類・保存と読込（8 件）、UT02 は各 Listen の式・Phone の周波数特性・Low cut・警告（5 件）、UT03 は WAV 16/24/float・AIFF の読み込みと破損データの拒否、リサンプラーの誤差 −70 dB 以下と折り返しなし、ラウドネス合わせ（±0.03 の比率で一致）、Loop 区間、Sync の位置一致、Crossfade の等パワー、2 本の参照曲・モノ入力・別レート・端数ブロック（12 件）。
+
+### LV01 Voice の設計（仕様書に数値がない部分）
+
+- **段と終点。** 仕様書は「4 段を Voice と Use で動かす」とだけ書き数値がないので、Use ごとの終点（Voice 100 % のとき）を設計値とした。Voice はすべての段の量を同じ割合で動かす（Voice 0 は完全バイパスで入力とビット単位で一致）。
+
+| Use | Noise 最大 | 低域カット | 〜250 Hz | 3.5 kHz | 10 kHz 以上 | Comp しきい値 | Comp 比 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Narration | −18 dB | 70 Hz | −2.5 dB | +2.5 dB | +2.0 dB | −24 dBFS | 3 : 1 |
+| Stream | −14 dB | 80 Hz | −3.0 dB | +3.0 dB | +1.5 dB | −22 dBFS | 4 : 1 |
+| Meeting | −20 dB | 100 Hz | −2.0 dB | +4.0 dB | 0 dB | −24 dBFS | 3.5 : 1 |
+| Singing | −6 dB | 40 Hz | −1.0 dB | +2.0 dB | +3.0 dB | −20 dBFS | 2.5 : 1 |
+
+- **Noise。** 250 Hz・3 kHz で 3 分割（LR4、遅延 0）し、帯域ごとのノイズ床を追う。床は 30 ms の電力平均の最小値（下には即座に、上へは 3 dB/秒、帯域あたり −42 dBFS が上限）。床＋6 dB を下回った分を 3 倍（1 dB 下がるごとに 3 dB）に下げ、Use の深さ×Voice で頭打ち。開く 2 ms、閉じる 80 ms。FFT を使わないので遅延 0。起動直後と Voice 0 からの復帰の 0.15 秒は床を素早く学習する。
+- **EQ。** 低域カット（2 次、Voice に応じて 20 Hz から終点まで指数的に）、250 Hz のベル（Q 0.9）、3.5 kHz のベル（Q 0.9）、10 kHz のハイシェルフ。
+- **Comp。** 左右連動のピーク検出、アタック 8 ms・リリース 150 ms、ソフトニー 6 dB、比は 1 から終点まで Voice で。メイクアップは −18 dBFS の信号が受ける低減量の半分。
+- **Limit。** −1 dBFS（サンプルピーク）、先読みなし・即座に効く、リリース 80 ms。**仕様書は「−1 dBTP 目標、先読みなし」で、先読みなしではサンプル間ピークまでは保証できないため、保証するのはサンプルピークのみ**（トゥルーピークの厳密な制限が必要なら LV04 の True peak モード）。
+- **Mute。** 押している間 5 ms で無音へ、離すと 5 ms で戻る（自動化不可）。段の値（`stage()`）は表示用に公開している。
+- テスト（9 件）：表、Voice 0 のビット一致、段の値、部屋のノイズが 8 dB 以上下がり声は ±4 dB に収まる、床が部屋に追従、低域カットと presence、Comp と −1 dBFS の天井、Mute、モノ・端数ブロック・prepare 前。
 
 ### CS04 の注意
 
