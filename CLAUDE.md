@@ -53,8 +53,8 @@ tools/setup_linux.sh                       # 初回：ビルド道具・clap-val
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
 tools/validate_all.sh                      # ビルド＋単体テスト＋全プラグインの両 validator（1行ずつ結果）
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
-# ASan / UBSan
-g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ibuild -Itests \
+# ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
+g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
     $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) tests/test_main.cpp -o /tmp/tests_asan && /tmp/tests_asan
 ```
 

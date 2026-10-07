@@ -10,6 +10,8 @@
 // Host-facing values (spec 共通章 2): continuous = normalized 0..1, stepped = step index.
 // Host parameter ids: product params 0..N-1, then common params (Auto gain, Delta) appended, so ids stay stable.
 #pragma once
+#include "gui_bridge.hpp"
+#include "gui_view.hpp"
 #include "sw/denormal.hpp"
 #include "sw/param.hpp"
 #include "sw/shell.hpp"
@@ -18,6 +20,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -114,12 +117,82 @@ private:
         apply(id, hostToPlain(id, ev->value));
     }
 
+    // ---- the plug-in window (CLAP gui extension; the platform view is gui_mac.mm / gui_win.cpp, none on Linux)
+    struct GuiFacade {
+        Plugin& pl;
+        int numParams() { return Plugin::numParams(); }
+        double plain(int i) { return hostToPlain(i, pl.host_values_[static_cast<size_t>(i)].load()); }
+        void begin(int i) { pl.guiPush(0, i); }
+        void end(int i) { pl.guiPush(2, i); }
+        void set(int i, double plainValue) {
+            const double h = plainToHost(i, plainValue);
+            pl.host_values_[static_cast<size_t>(i)].store(h); pl.dirty_[static_cast<size_t>(i)].store(true); pl.guiPush(1, i);
+        }
+        double latencyMs() { return 1000.0 * pl.shell_.latencySamples() / pl.sr_; }
+        double cpu() { return pl.cpu_.load(); }
+        void call(const std::string&, const std::string&) {}   // buttons that call the core's methods: not wired yet
+    };
+    // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
+    void guiPush(uint8_t kind, int id) {
+        const size_t h = gui_head_.load(std::memory_order_relaxed), t = gui_tail_.load(std::memory_order_acquire);
+        if (h - t >= kGuiQueue) return;   // full: the page keeps sending; dropping a gesture event costs only the host's automation record
+        gui_ops_[h % kGuiQueue] = {kind, id}; gui_head_.store(h + 1, std::memory_order_release);
+        if (host_) { const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS)); if (hp && hp->request_flush) hp->request_flush(host_); }
+    }
+    void guiDrain(const clap_output_events_t* out, uint32_t time) {
+        size_t t = gui_tail_.load(std::memory_order_relaxed); const size_t h = gui_head_.load(std::memory_order_acquire);
+        while (t != h) {
+            const GuiOp op = gui_ops_[t % kGuiQueue]; ++t;
+            if (!out || op.id < 0 || op.id >= numParams()) continue;
+            const int id = op.id;
+            if (op.kind == 1) { writeOneValue(out, time, id); continue; }
+            clap_event_param_gesture_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.flags = CLAP_EVENT_IS_LIVE;
+            e.header.type = op.kind == 0 ? CLAP_EVENT_PARAM_GESTURE_BEGIN : CLAP_EVENT_PARAM_GESTURE_END; e.param_id = static_cast<clap_id>(id); out->try_push(out, &e.header);
+        }
+        gui_tail_.store(t, std::memory_order_release);
+    }
+    void writeOneValue(const clap_output_events_t* out, uint32_t time, int id) {
+        clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = CLAP_EVENT_IS_LIVE;
+        e.param_id = static_cast<clap_id>(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = host_values_[static_cast<size_t>(id)].load();
+        out->try_push(out, &e.header);
+    }
+    static constexpr uint32_t kGuiW = 960, kGuiH = 550;
+    static bool guiIsApiSupported(const clap_plugin_t*, const char* api, bool floating) { return !floating && gui::platformApi() && api && !std::strcmp(api, gui::platformApi()); }
+    static bool guiPreferredApi(const clap_plugin_t*, const char** api, bool* floating) { if (!gui::platformApi()) return false; *api = gui::platformApi(); *floating = false; return true; }
+    static bool guiCreate(const clap_plugin_t* p, const char* api, bool floating) {
+        Plugin* s = self(p);
+        if (!guiIsApiSupported(p, api, floating)) return false;
+        s->guiDestroyView();
+        std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
+        const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, init, f.latencyMs());
+        s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_);
+        s->view_ = gui::createView(html, [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
+        return s->view_ != nullptr;
+    }
+    void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); }
+    static void guiDestroy(const clap_plugin_t* p) { self(p)->guiDestroyView(); }
+    static bool guiSetScale(const clap_plugin_t* p, double scale) { self(p)->scale_ = scale > 0.0 ? scale : 1.0; return true; }
+    static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { const char* api = gui::platformApi(); const bool logical = api && !std::strcmp(api, "cocoa"); const double k = logical ? 1.0 : self(p)->scale_; *w = static_cast<uint32_t>(kGuiW * k + 0.5); *h = static_cast<uint32_t>(kGuiH * k + 0.5); return true; }
+    static bool guiCanResize(const clap_plugin_t*) { return false; }
+    static bool guiResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t*) { return false; }
+    static bool guiAdjustSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { return guiGetSize(p, w, h); }
+    static bool guiSetSize(const clap_plugin_t* p, uint32_t w, uint32_t h) { uint32_t a, b; guiGetSize(p, &a, &b); return w == a && h == b; }
+    static bool guiSetParent(const clap_plugin_t* p, const clap_window_t* win) {
+        Plugin* s = self(p); if (!s->view_ || !win || !win->api || std::strcmp(win->api, gui::platformApi()) != 0) return false;
+        uint32_t w, h; guiGetSize(p, &w, &h); s->view_->setSize(w, h);
+        return s->view_->setParent(win->ptr);
+    }
+    static bool guiSetTransient(const clap_plugin_t*, const clap_window_t*) { return false; }
+    static void guiSuggestTitle(const clap_plugin_t*, const char*) {}
+    static bool guiShow(const clap_plugin_t* p) { Plugin* s = self(p); if (!s->view_) return false; s->view_->setVisible(true); return true; }
+    static bool guiHide(const clap_plugin_t* p) { Plugin* s = self(p); if (!s->view_) return false; s->view_->setVisible(false); return true; }
+
     // ---- plugin
     static bool init(const clap_plugin_t*) { return true; }
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2);
+        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr;
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -135,7 +208,9 @@ private:
     static clap_process_status process(const clap_plugin_t* p, const clap_process_t* pr) {
         ScopedNoDenormals noDenormals;
         Plugin* s = self(p);
+        const auto t0 = std::chrono::steady_clock::now();
         s->applyPending();
+        s->guiDrain(pr->out_events, 0);
         if (pr->audio_inputs_count < 1 || pr->audio_outputs_count < 1) return CLAP_PROCESS_ERROR;
         const clap_audio_buffer_t& ib = pr->audio_inputs[0];
         clap_audio_buffer_t& ob = pr->audio_outputs[0];
@@ -194,6 +269,10 @@ private:
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
             if (s->host_ && s->host_->request_restart) s->host_->request_restart(s->host_);
+        if (frames > 0) {   // the CPU figure of the screen: the time of the block over its length
+            const double used = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), len = static_cast<double>(frames) / s->sr_, now = 100.0 * used / len, old = s->cpu_.load();
+            s->cpu_.store(old < 0.0 ? now : old + 0.05 * (now - old));
+        }
         return CLAP_PROCESS_CONTINUE;
     }
 
@@ -202,10 +281,12 @@ private:
         static const clap_plugin_params_t params = {paramsCount, paramsInfo, paramsValue, paramsToText, paramsFromText, paramsFlush};
         static const clap_plugin_state_t state = {stateSave, stateLoad};
         static const clap_plugin_latency_t latency = {latencyGet};
+        static const clap_plugin_gui_t gui = {guiIsApiSupported, guiPreferredApi, guiCreate, guiDestroy, guiSetScale, guiGetSize, guiCanResize, guiResizeHints, guiAdjustSize, guiSetSize, guiSetParent, guiSetTransient, guiSuggestTitle, guiShow, guiHide};
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
+        if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
     }
     static void onMainThread(const clap_plugin_t*) {}
@@ -292,8 +373,9 @@ private:
         }
         if (f & 4) gesture(CLAP_EVENT_PARAM_GESTURE_END);
     }
-    static void paramsFlush(const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t*) {
+    static void paramsFlush(const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t* out) {
         for (uint32_t i = 0, n = in->size(in); i < n; ++i) self(p)->handleEvent(in->get(in, i));
+        self(p)->applyPending(); self(p)->guiDrain(out, 0);
     }
 
     // ---- state: "SWA1" + count + host values (count-based, so appended params load old states)
@@ -353,6 +435,16 @@ private:
     std::atomic<bool> snap_pending_{true};
     std::atomic<bool> restart_requested_{false};
     bool active_ = false;
+    // plug-in window
+    struct GuiOp { uint8_t kind = 0; int id = 0; };
+    static constexpr size_t kGuiQueue = 1024;
+    std::array<GuiOp, kGuiQueue> gui_ops_{};
+    std::atomic<size_t> gui_head_{0}, gui_tail_{0};
+    std::unique_ptr<GuiFacade> facade_;
+    std::unique_ptr<gui::Session<GuiFacade>> session_;
+    std::unique_ptr<gui::View> view_;
+    double scale_ = 1.0, sr_ = 48000.0;
+    std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
 };
 
 // single-plugin factory helper
