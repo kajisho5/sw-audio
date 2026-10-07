@@ -91,6 +91,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW CR02 Stutter | 拍に同期した直前スライスの繰り返し（Grid・Gate・Repeat・Pitch・Reverse・Filter・Mix・16 ステップのパターン）。Randomize は拍位置と入力の立ち上がりで重み付け。遅延 0 | 設計値は README「CR02 Stutter の設計」。4/4 を仮定。Randomize・Clear は UI ボタン用のメソッド（パラメータではない） |
 | SW CR03 Granular | 入力の過去から切り出した粒（Cloud/Scatter/Glitch、Grain・Density・Spray・Pitch・Spread・Mix・Freeze input）。Harmony は直近 4 秒の 12 音分布から粒の音程を構成音へ。遅延 0 | 設計値は README「CR03 Granular の設計」。Harmony の On/Off は末尾ではなく表の最後の cr03.evo.on。和音の入力には向かない |
 | SW CR04 Freeze | スペクトルを固めて鳴らし続ける（Trigger Hold/Momentary/Auto、Freeze、Blur、Drift、Mix）。ピーク位相ロックで取り込んだ音程とレベルを保つ。原音は遅らせない（遅延 0） | 設計値は README「CR04 Freeze の設計」。MIDI での取り込みは未実装。Mix は製品内で処理 |
+| SW CR05 Tape Stop | テープが止まる／立ち上がる／逆回転する（Action・Stop/Start time・Curve・Filter・Trigger）。ホストの小節線がわかれば停止が小節線で終わるよう逆算して開始。遅延 0 | 設計値は README「CR05 Tape Stop の設計」。4/4 を仮定。Start の終わりは 30 ms のクロスフェード |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -724,6 +725,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Blur** 0〜100 ％：振幅を ±0〜24 ビンで平均（パワーは保つ。保たないと Blur 40 で約 10 dB 小さくなった）。**Drift** Off／Slow／Fast：ピークごとの位相に 1 フレームあたり 0／0.1／0.6 rad のランダムな歩み（＋Blur/100 × 0.2）。
 - **Trigger。** Hold・Momentary：Freeze が On になった瞬間に取り込み（Hold は On の間続き、Off で 400 ms かけて消える。Momentary は 40 ms）。**Auto：** Freeze On で待機し、入力の立ち上がり（5 ms の包絡が 100 ms の包絡の 2.8 倍以上、−50 dB 超、150 ms 以上の間隔）ごとに取り込み直す（15 ms のクロスフェード）。MIDI ノートでの取り込み（仕様書）は MIDI 入力がまだ無いため未実装。
 - 画面のΔボタンは無い（仕様書の要確認のとおり）。
+
+### CR05 Tape Stop の設計（仕様書に数値がない部分）
+
+- **テープ。** 入力を 8 秒のリングに書き、出力は速度 s(t) でそこを読む（音程は速度に従う）。全速のときは今の入力そのもの（遅延 0）。進み具合 u（0〜1、指定の時間）の曲がり w(u)：Lin ＝ u、Exp ＝ u²（最初は速度を保ち、あとで急に落ちる）、Log ＝ √u（最初に急に落ち、あとは尾を引く）。**Stop**：s ＝ 1 − w、止まったら Trigger が Off になるまで無音。**Start**：停止から s ＝ w、終わったら 30 ms のクロスフェードで今の入力へ。**Spin back**：s ＝ 1 − 3w（最大 −2 倍で逆回転）、終わると無音。音量は速度に従い min(1, 4|s|)。Filter On：ローパス max(300 Hz, 18 kHz × |s|^1.5)。時間は 1/16〜2 小節（既定 Stop 1/2、Start 1/8。4/4・テンポ無しは 120 bpm と仮定）。
+- **Trigger。** Off→On で動作を始める（オートメーション用）。止まったまま（Held）の状態は Off に戻すと 20 ms ほどで今の入力へ戻る。
+- **進化機能（区分 A）。** ホストのトランスポートが分かるとき、Stop と Spin back は**（次の小節線 − 時間）に始める**（過ぎていれば次の小節）ので、止まるのがちょうど小節線になる（テスト：次の小節まで 1.5 秒のとき 1/4 小節（0.5 秒）の Stop が 1 秒待って始まり、小節線（1.5 秒後）の ±0.12 秒で無音になる）。Start はすぐ始める。トランスポートが無いときはすぐ。
+- **限界。** Start の終わりの 30 ms のクロスフェードは、テープが遅れた分（最大時間の半分）を一気に今の入力へ飛び越える（クロスフェードの間は 2 つの音が混ざる）。画面のΔボタンは無い。
 
 ### CS04 の注意
 
