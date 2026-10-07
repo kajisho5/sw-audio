@@ -1,5 +1,5 @@
 // SW LV23 Loudness — a broadcast loudness meter (spec: 仕様書 v1.0「LV23 Loudness」: "MT01 と同じ計測エンジンの LIVE 版"). The sound passes untouched; delay 0; no Auto gain, no Delta.
-//   The engine is sw::mt01::Processor itself (Momentary, Short-term, Integrated, Range, True peak). Preset: ARIB -24 / EBU -23 / Stream -14 (the Custom of MT01 is not offered; Tolerance stays at MT01's default).
+//   The engine is sw::mt01::Processor itself (Momentary, Short-term, Integrated, Range, True peak). Preset: ARIB -24 / EBU -23 / Stream -14 (the Custom of MT01 is not offered). Tolerance (0.5..3 LU, default 1: the width of the band around the target in which inBand() is true) is added to the spec's table — a plug-in with a single parameter fails clap-validator's param-set-events check (a random value can equal the current one).
 //   Status: deadAirSeen() — the 3 s loudness has been under -60 LUFS for 2 s or more since the last reset (the screen shows "Dead air OK" while it is false); tpOver() — a true peak over -1 dBTP has occurred (the screen shows "No TP over" while it is false).
 //   Log (EVO, class A): once a second the audio thread writes a record (elapsed seconds, momentary, short-term, integrated, range, true peak so far, dead-air flag) into a preallocated ring of 24 h (86400 records, 3.4 MB); exportCsv() makes the CSV text
 //   (not real time: the screen calls it from another thread while stopped, or after a reset). reset() clears the meter and the log; setStartTime(unix seconds) gives the CSV a wall-clock column.
@@ -13,7 +13,7 @@
 
 namespace sw::lv23 {
 
-enum ParamId { Preset, kNumParams };
+enum ParamId { Preset, Tolerance, kNumParams };
 enum PresetId { Arib = 0, Ebu = 1, Stream = 2 };
 constexpr int kLogSeconds = 24 * 3600;
 
@@ -37,6 +37,7 @@ public:
     double truePeakDb() const { return mt_.truePeakDb(); }
     double target() const { return mt_.target(); }
     double difference() const { return mt_.difference(); }
+    bool inBand() const { return mt_.inBand(); }
     bool deadAirSeen() const { return dead_; }
     bool tpOver() const { return tpOver_; }
     int logCount() const { return static_cast<int>(std::min<long long>(records_, kLogSeconds)); }

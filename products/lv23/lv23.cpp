@@ -8,6 +8,7 @@ namespace sw::lv23 {
 const std::vector<ParamSpec>& specs() {
     static const std::vector<ParamSpec> s = {
         {"lv23.preset", "Preset", 0, 2, 0, Curve::Step, 1, {0, 1, 2}, "", {"ARIB -24", "EBU -23", "Stream -14"}},
+        {"lv23.tol",    "Tolerance", 0.5, 3, 1, Curve::Lin, 1, {}, "LU"},
     };
     return s;
 }
@@ -15,10 +16,10 @@ const std::vector<ParamSpec>& specs() {
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; mt_.setParam(mt01::Preset, 0); }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
-    fs_ = sampleRate; mt_.setParam(mt01::Preset, target_[Preset]); mt_.prepare(fs_, maxBlock);
+    fs_ = sampleRate; mt_.setParam(mt01::Preset, target_[Preset]); mt_.setParam(mt01::Tolerance, target_[Tolerance]); mt_.prepare(fs_, maxBlock);
     log_.assign(static_cast<size_t>(kLogSeconds), LogRecord{}); records_ = 0; dead_ = tpOver_ = false; quiet_ = sinceLog_ = 0; prepared_ = true;
 }
-void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cast<size_t>(id)]; target_[static_cast<size_t>(id)] = sp.toValue(sp.toNorm(v)); mt_.setParam(mt01::Preset, target_[Preset]); }
+void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cast<size_t>(id)]; target_[static_cast<size_t>(id)] = sp.toValue(sp.toNorm(v)); mt_.setParam(mt01::Preset, target_[Preset]); mt_.setParam(mt01::Tolerance, target_[Tolerance]); }
 
 void Processor::reset() { mt_.reset(); records_ = 0; dead_ = tpOver_ = false; quiet_ = sinceLog_ = 0; }
 

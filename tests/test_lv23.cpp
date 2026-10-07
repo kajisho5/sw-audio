@@ -11,13 +11,17 @@ Processor make(Set set = {}) { Processor p; for (auto& s : set) p.setParam(s.fir
 
 TEST_CASE("LV23 table follows the spec") {
     const auto& s = specs(); REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    CHECK(s[Preset].labels == std::vector<std::string>{"ARIB -24", "EBU -23", "Stream -14"}); CHECK(s[Preset].def == 0);
+    CHECK(s[Preset].labels == std::vector<std::string>{"ARIB -24", "EBU -23", "Stream -14"}); CHECK(s[Preset].def == 0); CHECK(s[Tolerance].min == 0.5); CHECK(s[Tolerance].max == 3); CHECK(s[Tolerance].def == 1);
     Processor q; CHECK(q.latencySamples() == 0); CHECK(q.target() == -24.0);
 }
 TEST_CASE("LV23 the sound passes untouched; the engine is MT01's") {
     auto p = make(); const auto x = sine(-20.0, 10.0, 1000), y = run(p, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(y[i] == x[i]);
     CHECK(std::abs(p.integrated() - (-16.99)) < 0.2);   // -20 dBFS RMS on both channels: the two channel powers add (+3.01 dB), the K filter is flat at 1 kHz
     CHECK(std::abs(p.difference() - (p.integrated() + 24.0)) < 1e-9);
+}
+TEST_CASE("LV23 Tolerance is the width of the band around the target") {
+    auto p = make(); run(p, sine(-20, 10.0, 1000)); p.setParam(Preset, Stream); CHECK_FALSE(p.inBand()); p.setParam(Tolerance, 3); CHECK(std::abs(p.difference() - (-3.0)) < 0.2);   // -17 against -14: 3 LU under (inBand() has its own band, checked below)
+    auto q = make({{Preset, Stream}, {Tolerance, 3}}); run(q, sine(-20, 10.0, 1000)); CHECK(q.inBand());
 }
 TEST_CASE("LV23 Preset changes the target") {
     auto a = make({{Preset, Ebu}}); CHECK(a.target() == -23.0); auto b = make({{Preset, Stream}}); CHECK(b.target() == -14.0);
