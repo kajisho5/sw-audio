@@ -8,6 +8,7 @@
 #pragma once
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
+#include <algorithm>
 #include <array>
 #include <complex>
 #include <vector>
@@ -28,6 +29,8 @@ public:
     void snapToTargets() { if (prepared_) setFilters(0); }
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    // any notch count 1 .. 16 (LV09 Hum Cut); the Harmonics parameter itself only takes 2 / 4 / 8 / 16
+    void setHarmonicCount(int h) { target_[Harmonics] = std::clamp(h, 1, 16); }
     double humHz() const { return f0_; }   // the frequency in use (the display)
 
 private:

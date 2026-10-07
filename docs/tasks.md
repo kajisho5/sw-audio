@@ -8,7 +8,7 @@
 1. **CI を通す。** `.github/workflows/build.yml`（Windows MSVC／macOS ユニバーサル＋AU／Linux）はまだ一度も動かしていない。失敗したら直す。Mac 版（AU）はここで初めてできる。
 2. ~~**アナログ出力段を仕様どおり非対称にする。**~~ 済（v0.11.1、README「Drive 段の設計」）。元の記述： 仕様書は EQ01 の Drive を「非対称ソフトクリップ1段、2× OS、音量補正つき」と定め、EQ03・EQ04 も「EQ01 と同じ出力段」。今の `core/include/sw/drive.hpp` は対称の tanh（ヘッドルーム +6 dBFS は決定事項なので維持）。偶数次倍音が出ることをテストで確かめる。
 
-## 製品（済 107・残り 32）
+## 製品（済 132・残り 7）
 
 ### EQ
 - [x] EQ01 Passive 進化版 — Contour turns the boost-and-dip trick into one knob
@@ -68,7 +68,7 @@
 ### GT
 - [x] GT01 Amp — Cleans up when you roll back the guitar volume
 - [x] GT02 Cab Ir — Drag the mic across the speaker
-- [ ] GT03 Pedalboard — Drag to reorder pedals, tuner always running（Chorus＝MD01・Delay＝DL01・Reverb＝RV01 を流用するため、それらの後で作る）
+- [x] GT03 Pedalboard — Drag to reorder pedals, tuner always running（Chorus＝MD01・Delay＝DL01・Reverb＝RV01 を流用するため、それらの後で作る）
 - [x] GT04 Bass Amp — DI and amp blend is phase aligned automatically
 - [x] GT05 Reamp — Pickup model turns a DI into a different guitar
 
@@ -158,32 +158,32 @@
 - [x] LV02 Feedback — Ring out learns fixed filters before the show
 - [x] LV03 Channel — Mic presets set the whole strip
 - [x] LV04 Safety limiter — Logs every limit event with the time
-- [ ] LV05 Auto ducker — Ducks for voices only, ignores claps and noise
-- [ ] LV06 Stream master — Rides to the platform loudness target
-- [ ] LV07 Speech Agc — Holds level for close and distant talkers
-- [ ] LV08 Room Noise — Learns HVAC and keyboard noise
-- [ ] LV09 Hum Cut — Tracks mains drift live
-- [ ] LV10 Voice Fx — Anonymous mode for interviews
-- [ ] LV11 Mic Switch — Mutes on silence, cough button
-- [ ] LV12 Geq 31 — Feedback guard flags ringing bands
-- [ ] LV13 Live Peq — RTA overlay with peak suggestions
-- [ ] LV14 Align — Measures delay in one click
-- [ ] LV15 Auto Mixer — Last mic hold and open mic limit
+- [x] LV05 Auto ducker — Ducks for voices only, ignores claps and noise
+- [x] LV06 Stream master — Rides to the platform loudness target
+- [x] LV07 Speech Agc — Holds level for close and distant talkers
+- [x] LV08 Room Noise — Learns HVAC and keyboard noise
+- [x] LV09 Hum Cut — Tracks mains drift live
+- [x] LV10 Voice Fx — Anonymous mode for interviews
+- [x] LV11 Mic Switch — Mutes on silence, cough button
+- [x] LV12 Geq 31 — Feedback guard flags ringing bands
+- [x] LV13 Live Peq — RTA overlay with peak suggestions
+- [x] LV14 Align — Measures delay in one click
+- [x] LV15 Auto Mixer — Last mic hold and open mic limit
 - [x] LV16 Live Gate — Key filter ignores stage rumble
 - [x] LV17 Bus Comp — Modes switch with OBS scenes
-- [ ] LV18 Pop Guard — Catches plug and handling pops
-- [ ] LV19 Av Sync — Clap sync measures the offset
-- [ ] LV20 Rta — Pink noise reference overlay
-- [ ] LV21 Test Gen — Output stays off until armed
-- [ ] LV22 Polarity — Instant in-phase check
-- [ ] LV23 Loudness — ARIB TR-B32 log export
-- [ ] LV24 Live Reverb — 1% CPU and ducks under speech
-- [ ] LV25 Live Delay — Tap or MIDI clock, tails spill over on bypass
-- [ ] LV26 Mono — Auto phase fix for mono viewers
-- [ ] LV27 Scene Sync — Follows OBS scenes to recall presets
-- [ ] LV28 Remote Hub — Tablet control protected by PIN
-- [ ] LV29 Interp Mix — Ducks the floor when the interpreter talks
-- [ ] LV30 Recorder — Always-on backup recording with markers
+- [x] LV18 Pop Guard — Catches plug and handling pops
+- [x] LV19 Av Sync — Clap sync measures the offset
+- [x] LV20 Rta — Pink noise reference overlay
+- [x] LV21 Test Gen — Output stays off until armed
+- [x] LV22 Polarity — Instant in-phase check
+- [x] LV23 Loudness — ARIB TR-B32 log export
+- [x] LV24 Live Reverb — 1% CPU and ducks under speech
+- [x] LV25 Live Delay — Tap or MIDI clock, tails spill over on bypass
+- [x] LV26 Mono — Auto phase fix for mono viewers
+- [x] LV27 Scene Sync — Follows OBS scenes to recall presets
+- [x] LV28 Remote Hub — Tablet control protected by PIN
+- [x] LV29 Interp Mix — Ducks the floor when the interpreter talks
+- [x] LV30 Recorder — Always-on backup recording with markers
 
 ## 製品のあと
 

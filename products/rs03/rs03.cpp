@@ -51,7 +51,7 @@ void Processor::setParam(int id, double v) {
 }
 
 void Processor::setFilters(int ramp) {
-    const int H = std::clamp(static_cast<int>(target_[Harmonics] + 0.5), 2, 16);
+    const int H = std::clamp(static_cast<int>(target_[Harmonics] + 0.5), 1, 16);
     const double q = 60.0 * std::pow(8.0 / 60.0, target_[Width] * 0.01), buzz = target_[Buzz];
     int used = 0;
     for (int h = 1; h <= kMaxNotches; ++h) {

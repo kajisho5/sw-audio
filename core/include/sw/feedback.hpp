@@ -34,6 +34,8 @@ public:
         sens_ = std::clamp(sensitivity, 0, 2); maxDepth_ = std::clamp(std::abs(maxDepthDb), 0.0, 40.0); width_ = std::clamp(widthOct, 0.02, 1.0); release_ = std::max(0.1, releaseS);
         dirty_ = true;
     }
+    // false: detect only (LV12 marks the band, nothing is cut)
+    void setApply(bool on) { apply_ = on; }
     void ringOut(bool on) { ringOut_ = on; }
     bool ringingOut() const { return ringOut_; }
     void lockFilters() { for (auto& s : slot_) if (s.used && !s.freeing) s.fixed = true; }
@@ -74,6 +76,7 @@ public:
             } else if (!on) applied_[k] = false;
         }
         dirty_ = false;
+        if (!apply_) return;
         for (int i = 0; i < nslots_; ++i) {
             const size_t k = static_cast<size_t>(i);
             if (!(slot_[k].used && slot_[k].depthDb > 1e-6) && !applied_[k]) continue;
@@ -142,7 +145,7 @@ private:
     }
 
     double fs_ = 48000; int nslots_ = 12, sens_ = 2; double maxDepth_ = 12, width_ = 0.1, release_ = 8;
-    bool ringOut_ = false, dirty_ = true;
+    bool ringOut_ = false, dirty_ = true, apply_ = true;
     Fft fft_; std::vector<double> win_, ring_, mag_; std::vector<std::complex<double>> buf_;
     int pos_ = 0, sinceHop_ = 0, rampLeft_ = 0;
     std::array<Track, kTracks> tracks_{};
