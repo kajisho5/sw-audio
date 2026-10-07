@@ -84,6 +84,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW RS01 Denoise | 短時間 FFT（2048）のスペクトル抑圧。Profile・Adaptive（最小値統計）・Reduction・Threshold・Smoothing・Low/High band・Artifact guard・Learn。遅延 2048 | 設計値は README「RS01 Denoise の設計」。共通部品 sw/stft.hpp。定常な純音は雑音として覚える。Low lat は未実装 |
 | SW RS03 Dehum | 基本波と倍音のノッチ列（Base 50/60/Auto、Harmonics、Depth、Width、Buzz）。Track で ±2 Hz を追従。遅延 0 | 設計値は README「RS03 Dehum の設計」。Width は Q 60〜8、Buzz は設計値 |
 | SW RS04 Declick | AR モデルの励起で検出して補間（Click／Crackle／Both、Sensitivity、Click width、Crackle %、Low guard）。遅延 512。共通部品 sw/ar_repair.hpp | 設計値は README「RS04 Declick の設計」。2 ms 級のクリックは直りにくい。Repair ボタンの役割は未定 |
+| SW RS05 Declip | クリップした山の AR 補間（Threshold・Quality・Makeup・Smooth・Detect）。窓内の見積もりを挟んで高次数でも悪化しない。遅延 1024 | 設計値は README「RS05 Declip の設計」。極端に切れた信号（60 % 近く）は改善 2〜5 dB |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -665,6 +666,12 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **確かめたこと（テスト）。** ランダムなクリック 1・3・12 サンプルで励起との誤差が 20 dB 以上下がる、Click width 0.3 ms と 1 ms で 48 サンプル（1 ms）のクリックの補修が分かれる（8 dB 以上）、Sensitivity High が Low より 5 件以上多く拾う、Crackle 0／50／100 % でスパイクの残りが 1.0／0.1〜0.6／0.35 未満、キック風のバーストは −40 dB 以上変わらない。
 - **限界。** 2 ms（96 サンプル）級のクリックは補間が合わず、あまり直らない（実測で 3.6 dB 改善）。規則正しい繰り返し（例：+−+− の波形）は AR が予測してしまうので、クリックとして見つからない（端だけが見える）。テストのクリックはランダムな雑音のバースト。
 - 画面の「Repair」ボタンの役割は未定のまま（仕様書の要確認）。直したクリックの印は `clicksRepaired()`（回数）まで。
+
+### RS05 Declip の設計（仕様書に数値がない部分）
+
+- **クリップの見つけ方。** 同じ側で天井以上のサンプルが 2 つ以上（最大 256）続いた区間。天井は Threshold（−3〜0 dB）。**Detect On：** 入力のままの直近 2048 サンプル（補修後の履歴ではなく、別に持った生の履歴）の最大値に「2 サンプル以上、1e-4 以内で最大値と等しい」塊が 4 回以上あれば、最大値 × 0.995 を天井にする（平滑。1 秒見つからなければ Threshold に戻る）。**なめらかな山の頂上も 0.5 % 以内に 7 サンプルほど入るため、最初の「0.5 % 以内に 6 つ」では、クリップしていない信号の 2604 か所を誤って直した（実測）。** 条件を「1e-4 以内の連続 2 つ以上の塊が 4 回」に改めた。
+- **補間。** 256 サンプルごとに、出力へ出ていく区間に頭がある連続を AR（Quality Low／Mid／High ＝ 16／32／64 次）で補間する。**窓の中のクリップを先に 16 次で見積もり、その窓へ希望の次数のモデルを当てはめ直して、元のサンプルから補間し直す**（平らな頭をそのまま学習すると高次ほど悪化した：64 次の誤差が 16 次より大きかった。見積もりを挟んで解消）。補間値は天井の下へは行かないよう天井まで押し戻し（クリップした山が天井より低く出ることは無い）、天井 ＋ 9／6／3 dB（Smooth Low／Mid／High）で頭打ち。Makeup（−12〜0、既定 −3）は出力へのゲイン（戻した山の余裕）。遅延 1024 サンプル。
+- **確かめたこと。** 1.5 倍のピークを 0.95 で切った音声風の信号で、原音との誤差が 8 dB 以上下がる、Detect Off では何も触らない（1e-6 以内で入力と一致）、Detect On で天井 0.6 を 1 % 以内で見つけて直す。**限界：** 信号の 60 % 近くが切れている極端な例（1.5 倍を 0.6 で切る）では、改善は約 2〜5 dB。AR 補間は短いクリップ（数 ms まで）向け。
 
 ### CS04 の注意
 
