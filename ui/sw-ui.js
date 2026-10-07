@@ -211,13 +211,17 @@
 
     // ---- EVO bar and live readouts
     const bar = el('div', 'evobar'); const evoT = el('span', 'evot', prod.evo || ''); const cpu = el('span', 'cpu');
-    bar.append(el('span', 'evo', 'EVO'), evoT, cpu); box.append(bar);
+    const mk = lab => { const m = el('span', 'mtr'); const bars = [el('i'), el('i')]; bars.forEach(b => m.append(b)); m.title = lab; return { m, bars }; };
+    const mi = mk('IN'), mo = mk('OUT');
+    bar.append(el('span', 'evo', 'EVO'), evoT, el('span', 'sp'), el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu); box.append(bar);
+    const lvl = db => Math.max(0, Math.min(1, (db + 60) / 60)) * 100 + '%';
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
       if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
+      const mt = inf.meters; if (mt) { [mi.bars[0], mi.bars[1], mo.bars[0], mo.bars[1]].forEach((b, k) => { b.style.width = lvl(mt[k]); b.classList.toggle('hot', mt[k] > -1); }); }
       cpu.textContent = inf.cpu !== undefined ? 'CPU ' + inf.cpu.toFixed(1) + ' %' : '';
     }
-    refreshInfo(); const timer = setInterval(refreshInfo, 500);
+    refreshInfo(); const timer = setInterval(refreshInfo, 60);
     bridge.onChange((i, v) => { if (i < host.length) { vals[i] = v; const w = widgets.get(i); if (w) w(v); } });
     return { destroy() { clearInterval(timer); root.innerHTML = ''; }, values: () => vals.slice(), host };
   }

@@ -137,6 +137,7 @@ private:
         }
         double latencyMs() { return 1000.0 * pl.shell_.latencySamples() / pl.sr_; }
         double cpu() { return pl.cpu_.load(); }
+        double meter(int k) { const float v = pl.peaks_[static_cast<size_t>(k)].load(); return v > 1e-5f ? 20.0 * std::log10(static_cast<double>(v)) : -100.0; }
         void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
     };
     // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
@@ -269,6 +270,7 @@ private:
             }
             s->shell_.core().setPlayhead(sec, playing);
         }
+        s->measure(ib.data32, nch, frames, 0);
         for (uint32_t c = 0; c < nch; ++c)
             if (ob.data32[c] != ib.data32[c]) std::memcpy(ob.data32[c], ib.data32[c], frames * sizeof(float));
         // optional sidechain (host may leave it unconnected)
@@ -296,6 +298,7 @@ private:
             if constexpr (HasParamWrite<typename P::Core>::value) s->emitParamWrite(pr->out_events, next - 1);
             pos = next;
         }
+        s->measure(ob.data32, nch, frames, 2);
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
             if (s->host_ && s->host_->request_restart) s->host_->request_restart(s->host_);
@@ -304,6 +307,18 @@ private:
             s->cpu_.store(old < 0.0 ? now : old + 0.05 * (now - old));
         }
         return CLAP_PROCESS_CONTINUE;
+    }
+
+    // peak meters of the screen: block peak with a ~0.3 s fall (slot 0/1 input L/R, 2/3 output L/R)
+    void measure(float* const* d, uint32_t nch, uint32_t frames, int slot) {
+        if (frames == 0) return;
+        const float fall = std::exp(-static_cast<float>(frames) / static_cast<float>(0.3 * sr_));
+        for (uint32_t c = 0; c < 2; ++c) {
+            const float* x = d[std::min(c, nch - 1)]; float pk = 0.f;
+            for (uint32_t i = 0; i < frames; ++i) pk = std::max(pk, std::fabs(x[i]));
+            auto& a = peaks_[static_cast<size_t>(slot) + c];
+            a.store(std::max(pk, a.load() * fall));
+        }
     }
 
     static const void* getExtension(const clap_plugin_t*, const char* id) {
@@ -477,6 +492,7 @@ private:
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
+    std::array<std::atomic<float>, 4> peaks_{};
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
 };
 

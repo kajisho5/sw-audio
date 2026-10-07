@@ -66,10 +66,12 @@ inline std::string page(const std::string& code, const std::vector<ParamSpec>& s
     return h;
 }
 
-inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu) {
+inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu, const double* meters) {
     std::string s = "SWHOST.update([";
     for (size_t i = 0; i < plain.size(); ++i) s += (i ? "," : "") + num(plain[i]);
-    return s + "]," + num(latencyMs) + "," + num(cpu) + ");";
+    s += "]," + num(latencyMs) + "," + num(cpu) + ",[";
+    for (int i = 0; i < 4; ++i) s += (i ? "," : "") + num(meters[i]);
+    return s + "]);";
 }
 
 struct Message { char type = 0; int index = -1; double value = 0; std::string name, args; };
@@ -89,7 +91,7 @@ inline bool parseMessage(const std::string& m, Message& out) {
     return true;
 }
 
-// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), call(name, args).
+// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), call(name, args).
 template <class F>
 class Session {
 public:
@@ -107,7 +109,7 @@ public:
         }
         return "";
     }
-    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); return updateScript(v, f_.latencyMs(), f_.cpu()); }
+    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); return updateScript(v, f_.latencyMs(), f_.cpu(), m); }
 private:
     F& f_;
 };

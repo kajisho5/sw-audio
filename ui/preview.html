@@ -13,7 +13,7 @@
   const params = S.specs[code.toLowerCase()], traits = S.traits[code.toLowerCase()];
   const vals = params.map(p => p.def); if (traits.autoGain) vals.push(0); if (traits.delta) vals.push(0);
   const listeners = [];
-  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2 }) };
+  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2, meters: [-18, -22, -6, -0.5] }) };
   window.screen_ = SWUI.mount(document.getElementById('app'), { product: P[code], params, traits, bridge });
   document.title = 'SW ' + code; window.ready = true;
 })();

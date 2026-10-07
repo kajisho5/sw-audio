@@ -13,7 +13,7 @@ struct Fake {
     void begin(int i) { log.push_back("b" + std::to_string(i)); }
     void end(int i) { log.push_back("e" + std::to_string(i)); }
     void set(int i, double x) { v[static_cast<size_t>(i)] = x; log.push_back("s" + std::to_string(i)); }
-    double latencyMs() { return 1.5; } double cpu() { return -1; }
+    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; }
     void call(const std::string& n, const std::string& a) { log.push_back("c:" + n + ":" + a); }
 };
 }
@@ -38,7 +38,7 @@ TEST_CASE("GUI session: values and gestures reach the plug-in; a poll answers wi
     CHECK(f.v[1] == 5.5); CHECK(f.log == std::vector<std::string>{"b1", "s1", "e1"});
     s.onMessage("s 9 1"); s.onMessage("b 9"); s.onMessage("e 9"); s.onMessage("garbage"); CHECK(f.log.size() == 3);   // out of range or malformed: ignored
     s.onMessage("c tap 1 2"); CHECK(f.log.back() == "c:tap:1 2");
-    const std::string a = s.onMessage("p"); CHECK(a == "SWHOST.update([1,5.5,3],1.5,-1);"); CHECK(s.onMessage("r") == a);
+    const std::string a = s.onMessage("p"); CHECK(a == "SWHOST.update([1,5.5,3],1.5,-1,[-20,-21,-22,-23]);"); CHECK(s.onMessage("r") == a);
 }
 
 TEST_CASE("GUI page: the parameter table of a product is in it, valid and safe") {

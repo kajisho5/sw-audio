@@ -204,3 +204,5 @@
 - MIDI・フットスイッチ入力（ホストのノート入力をプラグイン層に通す）：MD05 Rotary の Speed 切替（CC64・CC1・Note）、VO03 Harmony、CR04 Freeze、IN04 Bass、LV25 Live Delay など。
 - EQ08・EQ02 Linear のカーネル再計算を別スレッドへ（仕様書どおり）。
 - [ ] UI: CR02 の Randomize／Clear ボタン（randomize()・clearPattern() を呼び、16 ステップをホストへ書く）
+
+- [x] 画面：入出力ピークメーター（全製品共通・アダプタで実測）、ボタン（Randomize／Tap など 12 製品）を本体へ配線
