@@ -41,6 +41,10 @@ struct HasParamWrite<C, std::void_t<decltype(std::declval<C&>().takeParamWrite(s
 template <class P, class = void> struct AutoGainEnabled : std::true_type {};
 template <class P> struct AutoGainEnabled<P, std::void_t<decltype(P::kAutoGain)>> : std::bool_constant<P::kAutoGain> {};
 
+// optional trait: static constexpr bool kDelta = false; -> the product has no Delta parameter (meters)
+template <class P, class = void> struct DeltaEnabled : std::true_type {};
+template <class P> struct DeltaEnabled<P, std::void_t<decltype(P::kDelta)>> : std::bool_constant<P::kDelta> {};
+
 template <class C, class = void> struct HasSetTransport : std::false_type {};
 template <class C> struct HasSetTransport<C, std::void_t<decltype(std::declval<C&>().setTransport(false, 0.0))>> : std::true_type {};
 
@@ -56,8 +60,9 @@ public:
     static constexpr bool kHasAutoGain = AutoGainEnabled<P>::value;
     static int numProduct() { return static_cast<int>(P::specs().size()); }
     static int autoGainId() { return kHasAutoGain ? numProduct() : -1; }
-    static int deltaId() { return numProduct() + (kHasAutoGain ? 1 : 0); }
-    static int numParams() { return deltaId() + 1; }
+    static constexpr bool kHasDelta = DeltaEnabled<P>::value;
+    static int deltaId() { return kHasDelta ? numProduct() + (kHasAutoGain ? 1 : 0) : -1; }
+    static int numParams() { return numProduct() + (kHasAutoGain ? 1 : 0) + (kHasDelta ? 1 : 0); }
     static const ParamSpec& spec(int id) {
         if (id < numProduct()) return P::specs()[static_cast<size_t>(id)];
         return id == autoGainId() ? autoGainSpec() : deltaSpec();
@@ -87,7 +92,7 @@ private:
         else if (id == P::kInParam) shell_.setIn(plain > 0.5);
         else if (id == P::kMixParam) shell_.setMix(plain / 100.0);  // Mix is in percent
         else if (id == autoGainId()) shell_.setAutoGain(plain > 0.5);
-        else if (id == deltaId()) shell_.setDelta(plain > 0.5);
+        else if (kHasDelta && id == deltaId()) shell_.setDelta(plain > 0.5);
         if (id < numProduct()) shell_.core().setParam(id, plain);
     }
     void applyPending() {

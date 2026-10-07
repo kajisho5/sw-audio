@@ -93,6 +93,8 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW CR04 Freeze | スペクトルを固めて鳴らし続ける（Trigger Hold/Momentary/Auto、Freeze、Blur、Drift、Mix）。ピーク位相ロックで取り込んだ音程とレベルを保つ。原音は遅らせない（遅延 0） | 設計値は README「CR04 Freeze の設計」。MIDI での取り込みは未実装。Mix は製品内で処理 |
 | SW CR05 Tape Stop | テープが止まる／立ち上がる／逆回転する（Action・Stop/Start time・Curve・Filter・Trigger）。ホストの小節線がわかれば停止が小節線で終わるよう逆算して開始。遅延 0 | 設計値は README「CR05 Tape Stop の設計」。4/4 を仮定。Start の終わりは 30 ms のクロスフェード |
 | SW CR06 One Knob | 6 つの効果（Wide/Warm/Air/Punch/Space/Lo-fi）を 1 つの Amount で動かす。Amount 0 は原音そのもの。Macro は内部値を画面へ。遅延 0 | 設計値は README「CR06 One Knob の設計」。内部チェーンは既存製品の簡略版（Space だけ RV02 のコア）で、曲線は設計値 |
+| SW MT01 Loudness | ラウドネスメーター（Momentary/Short-term/Integrated/LRA/True peak、10 分の推移、ARIB/EBU/配信のプリセット）。音は変えない。遅延 0 | 設計値は README「MT01 Loudness の設計」。±1 LU が規格上の許容値かは要確認のまま。アダプターに kDelta=false を追加 |
+| SW MT02 Spectrum | スペクトラムアナライザ（FFT 4k〜32k、Speed、Range、Slope、Smoothing、Display、参照との比較）。音は変えない。遅延 0 | 設計値は README「MT02 Spectrum の設計」。ジャンル別の型は未実装 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -740,6 +742,20 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Amount 0 はどの効果でも原音そのもの**（ビット単位。テスト）。Mix・Output は共通の枠。遅延 0。
 - **Macro**（`cr06.macro`、画面専用、Auto 不可）：選んだ効果の内部の値を画面に見せる。値は `macroValue(i)` で取れる（Air なら 0 番がシェルフの dB）。
 - 上の曲線はいずれも設計値で、聴いて決めたものではない（テストは、各効果が狙った向きに動くことだけを確かめている：Wide はサイドが 8 dB 以上増えミッドは 0.2 dB 以内、Warm は 3 次高調波が 20 dB 以上増える、Air は 14 kHz が 5 dB 以上上がる、Punch はアタックと持続の比が 3 dB 以上広がる、Space は尾が出る、Lo-fi は高調波が 20 dB 以上増え 6 kHz が下がる）。
+
+### MT01 Loudness の設計（仕様書に数値がない部分）
+
+- **計測器の共通事項（MT01〜MT05）。** 音は変えない（出力は入力とビット単位で一致、遅延 0）。**Δ と Auto gain は持たない**（仕様書の共通事項）。アダプターに「Δ なし」の指定 `kDelta = false` を追加した（Auto gain は従来の `kAutoGain = false`）。計測値は処理のたびに更新し、画面が読む。解析自体もオーディオ側のコアで行う（仕様書は「UI スレッド」と書くが、プラグインの UI がまだ無いため、コアが計算して値を持つ形にした）。
+- **MT01。** Momentary（400 ms）・Short-term（3 秒）は BS.1770 の K 特性の 100 ms ブロック（`sw::LoudnessMeter`）。Integrated は絶対ゲート −70 LUFS・相対ゲート −10 LU（`sw::IntegratedLoudness`）。**Range（LRA）は EBU Tech 3342**：Short-term 値を 100 ms ごとに（3 秒たってから）0.1 LU の箱へ入れ、絶対ゲート −70 LUFS、相対ゲートはそのパワー平均の −20 LU、LRA ＝ 95 パーセンタイル − 10 パーセンタイル。True peak は 4 倍の Kaiser 補間（`sw::TruePeakDetector`、dBTP）。直近 10 分の推移は Short-term 値を 1 秒ごとに 600 個。Preset：ARIB TR-B32 −24／EBU R128 −23／Streaming −14／Custom（Target −40〜−5 LUFS）。`difference()` ＝ Integrated − 目標、`inBand()` ＝ 差の絶対値が Tolerance（±0.5〜±3 LU、表示する帯の幅。**±1 LU が規格上の許容値かは仕様書の要確認のまま**）以内。Pause（パラメータ、Auto 不可）で計測を止め、`reset()`（画面のボタン）でクリア。
+- **確かめたこと。** −26 dBFS RMS のステレオ 1 kHz は −23.0 LUFS（Momentary・Short-term・Integrated が 0.2 LU 以内で一致、LRA 0.3 LU 未満）、−40 と −30 LUFS の 2 水準（30 秒ずつ）の LRA は 10 ±1.5 LU で無音は数えない、fs/4 の 45° の正弦波（サンプルのピークが 0.707 倍に見える）の True peak は真のピークの 0.4 dB 以内。
+- 表記は「LUFS」に揃える（LV23 の「LKFS」と同じ量。仕様書の要確認）。
+
+### MT02 Spectrum の設計（仕様書に数値がない部分）
+
+- **スケール。** FFT 4k／8k／16k／32k 点（Hann、ホップ N/4）、(L＋R)/2 のモノ。**ピーク振幅 A の正弦波がそのビンで 20 log10(A) dB を示す**（雑音はビンが細かいほど低く出る：ピーク基準の目盛り）。Speed：パワーの平均時間 Slow 2 秒／Medium 0.5 秒／Fast 0.12 秒。Display：Average（指数平均）、Peak（最大値、1 秒に 20 dB 下がる）、Hold（`reset()` まで最大値）。
+- **表示値 `spectrumDb()`。** Smoothing（Off／1/24／1/12／1/6／1/3 オクターブ：その幅のパワー平均）、Slope（1 kHz を中心に、1 オクターブあたり Slope dB 持ち上げる。ピンクノイズが平らに見えるのは 3 dB/oct）、Range（−Range 未満は出さない）。
+- **進化機能（Compare A、区分 B）。** `captureReference()` で今の平均を参照カーブとして保存し、`compareDb()` が（今の平均 − 参照）を返す。参照曲の長時間平均を作る使い方を想定。**ジャンル別の型は元データが要るため未実装**（仕様書の要確認のまま）。
+- **確かめたこと。** ビン上の正弦波が 4k／8k／32k のどれでもピーク値を ±0.6 dB で示す、Slope 3 dB/oct で 2 オクターブ上が +6 dB、Smoothing 1/3 オクターブで雑音の凸凹が半分未満、20 dB の段差の 0.5 秒後に Fast は Slow より 3 dB 以上高い、Peak は 3 秒後に Hold より 10 dB 以上低い、参照との差が 6 dB の雑音で ±1 dB。
 
 ### CS04 の注意
 
