@@ -92,6 +92,7 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW CR03 Granular | 入力の過去から切り出した粒（Cloud/Scatter/Glitch、Grain・Density・Spray・Pitch・Spread・Mix・Freeze input）。Harmony は直近 4 秒の 12 音分布から粒の音程を構成音へ。遅延 0 | 設計値は README「CR03 Granular の設計」。Harmony の On/Off は末尾ではなく表の最後の cr03.evo.on。和音の入力には向かない |
 | SW CR04 Freeze | スペクトルを固めて鳴らし続ける（Trigger Hold/Momentary/Auto、Freeze、Blur、Drift、Mix）。ピーク位相ロックで取り込んだ音程とレベルを保つ。原音は遅らせない（遅延 0） | 設計値は README「CR04 Freeze の設計」。MIDI での取り込みは未実装。Mix は製品内で処理 |
 | SW CR05 Tape Stop | テープが止まる／立ち上がる／逆回転する（Action・Stop/Start time・Curve・Filter・Trigger）。ホストの小節線がわかれば停止が小節線で終わるよう逆算して開始。遅延 0 | 設計値は README「CR05 Tape Stop の設計」。4/4 を仮定。Start の終わりは 30 ms のクロスフェード |
+| SW CR06 One Knob | 6 つの効果（Wide/Warm/Air/Punch/Space/Lo-fi）を 1 つの Amount で動かす。Amount 0 は原音そのもの。Macro は内部値を画面へ。遅延 0 | 設計値は README「CR06 One Knob の設計」。内部チェーンは既存製品の簡略版（Space だけ RV02 のコア）で、曲線は設計値 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -732,6 +733,13 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **Trigger。** Off→On で動作を始める（オートメーション用）。止まったまま（Held）の状態は Off に戻すと 20 ms ほどで今の入力へ戻る。
 - **進化機能（区分 A）。** ホストのトランスポートが分かるとき、Stop と Spin back は**（次の小節線 − 時間）に始める**（過ぎていれば次の小節）ので、止まるのがちょうど小節線になる（テスト：次の小節まで 1.5 秒のとき 1/4 小節（0.5 秒）の Stop が 1 秒待って始まり、小節線（1.5 秒後）の ±0.12 秒で無音になる）。Start はすぐ始める。トランスポートが無いときはすぐ。
 - **限界。** Start の終わりの 30 ms のクロスフェードは、テープが遅れた分（最大時間の半分）を一気に今の入力へ飛び越える（クロスフェードの間は 2 つの音が混ざる）。画面のΔボタンは無い。
+
+### CR06 One Knob の設計（仕様書に数値がない部分）
+
+- **6 種類の内部チェーンは、同梱製品の処理の簡略版**（仕様書は「既存製品の処理を組み合わせた内部チェーン」。SA05・EQ01・DY07・DY09 のコアをそのまま使うと、1 つのつまみで動かす値の範囲の調整が難しいため、必要な部分だけを自前で持った。Space だけは RV02 のコアを使う）。Amount t ＝ 0〜1 に対する曲線：**Wide** ＝ ミッド／サイドでサイド × (1 + 2t) と 4 kHz 以上に +3t dB。**Warm** ＝ tanh のドライブ (1 + 3t) を t でブレンド、150 Hz に +3t dB の低域シェルフ、6 kHz に −3t dB の高域シェルフ。**Air** ＝ 10 kHz に +6t dB の高域シェルフと、6 kHz 以上を tanh(3x) に通して 0.1t 足すエキサイター。**Punch** ＝ 2 ms と 40 ms の包絡の立ち上がりで、アタックを最大 +8 dB（×1.5t）、持続を最大 −2t dB。**Space** ＝ RV02（1.2 秒、プリディレイ 15 ms、ダンピング 60 ％、ローカット 150 Hz）を 0.5t 足す。**Lo-fi** ＝ サンプルレートを 1 + 11t 分の 1 に下げる（ホールド）、量子化 16 → 6 ビット、ローパス 12 → 3 kHz。
+- **Amount 0 はどの効果でも原音そのもの**（ビット単位。テスト）。Mix・Output は共通の枠。遅延 0。
+- **Macro**（`cr06.macro`、画面専用、Auto 不可）：選んだ効果の内部の値を画面に見せる。値は `macroValue(i)` で取れる（Air なら 0 番がシェルフの dB）。
+- 上の曲線はいずれも設計値で、聴いて決めたものではない（テストは、各効果が狙った向きに動くことだけを確かめている：Wide はサイドが 8 dB 以上増えミッドは 0.2 dB 以内、Warm は 3 次高調波が 20 dB 以上増える、Air は 14 kHz が 5 dB 以上上がる、Punch はアタックと持続の比が 3 dB 以上広がる、Space は尾が出る、Lo-fi は高調波が 20 dB 以上増え 6 kHz が下がる）。
 
 ### CS04 の注意
 
