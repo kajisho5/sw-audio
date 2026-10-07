@@ -1,5 +1,7 @@
 // SW UT01 Gain — CLAP plugin traits
 #include "clap_adapter.hpp"
+#include <cstdlib>
+#include <cstring>
 #include "ut01/ut01.hpp"
 
 namespace {
@@ -11,6 +13,7 @@ struct Ut01 {
     static constexpr int kMixParam = -1;
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
+    static void guiCall(Core& c, const char* n, const char* a) { (void)a; if (!std::strcmp(n, "remember")) c.rememberGain(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.ut01", "SW UT01 Gain", "SEVENTHWELL",

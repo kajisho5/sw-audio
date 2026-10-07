@@ -1,5 +1,7 @@
 // SW MT01 Loudness — CLAP plugin traits
 #include "clap_adapter.hpp"
+#include <cstdlib>
+#include <cstring>
 #include "mt01/mt01.hpp"
 
 namespace {
@@ -11,6 +13,7 @@ struct Mt01 {
     static constexpr int kMixParam = -1;
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
+    static void guiCall(Core& c, const char* n, const char* a) { (void)a; if (!std::strcmp(n, "reset")) c.reset(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.mt01", "SW MT01 Loudness", "SEVENTHWELL",

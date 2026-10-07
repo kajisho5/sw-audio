@@ -1,5 +1,7 @@
 // SW LV30 Recorder — CLAP plugin traits (LIVE line)
 #include "clap_adapter.hpp"
+#include <cstdlib>
+#include <cstring>
 #include "lv30/lv30.hpp"
 
 namespace {
@@ -11,6 +13,15 @@ struct Lv30 {
     static constexpr int kMixParam = -1;
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
+    static constexpr bool kGuiCallOnGuiThread = true;   // file I/O: not on the audio thread
+    static void guiCall(Core& c, const char* n, const char* a) {
+        if (!std::strcmp(n, "record")) {
+            if (a[0] == '1') {
+                if (c.folder().empty()) { const char* h = std::getenv("HOME"); if (!h) h = std::getenv("USERPROFILE"); if (h) c.setFolder(std::string(h) + "/Documents/SW AUDIO"); }
+                c.start();
+            } else c.stop();
+        } else if (!std::strcmp(n, "mark")) c.mark();
+    }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv30", "SW LV30 Recorder", "SEVENTHWELL",

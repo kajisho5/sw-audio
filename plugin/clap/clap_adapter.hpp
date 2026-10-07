@@ -55,6 +55,13 @@ template <class C> struct HasSetTransport<C, std::void_t<decltype(std::declval<C
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
+// optional trait: static void guiCall(Core&, const char* name, const char* arg) -> screen buttons (Randomize, Tap ...).
+// static constexpr bool kGuiCallOnGuiThread = true -> called on the GUI thread (file I/O), otherwise queued and called on the audio thread
+template <class P, class = void> struct HasGuiCall : std::false_type {};
+template <class P> struct HasGuiCall<P, std::void_t<decltype(P::guiCall(std::declval<typename P::Core&>(), "", ""))>> : std::true_type {};
+template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
+template <class P> struct GuiCallOnGuiThread<P, std::void_t<decltype(P::kGuiCallOnGuiThread)>> : std::bool_constant<P::kGuiCallOnGuiThread> {};
+
 template <class C, class = void> struct HasSetTempo : std::false_type {};
 template <class C> struct HasSetTempo<C, std::void_t<decltype(std::declval<C&>().setTempo(120.0))>> : std::true_type {};
 
@@ -130,7 +137,7 @@ private:
         }
         double latencyMs() { return 1000.0 * pl.shell_.latencySamples() / pl.sr_; }
         double cpu() { return pl.cpu_.load(); }
-        void call(const std::string&, const std::string&) {}   // buttons that call the core's methods: not wired yet
+        void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
     };
     // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
     void guiPush(uint8_t kind, int id) {
@@ -139,7 +146,30 @@ private:
         gui_ops_[h % kGuiQueue] = {kind, id}; gui_head_.store(h + 1, std::memory_order_release);
         if (host_) { const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS)); if (hp && hp->request_flush) hp->request_flush(host_); }
     }
+    struct CallOp { char name[16]; char arg[16]; };
+    void guiCall(const std::string& name, const std::string& arg) {
+        if constexpr (HasGuiCall<P>::value) {
+            if (name.size() >= sizeof(CallOp::name) || arg.size() >= sizeof(CallOp::arg)) return;
+            if constexpr (GuiCallOnGuiThread<P>::value) { P::guiCall(shell_.core(), name.c_str(), arg.c_str()); }
+            else {
+                const size_t h = call_head_.load(std::memory_order_relaxed), t = call_tail_.load(std::memory_order_acquire);
+                if (h - t >= kCallQueue) return;
+                CallOp& op = call_ops_[h % kCallQueue]; std::memset(&op, 0, sizeof(op));
+                std::memcpy(op.name, name.data(), name.size()); std::memcpy(op.arg, arg.data(), arg.size());
+                call_head_.store(h + 1, std::memory_order_release);
+                if (host_) { const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS)); if (hp && hp->request_flush) hp->request_flush(host_); }
+            }
+        }
+    }
+    void drainCalls() {
+        if constexpr (HasGuiCall<P>::value && !GuiCallOnGuiThread<P>::value) {
+            size_t t = call_tail_.load(std::memory_order_relaxed); const size_t h = call_head_.load(std::memory_order_acquire);
+            while (t != h) { const CallOp& op = call_ops_[t % kCallQueue]; ++t; P::guiCall(shell_.core(), op.name, op.arg); }
+            call_tail_.store(t, std::memory_order_release);
+        }
+    }
     void guiDrain(const clap_output_events_t* out, uint32_t time) {
+        drainCalls();
         size_t t = gui_tail_.load(std::memory_order_relaxed); const size_t h = gui_head_.load(std::memory_order_acquire);
         while (t != h) {
             const GuiOp op = gui_ops_[t % kGuiQueue]; ++t;
@@ -437,6 +467,9 @@ private:
     bool active_ = false;
     // plug-in window
     struct GuiOp { uint8_t kind = 0; int id = 0; };
+    static constexpr size_t kCallQueue = 64;
+    std::array<CallOp, kCallQueue> call_ops_{};
+    std::atomic<size_t> call_head_{0}, call_tail_{0};
     static constexpr size_t kGuiQueue = 1024;
     std::array<GuiOp, kGuiQueue> gui_ops_{};
     std::atomic<size_t> gui_head_{0}, gui_tail_{0};
