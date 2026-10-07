@@ -20,5 +20,6 @@
     }
   };
   window.SWUI_instance = SWUI.mount(document.getElementById('app'), { product: SWBOOT.product, params: SWBOOT.params, traits: SWBOOT.traits, bridge });
+  document.addEventListener('contextmenu', e => e.preventDefault());
   setInterval(() => post('p'), 50); post('r');
 })();

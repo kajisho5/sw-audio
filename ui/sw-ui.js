@@ -136,6 +136,15 @@
       for (const it of s.items) row.append(s.kind === 'faders' ? fader(it) : control(it, s.title && it.p.name.startsWith(s.title + ' ') ? it.p.name.slice(s.title.length + 1) : it.p.name));
     }
 
+    if ((prod.actions || []).length) {
+      const sec = el('div', 'sec'); sec.append(el('div', 'sect', 'Actions')); const row = el('div', 'row'); sec.append(row); body.insertBefore(sec, body.firstChild);
+      prod.actions.forEach(a => {
+        const b = el('button', 'dbtn', a.label); let on = false;
+        b.onclick = () => { if (a.toggle) { on = !on; b.classList.toggle('on', on); bridge.call(a.call, on ? '1' : '0'); } else { bridge.call(a.call, a.arg === undefined ? '' : a.arg); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 150); } };
+        row.append(b);
+      });
+    }
+
     function control(it, label) {
       const p = it.p, i = it.i, c = it.c; label = label || p.name;
       if (p.curve === 'step') {

@@ -1,0 +1,14 @@
+{
+  "CR02": [{"label": "Randomize", "call": "randomize"}, {"label": "Clear", "call": "clear"}],
+  "LV02": [{"label": "Ring out", "call": "ringout", "toggle": true}, {"label": "Lock filters", "call": "lock"}, {"label": "Clear live", "call": "clearlive"}],
+  "LV08": [{"label": "Learn noise", "call": "learn"}, {"label": "Forget", "call": "forget"}],
+  "LV12": [{"label": "Flat", "call": "flat"}],
+  "LV19": [{"label": "Clap sync", "call": "clap", "arg": "150"}],
+  "LV21": [{"label": "Arm", "call": "arm", "toggle": true}, {"label": "Output", "call": "output", "toggle": true}],
+  "LV23": [{"label": "Reset", "call": "reset"}],
+  "LV25": [{"label": "Tap", "call": "tap"}],
+  "LV28": [{"label": "Lock all", "call": "lockall", "toggle": true}],
+  "LV30": [{"label": "Record", "call": "record", "toggle": true}, {"label": "Mark", "call": "mark"}],
+  "MT01": [{"label": "Reset", "call": "reset"}],
+  "UT01": [{"label": "Remember gain", "call": "remember"}]
+}
