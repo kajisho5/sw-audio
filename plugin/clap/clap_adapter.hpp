@@ -4,6 +4,7 @@
 //   static const std::vector<sw::ParamSpec>& specs();   // product parameter table (spec order, never reordered)
 //   static constexpr int kOutputParam, kInParam, kMixParam; // routed to the shell (-1 if absent)
 // Optional on Core: void setTempo(double bpm) — receives the host tempo when the transport provides it.
+// Optional on Core: void setPlayhead(double seconds, bool playing) — every block; seconds is -1 when the host gives no time.
 // Optional on Core: void setTransport(bool playing, double beatsToNextBar) — every block; beatsToNextBar is -1 when the host gives no bar position.
 //   static const clap_plugin_descriptor_t* descriptor();
 // Host-facing values (spec 共通章 2): continuous = normalized 0..1, stepped = step index.
@@ -47,6 +48,9 @@ template <class P> struct DeltaEnabled<P, std::void_t<decltype(P::kDelta)>> : st
 
 template <class C, class = void> struct HasSetTransport : std::false_type {};
 template <class C> struct HasSetTransport<C, std::void_t<decltype(std::declval<C&>().setTransport(false, 0.0))>> : std::true_type {};
+
+template <class C, class = void> struct HasSetPlayhead : std::false_type {};
+template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
 template <class C, class = void> struct HasSetTempo : std::false_type {};
 template <class C> struct HasSetTempo<C, std::void_t<decltype(std::declval<C&>().setTempo(120.0))>> : std::true_type {};
@@ -150,6 +154,15 @@ private:
                     toBar = static_cast<double>(t.bar_start) / CLAP_BEATTIME_FACTOR + t.tsig_num * 4.0 / t.tsig_denom - static_cast<double>(t.song_pos_beats) / CLAP_BEATTIME_FACTOR;
             }
             s->shell_.core().setTransport(playing, toBar);
+        }
+        if constexpr (HasSetPlayhead<typename P::Core>::value) {
+            // host play position in seconds (-1 when the host does not tell) and whether it is playing
+            double sec = -1.0; bool playing = false;
+            if (pr->transport) {
+                playing = (pr->transport->flags & CLAP_TRANSPORT_IS_PLAYING) != 0;
+                if (pr->transport->flags & CLAP_TRANSPORT_HAS_SECONDS_TIMELINE) sec = static_cast<double>(pr->transport->song_pos_seconds) / CLAP_SECTIME_FACTOR;
+            }
+            s->shell_.core().setPlayhead(sec, playing);
         }
         for (uint32_t c = 0; c < nch; ++c)
             if (ob.data32[c] != ib.data32[c]) std::memcpy(ob.data32[c], ib.data32[c], frames * sizeof(float));

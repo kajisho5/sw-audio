@@ -96,6 +96,9 @@
 #include "st04/st04.hpp"
 #include "st05/st05.hpp"
 #include "st06/st06.hpp"
+#include "ut01/ut01.hpp"
+#include "ut02/ut02.hpp"
+#include "ut03/ut03.hpp"
 #include "vo01/vo01.hpp"
 #include "vo02/vo02.hpp"
 #include "vo03/vo03.hpp"
@@ -231,6 +234,9 @@ TEST_CASE("fuzz parameter bounds: st03") { fuzzBounds<sw::st03::Processor>(sw::s
 TEST_CASE("fuzz parameter bounds: st04") { fuzzBounds<sw::st04::Processor>(sw::st04::specs(), 17u); fuzzBounds<sw::st04::Processor>(sw::st04::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: st05") { fuzzBounds<sw::st05::Processor>(sw::st05::specs(), 17u); fuzzBounds<sw::st05::Processor>(sw::st05::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: st06") { fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 17u); fuzzBounds<sw::st06::Processor>(sw::st06::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: ut01") { fuzzBounds<sw::ut01::Processor>(sw::ut01::specs(), 17u); fuzzBounds<sw::ut01::Processor>(sw::ut01::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: ut02") { fuzzBounds<sw::ut02::Processor>(sw::ut02::specs(), 17u); fuzzBounds<sw::ut02::Processor>(sw::ut02::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: ut03") { fuzzBounds<sw::ut03::Processor>(sw::ut03::specs(), 17u); fuzzBounds<sw::ut03::Processor>(sw::ut03::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: vo01") { fuzzBounds<sw::vo01::Processor>(sw::vo01::specs(), 17u); fuzzBounds<sw::vo01::Processor>(sw::vo01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: vo02") { fuzzBounds<sw::vo02::Processor>(sw::vo02::specs(), 17u); fuzzBounds<sw::vo02::Processor>(sw::vo02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: vo03") { fuzzBounds<sw::vo03::Processor>(sw::vo03::specs(), 17u); fuzzBounds<sw::vo03::Processor>(sw::vo03::specs(), 29u); }

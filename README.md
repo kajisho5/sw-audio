@@ -98,6 +98,9 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW MT03 Spectrogram | スクロールするスペクトログラム（Scale Linear/Log/Mel、Scroll、Floor ほか）。帯域のその場試聴（出力が変わる）。遅延 0 | 設計値は README「MT03 Spectrogram の設計」。試聴中は previewActive() で警告 |
 | SW MT04 Phase Scope | 位相スコープと相関メーター（全帯域＋8 帯域、負相関 0.7 秒で警告、Persistence・Zoom）。音は変えない。遅延 0 | 設計値は README「MT04 Phase Scope の設計」 |
 | SW MT05 Vu Ppm | VU/PPM メーター（Ref −14/−18/−20、VU は 300 ms で 99 %、PPM は IEC Type II 基準の設計値）。遅延 0 | 設計値は README「MT05 Vu Ppm の設計」。SW Link での基準共有は未実装 |
+| SW UT01 Gain | ゲイン・バランス・幅・極性・Swap・Mono（Gain は 10 ms で滑らかに、既定値は素通し）。トラックの種類ごとの Gain を覚える。遅延 0 | 設計は README「UT01〜UT03 の設計」。ホストのトラック名の受け取りは未実装 |
+| SW UT02 Mono Check | Mono／Side／Left／Right 試聴、Mono fold、Phone speaker 模擬、Low cut。監視専用で、書き出し警告の判定あり。遅延 0 | 設計は README「UT01〜UT03 の設計」。警告の表示は画面と一緒に作る |
+| SW UT03 Reference | 参照曲 B／C と入力の A/B（ラウドネス自動合わせ、Crossfade、Loop 区間、ホスト位置に同期）。WAV・AIFF 対応。遅延 0 | FLAC・MP3 は未対応。設計は README「UT01〜UT03 の設計」 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -777,6 +780,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **VU。** 整流平均 ×1.1107（正弦波が RMS を示す）を 65 ms の 1 次ローパスに通す（階段で 300 ms に 99 %）。Ref dBFS（−14／−18／−20）の RMS の正弦波が 0 VU。**PPM（仕様書は「種類は要決定」）：** IEC 60268-10 の Type II を基にした設計値：整流した信号が時定数 4.5 ms で上がり（10 ms のバーストは定常より約 1〜3 dB 低い）、戻りは dB で直線に 1.7 秒で 20 dB。0 の基準は Ref のピーク（正弦波のピーク値）。
 - Δ・Auto・Unit は持たない（仕様書の推奨）。**SW Link でプロジェクト単位の 0 VU 基準を共有する進化機能は SW Link が無いため未実装**（Ref はインスタンスごとのパラメータ）。
 - テスト：Ref の RMS の正弦波が 0 VU（±0.1）、−12 dBFS で +6 dB、300 ms で 99 %（±1.5 %）、PPM の戻りが 20 dB ±1.5 dB（1.7 秒）、左右が別々に読める。
+
+### UT01〜UT03 の設計（仕様書に数値がない部分）
+
+- **共通。** 遅延 0。Auto gain は持たない（仕様書「UT01 は外す」。UT02・UT03 も打ち消し合うので同様）。Δ は持たない（`kDelta = false`）。
+- **UT01 Gain。** 処理順は 極性（Ø L／Ø R）→ Swap → Width（Mid／Side で Side×Width/100）→ Mono（(L+R)/2）→ Balance（直線。小さくする側だけ下げ、中央は 0 dB）→ Gain。Gain・Balance・Width は 10 ms で滑らかに動かし、既定値ではビット単位で素通し。Channel は Gain を掛けるチャンネルの指定（もう片方はそのまま）。**進化機能（トラックの種類ごとの Gain）：** トラック名を Vocal／Drums／Bass／Guitar／Keys／Bus／Other に分類し（英語・日本語のキーワード）、種類ごとの Gain を保存データに持つ（`rememberGain()`／`suggestedGainDb()`）。**ホストからトラック名を受け取る部分（CLAP track-info、VST3 のトラック情報）はプラグイン層の仕事で未実装。**
+- **UT02 Mono Check。** Mono は (L+R)×Mono fold（−3 dB で等パワー和、無相関の素材は 0 dB、モノ素材は +3 dB）、Side は (L−R)/2 を両チャンネルへ、Left／Right はそのチャンネルを両方へ。Phone speaker は LO01 と同じ小型スピーカー模擬（300 Hz の 4 次ハイパス＋1.2 kHz に +3 dB・Q 2.5）。Low cut は Off＋20〜300 Hz（最下段が Off）の 2 次ハイパス。Level は最後に掛ける。監視専用なので Stereo 以外・Phone・Low cut が有効なときは `exportWarning()` が true（書き出し前の警告用。画面は未実装）。
+- **UT03 Reference。** 参照曲 B／C は `loadReference(スロット, バイト列)` で読む。**WAV（PCM 8/16/24/32 bit、float 32/64、extensible）と AIFF（PCM 8〜32 bit）に対応。仕様書にある FLAC・MP3 は未対応**（デコーダーを自作する範囲を超えるため。読めないファイルは false を返す）。ホストのサンプルレートへは窓付き sinc（Blackman、片側 32 タップ、ダウンサンプルはカットオフを下げる）で変換。ラウドネス合わせは「入力の統合ラウドネス（30 秒の記憶）− 参照曲全体の統合ラウドネス」を参照曲に掛ける（±24 dB で頭打ち、入力が絶対ゲート未満のあいだは 0 dB）。画面に出す補正量は `matchDb()`。Loop は Intro＝先頭 20 秒、Verse＝20〜40 秒、Chorus＝ファイル中でいちばん大きい 20 秒（100 ms ブロックの平均二乗、1 秒刻み）、Custom＝`setLoopRegion()`。20 秒以下のファイルは全体をループ。Sync play On でホストの再生位置（アダプターに任意フック `setPlayhead(秒, 再生中か)` を追加）に区間内で追従、ホストが止まっていれば参照曲は無音。Off（またはホストが時刻を出さない）なら区間の頭から自走。Crossfade は等パワー、0 ms は即切り替え。Level は参照曲だけに掛ける。ループの端と位置の飛びには 5 ms のフェードを入れる。Source A のときは入力と**ビット単位で同じ**。読み込んだ参照曲は保存データに含めない（ファイルなので画面が読み直す）。
+- テスト：UT01 は各パラメータの式・ビット同一・トラック分類・保存と読込（8 件）、UT02 は各 Listen の式・Phone の周波数特性・Low cut・警告（5 件）、UT03 は WAV 16/24/float・AIFF の読み込みと破損データの拒否、リサンプラーの誤差 −70 dB 以下と折り返しなし、ラウドネス合わせ（±0.03 の比率で一致）、Loop 区間、Sync の位置一致、Crossfade の等パワー、2 本の参照曲・モノ入力・別レート・端数ブロック（12 件）。
 
 ### CS04 の注意
 
