@@ -81,7 +81,8 @@ TEST_CASE("LV30 FLAC and a rate that differs are reported, not hidden") {
 }
 TEST_CASE("LV30 the folder is part of the saved state; start refuses a bad folder; the destructor stops the thread") {
     Processor p; p.setFolder("/some/where/Recordings"); std::vector<uint8_t> st; p.saveExtra(st); Processor q; q.loadExtra(st.data(), st.size()); CHECK(q.folder() == "/some/where/Recordings"); q.loadExtra(nullptr, 0); std::vector<uint8_t> bad = {255, 255, 1}; q.loadExtra(bad.data(), bad.size()); CHECK(q.folder() == "/some/where/Recordings");
-    Processor r; prep(r); r.setFolder("/proc/definitely/not/writable"); CHECK_FALSE(r.start());
+    Tmp blocked; { std::ofstream f(blocked.dir / "afile", std::ios::binary); f << "x"; }
+    Processor r; prep(r); r.setFolder((blocked.dir / "afile" / "sub").string()); CHECK_FALSE(r.start());   // a folder under a regular file cannot be made on any OS
     Tmp t; { Processor s; s.setFolder(t.dir.string()); prep(s, {{AutoStart, 1}}); CHECK(s.recording()); feed(s, sine(-12, 0.5, 440)); }   // Auto start with a folder starts at prepare; leaving scope stops and closes
     CHECK(files(t.dir, ".wav").size() == 1);
 }

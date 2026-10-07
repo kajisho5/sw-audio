@@ -132,7 +132,7 @@ void Processor::writer() {
                   const double at = it->elapsed * fs_;
                   if (at <= static_cast<double>(totalFrames + frames)) {
                       const uint64_t pos = at > static_cast<double>(fileStart) ? static_cast<uint64_t>(at) - fileStart : 0; cues.push_back({std::min<uint64_t>(pos, fileFrames + frames), it->label});
-                      const bool fresh = !fs::exists(csvPath); std::ofstream csv(csvPath, std::ios::app);
+                      const bool fresh = !fs::exists(csvPath); std::ofstream csv(csvPath, std::ios::app | std::ios::binary);   // binary: one \n per line on every OS
                       if (csv) { if (fresh) csv << "elapsed_seconds,file,label\n"; char num[40]; std::snprintf(num, sizeof num, "%.3f", it->elapsed); csv << num << "," << fs::path(wav.path).filename().string() << "," << it->label << "\n"; }
                       it = marks_.erase(it);
                   } else ++it;
