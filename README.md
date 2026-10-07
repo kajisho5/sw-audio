@@ -95,6 +95,9 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 | SW CR06 One Knob | 6 つの効果（Wide/Warm/Air/Punch/Space/Lo-fi）を 1 つの Amount で動かす。Amount 0 は原音そのもの。Macro は内部値を画面へ。遅延 0 | 設計値は README「CR06 One Knob の設計」。内部チェーンは既存製品の簡略版（Space だけ RV02 のコア）で、曲線は設計値 |
 | SW MT01 Loudness | ラウドネスメーター（Momentary/Short-term/Integrated/LRA/True peak、10 分の推移、ARIB/EBU/配信のプリセット）。音は変えない。遅延 0 | 設計値は README「MT01 Loudness の設計」。±1 LU が規格上の許容値かは要確認のまま。アダプターに kDelta=false を追加 |
 | SW MT02 Spectrum | スペクトラムアナライザ（FFT 4k〜32k、Speed、Range、Slope、Smoothing、Display、参照との比較）。音は変えない。遅延 0 | 設計値は README「MT02 Spectrum の設計」。ジャンル別の型は未実装 |
+| SW MT03 Spectrogram | スクロールするスペクトログラム（Scale Linear/Log/Mel、Scroll、Floor ほか）。帯域のその場試聴（出力が変わる）。遅延 0 | 設計値は README「MT03 Spectrogram の設計」。試聴中は previewActive() で警告 |
+| SW MT04 Phase Scope | 位相スコープと相関メーター（全帯域＋8 帯域、負相関 0.7 秒で警告、Persistence・Zoom）。音は変えない。遅延 0 | 設計値は README「MT04 Phase Scope の設計」 |
+| SW MT05 Vu Ppm | VU/PPM メーター（Ref −14/−18/−20、VU は 300 ms で 99 %、PPM は IEC Type II 基準の設計値）。遅延 0 | 設計値は README「MT05 Vu Ppm の設計」。SW Link での基準共有は未実装 |
 | SW DY01 FET | FET 型のキャラクターコンプ。Drive（入力 0〜+36 dB）を固定しきい値 −6 dBFS に押し込む。Speed でアタック 800〜20 µs とリリース 1100〜50 ms を連動。Ratio 右端 5 % は Max（硬いニー・無限大）。Bite（立ち上がり後 5〜15 ms だけゲインリダクションを緩める）、Color（Clean／Grit／Crush、2× OS、Crush は 4×）、SC HPF | 検出はフィードバックの静的解をフィードフォワードで計算（下の「DY01 の設計」）。Color の歪みの量は設計値 |
 | SW DY02 Opto | 光学式レベラー。Level（しきい値 0〜−40 dBFS）、2 段リリース（速い段が GR の半分、遅い段が残り）、Speed（Fast／Prog／Slow）、Target、Emphasis（検出側の 2 kHz 以上のハイシェルフ）、Ride（EVO：400 ms ラウドネスを Target に寄せる前段フェーダー）、Auto makeup | 検出の比率 3:1・ニー 12 dB と Prog のモデルは設計値（下の「DY02 の設計」） |
 | SW DY03 Bus | VCA バスコンプ。段階式の Ratio/Attack/Release、Auto release（100 ms／1.2 秒の2段）、Punch keep（打楽器の頭を 15 ms 通す） | — |
@@ -756,6 +759,24 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **表示値 `spectrumDb()`。** Smoothing（Off／1/24／1/12／1/6／1/3 オクターブ：その幅のパワー平均）、Slope（1 kHz を中心に、1 オクターブあたり Slope dB 持ち上げる。ピンクノイズが平らに見えるのは 3 dB/oct）、Range（−Range 未満は出さない）。
 - **進化機能（Compare A、区分 B）。** `captureReference()` で今の平均を参照カーブとして保存し、`compareDb()` が（今の平均 − 参照）を返す。参照曲の長時間平均を作る使い方を想定。**ジャンル別の型は元データが要るため未実装**（仕様書の要確認のまま）。
 - **確かめたこと。** ビン上の正弦波が 4k／8k／32k のどれでもピーク値を ±0.6 dB で示す、Slope 3 dB/oct で 2 オクターブ上が +6 dB、Smoothing 1/3 オクターブで雑音の凸凹が半分未満、20 dB の段差の 0.5 秒後に Fast は Slow より 3 dB 以上高い、Peak は 3 秒後に Hold より 10 dB 以上低い、参照との差が 6 dB の雑音で ±1 dB。
+
+### MT03 Spectrogram の設計（仕様書に数値がない部分）
+
+- **列。** (L＋R)/2 の STFT（4096 点・Hann・ホップ 1024 ＝ 21.3 ms）を、選んだ Scale の 256 本の表示帯域に束ねて 1 列にする（Linear は 20 Hz〜20 kHz を等間隔、Log はオクターブ等間隔、Mel はメル等間隔）。値は MT02 と同じピーク基準の dB（帯域の中で最も強いビンを採るので、純音がレベルを保つ）、下限は Floor（−120〜−60 dB）。Scroll（2〜60 秒）の間だけ保持（最大 3000 列）。Contrast・Palette・Show notes・Show freq は画面の設定として保存するだけ（Heat パレットは状態色を使わない配色にする、という仕様書の注意は画面側）。
+- **進化機能（帯域のその場試聴、区分 A）。** `setPreview(true, 下端, 上端)` で、その帯域を 4 次のバンドパス（20 ms のクロスフェード）で聴く。**試聴中は出力が変わる**ので `previewActive()` を画面の警告（書き出し時に注意）に使う。**通過帯域の中心で 6 dB 小さくなっていたため（狭い帯域の 4 次）、中心の損失を補う（最大 +12 dB）。** 試聴していなければ出力はビット単位で一致。
+- テスト：各 Scale で 1 kHz の純音が 1 本の帯域（±1）に、ピーク値 ±1.6 dB で出る、Scroll 2 秒で保持する列が 2 秒分、Floor 未満が出ない、試聴で 5 kHz が 40 dB 以上下がる。
+
+### MT04 Phase Scope の設計（仕様書に数値がない部分）
+
+- **スコープの点。** x ＝ (L − R)/√2、y ＝ (L ＋ R)/√2（モノは縦線）、16 サンプルに 1 点、Persistence 秒ぶん（最大 12000 点）。Zoom 1／2／4／8 倍は `scopePoint()` が掛ける。**相関。** 300 ms の指数窓の相関係数 ΣLR/√(ΣLL ΣRR)。全帯域と、62.5 Hz〜8 kHz のオクターブ 8 帯域（両チャンネルへ Q 1.4 のバンドパス）。
+- **進化機能（区分 A）。** ある帯域の相関が **0.7 秒続けて負**になったら `warnings()` のその帯域のビットを立て（仕様書の「1 秒以上続きそうになったら」）、相関が +0.1 を超えたら下げる。信号の無い帯域は何も言わない。`summedLossDb()` は L＋R のパワーを L と R のパワーの和に対して見たもの（モノにしたときの目減り：相関 +1 で +3 dB、逆相で −40 dB 以下、無相関で 0 dB）。
+- テスト：モノは +1、逆相は −1、独立した雑音は 0.15 以内、125 Hz だけ逆相の信号で 0.5 秒では警告なし・3 秒後は 125 Hz の帯域だけ警告（4 kHz は出ない）で、相関が戻ると消える。
+
+### MT05 Vu Ppm の設計（仕様書に数値がない部分）
+
+- **VU。** 整流平均 ×1.1107（正弦波が RMS を示す）を 65 ms の 1 次ローパスに通す（階段で 300 ms に 99 %）。Ref dBFS（−14／−18／−20）の RMS の正弦波が 0 VU。**PPM（仕様書は「種類は要決定」）：** IEC 60268-10 の Type II を基にした設計値：整流した信号が時定数 4.5 ms で上がり（10 ms のバーストは定常より約 1〜3 dB 低い）、戻りは dB で直線に 1.7 秒で 20 dB。0 の基準は Ref のピーク（正弦波のピーク値）。
+- Δ・Auto・Unit は持たない（仕様書の推奨）。**SW Link でプロジェクト単位の 0 VU 基準を共有する進化機能は SW Link が無いため未実装**（Ref はインスタンスごとのパラメータ）。
+- テスト：Ref の RMS の正弦波が 0 VU（±0.1）、−12 dBFS で +6 dB、300 ms で 99 %（±1.5 %）、PPM の戻りが 20 dB ±1.5 dB（1.7 秒）、左右が別々に読める。
 
 ### CS04 の注意
 

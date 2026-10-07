@@ -65,6 +65,9 @@
 #include "ms07/ms07.hpp"
 #include "mt01/mt01.hpp"
 #include "mt02/mt02.hpp"
+#include "mt03/mt03.hpp"
+#include "mt04/mt04.hpp"
+#include "mt05/mt05.hpp"
 #include "rs01/rs01.hpp"
 #include "rs03/rs03.hpp"
 #include "rs04/rs04.hpp"
@@ -197,6 +200,9 @@ TEST_CASE("fuzz parameter bounds: ms06") { fuzzBounds<sw::ms06::Processor>(sw::m
 TEST_CASE("fuzz parameter bounds: ms07") { fuzzBounds<sw::ms07::Processor>(sw::ms07::specs(), 17u); fuzzBounds<sw::ms07::Processor>(sw::ms07::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: mt01") { fuzzBounds<sw::mt01::Processor>(sw::mt01::specs(), 17u); fuzzBounds<sw::mt01::Processor>(sw::mt01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: mt02") { fuzzBounds<sw::mt02::Processor>(sw::mt02::specs(), 17u); fuzzBounds<sw::mt02::Processor>(sw::mt02::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: mt03") { fuzzBounds<sw::mt03::Processor>(sw::mt03::specs(), 17u); fuzzBounds<sw::mt03::Processor>(sw::mt03::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: mt04") { fuzzBounds<sw::mt04::Processor>(sw::mt04::specs(), 17u); fuzzBounds<sw::mt04::Processor>(sw::mt04::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: mt05") { fuzzBounds<sw::mt05::Processor>(sw::mt05::specs(), 17u); fuzzBounds<sw::mt05::Processor>(sw::mt05::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rs01") { fuzzBounds<sw::rs01::Processor>(sw::rs01::specs(), 17u); fuzzBounds<sw::rs01::Processor>(sw::rs01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rs03") { fuzzBounds<sw::rs03::Processor>(sw::rs03::specs(), 17u); fuzzBounds<sw::rs03::Processor>(sw::rs03::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rs04") { fuzzBounds<sw::rs04::Processor>(sw::rs04::specs(), 17u); fuzzBounds<sw::rs04::Processor>(sw::rs04::specs(), 29u); }
