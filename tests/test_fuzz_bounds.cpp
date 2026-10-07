@@ -61,6 +61,7 @@
 #include "rs03/rs03.hpp"
 #include "rs04/rs04.hpp"
 #include "rs05/rs05.hpp"
+#include "rs06/rs06.hpp"
 #include "rv01/rv01.hpp"
 #include "rv02/rv02.hpp"
 #include "rv03/rv03.hpp"
@@ -183,6 +184,7 @@ TEST_CASE("fuzz parameter bounds: rs01") { fuzzBounds<sw::rs01::Processor>(sw::r
 TEST_CASE("fuzz parameter bounds: rs03") { fuzzBounds<sw::rs03::Processor>(sw::rs03::specs(), 17u); fuzzBounds<sw::rs03::Processor>(sw::rs03::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rs04") { fuzzBounds<sw::rs04::Processor>(sw::rs04::specs(), 17u); fuzzBounds<sw::rs04::Processor>(sw::rs04::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rs05") { fuzzBounds<sw::rs05::Processor>(sw::rs05::specs(), 17u); fuzzBounds<sw::rs05::Processor>(sw::rs05::specs(), 29u); }
+TEST_CASE("fuzz parameter bounds: rs06") { fuzzBounds<sw::rs06::Processor>(sw::rs06::specs(), 17u); fuzzBounds<sw::rs06::Processor>(sw::rs06::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rv01") { fuzzBounds<sw::rv01::Processor>(sw::rv01::specs(), 17u); fuzzBounds<sw::rv01::Processor>(sw::rv01::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rv02") { fuzzBounds<sw::rv02::Processor>(sw::rv02::specs(), 17u); fuzzBounds<sw::rv02::Processor>(sw::rv02::specs(), 29u); }
 TEST_CASE("fuzz parameter bounds: rv03") { fuzzBounds<sw::rv03::Processor>(sw::rv03::specs(), 17u); fuzzBounds<sw::rv03::Processor>(sw::rv03::specs(), 29u); }
