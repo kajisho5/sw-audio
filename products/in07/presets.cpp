@@ -327,13 +327,21 @@ const Built& built() {
 }  // namespace
 
 const std::vector<Preset>& factoryPresets() { return built().presets; }
+const std::vector<std::string>& presetNames() {
+    static const std::vector<std::string> n = [] { std::vector<std::string> v; for (const Raw& r : rawTable()) v.push_back(r.name); return v; }();
+    return n;
+}
+
+void applyInit(Processor& p) {
+    const auto& s = specs();
+    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, s[static_cast<size_t>(i)].def);
+}
 const std::vector<std::string>& presetErrors() { return built().errors; }
 
 void applyPreset(Processor& p, int index, double trim) {
     const auto& P = factoryPresets();
     if (index < 0 || index >= static_cast<int>(P.size())) return;
-    const auto& s = specs();
-    for (int i = 0; i < kNumParams; ++i) p.setParam(i, s[static_cast<size_t>(i)].def);
+    applyInit(p);
     const Preset& pr = P[static_cast<size_t>(index)];
     for (const auto& v : pr.values) p.setParam(v.first, v.second);
     p.setParam(Level, kPresetLevel);

@@ -1,4 +1,5 @@
 #include "in07/in07.hpp"
+#include "in07/presets.hpp"
 #include "sw/fft.hpp"
 #include <algorithm>
 #include <cmath>
@@ -136,6 +137,12 @@ const std::vector<ParamSpec>& specs() {
             add("dst",    "target", {"", "", 0, kModDests - 1, DstNone, Curve::Step, 1, dstSteps, "", dstLabels});
             add("amount", "amount", {"", "", -100, 100, 0, Curve::Lin, 1, {}, "%"});
         }
+        std::vector<double> presetSteps; std::vector<std::string> presetLabels = {"Init"};
+        for (const auto& n : presetNames()) presetLabels.push_back(n);
+        for (size_t i = 0; i < presetLabels.size(); ++i) presetSteps.push_back(static_cast<double>(i));
+        ParamSpec ps{"in07.preset", "Preset", 0, static_cast<double>(presetLabels.size() - 1), 0, Curve::Step, 1, presetSteps, "", presetLabels};
+        ps.automatable = false;
+        v.push_back(ps);
         return v;
     }();
     return s;
@@ -786,6 +793,7 @@ void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
+    if (id == PresetSelect) return;   // kept only: the plug-in layer loads presets
     if (id >= kFxEnd) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
     if (id >= kFxBase) { updateFx(); if (fresh_) fx_.snapSwitches(); return; }
     if (id == Level) level_.setTarget(dbToGain(v));

@@ -105,3 +105,30 @@ TEST_CASE("IN07 PRESETS: categories follow their conventions") {
         CHECK(val(p, "in07.fx.limit.on") == 1.0);
     }
 }
+
+TEST_CASE("IN07 PRESETS: the preset selector (the last parameter; the plug-in layer loads the preset, the engine only keeps the value)") {
+    const auto& s = specs();
+    REQUIRE(kNumParams == PresetSelect + 1);
+    const sw::ParamSpec& ps = s[static_cast<size_t>(PresetSelect)];
+    CHECK(std::string(ps.id) == "in07.preset");
+    CHECK_FALSE(ps.automatable);
+    REQUIRE(ps.numSteps() == static_cast<int>(factoryPresets().size()) + 1);
+    CHECK(ps.labels[0] == "Init");
+    for (size_t i = 0; i < factoryPresets().size(); ++i) CHECK(ps.labels[i + 1] == factoryPresets()[i].name);
+    CHECK(ps.def == 0.0);
+    // the engine keeps the value and changes nothing else
+    Processor p; p.prepare(48000, 256);
+    applyPreset(p, 6);
+    std::vector<double> before(static_cast<size_t>(kNumParams));
+    for (int i = 0; i < kNumParams; ++i) before[static_cast<size_t>(i)] = p.param(i);
+    p.setParam(PresetSelect, 3);
+    CHECK(p.param(PresetSelect) == 3.0);
+    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) CHECK(p.param(i) == before[static_cast<size_t>(i)]);
+    // a preset leaves the selector alone (the plug-in layer owns it); Init puts every other parameter back to its default
+    p.setParam(PresetSelect, 7);
+    applyPreset(p, 0);
+    CHECK(p.param(PresetSelect) == 7.0);
+    applyInit(p);
+    for (int i = 0; i < kNumParams; ++i)
+        if (i != PresetSelect) CHECK(p.param(i) == doctest::Approx(s[static_cast<size_t>(i)].def).epsilon(1e-9));
+}

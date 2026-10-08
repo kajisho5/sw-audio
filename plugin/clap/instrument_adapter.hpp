@@ -5,6 +5,10 @@
 //                       // optional: setTempo(bpm) — called with the host tempo when the transport has one
 //   static const std::vector<sw::ParamSpec>& specs();   // parameter table (never reordered; new ones are appended)
 //   static const clap_plugin_descriptor_t* descriptor();
+//   optional, a program (preset) selector: static constexpr int kProgramParam; static void loadProgram(Core&, int step) (audio thread or flush:
+//   no allocation); static void warmUp() (activate: build tables). Needs Core::param(id) (plain values) to read the loaded values back.
+//   When the host changes the selector, the preset is loaded and every value it changed is reported to the host (CLAP param value events);
+//   a restored state sets the selector without loading (the session keeps its own values).
 // Host-facing values as the effects (spec 共通章 2): continuous = normalized 0..1, stepped = step index. State: "SWA1" + count + values.
 // Notes: one note port, CLAP and MIDI dialects (CLAP preferred). MIDI: note on / off, pitch bend, CC 1 mod wheel, CC 64 sustain,
 // CC 120 all sound off, CC 123 all notes off, channel pressure; CLAP pressure expressions act as the aftertouch. Events are sample accurate: the block is split at each event. Every note that ends is reported (CLAP note end).
@@ -33,6 +37,10 @@ template <class C, class = void> struct HasModWheel : std::false_type {};
 template <class C> struct HasModWheel<C, std::void_t<decltype(std::declval<C&>().modWheel(0.0))>> : std::true_type {};
 template <class C, class = void> struct HasAftertouch : std::false_type {};
 template <class C> struct HasAftertouch<C, std::void_t<decltype(std::declval<C&>().aftertouch(0.0))>> : std::true_type {};
+template <class T, class = void> struct HasProgram : std::false_type {};
+template <class T> struct HasProgram<T, std::void_t<decltype(T::kProgramParam), decltype(T::loadProgram(std::declval<typename T::Core&>(), 0))>> : std::true_type {};
+template <class T, class = void> struct HasWarmUp : std::false_type {};
+template <class T> struct HasWarmUp<T, std::void_t<decltype(T::warmUp())>> : std::true_type {};
 
 template <class P>
 class Plugin {
@@ -50,7 +58,7 @@ public:
         return stepped(id) ? static_cast<double>(std::lround(s.toNorm(v) * (s.numSteps() - 1))) : s.toNorm(v);
     }
 
-    explicit Plugin(const clap_host_t* host) : host_(host), host_values_(static_cast<size_t>(numParams())), dirty_(static_cast<size_t>(numParams())) {
+    explicit Plugin(const clap_host_t* host) : host_(host), host_values_(static_cast<size_t>(numParams())), dirty_(static_cast<size_t>(numParams())), changed_(static_cast<size_t>(numParams()), 0) {
         for (int i = 0; i < numParams(); ++i) { host_values_[static_cast<size_t>(i)].store(plainToHost(i, spec(i).def)); dirty_[static_cast<size_t>(i)].store(true); }
         plugin_ = {P::descriptor(), this, init, destroy, activate, deactivate, startProcessing, stopProcessing, reset, process, getExtension, onMainThread};
     }
@@ -72,6 +80,8 @@ private:
                 const int id = static_cast<int>(ev->param_id);
                 host_values_[static_cast<size_t>(id)].store(ev->value);
                 core_.setParam(id, hostToPlain(id, ev->value));
+                if constexpr (HasProgram<P>::value)
+                    if (id == P::kProgramParam) { P::loadProgram(core_, static_cast<int>(std::lround(ev->value))); syncFromCore(); }
                 return;
             }
             case CLAP_EVENT_NOTE_ON: {
@@ -111,6 +121,33 @@ private:
             default: return;
         }
     }
+    // after a program load: every value the core now holds that differs from the host's goes to the host (emitChanged)
+    void syncFromCore() {
+        if constexpr (HasProgram<P>::value) {
+            for (int i = 0; i < numParams(); ++i) {
+                if (i == P::kProgramParam) continue;
+                const double h = plainToHost(i, core_.param(i));
+                if (std::abs(h - host_values_[static_cast<size_t>(i)].load()) > 1e-9) {
+                    host_values_[static_cast<size_t>(i)].store(h); dirty_[static_cast<size_t>(i)].store(false);
+                    changed_[static_cast<size_t>(i)] = 1; anyChanged_ = true;
+                }
+            }
+        }
+    }
+    void emitChanged(const clap_output_events_t* out, uint32_t time) {
+        if (!anyChanged_) return;
+        anyChanged_ = false;
+        for (int i = 0; i < numParams(); ++i) {
+            if (!changed_[static_cast<size_t>(i)]) continue;
+            changed_[static_cast<size_t>(i)] = 0;
+            if (!out) continue;
+            clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+            e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = 0;
+            e.param_id = static_cast<clap_id>(i); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1;
+            e.value = host_values_[static_cast<size_t>(i)].load();
+            out->try_push(out, &e.header);
+        }
+    }
     void emitNoteEnds(const clap_output_events_t* out, uint32_t time) {
         int key = 0, ch = 0, id = -1;
         while (core_.takeEnded(key, ch, id)) {
@@ -127,6 +164,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
+        if constexpr (HasWarmUp<P>::value) P::warmUp();
         s->core_.prepare(sr, static_cast<int>(std::max<uint32_t>(1, maxFrames)));
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->applyPending();
@@ -167,6 +205,7 @@ private:
         }
         while (ev < nev) { s->handleEvent(pr->in_events->get(pr->in_events, ev)); ++ev; }   // events at or after the end (frames 0)
         for (uint32_t c = 2; c < nch; ++c) if (ob.data32[c]) std::memset(ob.data32[c], 0, frames * sizeof(float));
+        s->emitChanged(pr->out_events, 0);
         s->emitNoteEnds(pr->out_events, frames > 0 ? frames - 1 : 0);
         return CLAP_PROCESS_CONTINUE;
     }
@@ -240,13 +279,14 @@ private:
         *out = plainToHost(static_cast<int>(id), v);
         return true;
     }
-    static void paramsFlush(const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t*) {
+    static void paramsFlush(const clap_plugin_t* p, const clap_input_events_t* in, const clap_output_events_t* out) {
         Plugin* s = self(p);
         for (uint32_t i = 0, n = in ? in->size(in) : 0; i < n; ++i) {
             const clap_event_header_t* h = in->get(in, i);
             if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_PARAM_VALUE) s->handleEvent(h);   // only values here: no notes outside process
         }
         s->applyPending();
+        s->emitChanged(out, 0);
     }
 
     // ---- state: "SWA1" + count + host values (count-based, so appended params load old states)
@@ -288,6 +328,8 @@ private:
     typename P::Core core_;
     std::vector<std::atomic<double>> host_values_;
     std::vector<std::atomic<bool>> dirty_;
+    std::vector<uint8_t> changed_;   // values a program load changed, not yet reported to the host
+    bool anyChanged_ = false;
     bool active_ = false;
 };
 

@@ -67,7 +67,10 @@ enum ModParamId { Lfo1Shape = kFxEnd, Lfo1Rate, Lfo1Sync, Lfo1Ecc, Lfo1Trigger, 
 constexpr int kModSlots = 8;
 enum ModField { ModOn, ModSrc, ModDst, ModAmount, kModFields };
 constexpr int modId(int slot, int field) { return kModSlotBase + slot * kModFields + field; }
-constexpr int kNumParams = kModSlotBase + kModSlots * kModFields;
+// the preset selector (Init, then the factory presets; not automatable): the plug-in layer loads the preset when the host changes it,
+// the engine only keeps the value (a restored session keeps its own values)
+constexpr int PresetSelect = kModSlotBase + kModSlots * kModFields;
+constexpr int kNumParams = PresetSelect + 1;
 enum LfoShapeId { LfoOrbit = 0, LfoTriangle, LfoSaw, LfoSquare, LfoRandom };
 enum ModSource { SrcNone = 0, SrcLfo1, SrcLfo2, SrcEnv2, SrcVelocity, SrcModWheel, SrcAftertouch, SrcKey,
                  SrcM1, SrcM2, SrcM3, SrcM4, SrcM5, SrcM6, SrcM7, SrcM8, kModSources };

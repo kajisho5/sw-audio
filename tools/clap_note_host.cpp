@@ -19,9 +19,11 @@ struct InEvents {
 };
 struct OutEvents {
     int noteEnds = 0; std::vector<int> keys;
+    std::vector<std::pair<clap_id, double>> values;   // parameter values the plug-in reports (a preset it loaded)
     static bool tryPush(const clap_output_events_t* l, const clap_event_header_t* h) {
         auto* o = static_cast<OutEvents*>(l->ctx);
         if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_NOTE_END) { ++o->noteEnds; o->keys.push_back(reinterpret_cast<const clap_event_note_t*>(h)->key); }
+        if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && h->type == CLAP_EVENT_PARAM_VALUE) { const auto* v = reinterpret_cast<const clap_event_param_value_t*>(h); o->values.push_back({v->param_id, v->value}); }
         return true;
     }
 };
@@ -133,6 +135,44 @@ int main(int argc, char** argv) {
             char txt[64]; params->value_to_text(p, cutoff, v, txt, sizeof(txt));
             std::printf("      cutoff after load: %.3f (%s), state %zu bytes, %u parameters\n", v, txt, m.d.size(), n);
             check(std::abs(v - 0.25) < 1e-9, "state round trip");
+            // presets: the selector (by its id string) loads a preset; the plug-in reports the values it changed
+            clap_id sel = CLAP_INVALID_ID, mode = CLAP_INVALID_ID;
+            int polar = -1;
+            for (uint32_t i = 0; i < n; ++i) {
+                clap_param_info_t inf; params->get_info(p, i, &inf);
+                if (!std::strcmp(inf.module, "in07.preset")) {
+                    sel = inf.id;
+                    check(!(inf.flags & CLAP_PARAM_IS_AUTOMATABLE) && (inf.flags & CLAP_PARAM_IS_STEPPED), "the preset selector is stepped and not automatable");
+                    for (int k = 0; k <= static_cast<int>(inf.max_value); ++k) { char t[64]; params->value_to_text(p, sel, k, t, sizeof(t)); if (!std::strcmp(t, "Polar Bass")) polar = k; }
+                }
+                if (!std::strcmp(inf.module, "in07.mode")) mode = inf.id;
+            }
+            check(sel != CLAP_INVALID_ID && polar > 0, "the preset selector lists the factory presets by name");
+            if (sel != CLAP_INVALID_ID && polar > 0) {
+                pv.param_id = sel; pv.value = polar;
+                OutEvents po; run(0.01, {{0.0, bytes(pv)}}, 0, 0, po);
+                double c = 0, m2 = 0; params->get_value(p, cutoff, &c); params->get_value(p, mode, &m2);
+                char ct[64]; params->value_to_text(p, cutoff, c, ct, sizeof(ct));
+                bool reported = false; for (auto& x : po.values) reported = reported || (x.first == cutoff && std::abs(x.second - c) < 1e-12);
+                std::printf("      Polar Bass: L1 cutoff %s, mode step %.0f, %zu values reported to the host\n", ct, m2, po.values.size());
+                check(!std::strcmp(ct, "300 Hz") && m2 == 1.0, "selecting a preset loads it (L1 cutoff 300 Hz, Mono)");
+                check(reported && po.values.size() > 20, "the plug-in reports the changed values to the host");
+                // a session saved after a tweak comes back with the tweak (the selector is restored, not applied again)
+                pv.param_id = cutoff; pv.value = 0.6; run(0.01, {{0.0, bytes(pv)}}, 0, 0, po);
+                Mem m3; clap_ostream_t os3{&m3, wr}; state->save(p, &os3);
+                pv.param_id = sel; pv.value = 0; run(0.01, {{0.0, bytes(pv)}}, 0, 0, po);   // Init
+                clap_istream_t is3{&m3, rd}; state->load(p, &is3);
+                double c3 = 0, s3 = 0; params->get_value(p, cutoff, &c3); params->get_value(p, sel, &s3);
+                check(std::abs(c3 - 0.6) < 1e-9 && s3 == polar, "a saved session keeps its tweaks and its preset name");
+                // through flush (no audio running): Init puts the defaults back
+                InEvents ie; pv.value = 0; pv.param_id = sel; ie.push(pv);
+                clap_input_events_t in{&ie, InEvents::size, InEvents::get};
+                OutEvents fo; clap_output_events_t o{&fo, OutEvents::tryPush};
+                params->flush(p, &in, &o);
+                double c4 = 0; params->get_value(p, cutoff, &c4); char t4[64]; params->value_to_text(p, cutoff, c4, t4, sizeof(t4));
+                std::printf("      Init through flush: L1 cutoff %s, %zu values reported\n", t4, fo.values.size());
+                check(!std::strcmp(t4, "2.4 kHz") && !fo.values.empty(), "Init through flush restores the defaults and reports them");
+            }
         }
     }
     p->stop_processing(p); p->deactivate(p); p->destroy(p); entry->deinit();
