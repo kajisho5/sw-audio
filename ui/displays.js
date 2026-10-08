@@ -254,7 +254,50 @@
     } };
   }
 
+
+  // ---- multiband (DY10, DY11): the design's bands drawn at the real frequencies; the dividers / centres can be dragged.
+  // The example spectrum of the design is removed (it is not measured). The height of a band bar is its Range (the deepest cut it may make).
+  function multibandDisplay(box, ctx, mode) {
+    const disp = box.querySelector('.disp'); const svg = disp && disp.querySelector('svg'); if (!svg) return null;
+    const W = 932, FMIN = 20, FMAX = 20000, X0 = 3, X1 = W - 3, TOP = 2, BOT = 242;
+    const fx = f => X0 + Math.log(clamp(f, FMIN, FMAX) / FMIN) / Math.log(FMAX / FMIN) * (X1 - X0), xf = x => FMIN * Math.pow(FMAX / FMIN, (x - X0) / (X1 - X0));
+    const rects = [...svg.querySelectorAll(':scope > rect')], texts = [...svg.querySelectorAll(':scope > text')], lines = [...svg.querySelectorAll(':scope > line')], dots = [...svg.querySelectorAll(':scope > circle')];
+    const sp = svg.querySelector(':scope > path'); if (sp) sp.remove();
+    const byName = re => ctx.params.filter(q => re.test(q.name)).map(q => q.i);
+    const freq = mode === 'xover' ? byName(/^Crossover \d$/) : byName(/^Band \d Freq$/);
+    const range = byName(/^Band \d Range$/), n = rects.length;
+    if (!freq.length || rects.length < 2 || (mode === 'xover' && freq.length !== n - 1) || (mode === 'centre' && freq.length !== n)) return null;
+    const q = i => ctx.params.find(x => x.i === i), rh = k => 6 + (range[k] !== undefined ? Math.abs(ctx.get(range[k])) / 24 : 0.25) * (BOT - TOP - 40);
+    // grid labels
+    [[100, '100'], [1000, '1k'], [10000, '10k']].forEach(([f, t]) => { const g = document.createElementNS(NS, 'text'); g.setAttribute('x', fx(f).toFixed(1)); g.setAttribute('y', '236'); g.setAttribute('text-anchor', 'middle'); g.setAttribute('font-family', 'Barlow Condensed, sans-serif'); g.setAttribute('font-size', '10'); g.setAttribute('fill', '#6b6d72'); g.textContent = t; svg.prepend(g); });
+    if (mode === 'centre') lines.forEach((l, k) => { l.style.display = 'none'; });
+    const markers = mode === 'xover' ? lines.map((l, k) => ({ l, c: dots[k], i: freq[k] })) : freq.map((i, k) => ({ l: null, c: dots[k] || null, i }));
+    if (mode === 'centre') { dots.forEach(c => { c.style.display = 'none'; }); markers.forEach((m, k) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', '5'); c.setAttribute('fill', '#f0ad3d'); c.setAttribute('cy', '128'); svg.append(c); m.c = c; }); }
+    const pt = e => { const r = svg.getBoundingClientRect(); return (e.clientX - r.left) / r.width * W; };
+    markers.forEach(m => {
+      const el = [m.c, m.l].filter(Boolean); let drag = false;
+      el.forEach(e => { e.style.cursor = 'ew-resize'; e.style.pointerEvents = 'all';
+        e.addEventListener('pointerdown', ev => { ev.stopPropagation(); e.setPointerCapture(ev.pointerId); drag = true; ctx.begin(m.i); });
+        e.addEventListener('pointermove', ev => { if (!drag) return; const pp = q(m.i); ctx.set(m.i, pp.c.value(pp.c.norm(xf(pt(ev))))); });
+        const end = () => { if (!drag) return; drag = false; ctx.end(m.i); }; e.addEventListener('pointerup', end); e.addEventListener('pointercancel', end);
+        e.addEventListener('dblclick', () => { ctx.begin(m.i); ctx.set(m.i, q(m.i).p.def); ctx.end(m.i); }); });
+    });
+    let last = '';
+    return { update() {
+      const fs = freq.map(i => ctx.get(i)), rs = range.map(i => ctx.get(i)), key = fs.join(',') + '|' + rs.join(','); if (key === last) return; last = key;
+      let edges;
+      if (mode === 'xover') { const xs = [...fs].sort((a, b) => a - b); edges = [FMIN, ...xs, FMAX]; markers.forEach((m, k) => { const x = fx(fs[k]).toFixed(1); m.l.setAttribute('x1', x); m.l.setAttribute('x2', x); m.c.setAttribute('cx', x); }); }
+      else { const w = ctx.params.filter(p => /^Band \d Width$/.test(p.name)).map(p => ctx.get(p.i)); edges = null;
+        markers.forEach((m, k) => { const x = fx(fs[k]); m.c.setAttribute('cx', x.toFixed(1)); const half = Math.pow(2, (w[k] || 1) / 2), a = fx(fs[k] / half), b = fx(fs[k] * half);
+          rects[k].setAttribute('x', a.toFixed(1)); rects[k].setAttribute('width', Math.max(4, b - a).toFixed(1)); rects[k].setAttribute('height', rh(k).toFixed(1)); texts[k].setAttribute('x', x.toFixed(1)); }); return; }
+      for (let k = 0; k < n; k++) { const a = fx(edges[k]) + (k ? 3 : 0), b = fx(edges[k + 1]) - (k < n - 1 ? 3 : 0), mid = fx(Math.sqrt(edges[k] * edges[k + 1]));
+        rects[k].setAttribute('x', a.toFixed(1)); rects[k].setAttribute('width', Math.max(2, b - a).toFixed(1)); rects[k].setAttribute('height', rh(k).toFixed(1)); texts[k].setAttribute('x', mid.toFixed(1)); }
+    } };
+  }
+
   const registry = {
+    DY10: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
+    DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     LV12: faderBank,
     EQ02: eqDisplay, EQ07: eqDisplay, EQ08: eqDisplay,
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
