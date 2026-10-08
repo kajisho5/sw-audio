@@ -11,9 +11,9 @@ from bs4 import BeautifulSoup
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CANVAS = os.path.join(ROOT, 'docs/design/canvas/project')
-SPECS = json.load(open(os.path.join(ROOT, 'ui/specs.json')))
+SPECS = json.load(open(os.path.join(ROOT, 'ui/specs.json'), encoding='utf-8'))
 ALIAS_FILE = os.path.join(ROOT, 'ui/skin_aliases.json')
-ALIASES = json.load(open(ALIAS_FILE)) if os.path.exists(ALIAS_FILE) else {}
+ALIASES = json.load(open(ALIAS_FILE, encoding='utf-8')) if os.path.exists(ALIAS_FILE) else {}
 UNITS = {'hz', 'khz', 'db', 'ms', 's', 'sec', 'pct', 'x'}
 
 
@@ -155,8 +155,9 @@ def emit(out, directory):
         text += arr('kSkinCss', (base + '\n' + v['css']).encode('utf-8')) + arr('kSkinHtml', v['html'].encode('utf-8'))
         text += 'static const int kSkinW = %d, kSkinH = %d;\n}  // namespace sw::gui_assets\n' % (v['w'], v['h'])
         path = os.path.join(directory, 'skin_%s.hpp' % code.lower())
-        if not os.path.exists(path) or open(path).read() != text:
-            open(path, 'w').write(text)
+        if not os.path.exists(path) or open(path, encoding='utf-8').read() != text:
+            with open(path, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(text)
 
 
 def main():
@@ -170,12 +171,14 @@ def main():
         if r:
             out[c] = r
     out['_base'] = {'css': '.p{' + ';'.join(k + ':' + v for k, v in BASE.items()) + '}'}
-    json.dump(out, open(os.path.join(ROOT, 'ui/skins.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
+    if '--emit' not in sys.argv:    # the preview data (ui/skins.json) is for the browser preview only
+        with open(os.path.join(ROOT, 'ui/skins.json'), 'w', encoding='utf-8') as f:
+            json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     if '--emit' in sys.argv:
         emit(out, sys.argv[sys.argv.index('--emit') + 1])
     kb = sum(v['knobs'][0] for k, v in out.items() if k != '_base'); kt = sum(v['knobs'][1] for k, v in out.items() if k != '_base')
     bb = sum(v['buttons'][0] for k, v in out.items() if k != '_base'); bt = sum(v['buttons'][1] for k, v in out.items() if k != '_base')
-    print('skins: %d products, knobs bound %d/%d, buttons bound %d/%d, size %d KB' % (len(out) - 1, kb, kt, bb, bt, os.path.getsize(os.path.join(ROOT, 'ui/skins.json')) // 1024))
+    print('skins: %d products, knobs bound %d/%d, buttons bound %d/%d, size %d KB' % (len(out) - 1, kb, kt, bb, bt, len(json.dumps(out, ensure_ascii=False)) // 1024))
     if '--report' in sys.argv:
         for k, v in report.items():
             print(k, v[:12])

@@ -58,11 +58,18 @@ add_custom_command(OUTPUT ${SW_GUI_ASSETS}
 add_custom_target(sw-gui-assets DEPENDS ${SW_GUI_ASSETS})
 
 # ---- the product designs (docs/design/canvas) as one header per plug-in (build/gen/skins/skin_<code>.hpp); needs beautifulsoup4
-execute_process(COMMAND ${Python3_EXECUTABLE} -c "import bs4" RESULT_VARIABLE SW_HAVE_BS4 OUTPUT_QUIET ERROR_QUIET)
-if (NOT SW_HAVE_BS4 EQUAL 0)
-    message(STATUS "Installing beautifulsoup4 (reads the design files)")
-    execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install --user beautifulsoup4 RESULT_VARIABLE SW_PIP)
-    if (NOT SW_PIP EQUAL 0)
+set(SW_PY ${Python3_EXECUTABLE})
+execute_process(COMMAND ${SW_PY} -c "import bs4" RESULT_VARIABLE SW_HAVE_BS4 OUTPUT_QUIET ERROR_QUIET)
+if (NOT SW_HAVE_BS4 EQUAL 0)    # a private environment: system pythons (Homebrew) refuse pip installs
+    message(STATUS "Installing beautifulsoup4 into ${CMAKE_BINARY_DIR}/pyenv (reads the design files)")
+    execute_process(COMMAND ${Python3_EXECUTABLE} -m venv ${CMAKE_BINARY_DIR}/pyenv RESULT_VARIABLE SW_VENV)
+    if (WIN32)
+        set(SW_PY ${CMAKE_BINARY_DIR}/pyenv/Scripts/python.exe)
+    else()
+        set(SW_PY ${CMAKE_BINARY_DIR}/pyenv/bin/python)
+    endif()
+    execute_process(COMMAND ${SW_PY} -m pip install beautifulsoup4 RESULT_VARIABLE SW_PIP)
+    if (NOT SW_VENV EQUAL 0 OR NOT SW_PIP EQUAL 0)
         message(FATAL_ERROR "python3 needs the beautifulsoup4 package: pip install beautifulsoup4")
     endif()
 endif()
@@ -73,7 +80,7 @@ foreach(code IN LISTS SW_PRODUCTS)
 endforeach()
 file(GLOB SW_CANVAS_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/docs/design/canvas/project/*.dc.html)
 add_custom_command(OUTPUT ${SW_SKIN_OUT}
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/gen_skins.py --emit ${SW_SKIN_DIR}
+    COMMAND ${SW_PY} ${CMAKE_SOURCE_DIR}/tools/gen_skins.py --emit ${SW_SKIN_DIR}
     DEPENDS ${CMAKE_SOURCE_DIR}/tools/gen_skins.py ${CMAKE_SOURCE_DIR}/ui/specs.json ${SW_CANVAS_FILES}
     COMMENT "Generating the product screens from the design canvas")
 add_custom_target(sw-gui-skins DEPENDS ${SW_SKIN_OUT})
