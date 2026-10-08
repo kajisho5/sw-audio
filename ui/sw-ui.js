@@ -223,32 +223,40 @@
 
     // ---- skin: tie the design's controls to the parameters (data-p, data-v, data-toggle, data-dial)
     function bindSkin() {
-      skinBox.querySelectorAll('.ctl[data-p]').forEach(ctl => {
-        const i = +ctl.dataset.p, h = host[i]; if (!h) return; const p = h.p, c = h.c;
+      let band = 0; const dyn = [];            // dyn: controls whose parameter depends on the chosen band
+      const hostOf = i => host[i];
+      // one control: cur() gives the host index it drives now; draw(v) shows a value
+      function attachDial(ctl, cur) {
         const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr'), val = ctl.querySelector('.val');
-        const upd = v => { const x = c.norm(v), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(p, v, c); };
-        widgets.set(i, upd); upd(vals[i]);
+        const draw = () => { const i = cur(), h = hostOf(i); if (!h) return; const x = h.c.norm(vals[i]), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(h.p, vals[i], h.c); };
         let drag = null; dial.style.touchAction = 'none'; dial.style.cursor = 'ns-resize';
-        dial.addEventListener('pointerdown', e => { dial.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: c.norm(vals[i]) }; bridge.begin(i); });
-        dial.addEventListener('pointermove', e => { if (!drag) return; setValue(i, c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
-        const end = () => { if (!drag) return; drag = null; bridge.end(i); };
+        dial.addEventListener('pointerdown', e => { const i = cur(); dial.setPointerCapture(e.pointerId); drag = { i, y: e.clientY, x0: hostOf(i).c.norm(vals[i]) }; bridge.begin(i); });
+        dial.addEventListener('pointermove', e => { if (!drag) return; setValue(drag.i, hostOf(drag.i).c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
+        const end = () => { if (!drag) return; const i = drag.i; drag = null; bridge.end(i); };
         dial.addEventListener('pointerup', end); dial.addEventListener('pointercancel', end);
-        dial.addEventListener('dblclick', () => { bridge.begin(i); setValue(i, p.def); bridge.end(i); });
-        dial.addEventListener('wheel', e => { e.preventDefault(); bridge.begin(i); setValue(i, c.value(clamp(c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
-      });
-      const pair = {};
-      skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => {
-        const i = +b.dataset.p, h = host[i]; if (!h) return; const p = h.p, c = h.c;
-        if (b.dataset.toggle) {
-          b.addEventListener('click', () => { bridge.begin(i); setValue(i, vals[i] > 0.5 ? p.steps[0] : p.steps[1]); bridge.end(i); });
-          (pair[i] = pair[i] || []).push(v => b.classList.toggle('on', c.norm(v) > 0.5));
-        } else {
-          const t = +b.dataset.v;
-          b.addEventListener('click', () => { bridge.begin(i); setValue(i, t); bridge.end(i); });
-          (pair[i] = pair[i] || []).push(v => b.classList.toggle('on', Math.abs(v - t) < 1e-9));
-        }
-      });
-      Object.keys(pair).forEach(k => { const fs = pair[k], prev = widgets.get(+k); const upd = v => { if (prev) prev(v); fs.forEach(f => f(v)); }; widgets.set(+k, upd); upd(vals[+k]); });
+        dial.addEventListener('dblclick', () => { const i = cur(); bridge.begin(i); setValue(i, hostOf(i).p.def); bridge.end(i); });
+        dial.addEventListener('wheel', e => { e.preventDefault(); const i = cur(), c = hostOf(i).c; bridge.begin(i); setValue(i, c.value(clamp(c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
+        return draw;
+      }
+      function attachButton(b, cur) {
+        const toggle = !!b.dataset.toggle, t = +b.dataset.v;
+        b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
+        return () => { const i = cur(), h = hostOf(i); if (!h) return; b.classList.toggle('on', toggle ? h.c.norm(vals[i]) > 0.5 : Math.abs(vals[i] - t) < 1e-9); };
+      }
+      const draws = new Map();                  // host index -> [draw functions]
+      const reg = (i, f) => { (draws.get(i) || draws.set(i, []).get(i)).push(f); };
+      const list = o => JSON.parse(o.dataset.pb);
+      skinBox.querySelectorAll('.ctl[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
+      skinBox.querySelectorAll('.ctl[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
+      skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
+      skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
+      const sel = [...skinBox.querySelectorAll('button[data-band]')];
+      const drawSel = () => sel.forEach(b => b.classList.toggle('on', +b.dataset.band === band));
+      sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; drawSel(); dyn.forEach(f => f()); }));
+      // the band shown first is the one the design marks as selected
+      const first = sel.find(b => b.classList.contains('on')); if (first) band = +first.dataset.band; drawSel();
+      draws.forEach((fs, i) => { const prev = widgets.get(i); widgets.set(i, v => { if (prev) prev(v); fs.forEach(f => f()); }); });
+      draws.forEach(fs => fs.forEach(f => f())); dyn.forEach(f => f());
     }
     if (skinBox) bindSkin();
 

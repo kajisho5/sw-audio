@@ -59,6 +59,24 @@ def match_knob(label, params, alias):
 BASE = {}
 
 
+def band_groups(params, alias):
+    """Parameters that repeat per band/voice/tap: {suffix: [host index of band 0, band 1, ...]} (names 'Band 2 Gain', or a stride given in the aliases)."""
+    groups = {}
+    st = alias.get('_stride')
+    if st:
+        for k in range(st['count']):
+            for j in range(st['stride']):
+                i = st['start'] + k * st['stride'] + j
+                if i < len(params):
+                    groups.setdefault(norm(params[i]['name']), []).append(i)
+        return groups
+    for p in params:
+        m = re.match(r'^(?:Band|Voice|Tap|Pedal|Module|Slot)\s+(\d+)\s+(.+)$', p['name'])
+        if m:
+            groups.setdefault(norm(m.group(2)), []).append(p['i'])
+    return groups
+
+
 def build(code, report):
     src = open(os.path.join(CANVAS, code + '.dc.html'), encoding='utf-8').read()
     soup = BeautifulSoup(src, 'html.parser')
@@ -78,11 +96,33 @@ def build(code, report):
         nk += 1
         i = match_knob(lab.get_text(), params, alias)
         if i is None:
-            report.setdefault(code, []).append('knob:' + lab.get_text())
             continue
         ctl['data-p'] = str(i)
         dial['data-dial'] = '1'
         nb += 1
+    # per-band controls: the selector buttons choose the band, the knobs follow it (data-pb = the host index of each band's parameter)
+    groups = band_groups(params, alias)
+    if groups:
+        sel = alias.get('_bands') or {}
+        labels = [norm(x) for x in sel.get('labels', [])]
+        for ctl in root.select('.ctl'):
+            lab = ctl.select_one('.lbl'); dial = ctl.select_one('.dk, .knob')
+            if not lab or not dial or ctl.get('data-p'):
+                continue
+            g = groups.get(norm(lab.get_text())) or groups.get(alias.get('_alias', {}).get(norm(lab.get_text()), ''))
+            if g:
+                ctl['data-pb'] = json.dumps(g); dial['data-dial'] = '1'; nb += 1
+        for b in root.select('button'):
+            t = b.get_text().strip(); n = norm(t)
+            if not n or b.get('data-p') or b.get('data-act'):
+                continue
+            k = labels.index(n) if n in labels else None
+            if k is None and not labels:
+                m = re.match(r'^(?:(?:band|voice|tap|pedal|module|slot) )?(\d+)$', n)
+                if m:
+                    k = int(m.group(1)) - 1
+            if k is not None:
+                b['data-band'] = str(k); nbt += 1; nbb += 1
     # buttons: an option of a stepped parameter, or the on/off of a 2-step parameter
     opts = {}
     for p in params:
@@ -104,7 +144,7 @@ def build(code, report):
             elif t in ('A', 'B') and not b.get('data-act'):
                 b['data-act'] = t
     for b in root.select('button, .btn, .chip, .bigbtn'):
-        if b.get('data-p') or b.get('data-act') or b.find_parent(attrs={'data-p': True}):
+        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip()
         if t == 'Δ' and delta:
@@ -120,7 +160,25 @@ def build(code, report):
             b['data-p'] = str(names[n][0]); b['data-toggle'] = '1'; nbb += 1; continue
         if n in opts and len(opts[n]) == 1:
             b['data-p'] = str(opts[n][0][0]); b['data-v'] = str(opts[n][0][1]); nbb += 1; continue
+        if groups and not b.get('data-band'):
+            gk = n if n in groups else alias.get('_alias', {}).get(n)
+            if gk in groups and params[groups[gk][0]]['curve'] == 'step' and len(params[groups[gk][0]]['steps']) == 2:
+                b['data-pb'] = json.dumps(groups[gk]); b['data-toggle'] = '1'; nbb += 1; continue
+            hit = []
+            for suffix, idxs in groups.items():
+                p0 = params[idxs[0]]
+                if p0['curve'] != 'step':
+                    continue
+                for k2, v2 in enumerate(p0['steps']):
+                    lbl2 = p0['labels'][k2] if p0.get('labels') and k2 < len(p0['labels']) else str(v2)
+                    if norm(lbl2) == n:
+                        hit.append((idxs, v2))
+            if len(hit) == 1:
+                b['data-pb'] = json.dumps(hit[0][0]); b['data-v'] = str(hit[0][1]); nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
+    for ctl in root.select('.ctl'):
+        if ctl.select_one('.dk, .knob') and ctl.select_one('.lbl') and not ctl.get('data-p') and not ctl.get('data-pb'):
+            report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl').get_text())
     style = re.sub(r'@import[^;]*;', '', style)
     m = re.match(r'<div[^>]*style="([^"]*)"', str(root))
     st = m.group(1) if m else ''
