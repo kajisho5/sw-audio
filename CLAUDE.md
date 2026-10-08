@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.13.0：132 製品が完成（単体テスト 1319 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 69＝LV30・GT03 まで Windows・macOS・Linux で全ジョブ成功）。残りは RS02（学習済みモデルが要る・保留）と画面（UI）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.13.0：132 製品が完成（単体テスト 1319 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 69＝LV30・GT03 まで Windows・macOS・Linux で全ジョブ成功）。残りは RS02（学習済みモデルが要る・保留）と画面（UI）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。IN07（軽量プリセットシンセ、名称未定）は 2026-10-08 に依頼者の依頼で追加：エンジン試作中（README「開発中の楽器」）。
 
 ## 話し方・進め方
 
