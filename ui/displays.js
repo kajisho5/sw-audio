@@ -230,7 +230,32 @@
     };
   }
 
+  // ---- fader bank (LV12): the 31 faders of the design are the bands; Edit (Left / Right / Both) chooses the side that is shown and written
+  function faderBank(box, ctx) {
+    const tracks = [...box.querySelectorAll('[data-fader]')]; if (!tracks.length) return null;
+    const editIdx = +tracks[0].dataset.edit, side = () => { const e = editIdx >= 0 ? Math.round(ctx.get(editIdx)) : 0; return e === 1 ? 'r' : 'l'; };   // 0 Left, 1 Right, 2 Both
+    const idx = (t, which) => +(which === 'r' ? t.dataset.faderR : t.dataset.fader), q = i => ctx.params.find(x => x.i === i);
+    const targets = t => (editIdx >= 0 && Math.round(ctx.get(editIdx)) === 2) ? [idx(t, 'l'), idx(t, 'r')] : [idx(t, side())];
+    const cap = t => t.children[2];
+    const val = (t, e) => { const r = t.getBoundingClientRect(), x = Math.min(1, Math.max(0, 1 - (e.clientY - r.top - 5) / (r.height - 10))); return x; };
+    tracks.forEach(t => {
+      let drag = false;
+      const put = e => { targets(t).forEach(i => { const m = q(i); ctx.set(i, m.c.value(val(t, e))); }); };
+      t.addEventListener('pointerdown', e => { t.setPointerCapture(e.pointerId); drag = true; targets(t).forEach(i => ctx.begin(i)); put(e); });
+      t.addEventListener('pointermove', e => { if (drag) put(e); });
+      const end = () => { if (!drag) return; drag = false; targets(t).forEach(i => ctx.end(i)); };
+      t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end);
+      t.addEventListener('dblclick', () => targets(t).forEach(i => { ctx.begin(i); ctx.set(i, q(i).p.def); ctx.end(i); }));
+    });
+    let last = '';
+    return { update() {
+      const sd = side(), key = tracks.map(t => ctx.get(idx(t, sd))).join(',') + sd; if (key === last) return; last = key;
+      tracks.forEach(t => { const m = q(idx(t, sd)), x = m.c.norm(ctx.get(m.i)); cap(t).style.top = 'calc((100% - 10px) * ' + (1 - x).toFixed(4) + ')'; });
+    } };
+  }
+
   const registry = {
+    LV12: faderBank,
     EQ02: eqDisplay, EQ07: eqDisplay, EQ08: eqDisplay,
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL02: (box, ctx) => reelDisplay(box, ctx, null),

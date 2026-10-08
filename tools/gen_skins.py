@@ -269,7 +269,26 @@ def rotary_rotors(root, params):
     return ''
 
 
-HOOKS = {'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
+def geq_faders(root, params):
+    """LV12 (31-band graphic EQ): each fader column is tied to its band (data-fader = the left band, data-fader-r = the right band; the Edit
+    parameter chooses which one the screen shows and writes). The drawing is the design's own."""
+    left = [p['i'] for p in params if p['name'].startswith('Band ')]
+    right = [p['i'] for p in params if p['name'].startswith('R ')]
+    edit = next((p['i'] for p in params if p['name'] == 'Edit'), -1)
+    if len(left) != 31 or len(right) != 31:
+        return ''
+    for holder in root.find_all('div'):
+        cols = holder.find_all('div', recursive=False)
+        if len(cols) == 31 and 'align-items:stretch' in (holder.get('style') or ''):
+            for k, col in enumerate(cols):
+                track = col.find('div', recursive=False)
+                track['data-fader'] = str(left[k]); track['data-fader-r'] = str(right[k]); track['data-edit'] = str(edit)
+                track['style'] = track.get('style', '') + ';cursor:ns-resize;touch-action:none'
+            return ''
+    return ''
+
+
+HOOKS = {'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 def build(code, report):
