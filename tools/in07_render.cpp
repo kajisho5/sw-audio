@@ -1,5 +1,5 @@
 // IN07 engine: render listening demos and measure the cost of one voice (and a chord) on this machine.
-//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/in07.cpp -o build/in07_render && build/in07_render build/in07
+//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/in07.cpp products/in07/osc.cpp -o build/in07_render && build/in07_render build/in07
 // Writes demo_lead.wav, demo_bass.wav, demo_pad.wav, demo_gravity.wav, demo_flyby.wav, demo_orbit_lfo.wav (the default effects on, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
 // and prints the time per sample of one voice in four set-ups, the default effect chain and an 8-note chord. The numbers are this machine's, not a design estimate.
 #include "in07/in07.hpp"
@@ -202,13 +202,19 @@ int main(int argc, char** argv) {
         writeWav(dir + (correct ? "/sweep_minblep.wav" : "/sweep_naive.wav"), l, l, 1.0);
     }
 
-    struct Setup { const char* name; int unison; int type; double drive; double spread; bool hold; bool fx; };
+    struct Setup { const char* name; int unison; int type; double drive; double spread; bool hold; bool fx; int osc = OscAnalog; };
     const Setup setups[] = {
         {"saw x1, LP12, Drive 0            ", 1, LP12, 0, 0, true, false},
         {"saw x1, LP24, Drive 18 (2x)      ", 1, LP24, 18, 0, true, false},
         {"saw x8 stereo, LP24, Drive 18 (2x)", 8, LP24, 18, 80, true, false},
         {"no note (the voice sleeps)       ", 8, LP24, 18, 80, false, false},
         {"saw x1, LP12 + the default effects", 1, LP12, 0, 0, true, true},
+        {"wavetable x1, LP12, Drive 0      ", 1, LP12, 0, 0, true, false, OscWavetable},
+        {"wavetable x8 stereo, LP24, Drv 18", 8, LP24, 18, 80, true, false, OscWavetable},
+        {"FM x1 (feedback 50 %), LP12      ", 1, LP12, 0, 0, true, false, OscFm},
+        {"FM x8 stereo, LP24, Drive 18     ", 8, LP24, 18, 80, true, false, OscFm},
+        {"sample x1 (Air), LP12            ", 1, LP12, 0, 0, true, false, OscSample},
+        {"sample x8 stereo, LP24, Drive 18 ", 8, LP24, 18, 80, true, false, OscSample},
     };
     std::printf("one voice (effects off unless named), 48 kHz, blocks of 256 (best of 3 x 20 s):\n");
     for (const auto& s : setups) {
@@ -216,6 +222,8 @@ int main(int argc, char** argv) {
         if (!s.fx) for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0);
         p.setParam(lp(0, Unison), s.unison); p.setParam(lp(0, FilterType), s.type); p.setParam(lp(0, Drive), s.drive); p.setParam(lp(0, Spread), s.spread);
         p.setParam(lp(0, AmpS), 100);
+        p.setParam(lp(0, OscType), s.osc); p.setParam(lp(0, Table), 4); p.setParam(lp(0, Position), 40);
+        p.setParam(lp(0, FmIndex), 30); p.setParam(lp(0, FmFeedback), 50); p.setParam(lp(0, SampleId), 0);
         const double ns = benchNsPerSample(p, s.hold);
         std::printf("  %s  %7.1f ns/sample  = %6.3f %% of one core in real time\n", s.name, ns, ns * kFs / 1e9 * 100.0);
     }

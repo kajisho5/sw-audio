@@ -869,3 +869,160 @@ TEST_CASE("IN07 MOD: the block size does not change the output with LFOs, flyby 
     size_t diff = 0; for (size_t i = 0; i < x.size(); ++i) if (x[i] != y[i]) ++diff;
     CHECK(diff == 0);
 }
+
+// ---- oscillator types: wavetable (8 procedural tables, mipmapped), FM (2 operators), sample (a small generated bank)
+namespace {
+// L1 as a given type, everything else plain
+void typed(Processor& p, int type) { plain(p); p.setParam(lp(0, OscType), type); }
+// power of the bins that are not harmonics of k / n over the fundamental's (dB) for a held note on L1
+double aliasOfLayer(Processor& p, int note) {
+    p.noteOn(note, 1.0);
+    render(p, 24000);
+    const int n = 65536;
+    auto y = render(p, static_cast<size_t>(n)).first;
+    p.allSoundOff();
+    std::vector<std::complex<double>> x(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {   // 4-term Blackman-Harris: side lobes under -92 dB, so the floor of this measure is far below what it checks
+        const double t = 2 * tu::kPi * i / n;
+        x[static_cast<size_t>(i)] = y[static_cast<size_t>(i)] * (0.35875 - 0.48829 * std::cos(t) + 0.14128 * std::cos(2 * t) - 0.01168 * std::cos(3 * t));
+    }
+    sw::Fft f(n); f.forward(x);
+    const double f0 = midiHz(note), bin = kFs / n;
+    double harm = 0, other = 0;
+    for (int b = 2; b < n / 2; ++b) {
+        const double fb = b * bin, h = fb / f0, d = std::abs(h - std::round(h)) * f0;
+        const double pw = std::norm(x[static_cast<size_t>(b)]);
+        if (d < 6 * bin && std::round(h) >= 1) harm += pw; else other += pw;   // the main lobe is +-4 bins
+    }
+    return 10 * std::log10(other / harm);
+}
+}  // namespace
+
+TEST_CASE("IN07 OSC: parameter table for the oscillator types") {
+    const auto& s = specs();
+    CHECK(std::string(s[lp(0, OscType)].id) == "in07.l1.osc.type");
+    CHECK(s[lp(0, OscType)].numSteps() == 4);            // Analog, Wavetable, FM, Sample
+    CHECK(s[lp(0, OscType)].def == OscAnalog);
+    CHECK(s[lp(0, Table)].numSteps() == kWaveTables);
+    CHECK(s[lp(0, SampleId)].numSteps() == kSamples);
+    CHECK(s[lp(0, FmRatio)].numSteps() == 12);
+    CHECK(std::string(s[lp(3, FmIndex)].id) == "in07.l4.fm.index");
+    CHECK(std::string(s[lp(2, Position)].id) == "in07.l3.wt.pos");
+    CHECK(s[modId(0, ModDst)].numSteps() == kModDests);
+}
+
+TEST_CASE("IN07 OSC: the Classic table goes from saw to square, the level stays") {
+    Processor p; typed(p, OscWavetable); p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
+    p.noteOn(57, 1.0); auto saw = render(p, 48000).first; p.allSoundOff();
+    CHECK(tu::harmDb(saw, 220, 2) == doctest::Approx(-6.02).epsilon(0.03));
+    CHECK(tu::harmDb(saw, 220, 3) == doctest::Approx(-9.54).epsilon(0.03));
+    p.setParam(lp(0, Position), 100);
+    p.noteOn(57, 1.0); auto sq = render(p, 48000).first; p.allSoundOff();
+    CHECK(tu::harmDb(sq, 220, 2) < -60.0);
+    CHECK(tu::harmDb(sq, 220, 3) == doctest::Approx(-9.54).epsilon(0.03));
+    for (int t = 0; t < kWaveTables; ++t)                  // every table and position plays at about the same loudness
+        for (double pos : {0.0, 33.0, 67.0, 100.0}) {
+            p.setParam(lp(0, Table), t); p.setParam(lp(0, Position), pos);
+            p.noteOn(57, 1.0); auto y = render(p, 24000).first; p.allSoundOff();
+            const double db = tu::rmsDb(y, 12000, 24000);
+            CHECK(db > -9.0); CHECK(db < -3.0);           // the frames are normalised to an RMS of 0.5 (-6 dB)
+        }
+}
+
+TEST_CASE("IN07 OSC: wavetables and FM stay clean high up (mipmaps, index limit)") {
+    Processor p; typed(p, OscWavetable); p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
+    const double wt = aliasOfLayer(p, 94);                 // 1865 Hz
+    p.setParam(lp(0, Table), 2); p.setParam(lp(0, Position), 100);   // Sync, the brightest frame
+    const double sync = aliasOfLayer(p, 94);
+    p.setParam(lp(0, OscType), OscFm); p.setParam(lp(0, FmRatio), 4); p.setParam(lp(0, FmIndex), 100); p.setParam(lp(0, FmDecay), 10000);
+    const double fm = aliasOfLayer(p, 96);                 // 2093 Hz, ratio 3, index 10 rad: the limit holds the bandwidth under 0.45 fs
+    // FM with full feedback (ratio 1, index 50 %): the feedback fades as the modulator's harmonics run out of room under Nyquist
+    p.setParam(lp(0, FmRatio), 1); p.setParam(lp(0, FmIndex), 50); p.setParam(lp(0, FmFeedback), 100);
+    const double fb84 = aliasOfLayer(p, 84), fb96 = aliasOfLayer(p, 96);
+    MESSAGE("alias: wavetable classic " << wt << " dB, sync " << sync << " dB, FM " << fm << " dB, FM feedback 100 % at C6 " << fb84 << " dB, C7 " << fb96 << " dB");
+    CHECK(wt < -80.0);
+    CHECK(sync < -80.0);
+    CHECK(fm < -50.0);                                     // the index limit: the first sidebands past Nyquist under -50 dB together
+    CHECK(fb84 < -50.0);
+    CHECK(fb96 < -50.0);
+}
+
+TEST_CASE("IN07 OSC: FM sidebands follow Bessel, the index decays") {
+    Processor p; typed(p, OscFm);
+    p.setParam(lp(0, FmRatio), 5); p.setParam(lp(0, FmIndex), 0); p.setParam(lp(0, FmDecay), 10000); p.setParam(lp(0, FmFeedback), 0);
+    CHECK(fmRatioOf(5) == 4.0);
+    p.noteOn(57, 1.0); auto y = render(p, 48000).first; p.allSoundOff();
+    CHECK(tu::harmDb(y, 220, 5) < -90.0);                   // index 0: a sine
+    p.setParam(lp(0, FmIndex), 10);                          // 1 rad
+    p.noteOn(57, 1.0); y = render(p, 48000).first; p.allSoundOff();
+    // carrier f, modulator 4 f: f (J0), 5 f and 3 f (J1), 9 f and 7 f (J2)
+    CHECK(tu::harmDb(y, 220, 5) == doctest::Approx(20 * std::log10(0.4400506 / 0.7651977)).epsilon(0.01));
+    CHECK(tu::harmDb(y, 220, 3) == doctest::Approx(20 * std::log10(0.4400506 / 0.7651977)).epsilon(0.01));
+    CHECK(tu::harmDb(y, 220, 9) == doctest::Approx(20 * std::log10(0.1149035 / 0.7651977)).epsilon(0.02));
+    // decay: the sidebands fall away
+    p.setParam(lp(0, FmIndex), 40); p.setParam(lp(0, FmDecay), 100);
+    p.noteOn(57, 1.0);
+    auto early = render(p, 4800).first;
+    render(p, 19200);
+    auto late = render(p, 24000).first;
+    CHECK(tu::binDb(early, 1100, 0, 4800) - tu::binDb(early, 220, 0, 4800) > tu::binDb(late, 1100, 0, 24000) - tu::binDb(late, 220, 0, 24000) + 20.0);
+}
+
+TEST_CASE("IN07 OSC: samples loop or end, and follow the key") {
+    Processor p; typed(p, OscSample);
+    p.setParam(lp(0, SampleId), 0);                          // Air: a loop
+    p.noteOn(60, 1.0);
+    auto y = render(p, 4 * 48000).first;                     // longer than the loop (2 s)
+    const double a = tu::rmsDb(y, 24000, 72000), b = tu::rmsDb(y, 120000, 168000);
+    CHECK(a > -40.0);
+    CHECK(std::abs(a - b) < 3.0);
+    p.allSoundOff();
+    // Knock: a one-shot; an octave up plays twice as fast, so it is over in half the time
+    auto lenAt = [&](int key) {
+        Processor q; typed(q, OscSample); q.setParam(lp(0, SampleId), 5); q.setParam(lp(0, AmpR), 2000);
+        q.noteOn(key, 1.0);
+        auto z = render(q, 48000).first;
+        size_t last = 0; for (size_t i = 0; i < z.size(); ++i) if (std::abs(z[i]) > 1e-4) last = i;
+        return static_cast<double>(last);
+    };
+    const double l60 = lenAt(60), l72 = lenAt(72);
+    MESSAGE("knock: " << l60 / 48.0 << " ms at C4, " << l72 / 48.0 << " ms at C5");
+    CHECK(l60 > 2000);
+    CHECK(l72 / l60 == doctest::Approx(0.5).epsilon(0.05));
+}
+
+TEST_CASE("IN07 OSC: modulation of the wavetable position and the FM index; gravity on a wavetable") {
+    Processor p; typed(p, OscWavetable); p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
+    p.setParam(modId(0, ModSrc), SrcModWheel); p.setParam(modId(0, ModDst), DstWtPos); p.setParam(modId(0, ModAmount), 100);
+    p.modWheel(1.0);
+    p.noteOn(57, 1.0); auto sq = render(p, 48000).first; p.allSoundOff();
+    CHECK(tu::harmDb(sq, 220, 2) < -60.0);                   // the wheel moved it to the square end
+    Processor q; typed(q, OscFm); q.setParam(lp(0, FmRatio), 5); q.setParam(lp(0, FmIndex), 0); q.setParam(lp(0, FmDecay), 10000);
+    q.setParam(modId(0, ModSrc), SrcVelocity); q.setParam(modId(0, ModDst), DstFmIndex); q.setParam(modId(0, ModAmount), 10);   // velocity 1 = +1 rad
+    q.noteOn(57, 1.0); auto y = render(q, 48000).first;
+    CHECK(tu::harmDb(y, 220, 5) == doctest::Approx(20 * std::log10(0.4400506 / 0.7651977)).epsilon(0.01));
+    Processor g; typed(g, OscWavetable); g.setParam(lp(0, Table), 3); g.setParam(lp(0, Position), 50);
+    g.setParam(lp(0, Unison), 8); g.setParam(lp(0, Detune), 30); g.setParam(lp(0, Gravity), 100);
+    g.noteOn(57, 1.0); render(g, 96000);
+    CHECK(v0(g, 57).coherence() > 0.97);
+}
+
+TEST_CASE("IN07 OSC: the block size does not change any oscillator type") {
+    auto play = [](int block) {
+        Processor p; plain(p);
+        p.setParam(lp(0, OscType), OscWavetable); p.setParam(lp(0, Table), 4); p.setParam(lp(0, Position), 40); p.setParam(lp(0, Unison), 3);
+        plainLayer(p, 1); p.setParam(lp(1, OscType), OscFm); p.setParam(lp(1, FmRatio), 3); p.setParam(lp(1, FmIndex), 30); p.setParam(lp(1, FmDecay), 300); p.setParam(lp(1, FmFeedback), 40);
+        plainLayer(p, 2); p.setParam(lp(2, OscType), OscSample); p.setParam(lp(2, SampleId), 2); p.setParam(lp(2, Unison), 2);
+        p.noteOn(57, 0.8); p.noteOn(64, 0.5);
+        auto a = render(p, 9000, block);
+        p.noteOff(57);
+        auto b = render(p, 9000, block);
+        a.first.insert(a.first.end(), b.first.begin(), b.first.end());
+        a.first.insert(a.first.end(), b.second.begin(), b.second.end());
+        return a.first;
+    };
+    const auto x = play(256), y = play(37);
+    REQUIRE(x.size() == y.size());
+    size_t diff = 0; for (size_t i = 0; i < x.size(); ++i) if (x[i] != y[i]) ++diff;
+    CHECK(diff == 0);
+}

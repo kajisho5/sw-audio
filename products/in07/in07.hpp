@@ -25,6 +25,10 @@
 //   held one, with a 3 ms fade (spare slots let it fade while the new note starts). Glide in Poly starts from the previous note while one is held.
 //   Mono = one voice, last-note priority, every new pitch re-triggers, glides whenever Glide > 0. Legato = one voice, no new attack while a key is
 //   held, glides only between held keys. Sustain pedal holds released notes. Every note reports its end once (CLAP note end).
+//   Oscillator types (osc.hpp): Analog (the shapes above), Wavetable (8 tables x 16 frames, mipmapped; Position sweeps the frames, ramped at control
+//   rate), FM (2 operators: ratio, index 0..10 rad with a decay to -60 dB in the set time or Hold, modulator feedback; the index is held under the
+//   aliasing limit), Sample (5 loops, 3 one-shots; the key sets the speed from C4). Unison, detune, spread and gravity work on every type (gravity
+//   pulls the carrier phases; samples have no phase to pull, so it does nothing there). The type and the sample are taken at a fresh note-on.
 //   Parameter changes reach the voices at control rate. Unison count, the drive path and the start phases are taken at note-on.
 //   After the voices: the effect chain (fx.hpp), then Level.
 #pragma once
@@ -33,6 +37,7 @@
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
 #include "in07/fx.hpp"
+#include "in07/osc.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -42,7 +47,8 @@ namespace sw::in07 {
 
 // host ids: the global parameters, then each layer's block (lp(layer, param))
 enum GlobalId { Voices, Mode, Glide, Bend, Level, kNumGlobal };
-enum LayerParam { On, LayerLevel, Pan, Wave, PulseWidth, Octave, Semi, Fine, Unison, Detune, Spread, Gravity, FilterType, Cutoff, Resonance, Drive, FilterEnv,
+enum LayerParam { On, LayerLevel, Pan, OscType, Wave, PulseWidth, Table, Position, FmRatio, FmIndex, FmDecay, FmFeedback, SampleId,
+                  Octave, Semi, Fine, Unison, Detune, Spread, Gravity, FilterType, Cutoff, Resonance, Drive, FilterEnv,
                   KeyTrack, AmpA, AmpD, AmpS, AmpR, FenvA, FenvD, FenvS, FenvR, VelSens, kLayerParams };
 constexpr int kLayers = 4;
 constexpr int lp(int layer, int param) { return kNumGlobal + layer * kLayerParams + param; }
@@ -66,7 +72,7 @@ enum LfoShapeId { LfoOrbit = 0, LfoTriangle, LfoSaw, LfoSquare, LfoRandom };
 enum ModSource { SrcNone = 0, SrcLfo1, SrcLfo2, SrcEnv2, SrcVelocity, SrcModWheel, SrcAftertouch, SrcKey,
                  SrcM1, SrcM2, SrcM3, SrcM4, SrcM5, SrcM6, SrcM7, SrcM8, kModSources };
 enum ModDest { DstNone = 0, DstCutoff, DstResonance, DstPitch, DstDrive, DstPan, DstLevel, DstL1Level, DstL2Level, DstL3Level, DstL4Level,
-               DstLfo1Rate, DstLfo2Rate, DstPulseWidth, DstDetune, DstGravity, kModDests };
+               DstLfo1Rate, DstLfo2Rate, DstPulseWidth, DstDetune, DstGravity, DstWtPos, DstFmIndex, kModDests };
 enum FlybyModeId { FlybyOff = 0, FlybyArrive, FlybyPass, FlybyLeave };
 
 // an LFO's value (-1..1) at a phase (0..1). Orbit: the moon's place along the long axis of a Kepler ellipse, cos E with E - e sin E = 2 pi phase
@@ -169,6 +175,8 @@ public:
 
 private:
     void control();
+    void oscillate(double* xl, double* xr, int m, int done);   // the unison copies' sum for m samples (done: samples of the period already played)
+    double phaseOf(int k) const { return otype_ == OscAnalog ? osc_[static_cast<size_t>(k)].phase() : ph_[static_cast<size_t>(k)]; }
     double p(int id) const { return lp_[id]; }
     const double* lp_ = nullptr;
     const Shared* sh_ = nullptr;
@@ -183,6 +191,16 @@ private:
     uint32_t rng_ = 0x5EED1234u;
     std::array<BlepOsc, kMaxUnison> osc_;
     std::array<double, kMaxUnison> detune_{}, gl_{}, gr_{};
+    // the other oscillator types: per copy the (carrier) phase, the modulator phase and its last two outputs, the sample position (level-0 samples)
+    int otype_ = OscAnalog, table_ = 0, sample_ = 0;
+    std::array<double, kMaxUnison> ph_{}, pm_{}, fb0_{}, fb1_{}, spos_{}, sinc_{}, sscale_{};
+    std::array<const float*, kMaxUnison> wbase_{}, sptr_{};
+    std::array<int, kMaxUnison> wsize_{};
+    std::array<bool, kMaxUnison> sdone_{};
+    double wp0_ = 0.0, wp1_ = 0.0;                        // the wavetable position (frames) at the start and the end of the control period
+    double fi0_ = 0.0, fi1_ = 0.0, fb0k_ = 0.0, fb1k_ = 0.0, fmEnv_ = 1.0, fmRatio_ = 1.0;   // FM index and feedback (cycles), the index decay
+    std::array<double, 2> dcx_{}, dcy_{};                 // the FM output's DC blocker
+    double dca_ = 0.9993;
     std::array<std::array<Svf, 2>, 2> svf_;            // [channel][stage]
     std::array<Oversampler2x, 2> os_;
     Adsr amp_, fenv_;

@@ -26,14 +26,27 @@ const std::vector<ParamSpec>& specs() {
         static std::deque<std::string> text;
         auto str = [](const std::string& x) { text.push_back(x); return text.back().c_str(); };
         static const int kWave[kLayers] = {Saw, Square, Triangle, Sine}, kOct[kLayers] = {0, -1, 1, 0};
+        std::vector<double> tableSteps, ratioSteps, sampleSteps;
+        std::vector<std::string> tableLabels, ratioLabels, sampleLabels;
+        for (int i = 0; i < kWaveTables; ++i) { tableSteps.push_back(i); tableLabels.push_back(kWaveTableNames[i]); }
+        for (int i = 0; i < kFmRatios; ++i) { ratioSteps.push_back(i); ratioLabels.push_back(kFmRatioLabels[i]); }
+        for (int i = 0; i < kSamples; ++i) { sampleSteps.push_back(i); sampleLabels.push_back(kSampleNames[i]); }
         for (int l = 0; l < kLayers; ++l) {
             const std::string id = "in07.l" + std::to_string(l + 1) + ".", nm = "L" + std::to_string(l + 1) + " ";
             auto add = [&](const char* key, const char* name, ParamSpec ps) { ps.id = str(id + key); ps.name = str(nm + name); v.push_back(ps); };
             add("on",         "On",          {"", "", 0, 1, l == 0 ? 1.0 : 0.0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}});
             add("level",      "Level",       {"", "", -60, 6, 0, Curve::Lin, 1, {}, "dB", {}, "Off"});
             add("pan",        "Pan",         {"", "", -100, 100, 0, Curve::Lin, 1, {}, ""});
+            add("osc.type",   "Osc type",    {"", "", 0, 3, OscAnalog, Curve::Step, 1, {0, 1, 2, 3}, "", {"Analog", "Wavetable", "FM", "Sample"}});
             add("osc.wave",   "Wave",        {"", "", 0, 3, static_cast<double>(kWave[l]), Curve::Step, 1, {0, 1, 2, 3}, "", {"Sine", "Triangle", "Saw", "Square"}});
             add("osc.pw",     "Pulse width", {"", "", 5, 95, 50, Curve::Lin, 1, {}, "%"});
+            add("wt.table",   "Table",       {"", "", 0, kWaveTables - 1, 0, Curve::Step, 1, tableSteps, "", tableLabels});
+            add("wt.pos",     "Position",    {"", "", 0, 100, 0, Curve::Lin, 1, {}, "%"});
+            add("fm.ratio",   "FM ratio",    {"", "", 0, kFmRatios - 1, 1, Curve::Step, 1, ratioSteps, "", ratioLabels});
+            add("fm.index",   "FM index",    {"", "", 0, 100, 30, Curve::Lin, 1, {}, "%"});
+            add("fm.decay",   "FM decay",    {"", "", 10, 10000, 10000, Curve::Log, 1, {}, "ms", {}, nullptr, "Hold"});
+            add("fm.feedback", "FM feedback", {"", "", 0, 100, 0, Curve::Lin, 1, {}, "%"});
+            add("smp.id",     "Sample",      {"", "", 0, kSamples - 1, 0, Curve::Step, 1, sampleSteps, "", sampleLabels});
             add("osc.octave", "Octave",      {"", "", -2, 2, static_cast<double>(kOct[l]), Curve::Step, 1, {-2, -1, 0, 1, 2}, "", {"-2", "-1", "0", "+1", "+2"}});
             add("osc.semi",   "Semi",        {"", "", -12, 12, 0, Curve::Step, 1, semis, "st", semiLabels});
             add("osc.fine",   "Fine",        {"", "", -100, 100, 0, Curve::Lin, 1, {}, "ct"});
@@ -114,7 +127,7 @@ const std::vector<ParamSpec>& specs() {
         const std::vector<std::string> srcLabels = {"None", "LFO 1", "LFO 2", "Env 2", "Velocity", "Mod wheel", "Aftertouch", "Key",
                                                     "M1 Bright", "M2 Reso", "M3 Attack", "M4 Release", "M5 Drive", "M6 Width", "M7 Delay", "M8 Reverb"};
         const std::vector<std::string> dstLabels = {"None", "Cutoff", "Resonance", "Pitch", "Drive", "Pan", "Level", "L1 level", "L2 level", "L3 level", "L4 level",
-                                                    "LFO 1 rate", "LFO 2 rate", "Pulse width", "Detune", "Gravity"};
+                                                    "LFO 1 rate", "LFO 2 rate", "Pulse width", "Detune", "Gravity", "WT position", "FM index"};
         for (int i = 0; i < kModSlots; ++i) {
             const std::string id = "in07.mod" + std::to_string(i + 1) + ".", nm = "Mod " + std::to_string(i + 1) + " ";
             auto add = [&](const char* key, const char* name, ParamSpec ps) { ps.id = str(id + key); ps.name = str(nm + name); v.push_back(ps); };
@@ -153,6 +166,12 @@ inline double fastTanh(double x) {
     return x * (135135.0 + x2 * (17325.0 + x2 * (378.0 + x2))) / (135135.0 + x2 * (62370.0 + x2 * (3150.0 + 28.0 * x2)));
 }
 inline double dbToGain(double db) { return std::pow(10.0, db / 20.0); }
+// 4-point cubic Hermite (Catmull-Rom) between p[0] and p[1] (p[-1] and p[2] are read too)
+inline double hermite(const float* p, double t) {
+    const double xm = p[-1], x0 = p[0], x1 = p[1], x2 = p[2];
+    const double c1 = 0.5 * (x1 - xm), c2 = xm - 2.5 * x0 + 2.0 * x1 - 0.5 * x2, c3 = 0.5 * (x2 - xm) + 1.5 * (x0 - x1);
+    return ((c3 * t + c2) * t + c1) * t + x0;
+}
 }  // namespace
 
 // ---- minBLEP table (built once, in prepare)
@@ -318,6 +337,7 @@ double Adsr::next() {
 // ---- voice
 void Voice::prepare(double fs, const double* layerParams, const Shared* shared, int layer) {
     fs_ = fs; lp_ = layerParams; sh_ = shared; layer_ = layer;
+    dca_ = std::exp(-2.0 * kPi * 5.0 / fs);
     amp_.prepare(fs); fenv_.prepare(fs);
     reset();
     rng_ = 0x5EED1234u;
@@ -347,16 +367,30 @@ void Voice::noteOn(int key, double velocity, double glideFrom) {
     }
     if (!wasActive) {   // a fresh start: the voice was silent
         unison_ = std::clamp(static_cast<int>(std::lround(p(Unison))), 1, kMaxUnison);
+        otype_ = std::clamp(static_cast<int>(std::lround(p(OscType))), 0, 3);
+        sample_ = std::clamp(static_cast<int>(std::lround(p(SampleId))), 0, kSamples - 1);
+        fmRatio_ = fmRatioOf(static_cast<int>(std::lround(p(FmRatio))));
+        const auto& smp = sampleBank().s[static_cast<size_t>(sample_)];
         for (int i = 0; i < unison_; ++i) {
+            const size_t k = static_cast<size_t>(i);
             double ph = 0.0;
             if (unison_ > 1) { rng_ = rng_ * 1664525u + 1013904223u; ph = (rng_ >> 8) * (1.0 / 16777216.0); }
-            osc_[static_cast<size_t>(i)].setPhase(ph);
+            osc_[k].setPhase(ph);
+            ph_[k] = ph;
+            pm_[k] = fmRatio_ * ph - std::floor(fmRatio_ * ph);   // the modulator in step with the carrier (no DC where a sideband meets 0 Hz)
+            fb0_[k] = fb1_[k] = 0.0;
+            dcx_ = {}; dcy_ = {};
+            spos_[k] = smp.loop ? ph * smp.length : 0.0;          // loops: the copies start at different places (one copy: the start)
+            sdone_[k] = false;
         }
         oversample_ = p(Drive) > 0.0 || (sh_ && sh_->driveRouted);
         for (auto& ch : svf_) for (auto& f : ch) f.reset();
         for (auto& o : os_) o.reset();
         first_ = true;
     }
+    fmEnv_ = 1.0;   // the FM index starts again
+    if (otype_ == OscSample && !sampleBank().s[static_cast<size_t>(sample_)].loop)   // a one-shot plays again
+        for (int i = 0; i < unison_; ++i) { spos_[static_cast<size_t>(i)] = 0.0; sdone_[static_cast<size_t>(i)] = false; }
     ctl_ = 0;   // the next sample starts with a control update
     align_ = sh_ ? sh_->gridLeft : 0;   // and the one after it falls on the synth's grid (the periods are not split later)
     amp_.gate(true); fenv_.gate(true);
@@ -435,15 +469,15 @@ void Voice::control() {
         lo = std::min(lo, inc0_[k]); hi = std::max(hi, inc0_[k]);
     }
     double cEff = 0.0;
-    if (unison_ > 1 && grav > 0.0) {
+    if (unison_ > 1 && grav > 0.0 && otype_ != OscSample) {
         double X = 0.0, Y = 0.0;
-        for (int i = 0; i < unison_; ++i) { const double th = 2.0 * kPi * osc_[static_cast<size_t>(i)].phase(); X += std::cos(th); Y += std::sin(th); }
+        for (int i = 0; i < unison_; ++i) { const double th = 2.0 * kPi * phaseOf(i); X += std::cos(th); Y += std::sin(th); }
         X /= unison_; Y /= unison_;
         const double r = std::sqrt(X * X + Y * Y), psi = std::atan2(Y, X);
         const double K = grav * ((hi - lo) + kGravityFloorHz / fs_);   // cycles per sample: at 100 % enough to hold the widest copies
         for (int i = 0; i < unison_; ++i) {
             const size_t k = static_cast<size_t>(i);
-            inc0_[k] = std::clamp(inc0_[k] + K * r * std::sin(psi - 2.0 * kPi * osc_[k].phase()), 0.0, 0.45);
+            inc0_[k] = std::clamp(inc0_[k] + K * r * std::sin(psi - 2.0 * kPi * phaseOf(i)), 0.0, 0.45);
         }
         coherence_ = r;
         const double N = unison_, c = std::max(0.0, (r * r * N - 1.0) / (N - 1.0));
@@ -456,12 +490,52 @@ void Voice::control() {
     for (int i = 0; i < unison_; ++i) {
         const size_t k = static_cast<size_t>(i);
         const double u = unison_ > 1 ? 2.0 * i / (unison_ - 1) - 1.0 : 0.0;
-        osc_[k].setWave(wave); osc_[k].setPulseWidth(pw);
-        osc_[k].setIncrement(inc0_[k]);
+        if (otype_ == OscAnalog) { osc_[k].setWave(wave); osc_[k].setPulseWidth(pw); osc_[k].setIncrement(inc0_[k]); }
         const double pan = u * spread;
         if (std::abs(pan) < 1e-12) { gl_[k] = gr_[k] = norm; }
         else { const double th = (pan + 1.0) * kPi / 4.0; gl_[k] = norm * kSqrt2 * std::cos(th); gr_[k] = norm * kSqrt2 * std::sin(th); stereo = true; }
     }
+    // the other types' settings (ramped across the period where a jump would click)
+    switch (otype_) {
+        case OscWavetable: {
+            const WaveBank& wb = waveBank();
+            table_ = std::clamp(static_cast<int>(std::lround(p(Table))), 0, kWaveTables - 1);
+            const double pos = std::clamp((p(Position) + kModRange * md[DstWtPos]) / 100.0, 0.0, 1.0) * (WaveBank::kFrames - 1);
+            wp0_ = first_ ? pos : wp1_; wp1_ = pos;
+            for (int i = 0; i < unison_; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                const int lev = wb.level(inc0_[k]);
+                wbase_[k] = wb.at(table_, 0, lev); wsize_[k] = wb.size[static_cast<size_t>(lev)];
+            }
+            break;
+        }
+        case OscFm: {
+            fmRatio_ = fmRatioOf(static_cast<int>(std::lround(p(FmRatio))));
+            double hiInc = 0.0;
+            for (int i = 0; i < unison_; ++i) hiInc = std::max(hiInc, inc0_[static_cast<size_t>(i)]);
+            const double lim = fmIndexLimit(hiInc, fmRatio_), toCyc = 1.0 / (2.0 * kPi);
+            const double base = std::clamp((p(FmIndex) + kModRange * md[DstFmIndex]) / 100.0, 0.0, 1.0) * kFmIndexMax;
+            const double start = first_ ? std::min(base, lim) * toCyc : fi1_;
+            if (p(FmDecay) < 10000.0 - 1e-6) fmEnv_ *= std::exp(std::log(1e-3) * kCtl / (p(FmDecay) * 1e-3 * fs_));   // to -60 dB in the set time
+            fi1_ = std::min(base * fmEnv_, lim) * toCyc; fi0_ = start;
+            const double beta = std::min(p(FmFeedback) / 100.0 * kFmFeedbackMax, fmFeedbackLimit(hiInc, fmRatio_, fi1_ / toCyc)) * toCyc;
+            fb0k_ = first_ ? beta : fb1k_; fb1k_ = beta;
+            break;
+        }
+        case OscSample: {
+            const auto& smp = sampleBank().s[static_cast<size_t>(sample_)];
+            for (int i = 0; i < unison_; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                const double speed = inc0_[k] * fs_ / SampleBank::kRootHz;
+                const int lev = SampleBank::level(speed, fs_);
+                sptr_[k] = smp.lv[static_cast<size_t>(lev)].data(); sscale_[k] = 1.0 / static_cast<double>(1 << lev);
+                sinc_[k] = speed * SampleBank::kRate / fs_;
+            }
+            break;
+        }
+        default: break;
+    }
+
     // the layer: level (the bottom of the range is Off) and pan, equal power with the centre at unity; tremolo-like level modulation
     const double levMod = std::max(0.0, 1.0 + md[DstLevel]) * std::max(0.0, 1.0 + md[DstL1Level + std::clamp(layer_, 0, 3)]);
     if (p(LayerLevel) != levDb_) { levDb_ = p(LayerLevel); levGain_ = levDb_ <= -60.0 + 1e-9 ? 0.0 : dbToGain(levDb_); }
@@ -502,26 +576,117 @@ void Voice::control() {
     drive_ = std::clamp((p(Drive) + kModRange * md[DstDrive] + kMacroRange * m[4]) / 100.0, 0.0, 1.0);
 }
 
+void Voice::oscillate(double* xl, double* xr, int m, int done) {
+    const int U = unison_;
+    switch (otype_) {
+        case OscWavetable: {   // two frames, cubic (Hermite) between samples, linear between frames; the position ramps across the period
+            const size_t stride = waveBank().stride;
+            const double dw = (wp1_ - wp0_) / kCtl;
+            double w = wp0_ + dw * done;
+            for (int i = 0; i < m; ++i) {
+                w += dw;
+                const int f = std::clamp(static_cast<int>(w), 0, WaveBank::kFrames - 2);
+                const double fw = w - f;
+                double sl = 0.0, sr = 0.0;
+                for (int u = 0; u < U; ++u) {
+                    const size_t k = static_cast<size_t>(u);
+                    const float* A = wbase_[k] + static_cast<size_t>(f) * stride;
+                    const float* B = A + stride;
+                    const double x = ph_[k] * wsize_[k];
+                    const int j = static_cast<int>(x);
+                    const double fr = x - j;
+                    const double a = hermite(A + j, fr), b = hermite(B + j, fr);
+                    const double s = a + fw * (b - a);
+                    double ph = ph_[k] + inc0_[k];
+                    if (ph >= 1.0) ph -= 1.0;
+                    ph_[k] = ph;
+                    sl += gl_[k] * s; sr += gr_[k] * s;
+                }
+                xl[i] = sl; xr[i] = sr;
+            }
+            break;
+        }
+        case OscFm: {   // modulator (with feedback: the average of its last two outputs) -> carrier phase; index and feedback ramp across the period
+            const float* T = sineTable();
+            const double di = (fi1_ - fi0_) / kCtl, db = (fb1k_ - fb0k_) / kCtl, R = fmRatio_;
+            double I = fi0_ + di * done, B = fb0k_ + db * done;
+            for (int i = 0; i < m; ++i) {
+                I += di; B += db;
+                double sl = 0.0, sr = 0.0;
+                for (int u = 0; u < U; ++u) {
+                    const size_t k = static_cast<size_t>(u);
+                    const double mo = sinCycles(T, pm_[k] + 0.5 * B * (fb0_[k] + fb1_[k]));
+                    fb1_[k] = fb0_[k]; fb0_[k] = mo;
+                    const double s = sinCycles(T, ph_[k] + I * mo);
+                    double ph = ph_[k] + inc0_[k];
+                    if (ph >= 1.0) ph -= 1.0;
+                    ph_[k] = ph;
+                    double q = pm_[k] + R * inc0_[k];
+                    if (q >= 1.0) q -= static_cast<double>(static_cast<int>(q));
+                    pm_[k] = q;
+                    sl += gl_[k] * s; sr += gr_[k] * s;
+                }
+                // a sideband can land on 0 Hz (ratio 1 or 0.5) and feedback shifts its phase off the zero: a 5 Hz DC blocker
+                const double yl = sl - dcx_[0] + dca_ * dcy_[0], yr = sr - dcx_[1] + dca_ * dcy_[1];
+                dcx_[0] = sl; dcy_[0] = yl; dcx_[1] = sr; dcy_[1] = yr;
+                xl[i] = yl; xr[i] = yr;
+            }
+            break;
+        }
+        case OscSample: {   // linear interpolation in the level chosen for the speed; loops wrap, one-shots stop
+            const auto& smp = sampleBank().s[static_cast<size_t>(sample_)];
+            const double len = smp.length, end = smp.length + SampleBank::kTail;
+            const bool loop = smp.loop;
+            for (int i = 0; i < m; ++i) {
+                double sl = 0.0, sr = 0.0;
+                for (int u = 0; u < U; ++u) {
+                    const size_t k = static_cast<size_t>(u);
+                    if (sdone_[k]) continue;
+                    const double x = spos_[k] * sscale_[k];
+                    const int j = static_cast<int>(x);
+                    const float* v = sptr_[k];
+                    const double s = v[j] + (x - j) * (v[j + 1] - v[j]);
+                    double q = spos_[k] + sinc_[k];
+                    if (loop) { if (q >= len) q -= len; }
+                    else if (q >= end) sdone_[k] = true;
+                    spos_[k] = q;
+                    sl += gl_[k] * s; sr += gr_[k] * s;
+                }
+                xl[i] = sl; xr[i] = sr;
+            }
+            break;
+        }
+        default:
+            for (int i = 0; i < m; ++i) {
+                double sl = 0.0, sr = 0.0;
+                for (int u = 0; u < U; ++u) {
+                    const size_t k = static_cast<size_t>(u);
+                    const double s = osc_[k].next();
+                    sl += gl_[k] * s; sr += gr_[k] * s;
+                }
+                xl[i] = sl; xr[i] = sr;
+            }
+            break;
+    }
+}
+
 void Voice::render(float* l, float* r, int n) {
     if (!amp_.active()) return;   // sleep
+    double xs[2][kCtl];
     int off = 0;
     while (off < n) {
         if (ctl_ == 0) { control(); ctl_ = (align_ > 0 && align_ < kCtl) ? align_ : kCtl; align_ = 0; }
         const int m = std::min(n - off, ctl_);
+        const int done = std::max(0, kCtl - ctl_);   // samples of this control period already played
+        oscillate(xs[0], xs[1], m, done);
         const double d = drive_, g = 1.0 + 9.0 * d;
         const bool lp24 = type_ == LP24;
-        // the layer gains ramp linearly across the control period (kCtl - ctl_ samples of it are done)
+        // the layer gains ramp linearly across the control period
         const double dl = (gL_ - gL0_) / kCtl, dr = (gR_ - gR0_) / kCtl;
-        double cl = gL0_ + dl * std::max(0, kCtl - ctl_), cr = gR0_ + dr * std::max(0, kCtl - ctl_);
+        double cl = gL0_ + dl * done, cr = gR0_ + dr * done;
         for (int i = 0; i < m; ++i) {
-            double xl = 0.0, xr = 0.0;
-            for (int u = 0; u < unison_; ++u) {
-                const size_t k = static_cast<size_t>(u);
-                const double s = osc_[k].next();
-                xl += gl_[k] * s; xr += gr_[k] * s;
-            }
             const int chans = stereo_ ? 2 : 1;
-            double y[2] = {xl, xr};
+            double y[2] = {xs[0][i], xs[1][i]};
             for (int c = 0; c < chans; ++c) {
                 const size_t cc = static_cast<size_t>(c);
                 double x = y[c];
@@ -566,7 +731,8 @@ Processor::Processor() : slots_(static_cast<size_t>(kSlots)) {
 }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
-    (void)minBlep();   // build the table here, not on the audio thread
+    (void)minBlep();   // build the tables here, not on the audio thread
+    (void)waveBank(); (void)sampleBank(); (void)sineTable();
     fs_ = sampleRate;
     const size_t m = static_cast<size_t>(std::max(1, maxBlock));
     l_.assign(m, 0.0f); r_.assign(m, 0.0f);
