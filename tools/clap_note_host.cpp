@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
     };
     auto bytes = [](const auto& ev) { std::vector<uint8_t> b(sizeof(ev)); std::memcpy(b.data(), &ev, sizeof(ev)); return b; };
 
-    {   // CLAP dialect: a chord held 1 s, then 2 s of nothing
+    {   // CLAP dialect: a chord held 1 s, then the tail (reverb and delay are on in the default patch), then silence
         OutEvents oe;
         std::vector<std::pair<double, std::vector<uint8_t>>> ev = {
             {0.01, bytes(note(CLAP_EVENT_NOTE_ON, 0, 57, 0.9, 1))}, {0.01, bytes(note(CLAP_EVENT_NOTE_ON, 0, 60, 0.9, 2))}, {0.01, bytes(note(CLAP_EVENT_NOTE_ON, 0, 64, 0.9, 3))},
@@ -94,9 +94,11 @@ int main(int argc, char** argv) {
         const double held = run(1.0, ev, 0.2, 0.9, oe);
         ev.clear();
         const double after = run(2.0, ev, 1.0, 2.0, oe);
-        std::printf("      chord held %.1f dBFS RMS, after the release %.1f dBFS, note ends %d\n", held, after, oe.noteEnds);
+        const double late = run(12.0, ev, 11.0, 12.0, oe);
+        std::printf("      chord held %.1f dBFS RMS, 1..2 s after the release %.1f dBFS, 12 s after %.1f dBFS, note ends %d\n", held, after, late, oe.noteEnds);
         check(held > -40.0 && held < 0.0, "a CLAP chord sounds");
-        check(after < -200.0, "silence after the release");
+        check(after < held - 25.0, "the tail dies away");
+        check(late < -200.0, "then silence (the effects sleep)");
         check(oe.noteEnds == 3, "three note ends");
     }
     {   // MIDI dialect: note on, pitch bend, sustain pedal holds after note off, pedal up releases
@@ -109,7 +111,7 @@ int main(int argc, char** argv) {
         const double after = run(2.0, ev, 1.0, 2.0, oe);
         std::printf("      MIDI note on the pedal %.1f dBFS RMS, after pedal up %.1f dBFS, note ends %d\n", held, after, oe.noteEnds);
         check(held > -40.0, "a MIDI note held by the sustain pedal sounds");
-        check(after < -200.0, "pedal up releases it");
+        check(after < held - 25.0, "pedal up releases it");
         check(oe.noteEnds == 1, "one note end");
     }
     {   // state: set Cutoff (id from the params ext) through a param event, save, change, load, read back

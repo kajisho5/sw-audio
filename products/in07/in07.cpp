@@ -40,6 +40,7 @@ const std::vector<ParamSpec>& specs() {
             add("osc.unison", "Unison",      {"", "", 1, 8, 1, Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, "v", {"1", "2", "3", "4", "5", "6", "7", "8"}});
             add("osc.detune", "Detune",      {"", "", 0, 100, 22, Curve::Lin, 1, {}, "%"});
             add("osc.spread", "Spread",      {"", "", 0, 100, 80, Curve::Lin, 1, {}, "%"});
+            add("osc.gravity", "Gravity",    {"", "", 0, 100, 0, Curve::Lin, 1, {}, "%"});
             add("flt.type",   "Filter",      {"", "", 0, 3, LP24, Curve::Step, 1, {0, 1, 2, 3}, "", {"LP 12", "LP 24", "BP 12", "HP 12"}});
             add("flt.cutoff", "Cutoff",      {"", "", 20, 20000, 2400, Curve::Log, 1, {}, "Hz"});
             add("flt.res",    "Resonance",   {"", "", 0, 100, 30, Curve::Lin, 1, {}, "%"});
@@ -56,6 +57,72 @@ const std::vector<ParamSpec>& specs() {
             add("fenv.r",     "Filter release", {"", "", 1, 20000, 500, Curve::Log, 1, {}, "ms"});
             add("vel",        "Vel sens",    {"", "", 0, 100, 50, Curve::Lin, 1, {}, "%"});
         }
+        // the effects: six order slots (Drive, Chorus, Delay, Reverb, EQ, Limit by default), then each effect's On and three settings
+        const std::vector<std::string> fxNames = {"Drive", "Chorus", "Delay", "Reverb", "EQ", "Limit"};
+        for (int i = 0; i < kFx; ++i) {
+            ParamSpec ps{"", "", 0, kFx - 1, static_cast<double>(i), Curve::Step, 1, {0, 1, 2, 3, 4, 5}, "", fxNames};
+            ps.id = str("in07.fx.slot" + std::to_string(i + 1)); ps.name = str("FX slot " + std::to_string(i + 1)); ps.automatable = false;
+            v.push_back(ps);
+        }
+        auto onOff = [&](const char* id, const char* name, bool on) { v.push_back({id, name, 0, 1, on ? 1.0 : 0.0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}}); };
+        onOff("in07.fx.drive.on", "Drive on", true);
+        v.push_back({"in07.fx.drive.amount", "Drive amount", 0, 100, 30, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.fx.drive.tone",   "Drive tone",   0, 100, 60, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.fx.drive.mix",    "Drive mix",    0, 100, 100, Curve::Lin, 1, {}, "%"});
+        onOff("in07.fx.chorus.on", "Chorus on", true);
+        v.push_back({"in07.fx.chorus.rate",  "Chorus rate",  0.05, 5, 0.2, Curve::Log, 1, {}, "Hz"});
+        v.push_back({"in07.fx.chorus.depth", "Chorus depth", 0, 100, 40, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.fx.chorus.mix",   "Chorus mix",   0, 100, 35, Curve::Lin, 1, {}, "%"});
+        onOff("in07.fx.delay.on", "Delay on", true);
+        v.push_back({"in07.fx.delay.time",   "Delay time",   0, 5, 2, Curve::Step, 1, {0, 1, 2, 3, 4, 5}, "", {"1/16", "1/8", "1/8 D", "1/4", "1/4 D", "1/2"}});
+        v.push_back({"in07.fx.delay.feedback", "Delay feedback", 0, 90, 35, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.fx.delay.mix",    "Delay mix",    0, 100, 22, Curve::Lin, 1, {}, "%"});
+        onOff("in07.fx.reverb.on", "Reverb on", true);
+        v.push_back({"in07.fx.reverb.size",  "Reverb size",  0.3, 12, 2.3, Curve::Log, 1, {}, "s"});
+        v.push_back({"in07.fx.reverb.damp",  "Reverb damp",  0, 100, 40, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.fx.reverb.mix",   "Reverb mix",   0, 100, 30, Curve::Lin, 1, {}, "%"});
+        onOff("in07.fx.eq.on", "EQ on", false);
+        v.push_back({"in07.fx.eq.low",       "EQ low",       -12, 12, 0, Curve::Lin, 1, {}, "dB"});
+        v.push_back({"in07.fx.eq.mid",       "EQ mid",       -12, 12, 0, Curve::Lin, 1, {}, "dB"});
+        v.push_back({"in07.fx.eq.high",      "EQ high",      -12, 12, 0, Curve::Lin, 1, {}, "dB"});
+        onOff("in07.fx.limit.on", "Limit on", true);
+        v.push_back({"in07.fx.limit.gain",   "Limit gain",   0, 12, 0, Curve::Lin, 1, {}, "dB"});
+        v.push_back({"in07.fx.limit.ceiling", "Limit ceiling", -12, 0, -1, Curve::Lin, 1, {}, "dB"});
+        v.push_back({"in07.fx.limit.release", "Limit release", 10, 500, 50, Curve::Log, 1, {}, "ms"});
+        // modulation
+        const std::vector<double> syncSteps = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        const std::vector<std::string> syncLabels = {"Off", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16", "1/4 T", "1/8 T", "1/16 T"};
+        for (int i = 0; i < 2; ++i) {
+            const std::string id = "in07.lfo" + std::to_string(i + 1) + ".", nm = "LFO" + std::to_string(i + 1) + " ";
+            auto add = [&](const char* key, const char* name, ParamSpec ps) { ps.id = str(id + key); ps.name = str(nm + name); v.push_back(ps); };
+            add("shape",   "shape",   {"", "", 0, 4, i == 0 ? 0.0 : 1.0, Curve::Step, 1, {0, 1, 2, 3, 4}, "", {"Orbit", "Triangle", "Saw", "Square", "Random"}});
+            add("rate",    "rate",    {"", "", 0.02, 20, i == 0 ? 0.8 : 0.25, Curve::Log, 1, {}, "Hz"});
+            add("sync",    "sync",    {"", "", 0, 10, 0, Curve::Step, 1, syncSteps, "", syncLabels});
+            add("orbit",   "orbit",   {"", "", 0, 95, 0, Curve::Lin, 1, {}, "%"});
+            add("trigger", "trigger", {"", "", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Free", "Note"}});
+        }
+        static const char* const kMacro[8] = {"M1 Bright", "M2 Reso", "M3 Attack", "M4 Release", "M5 Drive", "M6 Width", "M7 Delay", "M8 Reverb"};
+        for (int i = 0; i < 8; ++i) v.push_back({str("in07.macro" + std::to_string(i + 1)), kMacro[i], 0, 100, 50, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.flyby.mode",  "Flyby",           0, 3, FlybyOff, Curve::Step, 1, {0, 1, 2, 3}, "", {"Off", "Arrive", "Pass", "Leave"}});
+        v.push_back({"in07.flyby.depth", "Flyby depth",     0, 100, 60, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.flyby.time",  "Flyby time",      0.05, 8, 1.5, Curve::Log, 1, {}, "s"});
+        v.push_back({"in07.flyby.near",  "Flyby closeness", 0, 100, 50, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.flyby.side",  "Flyby side",      0, 2, 2, Curve::Step, 1, {0, 1, 2}, "", {"L > R", "R > L", "Alternate"}});
+        std::vector<double> srcSteps, dstSteps;
+        for (int i = 0; i < kModSources; ++i) srcSteps.push_back(i);
+        for (int i = 0; i < kModDests; ++i) dstSteps.push_back(i);
+        const std::vector<std::string> srcLabels = {"None", "LFO 1", "LFO 2", "Env 2", "Velocity", "Mod wheel", "Aftertouch", "Key",
+                                                    "M1 Bright", "M2 Reso", "M3 Attack", "M4 Release", "M5 Drive", "M6 Width", "M7 Delay", "M8 Reverb"};
+        const std::vector<std::string> dstLabels = {"None", "Cutoff", "Resonance", "Pitch", "Drive", "Pan", "Level", "L1 level", "L2 level", "L3 level", "L4 level",
+                                                    "LFO 1 rate", "LFO 2 rate", "Pulse width", "Detune", "Gravity"};
+        for (int i = 0; i < kModSlots; ++i) {
+            const std::string id = "in07.mod" + std::to_string(i + 1) + ".", nm = "Mod " + std::to_string(i + 1) + " ";
+            auto add = [&](const char* key, const char* name, ParamSpec ps) { ps.id = str(id + key); ps.name = str(nm + name); v.push_back(ps); };
+            add("on",     "on",     {"", "", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}});
+            add("src",    "source", {"", "", 0, kModSources - 1, SrcNone, Curve::Step, 1, srcSteps, "", srcLabels});
+            add("dst",    "target", {"", "", 0, kModDests - 1, DstNone, Curve::Step, 1, dstSteps, "", dstLabels});
+            add("amount", "amount", {"", "", -100, 100, 0, Curve::Lin, 1, {}, "%"});
+        }
         return v;
     }();
     return s;
@@ -65,6 +132,11 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kSqrt2 = 1.41421356237309504880;
 constexpr double kQ24a = 0.5412, kQ24b = 1.3066, kQ12 = 0.7071, kQMax = 25.0, kEnvOctaves = 5.0, kDetuneCents = 50.0;
+// modulation scales (at amount 100 % and a source of 1): pitch 12 semitones, cutoff 5 octaves (kEnvOctaves), resonance / drive / detune /
+// gravity 100 points, pulse width 45 points, pan full; the macros +-50 points (Bright +-2 octaves, Attack / Release x4 .. /4)
+constexpr double kModPitch = 12.0, kModRange = 100.0, kModPw = 45.0, kMacroRange = 50.0;
+// flyby: up to 7 semitones of Doppler and 3 octaves of air at full depth; gravity: a floor of 2 Hz of pull (copies with no detune still gather)
+constexpr double kFlyPitch = 7.0, kFlyCutOct = 3.0, kGravityFloorHz = 2.0;
 
 // 2-point polyBLAMP (the integral of the BLEP): the correction for a slope change of 1 per sample at phase 0
 inline double blamp(double t, double dt) {
@@ -124,6 +196,24 @@ const MinBlep& minBlep() {
         return m;
     }();
     return table;
+}
+
+// ---- LFO shapes
+double lfoShape(int shape, double phase, double ecc, uint32_t seed) {
+    const double ph = phase - std::floor(phase);
+    switch (shape) {
+        case LfoTriangle: return ph < 0.5 ? 4.0 * ph - 1.0 : 3.0 - 4.0 * ph;
+        case LfoSaw: return 2.0 * ph - 1.0;
+        case LfoSquare: return ph < 0.5 ? 1.0 : -1.0;
+        case LfoRandom: { uint32_t h = seed * 2654435761u; h ^= h >> 16; h *= 2246822519u; h ^= h >> 13; return (h >> 8) * (2.0 / 16777216.0) - 1.0; }
+        default: {   // Orbit: Kepler's equation E - e sin E = M, Newton from E = M + e sin M (converges for e < 1)
+            const double e = std::clamp(ecc, 0.0, 0.95), m = 2.0 * kPi * ph;
+            if (e <= 0.0) return std::cos(m);
+            double E = m + e * std::sin(m);
+            for (int i = 0; i < 8; ++i) { const double d = (E - e * std::sin(E) - m) / (1.0 - e * std::cos(E)); E -= d; if (std::abs(d) < 1e-12) break; }
+            return std::cos(E);
+        }
+    }
 }
 
 // ---- oscillator
@@ -226,8 +316,8 @@ double Adsr::next() {
 }
 
 // ---- voice
-void Voice::prepare(double fs, const double* layerParams, const Shared* shared) {
-    fs_ = fs; lp_ = layerParams; sh_ = shared;
+void Voice::prepare(double fs, const double* layerParams, const Shared* shared, int layer) {
+    fs_ = fs; lp_ = layerParams; sh_ = shared; layer_ = layer;
     amp_.prepare(fs); fenv_.prepare(fs);
     reset();
     rng_ = 0x5EED1234u;
@@ -237,14 +327,17 @@ void Voice::reset() {
     amp_.reset(); fenv_.reset();
     for (auto& ch : svf_) for (auto& f : ch) f.reset();
     for (auto& o : os_) o.reset();
-    ctl_ = 0; first_ = true; killed_ = false; glideLeft_ = 0;
+    ctl_ = 0; first_ = true; killed_ = false; glideLeft_ = 0; flyOn_ = false; coherence_ = 0.0;
 }
 
 void Voice::noteOn(int key, double velocity, double glideFrom) {
     const bool wasActive = amp_.active();
     note_ = key; killed_ = false;
     const double s = p(VelSens) / 100.0, v = std::clamp(velocity, 0.0, 1.0);
-    velGain_ = (1.0 - s) + s * v * v;
+    velGain_ = (1.0 - s) + s * v * v; vel_ = v;
+    // the flyby: Arrive and Pass start with the note, Leave with its release
+    const int fm = sh_ ? sh_->flyMode : FlybyOff;
+    flyOn_ = fm == FlybyArrive || fm == FlybyPass; flyT_ = 0.0; flySign_ = sh_ ? sh_->flySign : 1.0;
     const double gms = sh_ ? sh_->glideMs : 0.0;
     if (glideFrom >= 0.0 && gms > 0.0 && glideFrom != key) {
         glideFrom_ = glideFrom;
@@ -259,12 +352,13 @@ void Voice::noteOn(int key, double velocity, double glideFrom) {
             if (unison_ > 1) { rng_ = rng_ * 1664525u + 1013904223u; ph = (rng_ >> 8) * (1.0 / 16777216.0); }
             osc_[static_cast<size_t>(i)].setPhase(ph);
         }
-        oversample_ = p(Drive) > 0.0;
+        oversample_ = p(Drive) > 0.0 || (sh_ && sh_->driveRouted);
         for (auto& ch : svf_) for (auto& f : ch) f.reset();
         for (auto& o : os_) o.reset();
         first_ = true;
     }
     ctl_ = 0;   // the next sample starts with a control update
+    align_ = sh_ ? sh_->gridLeft : 0;   // and the one after it falls on the synth's grid (the periods are not split later)
     amp_.gate(true); fenv_.gate(true);
 }
 
@@ -277,16 +371,46 @@ void Voice::legato(int key, double glideFrom) {
     } else {
         glideLeft_ = 0;
     }
-    ctl_ = 0;
+    ctl_ = 0; align_ = sh_ ? sh_->gridLeft : 0;
 }
 
-void Voice::noteOff() { amp_.gate(false); fenv_.gate(false); }
+void Voice::noteOff() {
+    amp_.gate(false); fenv_.gate(false);
+    if (sh_ && sh_->flyMode == FlybyLeave && amp_.active() && !killed_) { flyOn_ = true; flyT_ = 0.0; flySign_ = sh_->flySign; }
+}
 
 void Voice::kill() { killed_ = true; amp_.quickRelease(0.003); }
 
 double Voice::frequency() const { return 440.0 * std::exp2((pitch_ - 69.0) / 12.0); }
 
 void Voice::control() {
+    // modulation: the matrix's sums per destination (amount x source; the per-voice sources are this voice's)
+    double md[kModDests] = {};
+    double m[8] = {};   // the macros, -1..1 (the middle = 0)
+    if (sh_) {
+        double src[kModSources];
+        std::copy(std::begin(sh_->src), std::end(sh_->src), src);
+        src[SrcEnv2] = fenv_.level(); src[SrcVelocity] = vel_; src[SrcKey] = (note_ - 60.0) / 60.0;
+        for (int i = 0; i < sh_->nSlots; ++i) { const auto& sl = sh_->slots[static_cast<size_t>(i)]; md[sl.dst] += sl.amount * src[sl.src]; }
+        for (int i = 0; i < 8; ++i) m[i] = sh_->src[SrcM1 + i];
+    }
+    // the flyby: tau runs -1 (far, before) .. 0 (closest) .. +1 (far, after); delta = how near it passes
+    double flyPitch = 0.0, flyGain = 1.0, flyPan = 0.0, flyCut = 0.0;
+    if (flyOn_ && sh_ && sh_->flyMode != FlybyOff) {
+        const double T = std::max(0.01, sh_->flyTime), u = flyT_ / T, dl = sh_->flyDelta, dep = sh_->flyDepth;
+        double tau;
+        switch (sh_->flyMode) {
+            case FlybyArrive: tau = std::min(0.0, -1.0 + u); break;
+            case FlybyPass:   tau = std::min(1.0, -1.0 + 2.0 * u); break;
+            default:          tau = std::min(1.0, u); break;   // Leave
+        }
+        const double pos = tau / std::sqrt(tau * tau + dl * dl), near = dl / std::sqrt(dl * dl + tau * tau);
+        flyPitch = -dep * kFlyPitch * pos;            // Doppler: higher while it comes, lower while it goes, the true pitch at the closest point
+        flyGain = 1.0 - dep * (1.0 - near);           // inverse distance
+        flyPan = flySign_ * dep * pos;                // across the stereo field
+        flyCut = -kFlyCutOct * dep * (1.0 - near);    // the air takes the highs with distance
+        flyT_ += kCtl / fs_;
+    }
     // pitch (glide: linear in semitones over a constant time)
     if (glideLeft_ > 0) {   // the key at the end of this control period (it lands on the note when the glide time is up)
         glideLeft_ = std::max(0, glideLeft_ - kCtl);
@@ -295,23 +419,54 @@ void Voice::control() {
     } else {
         key_ = note_;
     }
-    pitch_ = key_ + 12.0 * p(Octave) + p(Semi) + p(Fine) / 100.0 + (sh_ ? sh_->bendSemis : 0.0);
+    pitch_ = key_ + 12.0 * p(Octave) + p(Semi) + p(Fine) / 100.0 + (sh_ ? sh_->bendSemis : 0.0) + kModPitch * md[DstPitch] + flyPitch;
     const double f = frequency();
-    const double det = p(Detune) / 100.0 * kDetuneCents, spread = p(Spread) / 100.0, norm = 1.0 / std::sqrt(static_cast<double>(unison_));
+    const double detPct = std::clamp(p(Detune) + kModRange * md[DstDetune] + kMacroRange * m[5], 0.0, 100.0);
+    const double det = detPct / 100.0 * kDetuneCents, spread = p(Spread) / 100.0;
     const int wave = static_cast<int>(std::lround(p(Wave)));
-    const double pw = p(PulseWidth) / 100.0;
-    bool stereo = false;
+    const double pw = std::clamp(p(PulseWidth) + kModPw * md[DstPulseWidth], 5.0, 95.0) / 100.0;
+    // gravity: the copies pull toward their common phase (Kuramoto coupling, updated here at control rate)
+    const double grav = std::clamp((p(Gravity) + kModRange * md[DstGravity]) / 100.0, 0.0, 1.0);
+    double lo = 1.0, hi = 0.0;
     for (int i = 0; i < unison_; ++i) {
         const size_t k = static_cast<size_t>(i);
         const double u = unison_ > 1 ? 2.0 * i / (unison_ - 1) - 1.0 : 0.0;   // -1 .. +1
+        inc0_[k] = std::min(0.45, f * std::exp2(det * u / 1200.0) / fs_);
+        lo = std::min(lo, inc0_[k]); hi = std::max(hi, inc0_[k]);
+    }
+    double cEff = 0.0;
+    if (unison_ > 1 && grav > 0.0) {
+        double X = 0.0, Y = 0.0;
+        for (int i = 0; i < unison_; ++i) { const double th = 2.0 * kPi * osc_[static_cast<size_t>(i)].phase(); X += std::cos(th); Y += std::sin(th); }
+        X /= unison_; Y /= unison_;
+        const double r = std::sqrt(X * X + Y * Y), psi = std::atan2(Y, X);
+        const double K = grav * ((hi - lo) + kGravityFloorHz / fs_);   // cycles per sample: at 100 % enough to hold the widest copies
+        for (int i = 0; i < unison_; ++i) {
+            const size_t k = static_cast<size_t>(i);
+            inc0_[k] = std::clamp(inc0_[k] + K * r * std::sin(psi - 2.0 * kPi * osc_[k].phase()), 0.0, 0.45);
+        }
+        coherence_ = r;
+        const double N = unison_, c = std::max(0.0, (r * r * N - 1.0) / (N - 1.0));
+        cEff = c * std::min(1.0, grav / 0.2);   // the level follows the coherence (a locked stack is not louder), fully from 20 % on
+    } else {
+        coherence_ = unison_ > 1 ? 0.0 : 1.0;
+    }
+    const double norm = 1.0 / std::sqrt(unison_ + (static_cast<double>(unison_) * unison_ - unison_) * cEff);
+    bool stereo = false;
+    for (int i = 0; i < unison_; ++i) {
+        const size_t k = static_cast<size_t>(i);
+        const double u = unison_ > 1 ? 2.0 * i / (unison_ - 1) - 1.0 : 0.0;
         osc_[k].setWave(wave); osc_[k].setPulseWidth(pw);
-        osc_[k].setIncrement(std::min(0.45, f * std::exp2(det * u / 1200.0) / fs_));
+        osc_[k].setIncrement(inc0_[k]);
         const double pan = u * spread;
         if (std::abs(pan) < 1e-12) { gl_[k] = gr_[k] = norm; }
         else { const double th = (pan + 1.0) * kPi / 4.0; gl_[k] = norm * kSqrt2 * std::cos(th); gr_[k] = norm * kSqrt2 * std::sin(th); stereo = true; }
     }
-    // the layer: level (the bottom of the range is Off) and pan, equal power with the centre at unity
-    const double lev = p(LayerLevel) <= -60.0 + 1e-9 ? 0.0 : dbToGain(p(LayerLevel)), pan = std::clamp(p(Pan) / 100.0, -1.0, 1.0);
+    // the layer: level (the bottom of the range is Off) and pan, equal power with the centre at unity; tremolo-like level modulation
+    const double levMod = std::max(0.0, 1.0 + md[DstLevel]) * std::max(0.0, 1.0 + md[DstL1Level + std::clamp(layer_, 0, 3)]);
+    if (p(LayerLevel) != levDb_) { levDb_ = p(LayerLevel); levGain_ = levDb_ <= -60.0 + 1e-9 ? 0.0 : dbToGain(levDb_); }
+    const double lev = levGain_ * levMod * flyGain;
+    const double pan = std::clamp(p(Pan) / 100.0 + md[DstPan] + flyPan, -1.0, 1.0);
     double nl = lev, nr = lev;
     if (std::abs(pan) > 1e-12) { const double th = (pan + 1.0) * kPi / 4.0; nl = lev * kSqrt2 * std::cos(th); nr = lev * kSqrt2 * std::sin(th); stereo = true; }
     gL0_ = first_ ? nl : gL_; gR0_ = first_ ? nr : gR_;   // ramp from the last period's gains (the first period of a note starts there)
@@ -319,15 +474,17 @@ void Voice::control() {
     if (stereo && !stereo_) { svf_[1] = svf_[0]; os_[1] = os_[0]; }   // the right chain takes over the left chain's state: no click
     stereo_ = stereo;
 
-    amp_.setTimes(p(AmpA) * 1e-3, p(AmpD) * 1e-3, p(AmpS) / 100.0, p(AmpR) * 1e-3);
+    amp_.setTimes(p(AmpA) * 1e-3 * (m[2] == 0.0 ? 1.0 : std::pow(4.0, m[2])), p(AmpD) * 1e-3, p(AmpS) / 100.0,
+                  p(AmpR) * 1e-3 * (m[3] == 0.0 ? 1.0 : std::pow(4.0, m[3])));
     fenv_.setTimes(p(FenvA) * 1e-3, p(FenvD) * 1e-3, p(FenvS) / 100.0, p(FenvR) * 1e-3);
 
     // filter
-    const double oct = kEnvOctaves * p(FilterEnv) / 100.0 * fenv_.level() + p(KeyTrack) / 100.0 * (pitch_ - 60.0) / 12.0;
+    const double oct = kEnvOctaves * p(FilterEnv) / 100.0 * fenv_.level() + p(KeyTrack) / 100.0 * (pitch_ - 60.0) / 12.0
+                     + kEnvOctaves * md[DstCutoff] + 2.0 * m[0] + flyCut;
     cutoff_ = std::clamp(p(Cutoff) * std::exp2(oct), 20.0, 0.45 * fs_);
     const int type = static_cast<int>(std::lround(p(FilterType)));
     if (type != type_) { for (auto& ch : svf_) ch[1].reset(); type_ = type; }
-    const double r = std::clamp(p(Resonance) / 100.0, 0.0, 1.0);
+    const double r = std::clamp((p(Resonance) + kModRange * md[DstResonance] + kMacroRange * m[1]) / 100.0, 0.0, 1.0);
     const int n = first_ ? 0 : kCtl;   // the first update of a note is immediate
     for (int c = 0; c < 2; ++c) {
         auto& st = svf_[static_cast<size_t>(c)];
@@ -342,20 +499,20 @@ void Voice::control() {
         }
     }
     first_ = false;
-    drive_ = std::clamp(p(Drive) / 100.0, 0.0, 1.0);
+    drive_ = std::clamp((p(Drive) + kModRange * md[DstDrive] + kMacroRange * m[4]) / 100.0, 0.0, 1.0);
 }
 
 void Voice::render(float* l, float* r, int n) {
     if (!amp_.active()) return;   // sleep
     int off = 0;
     while (off < n) {
-        if (ctl_ == 0) { control(); ctl_ = kCtl; }
+        if (ctl_ == 0) { control(); ctl_ = (align_ > 0 && align_ < kCtl) ? align_ : kCtl; align_ = 0; }
         const int m = std::min(n - off, ctl_);
         const double d = drive_, g = 1.0 + 9.0 * d;
         const bool lp24 = type_ == LP24;
         // the layer gains ramp linearly across the control period (kCtl - ctl_ samples of it are done)
         const double dl = (gL_ - gL0_) / kCtl, dr = (gR_ - gR0_) / kCtl;
-        double cl = gL0_ + dl * (kCtl - ctl_), cr = gR0_ + dr * (kCtl - ctl_);
+        double cl = gL0_ + dl * std::max(0, kCtl - ctl_), cr = gR0_ + dr * std::max(0, kCtl - ctl_);
         for (int i = 0; i < m; ++i) {
             double xl = 0.0, xr = 0.0;
             for (int u = 0; u < unison_; ++u) {
@@ -419,10 +576,41 @@ void Processor::prepare(double sampleRate, int maxBlock) {
     shared_.bendSemis = 0.0; shared_.glideMs = p(Glide);
     mode_ = static_cast<int>(std::lround(p(Mode)));
     for (auto& s : slots_) {
-        for (int l = 0; l < kLayers; ++l) s.v[static_cast<size_t>(l)].prepare(fs_, &target_[static_cast<size_t>(lp(l, 0))], &shared_);
+        for (int l = 0; l < kLayers; ++l) s.v[static_cast<size_t>(l)].prepare(fs_, &target_[static_cast<size_t>(lp(l, 0))], &shared_, l);
         s.key = -1; s.held = s.sustained = s.stolen = false;
     }
+    lfoPhase_ = {}; lfoValue_ = {}; lfoSeed_ = {{0x1234567u, 0x7654321u}}; gctl_ = 0; wheel_ = after_ = 0.0; flyFlip_ = 1.0;
+    updateMod();
+    tick(); gctl_ = 0;   // the sources are ready before the first note (the next sample ticks again, from where it starts)
+    updateFx();
+    fx_.prepare(fs_, fxParams_);
+    fresh_ = true; fxIdle_ = 0;
     prepared_ = true;
+}
+
+void Processor::updateFx() {
+    static const double kBeats[6] = {0.25, 0.5, 0.75, 1.0, 1.5, 2.0};   // 1/16, 1/8, 1/8 D, 1/4, 1/4 D, 1/2
+    FxParams& f = fxParams_;
+    for (int i = 0; i < kFx; ++i) f.on[static_cast<size_t>(i)] = p(fxOnId(i)) > 0.5;
+    f.driveAmount = p(FxDriveAmount); f.driveTone = p(FxDriveTone); f.driveMix = p(FxDriveMix);
+    f.chorusRate = p(FxChorusRate); f.chorusDepth = p(FxChorusDepth); f.chorusMix = p(FxChorusMix);
+    f.delayBeats = kBeats[std::clamp(static_cast<int>(std::lround(p(FxDelayTime))), 0, 5)]; f.delayFeedback = p(FxDelayFeedback); f.delayMix = p(FxDelayMix);
+    // M7 Delay and M8 Reverb: +-50 points of mix from the middle
+    f.delayMix = std::clamp(f.delayMix + kMacroRange * (p(Macro7) - 50.0) / 50.0, 0.0, 100.0);
+    f.reverbSize = p(FxReverbSize); f.reverbDamp = p(FxReverbDamp);
+    f.reverbMix = std::clamp(p(FxReverbMix) + kMacroRange * (p(Macro8) - 50.0) / 50.0, 0.0, 100.0);
+    f.eqLow = p(FxEqLow); f.eqMid = p(FxEqMid); f.eqHigh = p(FxEqHigh);
+    f.limitGain = p(FxLimitGain); f.limitCeiling = p(FxLimitCeiling); f.limitRelease = p(FxLimitRelease);
+    fx_.setParams(f);
+    // the order: the slots in turn, each effect the first time it appears; the ones no slot names follow in their default order
+    std::array<int, kFx> o{}; std::array<bool, kFx> used{};
+    int n = 0;
+    for (int i = 0; i < kFx; ++i) {
+        const int e = std::clamp(static_cast<int>(std::lround(p(FxSlot1 + i))), 0, kFx - 1);
+        if (!used[static_cast<size_t>(e)]) { used[static_cast<size_t>(e)] = true; o[static_cast<size_t>(n++)] = e; }
+    }
+    for (int e = 0; e < kFx; ++e) if (!used[static_cast<size_t>(e)]) o[static_cast<size_t>(n++)] = e;
+    fx_.setOrder(o);
 }
 
 void Processor::setParam(int id, double v) {
@@ -430,6 +618,8 @@ void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
+    if (id >= kFxEnd) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
+    if (id >= kFxBase) { updateFx(); if (fresh_) fx_.snapSwitches(); return; }
     if (id == Level) level_.setTarget(dbToGain(v));
     else if (id == Glide) shared_.glideMs = v;
     else if (id == Bend) shared_.bendSemis = bend_ * v;
@@ -445,6 +635,53 @@ void Processor::setParam(int id, double v) {
         layerOn_[static_cast<size_t>(l)] = on;
     }
 }
+
+void Processor::updateMod() {
+    int n = 0;
+    shared_.driveRouted = std::abs(p(Macro5) - 50.0) > 1e-9;
+    for (int i = 0; i < kModSlots; ++i) {
+        const int src = std::clamp(static_cast<int>(std::lround(p(modId(i, ModSrc)))), 0, kModSources - 1);
+        const int dst = std::clamp(static_cast<int>(std::lround(p(modId(i, ModDst)))), 0, kModDests - 1);
+        const double amt = p(modId(i, ModAmount)) / 100.0;
+        if (p(modId(i, ModOn)) < 0.5 || src == SrcNone || dst == DstNone || amt == 0.0) continue;
+        shared_.slots[static_cast<size_t>(n++)] = {src, dst, amt};
+        if (dst == DstDrive) shared_.driveRouted = true;
+    }
+    shared_.nSlots = n;
+    for (int i = 0; i < 8; ++i) shared_.src[SrcM1 + i] = (p(Macro1 + i) - 50.0) / 50.0;
+    shared_.flyMode = std::clamp(static_cast<int>(std::lround(p(FlybyMode))), 0, 3);
+    shared_.flyDepth = p(FlybyDepth) / 100.0;
+    shared_.flyTime = p(FlybyTime);
+    shared_.flyDelta = 0.05 + 0.6 * (1.0 - p(FlybyNear) / 100.0);
+}
+
+// every 32 samples on the synth's own grid (the same whatever the host's block size): the LFOs and the global sources
+void Processor::tick() {
+    static const double kSyncBeats[11] = {0.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25, 2.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0};
+    shared_.src[SrcModWheel] = wheel_; shared_.src[SrcAftertouch] = after_;
+    // the LFO rates may be modulated by the global sources (an LFO by the other, the wheel, the macros); per-voice sources count 0 here
+    double rateMod[2] = {0.0, 0.0};
+    for (int i = 0; i < shared_.nSlots; ++i) {
+        const auto& sl = shared_.slots[static_cast<size_t>(i)];
+        if (sl.dst != DstLfo1Rate && sl.dst != DstLfo2Rate) continue;
+        if (sl.src == SrcEnv2 || sl.src == SrcVelocity || sl.src == SrcKey) continue;
+        rateMod[sl.dst == DstLfo1Rate ? 0 : 1] += sl.amount * shared_.src[sl.src];
+    }
+    for (int k = 0; k < 2; ++k) {
+        const int base = k == 0 ? Lfo1Shape : Lfo2Shape;
+        const int sync = std::clamp(static_cast<int>(std::lround(p(base + 2))), 0, 10);
+        double hz = sync > 0 ? bpm_ / 60.0 / kSyncBeats[sync] : p(base + 1);
+        hz *= std::exp2(4.0 * rateMod[k]);   // +-4 octaves at 100 %
+        lfoValue_[static_cast<size_t>(k)] = lfoShape(static_cast<int>(std::lround(p(base))), lfoPhase_[static_cast<size_t>(k)], p(base + 3) / 100.0, lfoSeed_[static_cast<size_t>(k)]);
+        double ph = lfoPhase_[static_cast<size_t>(k)] + std::clamp(hz, 0.0, 100.0) * Voice::kCtl / fs_;
+        if (ph >= 1.0) { ph -= std::floor(ph); lfoSeed_[static_cast<size_t>(k)] = lfoSeed_[static_cast<size_t>(k)] * 1664525u + 1013904223u; }   // Random: a new value each cycle
+        lfoPhase_[static_cast<size_t>(k)] = ph;
+    }
+    shared_.src[SrcLfo1] = lfoValue_[0]; shared_.src[SrcLfo2] = lfoValue_[1];
+}
+
+void Processor::modWheel(double v) { wheel_ = std::clamp(v, 0.0, 1.0); }
+void Processor::aftertouch(double v) { after_ = std::clamp(v, 0.0, 1.0); }
 
 void Processor::pushEnded(int key, int channel, int noteId) {
     if (endHead_ - endTail_ >= kEnded) ++endTail_;   // full: the oldest report is dropped
@@ -508,10 +745,20 @@ Processor::Slot* Processor::allocate() {
 
 void Processor::noteOn(int key, double velocity, int channel, int noteId) {
     if (!prepared_ || key < 0 || key > 127) return;
+    shared_.gridLeft = gctl_;
     lastVel_ = velocity;
     bool any = false;
     for (bool on : layerOn_) any = any || on;
     if (!any) { pushEnded(key, channel, noteId); return; }   // nothing to play: the note ends at once
+    // LFOs set to Note restart with a note played while no key is held
+    bool keysHeld = !held_.empty();
+    for (const auto& s : slots_) keysHeld = keysHeld || (s.key >= 0 && !s.stolen && s.held);
+    if (!keysHeld)
+        for (int k = 0; k < 2; ++k)
+            if (p(k == 0 ? Lfo1Trigger : Lfo2Trigger) > 0.5) { lfoPhase_[static_cast<size_t>(k)] = 0.0; gctl_ = 0; }
+    // the flyby's side: fixed, or turn about with each note
+    const int side = static_cast<int>(std::lround(p(FlybySide)));
+    if (side == 2) { shared_.flySign = flyFlip_; flyFlip_ = -flyFlip_; } else shared_.flySign = side == 0 ? 1.0 : -1.0;
     if (mode_ != Poly) { monoOn(key, velocity, channel, noteId); return; }
     // poly glide: from the previous note while one is held
     bool anyHeld = false;
@@ -530,6 +777,7 @@ void Processor::noteOn(int key, double velocity, int channel, int noteId) {
 
 void Processor::noteOff(int key, int channel) {
     if (!prepared_) return;
+    shared_.gridLeft = gctl_;
     if (mode_ != Poly) { monoOff(key); return; }
     for (auto& s : slots_)
         if (s.key >= 0 && !s.stolen && s.held && (key < 0 || s.key == key) && (channel < 0 || s.channel == channel)) release(s);
@@ -622,6 +870,8 @@ bool Processor::active() const {
     return false;
 }
 
+bool Processor::fxAsleep() const { return fxIdle_ >= static_cast<int64_t>(0.5 * fs_); }
+
 int Processor::notes() const {
     int n = 0;
     for (const auto& s : slots_) if (s.key >= 0 && !s.stolen && s.sounding()) ++n;
@@ -640,18 +890,39 @@ const Voice* Processor::find(int key, int layer) const {
 void Processor::process(float** ch, int numCh, int n) {
     for (int c = 0; c < numCh; ++c) std::fill(ch[c], ch[c] + n, 0.0f);
     if (!prepared_ || n <= 0) return;
+    fresh_ = false;
     const int cap = static_cast<int>(l_.size());
     for (int off = 0; off < n; off += cap) {
         const int m = std::min(cap, n - off);
         std::fill(l_.begin(), l_.begin() + m, 0.0f);
         std::fill(r_.begin(), r_.begin() + m, 0.0f);
-        for (auto& s : slots_) {
-            if (s.key < 0 && !s.sounding()) continue;
-            for (auto& x : s.v) x.render(l_.data(), r_.data(), m);
-            if (s.key >= 0 && !s.sounding()) {   // the note's sound has ended
-                if (static_cast<int>(&s - slots_.data()) == monoSlot_) monoSlot_ = -1;
-                end(s);
+        // the slots that sound (notes only start between calls, so the list holds for this block)
+        int na = 0;
+        for (int i = 0; i < kSlots; ++i) { const Slot& s = slots_[static_cast<size_t>(i)]; if (s.key >= 0 || s.sounding()) active_[static_cast<size_t>(na++)] = i; }
+        const bool voices = na > 0;
+        for (int pos = 0; pos < m;) {   // the voices in steps of the global control grid
+            if (gctl_ == 0) { tick(); gctl_ = Voice::kCtl; }
+            const int k = std::min(m - pos, gctl_);
+            for (int a = 0; a < na; ++a) {
+                Slot& s = slots_[static_cast<size_t>(active_[static_cast<size_t>(a)])];
+                for (auto& x : s.v) x.render(l_.data() + pos, r_.data() + pos, k);
+                if (s.key >= 0 && !s.sounding()) {   // the note's sound has ended
+                    if (active_[static_cast<size_t>(a)] == monoSlot_) monoSlot_ = -1;
+                    end(s);
+                }
             }
+            gctl_ -= k; pos += k;
+        }
+        // the effects sleep once no voice sounds and their tails have been under -120 dBFS for half a second (no cost while idle)
+        if (voices) fxIdle_ = 0;
+        if (fxIdle_ < static_cast<int64_t>(0.5 * fs_)) {
+            fx_.process(l_.data(), r_.data(), m);
+            float pk = 0.0f;
+            for (int i = 0; i < m; ++i) pk = std::max({pk, std::abs(l_[static_cast<size_t>(i)]), std::abs(r_[static_cast<size_t>(i)])});
+            fxIdle_ = (!voices && pk < 1e-6f) ? fxIdle_ + m : 0;
+        } else {
+            std::fill(l_.begin(), l_.begin() + m, 0.0f);
+            std::fill(r_.begin(), r_.begin() + m, 0.0f);
         }
         for (int i = 0; i < m; ++i) {
             const double g = level_.next();

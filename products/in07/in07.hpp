@@ -26,11 +26,14 @@
 //   Mono = one voice, last-note priority, every new pitch re-triggers, glides whenever Glide > 0. Legato = one voice, no new attack while a key is
 //   held, glides only between held keys. Sustain pedal holds released notes. Every note reports its end once (CLAP note end).
 //   Parameter changes reach the voices at control rate. Unison count, the drive path and the start phases are taken at note-on.
+//   After the voices: the effect chain (fx.hpp), then Level.
 #pragma once
 #include "sw/oversample.hpp"
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "in07/fx.hpp"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -39,11 +42,36 @@ namespace sw::in07 {
 
 // host ids: the global parameters, then each layer's block (lp(layer, param))
 enum GlobalId { Voices, Mode, Glide, Bend, Level, kNumGlobal };
-enum LayerParam { On, LayerLevel, Pan, Wave, PulseWidth, Octave, Semi, Fine, Unison, Detune, Spread, FilterType, Cutoff, Resonance, Drive, FilterEnv,
+enum LayerParam { On, LayerLevel, Pan, Wave, PulseWidth, Octave, Semi, Fine, Unison, Detune, Spread, Gravity, FilterType, Cutoff, Resonance, Drive, FilterEnv,
                   KeyTrack, AmpA, AmpD, AmpS, AmpR, FenvA, FenvD, FenvS, FenvR, VelSens, kLayerParams };
 constexpr int kLayers = 4;
-constexpr int kNumParams = kNumGlobal + kLayers * kLayerParams;
 constexpr int lp(int layer, int param) { return kNumGlobal + layer * kLayerParams + param; }
+// the effects (fx.hpp): the order slots (not automatable), then four parameters per effect (On first)
+constexpr int kFxBase = kNumGlobal + kLayers * kLayerParams;
+enum FxParamId { FxSlot1 = kFxBase, FxSlot2, FxSlot3, FxSlot4, FxSlot5, FxSlot6,
+                 FxDriveOn, FxDriveAmount, FxDriveTone, FxDriveMix, FxChorusOn, FxChorusRate, FxChorusDepth, FxChorusMix,
+                 FxDelayOn, FxDelayTime, FxDelayFeedback, FxDelayMix, FxReverbOn, FxReverbSize, FxReverbDamp, FxReverbMix,
+                 FxEqOn, FxEqLow, FxEqMid, FxEqHigh, FxLimitOn, FxLimitGain, FxLimitCeiling, FxLimitRelease, kFxEnd };
+constexpr int kFxParams = kFxEnd - kFxBase;
+constexpr int fxOnId(int fx) { return FxDriveOn + 4 * fx; }
+// modulation: two LFOs, eight macros (each with its own job, the middle = no change), the flyby, then the matrix (8 slots x On / Source / Dest / Amount)
+enum ModParamId { Lfo1Shape = kFxEnd, Lfo1Rate, Lfo1Sync, Lfo1Ecc, Lfo1Trigger, Lfo2Shape, Lfo2Rate, Lfo2Sync, Lfo2Ecc, Lfo2Trigger,
+                  Macro1, Macro2, Macro3, Macro4, Macro5, Macro6, Macro7, Macro8,
+                  FlybyMode, FlybyDepth, FlybyTime, FlybyNear, FlybySide, kModSlotBase };
+constexpr int kModSlots = 8;
+enum ModField { ModOn, ModSrc, ModDst, ModAmount, kModFields };
+constexpr int modId(int slot, int field) { return kModSlotBase + slot * kModFields + field; }
+constexpr int kNumParams = kModSlotBase + kModSlots * kModFields;
+enum LfoShapeId { LfoOrbit = 0, LfoTriangle, LfoSaw, LfoSquare, LfoRandom };
+enum ModSource { SrcNone = 0, SrcLfo1, SrcLfo2, SrcEnv2, SrcVelocity, SrcModWheel, SrcAftertouch, SrcKey,
+                 SrcM1, SrcM2, SrcM3, SrcM4, SrcM5, SrcM6, SrcM7, SrcM8, kModSources };
+enum ModDest { DstNone = 0, DstCutoff, DstResonance, DstPitch, DstDrive, DstPan, DstLevel, DstL1Level, DstL2Level, DstL3Level, DstL4Level,
+               DstLfo1Rate, DstLfo2Rate, DstPulseWidth, DstDetune, DstGravity, kModDests };
+enum FlybyModeId { FlybyOff = 0, FlybyArrive, FlybyPass, FlybyLeave };
+
+// an LFO's value (-1..1) at a phase (0..1). Orbit: the moon's place along the long axis of a Kepler ellipse, cos E with E - e sin E = 2 pi phase
+// (e = eccentricity 0..0.95; e = 0 is a cosine; near 1 it lingers far out at -1 and whips round the planet to +1). Random: a value per cycle from `seed`.
+double lfoShape(int shape, double phase, double ecc, uint32_t seed = 0);
 enum ModeId { Poly = 0, Mono = 1, Legato = 2 };
 enum WaveId { Sine = 0, Triangle = 1, Saw = 2, Square = 3 };
 enum FilterTypeId { LP12 = 0, LP24 = 1, BP12 = 2, HP12 = 3 };
@@ -101,10 +129,19 @@ private:
     Stage stage_ = Idle;
 };
 
-// what every voice reads from the synth
+// what every voice reads from the synth (the global sources are updated every 32 samples on the synth's own grid)
 struct Shared {
     double bendSemis = 0.0;   // pitch bend now (semitones)
     double glideMs = 0.0;
+    double src[kModSources] = {};   // the global sources now (LFOs, wheel, aftertouch, macros -1..1); the per-voice ones are filled by each voice
+    struct Slot { int src = SrcNone, dst = DstNone; double amount = 0.0; };
+    std::array<Slot, kModSlots> slots{};
+    int nSlots = 0;           // the slots in use (on, with a source and a destination), packed first
+    bool driveRouted = false; // something can add drive (decides the voice's 2x path at note-on)
+    int gridLeft = 0;         // samples to the synth's next control point: a new note's second control period starts there
+    // flyby
+    int flyMode = FlybyOff;
+    double flyDepth = 0.6, flyTime = 1.5, flyDelta = 0.35, flySign = 1.0;
 };
 
 // one layer of one note
@@ -113,7 +150,7 @@ public:
     static constexpr int kMaxUnison = 8;
     static constexpr int kCtl = 32;   // control-rate period (samples)
 
-    void prepare(double fs, const double* layerParams, const Shared* shared);
+    void prepare(double fs, const double* layerParams, const Shared* shared, int layer = 0);
     // glideFrom: the key to glide from (a negative value = no glide); the time is Shared::glideMs
     void noteOn(int key, double velocity, double glideFrom);
     void legato(int key, double glideFrom);   // a new key, no new attack
@@ -126,6 +163,7 @@ public:
     double cutoffInUse() const { return cutoff_; }
     double frequency() const;                  // the pitch in use (Hz), with the layer offsets and the bend
     double keyInUse() const { return key_; }   // the (gliding) key, without the layer offsets
+    double coherence() const { return coherence_; }   // how much the unison copies move together (0..1; the gravity's mean field)
     int key() const { return note_; }
     const Adsr& ampEnv() const { return amp_; }
 
@@ -136,7 +174,11 @@ private:
     const Shared* sh_ = nullptr;
     double fs_ = 48000.0, key_ = 60.0, glideFrom_ = 60.0, velGain_ = 1.0, cutoff_ = 2400.0, drive_ = 0.0, pitch_ = 60.0;
     double gL_ = 1.0, gR_ = 1.0, gL0_ = 1.0, gR0_ = 1.0;   // the layer's level and pan, ramped over each control period
-    int note_ = 60, unison_ = 1, ctl_ = 0, glideN_ = 0, glideLeft_ = 0, type_ = LP24;
+    double vel_ = 1.0, coherence_ = 0.0, flyT_ = 0.0, flySign_ = 1.0, levDb_ = 1e9, levGain_ = 1.0;
+    int layer_ = 0;
+    bool flyOn_ = false;
+    std::array<double, kMaxUnison> inc0_{};
+    int note_ = 60, unison_ = 1, ctl_ = 0, glideN_ = 0, glideLeft_ = 0, type_ = LP24, align_ = 0;
     bool oversample_ = false, first_ = true, stereo_ = false, killed_ = false;
     uint32_t rng_ = 0x5EED1234u;
     std::array<BlepOsc, kMaxUnison> osc_;
@@ -155,18 +197,23 @@ public:
     void prepare(double sampleRate, int maxBlock);
     void setParam(int id, double plainValue);
     double param(int id) const { return (id >= 0 && id < kNumParams) ? target_[static_cast<size_t>(id)] : 0.0; }
-    void snapToTargets() {}
+    void snapToTargets() { fx_.snapSwitches(); }
+    void setTempo(double bpm) { if (bpm > 0.0) { bpm_ = std::clamp(bpm, 30.0, 300.0); fx_.setTempo(bpm); } }   // the host tempo (delay, LFO sync); 120 until told
+    std::array<int, kFx> fxOrder() const { return fx_.order(); }
     // velocity 0..1; channel and noteId are only carried to the end report (CLAP); channel -1 / key -1 in noteOff = any
     void noteOn(int key, double velocity, int channel = 0, int noteId = -1);
     void noteOff(int key, int channel = -1);
     void choke(int key, int channel = -1);              // stop at once (3 ms)
     void pitchBend(double v);                           // -1 .. +1 of the bend range
+    void modWheel(double v);                            // 0..1 (CC 1)
+    void aftertouch(double v);                          // 0..1 (channel pressure)
     void sustain(bool down);
     void allNotesOff();                                 // release everything (the pedal is lifted too)
     void allSoundOff();                                 // silent at once
     void process(float** ch, int numCh, int n);         // writes (replaces) the output
     int latencySamples() const { return 0; }
-    bool active() const;                                // anything sounding
+    bool active() const;                                // any voice sounding (the effects' tails are not counted)
+    bool fxAsleep() const;                              // the effects are idle (no voice, tails under -120 dBFS for 0.5 s)
     int notes() const;                                  // notes sounding, without the ones fading after a steal
     const Voice* find(int key, int layer = 0) const;    // the sounding (not fading) voice of a key on a layer, or null
     bool takeEnded(int& key, int& channel, int& noteId); // notes whose sound has ended, oldest first
@@ -187,6 +234,9 @@ private:
     void monoOn(int key, double vel, int channel, int noteId);
     void monoOff(int key);
     double p(int id) const { return target_[static_cast<size_t>(id)]; }
+    void updateFx();                                    // the effects' parameters and order from the table
+    void updateMod();                                   // the matrix, the macros and the flyby settings into Shared
+    void tick();                                        // the global sources, every 32 samples
 
     double fs_ = 48000.0, lastVel_ = 1.0, bend_ = 0.0, lastKey_ = -1.0;
     bool prepared_ = false, pedal_ = false;
@@ -204,6 +254,15 @@ private:
     size_t endHead_ = 0, endTail_ = 0;
     std::vector<float> l_, r_;
     LinearSmoother level_;
+    FxChain fx_;
+    FxParams fxParams_;
+    int64_t fxIdle_ = 0;
+    int gctl_ = 0;                                      // samples to the next global control point
+    std::array<int, kSlots> active_{};                  // the slots that sound in this block
+    double bpm_ = 120.0, wheel_ = 0.0, after_ = 0.0, flyFlip_ = 1.0;
+    std::array<double, 2> lfoPhase_{}, lfoValue_{};
+    std::array<uint32_t, 2> lfoSeed_{{0x1234567u, 0x7654321u}};                                // samples with no voice and the effects' output under -120 dBFS
+    bool fresh_ = true;                                 // nothing processed since prepare: switching an effect does not fade
 };
 
 }  // namespace sw::in07

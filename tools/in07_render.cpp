@@ -1,7 +1,7 @@
 // IN07 engine: render listening demos and measure the cost of one voice (and a chord) on this machine.
 //   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/in07.cpp -o build/in07_render && build/in07_render build/in07
-// Writes demo_lead.wav, demo_bass.wav, demo_pad.wav (dry, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
-// and prints the time per sample of one voice in four set-ups. The numbers are this machine's, not a design estimate.
+// Writes demo_lead.wav, demo_bass.wav, demo_pad.wav, demo_gravity.wav, demo_flyby.wav, demo_orbit_lfo.wav (the default effects on, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
+// and prints the time per sample of one voice in four set-ups, the default effect chain and an 8-note chord. The numbers are this machine's, not a design estimate.
 #include "in07/in07.hpp"
 #include <algorithm>
 #include <chrono>
@@ -150,6 +150,50 @@ int main(int argc, char** argv) {
         play(p, ev, 0.25 + 8 * bar + 2.5, l, r);
         writeWav(dir + "/demo_pad.wav", l, r, -1.0);
     }
+    // the planet features
+    auto route = [](Processor& p, int slot, int src, int dst, double amount) {
+        p.setParam(modId(slot, ModSrc), src); p.setParam(modId(slot, ModDst), dst); p.setParam(modId(slot, ModAmount), amount); p.setParam(modId(slot, ModOn), 1);
+    };
+    {   // gravity: a supersaw chord, the LFO (slow triangle) pulls the copies into step and lets them go (wide <-> one saw)
+        Processor p; p.prepare(kFs, 256); leadPatch(p);
+        p.setParam(lp(0, Detune), 35); p.setParam(lp(0, Cutoff), 3500); p.setParam(lp(0, AmpA), 30); p.setParam(lp(0, AmpR), 1500);
+        p.setParam(Lfo2Shape, LfoTriangle); p.setParam(Lfo2Rate, 0.2);
+        route(p, 0, SrcLfo2, DstGravity, 50.0);   // gravity 0 .. 100 % (from 50 % +- 50)
+        p.setParam(lp(0, Gravity), 50);
+        std::vector<Ev> ev;
+        for (int k : {57, 60, 64, 69}) { ev.push_back({0.25, k, true, 0.8}); ev.push_back({10.25, k, false, 0.0}); }
+        play(p, ev, 12.5, l, r);
+        writeWav(dir + "/demo_gravity.wav", l, r, -1.0);
+    }
+    {   // flyby: Arrive on a lead (each note comes in from the side, alternating), then Pass on long notes
+        Processor p; p.prepare(kFs, 256); leadPatch(p);
+        p.setParam(FlybyMode, FlybyArrive); p.setParam(FlybyDepth, 70); p.setParam(FlybyTime, 0.6); p.setParam(FlybyNear, 55); p.setParam(FlybySide, 2);
+        std::vector<Ev> ev;
+        const double beat = 60.0 / 110.0;
+        const std::vector<int> mel = {69, 72, 76, 74, 72, 69, 67, 69};
+        for (size_t i = 0; i < mel.size(); ++i) { const double t = 0.25 + i * beat * 2; ev.push_back({t, mel[i], true, 0.9}); ev.push_back({t + beat * 1.8, mel[i], false, 0.0}); }
+        play(p, ev, 0.25 + mel.size() * beat * 2 + 1.5, l, r);
+        std::vector<float> l2, r2;
+        Processor q; q.prepare(kFs, 256); leadPatch(q);
+        q.setParam(FlybyMode, FlybyPass); q.setParam(FlybyDepth, 100); q.setParam(FlybyTime, 2.5); q.setParam(FlybyNear, 40); q.setParam(FlybySide, 2);
+        q.setParam(lp(0, AmpR), 600);
+        std::vector<Ev> ev2 = {{0.25, 57, true, 0.9}, {2.9, 57, false, 0.0}, {3.25, 64, true, 0.9}, {5.9, 64, false, 0.0}};
+        play(q, ev2, 7.5, l2, r2);
+        l.insert(l.end(), l2.begin(), l2.end()); r.insert(r.end(), r2.begin(), r2.end());
+        writeWav(dir + "/demo_flyby.wav", l, r, -1.0);
+    }
+    {   // orbit LFO: eccentricity 85 % synced to 1/4 on the cutoff of a pad: a short bright peak each beat, then the long dark swing out
+        Processor p; p.prepare(kFs, 256); leadPatch(p); p.setTempo(120.0);
+        p.setParam(lp(0, Cutoff), 500); p.setParam(lp(0, FilterEnv), 0); p.setParam(lp(0, Resonance), 45); p.setParam(lp(0, AmpR), 1200);
+        p.setParam(Lfo1Shape, LfoOrbit); p.setParam(Lfo1Ecc, 85); p.setParam(Lfo1Sync, 5); p.setParam(Lfo1Trigger, 1);
+        route(p, 0, SrcLfo1, DstCutoff, 45.0);    // +-2.25 octaves
+        const double bar = 2.0;
+        const std::vector<std::vector<int>> chords = {{57, 60, 64}, {53, 57, 60}, {48, 55, 60}, {55, 59, 62}};
+        std::vector<Ev> ev;
+        for (int b = 0; b < 4; ++b) for (int k : chords[static_cast<size_t>(b)]) { const double t = 0.25 + b * bar; ev.push_back({t, k, true, 0.8}); ev.push_back({t + bar * 0.98, k, false, 0.0}); }
+        play(p, ev, 0.25 + 4 * bar + 2.0, l, r);
+        writeWav(dir + "/demo_orbit_lfo.wav", l, r, -1.0);
+    }
     for (int correct = 0; correct < 2; ++correct) {   // saw sweep 100 Hz -> 10 kHz over 8 s, exponential
         BlepOsc o; o.setWave(Saw); o.setCorrection(correct == 1);
         const size_t n = static_cast<size_t>(8.0 * kFs);
@@ -158,16 +202,18 @@ int main(int argc, char** argv) {
         writeWav(dir + (correct ? "/sweep_minblep.wav" : "/sweep_naive.wav"), l, l, 1.0);
     }
 
-    struct Setup { const char* name; int unison; int type; double drive; double spread; bool hold; };
+    struct Setup { const char* name; int unison; int type; double drive; double spread; bool hold; bool fx; };
     const Setup setups[] = {
-        {"saw x1, LP12, Drive 0            ", 1, LP12, 0, 0, true},
-        {"saw x1, LP24, Drive 18 (2x)      ", 1, LP24, 18, 0, true},
-        {"saw x8 stereo, LP24, Drive 18 (2x)", 8, LP24, 18, 80, true},
-        {"no note (the voice sleeps)       ", 8, LP24, 18, 80, false},
+        {"saw x1, LP12, Drive 0            ", 1, LP12, 0, 0, true, false},
+        {"saw x1, LP24, Drive 18 (2x)      ", 1, LP24, 18, 0, true, false},
+        {"saw x8 stereo, LP24, Drive 18 (2x)", 8, LP24, 18, 80, true, false},
+        {"no note (the voice sleeps)       ", 8, LP24, 18, 80, false, false},
+        {"saw x1, LP12 + the default effects", 1, LP12, 0, 0, true, true},
     };
-    std::printf("one voice, 48 kHz, blocks of 256 (best of 3 x 20 s):\n");
+    std::printf("one voice (effects off unless named), 48 kHz, blocks of 256 (best of 3 x 20 s):\n");
     for (const auto& s : setups) {
         Processor p; p.prepare(kFs, 256); leadPatch(p);
+        if (!s.fx) for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0);
         p.setParam(lp(0, Unison), s.unison); p.setParam(lp(0, FilterType), s.type); p.setParam(lp(0, Drive), s.drive); p.setParam(lp(0, Spread), s.spread);
         p.setParam(lp(0, AmpS), 100);
         const double ns = benchNsPerSample(p, s.hold);
@@ -175,6 +221,7 @@ int main(int argc, char** argv) {
     }
     {   // a chord of 8 notes on L1 (saw x8 stereo, LP24, Drive 18) and the same with all four layers on
         Processor p; p.prepare(kFs, 256); leadPatch(p); p.setParam(lp(0, AmpS), 100);
+        for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0);
         std::printf("  8 notes, L1 only (saw x8 stereo, LP24, Drive 18)  %7.1f ns/sample\n", benchNsPerSample(p, true, 8));
         for (int l = 1; l < kLayers; ++l) {
             p.setParam(lp(l, On), 1);

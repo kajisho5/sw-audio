@@ -21,6 +21,7 @@ const double kFs = tu::kFs;
 void plain(Processor& p) {
     p.prepare(kFs, 256);
     p.setParam(Level, 0); p.setParam(Glide, 0);
+    for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0);   // the effects (on by default) stay out of the voice tests
     p.setParam(lp(0, Wave), Sine); p.setParam(lp(0, Unison), 1); p.setParam(lp(0, Octave), 0);
     p.setParam(lp(0, FilterType), LP12); p.setParam(lp(0, Cutoff), 20000); p.setParam(lp(0, Resonance), 0); p.setParam(lp(0, Drive), 0);
     p.setParam(lp(0, FilterEnv), 0); p.setParam(lp(0, KeyTrack), 0); p.setParam(lp(0, VelSens), 0);
@@ -79,7 +80,7 @@ std::vector<float> oscRun(int wave, double hz, double pw, size_t n) {
 TEST_CASE("IN07: parameter table") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    CHECK(kNumParams == kNumGlobal + kLayers * kLayerParams);
+    CHECK(kNumParams == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields);
     std::set<std::string> ids, names;
     for (const auto& p : s) {
         ids.insert(p.id); names.insert(p.name);
@@ -498,4 +499,373 @@ TEST_CASE("IN07: finite and bounded under random settings and chords") {
     }
     CHECK(finite);
     CHECK(peak < 100.0);
+}
+
+// ---- the effects after the voices (6 slots, any order)
+namespace {
+void fxOff(Processor& p) { for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0); }
+// a held note through one effect, steady part (dB RMS of the left channel)
+double fxHeldDb(Processor& p, int note, double seconds = 1.0) {
+    p.noteOn(note, 1.0);
+    auto y = render(p, static_cast<size_t>(seconds * kFs)).first;
+    p.allNotesOff(); render(p, 9600);
+    return tu::rmsDb(y, y.size() / 2, y.size());
+}
+}  // namespace
+
+TEST_CASE("IN07 FX: parameter table and order slots") {
+    const auto& s = specs();
+    CHECK(kNumParams == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields);
+    CHECK(std::string(s[FxSlot1].id) == "in07.fx.slot1");
+    CHECK(std::string(s[FxDelayTime].id) == "in07.fx.delay.time");
+    CHECK(std::string(s[FxReverbSize].name) == "Reverb size");
+    for (int i = 0; i < kFx; ++i) {
+        CHECK_FALSE(s[FxSlot1 + i].automatable);       // the order is not for automation
+        CHECK(s[FxSlot1 + i].def == i);                 // Drive, Chorus, Delay, Reverb, EQ, Limit
+        CHECK(s[FxSlot1 + i].numSteps() == kFx);
+    }
+    CHECK(s[fxOnId(FxEq)].def == 0);                    // the screen's defaults: EQ off, the rest on
+    CHECK(s[fxOnId(FxDrive)].def == 1);
+    CHECK(s[FxDelayTime].numSteps() == 6);
+}
+
+TEST_CASE("IN07 FX: the order follows the slots; a repeated effect keeps one place, missing ones go to the end") {
+    Processor p; plain(p);
+    p.setParam(FxSlot1, FxEq); p.setParam(FxSlot2, FxDrive);
+    auto o = p.fxOrder();
+    CHECK(o[0] == FxEq); CHECK(o[1] == FxDrive);
+    std::set<int> all(o.begin(), o.end());
+    CHECK(all.size() == static_cast<size_t>(kFx));
+    p.setParam(FxSlot3, FxEq);                          // EQ twice: the first place counts, Delay (pushed out) goes to the end
+    o = p.fxOrder();
+    all = std::set<int>(o.begin(), o.end());
+    CHECK(all.size() == static_cast<size_t>(kFx));
+    CHECK(o[0] == FxEq);
+}
+
+TEST_CASE("IN07 FX: with every effect off the output is the voices alone") {
+    Processor a; plain(a); fxOff(a);
+    Processor b; plain(b); fxOff(b); b.setParam(FxReverbMix, 100); b.setParam(FxDriveAmount, 100);   // settings of switched-off effects do nothing
+    a.noteOn(60, 1.0); b.noteOn(60, 1.0);
+    auto x = render(a, 9600).first, y = render(b, 9600).first;
+    size_t diff = 0; for (size_t i = 0; i < x.size(); ++i) if (x[i] != y[i]) ++diff;
+    CHECK(diff == 0);
+}
+
+TEST_CASE("IN07 FX: EQ bands") {
+    Processor p; plain(p); fxOff(p);
+    const double d50 = fxHeldDb(p, 31), d1k = fxHeldDb(p, 84), d12k = fxHeldDb(p, 127);   // 49 Hz, 1047 Hz, 12.5 kHz
+    p.setParam(fxOnId(FxEq), 1);
+    CHECK(fxHeldDb(p, 84) - d1k == doctest::Approx(0.0).epsilon(0.02));     // flat at 0 dB
+    p.setParam(FxEqLow, 12);
+    CHECK(fxHeldDb(p, 31) - d50 == doctest::Approx(12.0).epsilon(0.03));
+    p.setParam(FxEqLow, 0); p.setParam(FxEqMid, -12);
+    CHECK(fxHeldDb(p, 84) - d1k == doctest::Approx(-12.0).epsilon(0.05));
+    p.setParam(FxEqMid, 0); p.setParam(FxEqHigh, 12);
+    CHECK(fxHeldDb(p, 127) - d12k == doctest::Approx(12.0).epsilon(0.05));
+}
+
+TEST_CASE("IN07 FX: delay time follows the tempo, echoes alternate sides (ping-pong)") {
+    Processor p; plain(p); fxOff(p);
+    p.setParam(lp(0, AmpR), 1); p.setParam(fxOnId(FxDelay), 1); p.setParam(FxDelayMix, 100); p.setParam(FxDelayFeedback, 50);
+    p.setParam(FxDelayTime, 3);                          // 1/4
+    p.setTempo(120.0);                                   // a quarter = 0.5 s
+    p.noteOn(81, 1.0); render(p, 480); p.noteOff(81);    // a 10 ms blip
+    auto y = render(p, 96000);
+    auto energy = [](const std::vector<float>& x, double a, double b) { double s = 0; for (size_t i = static_cast<size_t>(a * kFs); i < static_cast<size_t>(b * kFs); ++i) s += x[i] * x[i]; return s; };
+    // first echo at 0.5 s after the blip (which started 480 samples before this render)
+    const double e1L = energy(y.first, 0.49, 0.52), e1R = energy(y.second, 0.49, 0.52);
+    const double e2L = energy(y.first, 0.99, 1.02), e2R = energy(y.second, 0.99, 1.02);
+    const double gap = energy(y.first, 0.2, 0.45) + energy(y.second, 0.2, 0.45);
+    CHECK(e1L + e1R > 1000 * gap);
+    CHECK(e1L > 100 * e1R);                              // the first echo on the left
+    CHECK(e2R > 100 * e2L);                              // the second on the right
+    p.allSoundOff(); render(p, 96000);
+    p.setTempo(60.0);                                     // a quarter = 1 s
+    p.noteOn(81, 1.0); render(p, 480); p.noteOff(81);
+    y = render(p, 96000);
+    CHECK(energy(y.first, 0.99, 1.02) > 1000 * energy(y.first, 0.45, 0.55));
+}
+
+TEST_CASE("IN07 FX: reverb decays in about its size") {
+    Processor p; plain(p); fxOff(p);
+    p.setParam(lp(0, Wave), Saw); p.setParam(lp(0, AmpR), 1);
+    p.setParam(fxOnId(FxReverb), 1); p.setParam(FxReverbMix, 100); p.setParam(FxReverbSize, 2.0); p.setParam(FxReverbDamp, 0);
+    p.noteOn(60, 1.0); render(p, 24000); p.noteOff(60);
+    auto y = render(p, static_cast<size_t>(3.0 * kFs)).first;
+    // the decay from 0.3 s to 1.3 s should be about 30 dB (60 dB in 2 s)
+    const double a = tu::rmsDb(y, static_cast<size_t>(0.25 * kFs), static_cast<size_t>(0.35 * kFs));
+    const double b = tu::rmsDb(y, static_cast<size_t>(1.25 * kFs), static_cast<size_t>(1.35 * kFs));
+    MESSAGE("reverb: " << a - b << " dB in 1 s (size 2 s)");
+    CHECK(a - b == doctest::Approx(30.0).epsilon(0.25));
+}
+
+TEST_CASE("IN07 FX: chorus widens a mono voice at about the same level") {
+    Processor p; plain(p); fxOff(p); p.setParam(lp(0, Wave), Saw);
+    p.noteOn(57, 1.0);
+    auto dry = render(p, 48000);
+    p.allNotesOff(); render(p, 9600);
+    p.setParam(fxOnId(FxChorus), 1); p.setParam(FxChorusMix, 50); p.setParam(FxChorusDepth, 60);
+    p.noteOn(57, 1.0);
+    auto wet = render(p, 48000);
+    double sl = 0, sr = 0, slr = 0;
+    for (size_t i = 24000; i < 48000; ++i) { sl += wet.first[i] * wet.first[i]; sr += wet.second[i] * wet.second[i]; slr += wet.first[i] * wet.second[i]; }
+    CHECK(slr / std::sqrt(sl * sr) < 0.95);
+    CHECK(std::abs(tu::rmsDb(wet.first, 24000, 48000) - tu::rmsDb(dry.first, 24000, 48000)) < 3.0);
+}
+
+TEST_CASE("IN07 FX: drive adds harmonics, limit holds the ceiling, the order matters") {
+    Processor p; plain(p); fxOff(p);
+    p.setParam(fxOnId(FxDrive), 1); p.setParam(FxDriveAmount, 100); p.setParam(FxDriveTone, 100); p.setParam(FxDriveMix, 100);
+    p.noteOn(57, 1.0);
+    auto y = render(p, 48000).first;
+    p.allNotesOff(); render(p, 9600);
+    CHECK(tu::harmDb(y, 220, 3) > -40.0);
+    fxOff(p);
+    // a loud chord through Limit: +12 dB of gain, ceiling -3 dB
+    p.setParam(lp(0, Wave), Saw); p.setParam(lp(0, Unison), 4); p.setParam(fxOnId(FxLimit), 1); p.setParam(FxLimitGain, 12); p.setParam(FxLimitCeiling, -3);
+    render(p, 480);                                      // the 5 ms switch fades are over
+    for (int k : {48, 52, 55, 60, 64}) p.noteOn(k, 1.0);
+    auto st = render(p, 48000);
+    p.allNotesOff(); render(p, 48000);
+    double peak = 0; for (size_t i = 0; i < st.first.size(); ++i) peak = std::max({peak, std::abs(static_cast<double>(st.first[i])), std::abs(static_cast<double>(st.second[i]))});
+    CHECK(20 * std::log10(peak) <= -3.0 + 0.01);
+    CHECK(20 * std::log10(peak) > -6.0);
+    // EQ then Drive differs from Drive then EQ
+    auto play = [](int first, int second) {
+        Processor q; plain(q); fxOff(q);
+        q.setParam(fxOnId(FxDrive), 1); q.setParam(FxDriveAmount, 80); q.setParam(fxOnId(FxEq), 1); q.setParam(FxEqLow, 12);
+        q.setParam(FxSlot1, first); q.setParam(FxSlot2, second);
+        q.noteOn(36, 1.0);
+        return render(q, 9600).first;
+    };
+    auto a = play(FxEq, FxDrive), b = play(FxDrive, FxEq);
+    double d = 0; for (size_t i = 0; i < a.size(); ++i) d = std::max(d, std::abs(static_cast<double>(a[i]) - b[i]));
+    CHECK(d > 0.01);
+}
+
+TEST_CASE("IN07 FX: switching an effect fades instead of clicking") {
+    Processor p; plain(p); fxOff(p);
+    p.setParam(lp(0, Wave), Sine);
+    p.noteOn(57, 1.0); render(p, 4800);
+    p.setParam(fxOnId(FxEq), 1); p.setParam(FxEqLow, 12);   // +12 dB on a 220 Hz sine: a jump would be a click
+    auto y = render(p, 4800).first;
+    double maxStep = 0;
+    for (size_t i = 1; i < y.size(); ++i) maxStep = std::max(maxStep, std::abs(static_cast<double>(y[i]) - y[i - 1]));
+    CHECK(maxStep < 0.12);   // a 220 Hz sine of amplitude 1..3 moves at most 0.029..0.086 a sample
+}
+
+TEST_CASE("IN07 FX: the effects go to sleep after their tails, and wake with the next note") {
+    Processor p; p.prepare(kFs, 256);                    // the default patch: drive, chorus, delay, reverb and limit on
+    p.noteOn(60, 1.0); render(p, 24000); p.noteOff(60);
+    auto tail = render(p, 48000);
+    CHECK(tu::rmsDb(tail.first, 0, 24000) > -60.0);     // the reverb and the delay ring on
+    CHECK_FALSE(p.fxAsleep());
+    auto later = render(p, static_cast<size_t>(12.0 * kFs));
+    CHECK(p.fxAsleep());
+    CHECK(*std::max_element(later.first.end() - 4800, later.first.end()) == 0.0f);
+    CHECK(*std::min_element(later.second.end() - 4800, later.second.end()) == 0.0f);
+    p.noteOn(64, 1.0);
+    auto again = render(p, 4800);
+    CHECK_FALSE(p.fxAsleep());
+    CHECK(tu::rmsDb(again.first, 2400, 4800) > -40.0);
+}
+
+// ---- modulation: LFOs (with the orbit shape), the matrix, the macros; the planet features flyby and gravity
+namespace {
+// one matrix slot
+void route(Processor& p, int slot, int src, int dst, double amount) {
+    p.setParam(modId(slot, ModSrc), src); p.setParam(modId(slot, ModDst), dst); p.setParam(modId(slot, ModAmount), amount); p.setParam(modId(slot, ModOn), 1);
+}
+// the frequency of a voice, sampled every `step` samples for `n` samples
+std::vector<double> freqTrack(Processor& p, int key, size_t n, int step) {
+    std::vector<double> f;
+    for (size_t i = 0; i < n; i += static_cast<size_t>(step)) { render(p, static_cast<size_t>(step), step); f.push_back(v0(p, key).frequency()); }
+    return f;
+}
+}  // namespace
+
+TEST_CASE("IN07 MOD: parameter table") {
+    const auto& s = specs();
+    CHECK(std::string(s[Lfo1Shape].id) == "in07.lfo1.shape");
+    CHECK(std::string(s[Lfo2Rate].id) == "in07.lfo2.rate");
+    CHECK(std::string(s[Macro1].name) == "M1 Bright");
+    CHECK(std::string(s[Macro8].name) == "M8 Reverb");
+    CHECK(std::string(s[modId(0, ModSrc)].id) == "in07.mod1.src");
+    CHECK(std::string(s[modId(7, ModAmount)].id) == "in07.mod8.amount");
+    CHECK(std::string(s[FlybyMode].id) == "in07.flyby.mode");
+    CHECK(std::string(s[lp(2, Gravity)].id) == "in07.l3.osc.gravity");
+    for (int m = 0; m < 8; ++m) CHECK(s[Macro1 + m].def == 50);   // the middle = the preset as it is
+    CHECK(s[modId(0, ModSrc)].numSteps() == kModSources);
+    CHECK(s[modId(0, ModDst)].numSteps() == kModDests);
+    CHECK(s[FlybyMode].def == FlybyOff);
+    CHECK(s[lp(0, Gravity)].def == 0);
+}
+
+TEST_CASE("IN07 MOD: the orbit LFO is a cosine at eccentricity 0 and a slingshot near 1") {
+    for (int i = 0; i < 64; ++i) {
+        const double ph = i / 64.0;
+        CHECK(lfoShape(LfoOrbit, ph, 0.0) == doctest::Approx(std::cos(2 * tu::kPi * ph)).epsilon(1e-9));
+    }
+    // e = 0.8: Kepler's second law, the moon lingers far out (y near -1) and whips round the planet: y is a narrow peak
+    // (a cosine is above 0.5 for a third of the cycle; here for 2 (E - e sin E) / 2 pi at E = pi / 3 = 11.3 %)
+    int below = 0, top = 0; double maxStep = 0, prev = lfoShape(LfoOrbit, 0.0, 0.8);
+    const int n = 4096;
+    for (int i = 1; i <= n; ++i) {
+        const double y = lfoShape(LfoOrbit, static_cast<double>(i) / n, 0.8);
+        below += y < 0.0; top += y > 0.5; maxStep = std::max(maxStep, std::abs(y - prev)); prev = y;
+    }
+    MESSAGE("orbit e 0.8: " << 100.0 * below / n << " % of the cycle below 0, " << 100.0 * top / n << " % above 0.5, steepest step " << maxStep);
+    CHECK(below > 0.70 * n);
+    CHECK(static_cast<double>(top) / n == doctest::Approx(0.113).epsilon(0.03));
+    CHECK(maxStep > 1.5 * (2 * tu::kPi / n));               // the flanks are steeper than a cosine's (1.67 x at e 0.8)
+    for (int sh : {int(LfoTriangle), int(LfoSaw), int(LfoSquare), int(LfoRandom)})
+        for (int i = 0; i < 64; ++i) { const double y = lfoShape(sh, i / 64.0, 0.0, 12345u); CHECK(y >= -1.0); CHECK(y <= 1.0); }
+}
+
+TEST_CASE("IN07 MOD: LFO to pitch (vibrato), synced to the tempo") {
+    Processor p; plain(p);
+    p.setParam(Lfo1Shape, LfoOrbit); p.setParam(Lfo1Ecc, 0); p.setParam(Lfo1Rate, 5.0);
+    route(p, 0, SrcLfo1, DstPitch, 10.0);                // 10 % of 12 semitones = 1.2
+    p.noteOn(69, 1.0);
+    auto f = freqTrack(p, 69, 48000, 32);
+    const double hi = *std::max_element(f.begin(), f.end()), lo = *std::min_element(f.begin(), f.end());
+    CHECK(hi / 440.0 == doctest::Approx(std::exp2(1.2 / 12.0)).epsilon(0.002));
+    CHECK(lo / 440.0 == doctest::Approx(std::exp2(-1.2 / 12.0)).epsilon(0.002));
+    // cycles in 1 s: count upward crossings of 440 Hz
+    auto cycles = [](const std::vector<double>& x) { int c = 0; for (size_t i = 1; i < x.size(); ++i) c += (x[i - 1] < 440.0 && x[i] >= 440.0); return c; };
+    CHECK(cycles(f) == 5);
+    p.setParam(Lfo1Sync, 5); p.setTempo(120.0);           // 1/4 at 120 bpm = 2 Hz
+    f = freqTrack(p, 69, 48000, 32);
+    CHECK(cycles(f) == 2);
+}
+
+TEST_CASE("IN07 MOD: velocity, mod wheel, aftertouch and key as sources") {
+    Processor p; plain(p);
+    p.setParam(lp(0, Cutoff), 500);
+    route(p, 0, SrcVelocity, DstCutoff, 50.0);            // velocity 1 = +2.5 octaves
+    p.noteOn(60, 1.0); render(p, 480);
+    const double hard = v0(p, 60).cutoffInUse();
+    p.allSoundOff(); p.noteOn(60, 0.0); render(p, 480);
+    CHECK(hard / v0(p, 60).cutoffInUse() == doctest::Approx(std::exp2(2.5)).epsilon(0.001));
+    p.allSoundOff();
+    route(p, 0, SrcModWheel, DstL1Level, -100.0);          // the wheel up silences L1
+    p.noteOn(60, 1.0);
+    const double open = tu::rmsDb(render(p, 9600).first, 4800, 9600);
+    p.modWheel(1.0);
+    const double shut = tu::rmsDb(render(p, 9600).first, 4800, 9600);
+    CHECK(open > -20.0);
+    CHECK(shut < -120.0);
+    p.allSoundOff(); p.modWheel(0.0);
+    route(p, 0, SrcAftertouch, DstPitch, 100.0);          // pressure 0.5 = +6 semitones
+    p.noteOn(69, 1.0); p.aftertouch(0.5); render(p, 480);
+    CHECK(v0(p, 69).frequency() == doctest::Approx(440.0 * std::sqrt(2.0)).epsilon(1e-6));
+    p.allSoundOff(); p.aftertouch(0.0);
+    route(p, 0, SrcKey, DstPan, 100.0);                   // key 120 = (120 - 60) / 60 = full right
+    p.noteOn(120, 1.0);
+    auto st = render(p, 4800);
+    CHECK(tu::rmsDb(st.first, 2400, 4800) < -100.0);
+}
+
+TEST_CASE("IN07 MOD: the macros' built-in jobs; the middle changes nothing") {
+    Processor p; plain(p); p.setParam(lp(0, Cutoff), 1000);
+    p.noteOn(60, 1.0); render(p, 480);
+    const double c0 = v0(p, 60).cutoffInUse();
+    p.setParam(Macro1, 100); render(p, 480);              // BRIGHT +2 octaves
+    CHECK(v0(p, 60).cutoffInUse() / c0 == doctest::Approx(4.0).epsilon(1e-6));
+    p.setParam(Macro1, 0); render(p, 480);                // -2 octaves
+    CHECK(v0(p, 60).cutoffInUse() / c0 == doctest::Approx(0.25).epsilon(1e-6));
+    p.setParam(Macro1, 50); render(p, 480);
+    CHECK(v0(p, 60).cutoffInUse() == doctest::Approx(c0).epsilon(1e-12));
+    // M8 REVERB: +50 points of reverb mix from the middle
+    Processor q; plain(q); q.setParam(fxOnId(FxReverb), 1); q.setParam(FxReverbMix, 0); q.setParam(lp(0, AmpR), 1);
+    q.noteOn(72, 1.0); render(q, 480); q.noteOff(72);
+    const double dry = tu::rmsDb(render(q, 24000).first, 4800, 24000);
+    q.setParam(Macro8, 100); render(q, 96000);
+    q.noteOn(72, 1.0); render(q, 480); q.noteOff(72);
+    const double wet = tu::rmsDb(render(q, 24000).first, 4800, 24000);
+    CHECK(dry < -120.0);
+    CHECK(wet > -60.0);
+    // M3 ATTACK: x4 at the top (5 ms -> 20 ms)
+    Processor a; plain(a); a.setParam(lp(0, AmpA), 5); a.setParam(Macro3, 100); render(a, 64);
+    a.noteOn(60, 1.0);
+    int reached = -1;
+    for (int i = 0; i < 4000 && reached < 0; ++i) { render(a, 1, 1); if (v0(a, 60).ampEnv().stage() != Adsr::Attack) reached = i + 1; }
+    CHECK(reached == doctest::Approx(960).epsilon(0.02));
+}
+
+TEST_CASE("IN07 FLYBY: arrive — from high, far and to the side, landing on the note at the set time") {
+    Processor p; plain(p);
+    p.setParam(FlybyMode, FlybyArrive); p.setParam(FlybyDepth, 100); p.setParam(FlybyTime, 1.0); p.setParam(FlybyNear, 50); p.setParam(FlybySide, 0);
+    p.noteOn(69, 1.0);
+    auto f = freqTrack(p, 69, 4800, 32);
+    CHECK(f.front() > 440.0 * std::exp2(5.0 / 12.0));      // more than 5 semitones up at the start
+    render(p, 48000);                                        // to 1.1 s
+    CHECK(v0(p, 69).frequency() == doctest::Approx(440.0).epsilon(1e-9));
+    Processor q; plain(q);
+    q.setParam(FlybyMode, FlybyArrive); q.setParam(FlybyDepth, 100); q.setParam(FlybyTime, 1.0); q.setParam(FlybyNear, 50); q.setParam(FlybySide, 0);
+    q.noteOn(69, 1.0);
+    auto a = render(q, 72000);
+    const double startL = tu::rmsDb(a.first, 0, 4800), startR = tu::rmsDb(a.second, 0, 4800);
+    const double endL = tu::rmsDb(a.first, 57600, 72000), endR = tu::rmsDb(a.second, 57600, 72000);
+    MESSAGE("flyby arrive: start L " << startL << " R " << startR << " dB, end L " << endL << " R " << endR << " dB");
+    CHECK(endL - startL > 4.0);                               // it comes closer: louder (-9.6 dB of distance, +3 dB of pan at the side)
+    CHECK(startL - startR > 6.0);                             // side 0 = from the left
+    CHECK(std::abs(endL - endR) < 0.01);                      // and ends in the middle
+}
+
+TEST_CASE("IN07 FLYBY: pass — high, the note at half time, then low; leave — falls away after the key is let go") {
+    Processor p; plain(p);
+    p.setParam(FlybyMode, FlybyPass); p.setParam(FlybyDepth, 100); p.setParam(FlybyTime, 1.0); p.setParam(FlybyNear, 50);
+    p.noteOn(69, 1.0);
+    auto f = freqTrack(p, 69, 57600, 32);                     // 1.2 s
+    const double mid = f[static_cast<size_t>(24000 / 32) - 1];
+    CHECK(f.front() > 440.0 * std::exp2(4.0 / 12.0));
+    CHECK(mid == doctest::Approx(440.0).epsilon(0.01));
+    CHECK(f.back() < 440.0 * std::exp2(-4.0 / 12.0));
+    Processor q; plain(q); q.setParam(lp(0, AmpR), 2000);
+    q.setParam(FlybyMode, FlybyLeave); q.setParam(FlybyDepth, 100); q.setParam(FlybyTime, 0.5); q.setParam(FlybyNear, 50);
+    q.noteOn(69, 1.0); render(q, 9600);
+    CHECK(v0(q, 69).frequency() == doctest::Approx(440.0).epsilon(1e-9));   // no flyby while held
+    q.noteOff(69); render(q, 24000);
+    CHECK(v0(q, 69).frequency() < 440.0 * std::exp2(-4.0 / 12.0));
+}
+
+TEST_CASE("IN07 GRAVITY: the unison copies pull into step at the same loudness") {
+    auto play = [](double gravity) {
+        Processor p; plain(p);
+        p.setParam(lp(0, Wave), Saw); p.setParam(lp(0, Unison), 8); p.setParam(lp(0, Detune), 30); p.setParam(lp(0, Spread), 0);
+        p.setParam(lp(0, Gravity), gravity);
+        p.noteOn(57, 1.0);
+        auto y = render(p, 96000).first;
+        return std::make_pair(v0(p, 57).coherence(), tu::rmsDb(y, 48000, 96000));
+    };
+    const auto free = play(0), mid = play(50), full = play(100);
+    MESSAGE("gravity 0 / 50 / 100: coherence " << free.first << " / " << mid.first << " / " << full.first << ", level " << free.second << " / " << mid.second << " / " << full.second << " dB");
+    CHECK(full.first > 0.97);                                 // locked: one saw
+    CHECK(free.first < 0.8);
+    CHECK(mid.first > free.first);
+    CHECK(std::abs(full.second - free.second) < 2.0);         // the level is held
+    CHECK(std::abs(mid.second - free.second) < 2.0);
+}
+
+TEST_CASE("IN07 MOD: the block size does not change the output with LFOs, flyby and gravity") {
+    auto play = [](int block) {
+        Processor p; plain(p);
+        p.setParam(lp(0, Wave), Saw); p.setParam(lp(0, Unison), 4); p.setParam(lp(0, Gravity), 40); p.setParam(lp(0, Cutoff), 1200);
+        p.setParam(Lfo1Rate, 3.3); p.setParam(Lfo1Ecc, 70); p.setParam(Lfo2Shape, LfoRandom); p.setParam(Lfo2Rate, 7.0);
+        route(p, 0, SrcLfo1, DstCutoff, 30); route(p, 1, SrcLfo2, DstPan, 40); route(p, 2, SrcVelocity, DstResonance, 20);
+        p.setParam(FlybyMode, FlybyPass); p.setParam(FlybyTime, 0.2);
+        p.noteOn(57, 0.8); p.noteOn(64, 0.5);
+        auto a = render(p, 9000, block);
+        p.noteOff(57); p.modWheel(0.4);
+        auto b = render(p, 9000, block);
+        a.first.insert(a.first.end(), b.first.begin(), b.first.end());
+        a.first.insert(a.first.end(), b.second.begin(), b.second.end());
+        return a.first;
+    };
+    const auto x = play(256), y = play(37);
+    REQUIRE(x.size() == y.size());
+    size_t diff = 0; for (size_t i = 0; i < x.size(); ++i) if (x[i] != y[i]) ++diff;
+    CHECK(diff == 0);
 }

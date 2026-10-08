@@ -2,11 +2,12 @@
 // A product supplies a traits struct P:
 //   using Core = ...;   // prepare / setParam / noteOn(key, vel, channel, noteId) / noteOff(key, channel) / choke / pitchBend(-1..1)
 //                       // sustain(bool) / allNotesOff / allSoundOff / process(float**, nch, n) / takeEnded(key, channel, noteId)
+//                       // optional: setTempo(bpm) — called with the host tempo when the transport has one
 //   static const std::vector<sw::ParamSpec>& specs();   // parameter table (never reordered; new ones are appended)
 //   static const clap_plugin_descriptor_t* descriptor();
 // Host-facing values as the effects (spec 共通章 2): continuous = normalized 0..1, stepped = step index. State: "SWA1" + count + values.
-// Notes: one note port, CLAP and MIDI dialects (CLAP preferred). MIDI: note on / off, pitch bend, CC 64 sustain, CC 120 all sound off,
-// CC 123 all notes off. Events are sample accurate: the block is split at each event. Every note that ends is reported (CLAP note end).
+// Notes: one note port, CLAP and MIDI dialects (CLAP preferred). MIDI: note on / off, pitch bend, CC 1 mod wheel, CC 64 sustain,
+// CC 120 all sound off, CC 123 all notes off, channel pressure; CLAP pressure expressions act as the aftertouch. Events are sample accurate: the block is split at each event. Every note that ends is reported (CLAP note end).
 // No plug-in window yet (the screen comes later): hosts show their generic controls. The instruments have no Auto gain, Delta, In or Mix.
 #pragma once
 #include "sw/denormal.hpp"
@@ -18,9 +19,20 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace sw::clapinst {
+
+// optional on Core: void setTempo(double bpm) — the host tempo (tempo-synced effects)
+template <class C, class = void> struct HasSetTempo : std::false_type {};
+template <class C> struct HasSetTempo<C, std::void_t<decltype(std::declval<C&>().setTempo(120.0))>> : std::true_type {};
+// optional on Core: modWheel(0..1) (CC 1) and aftertouch(0..1) (channel pressure, CLAP pressure expression)
+template <class C, class = void> struct HasModWheel : std::false_type {};
+template <class C> struct HasModWheel<C, std::void_t<decltype(std::declval<C&>().modWheel(0.0))>> : std::true_type {};
+template <class C, class = void> struct HasAftertouch : std::false_type {};
+template <class C> struct HasAftertouch<C, std::void_t<decltype(std::declval<C&>().aftertouch(0.0))>> : std::true_type {};
 
 template <class P>
 class Plugin {
@@ -77,6 +89,12 @@ private:
                 core_.choke(ev->key, ev->channel);
                 return;
             }
+            case CLAP_EVENT_NOTE_EXPRESSION: {   // pressure: taken as the (global) aftertouch
+                const auto* ev = reinterpret_cast<const clap_event_note_expression_t*>(h);
+                if constexpr (HasAftertouch<typename P::Core>::value)
+                    if (ev->expression_id == CLAP_NOTE_EXPRESSION_PRESSURE) core_.aftertouch(std::clamp(ev->value, 0.0, 1.0));
+                return;
+            }
             case CLAP_EVENT_MIDI: {
                 const auto* ev = reinterpret_cast<const clap_event_midi_t*>(h);
                 const int st = ev->data[0] & 0xF0, ch = ev->data[0] & 0x0F, d1 = ev->data[1] & 0x7F, d2 = ev->data[2] & 0x7F;
@@ -84,6 +102,8 @@ private:
                 else if (st == 0x80 || (st == 0x90 && d2 == 0)) core_.noteOff(d1, ch);
                 else if (st == 0xE0) core_.pitchBend(std::clamp(((d2 << 7) | d1) - 8192, -8191, 8191) / 8191.0);
                 else if (st == 0xB0 && d1 == 64) core_.sustain(d2 >= 64);
+                else if (st == 0xB0 && d1 == 1) { if constexpr (HasModWheel<typename P::Core>::value) core_.modWheel(d2 / 127.0); }
+                else if (st == 0xD0) { if constexpr (HasAftertouch<typename P::Core>::value) core_.aftertouch(d1 / 127.0); }
                 else if (st == 0xB0 && d1 == 120) core_.allSoundOff();
                 else if (st == 0xB0 && d1 == 123) core_.allNotesOff();
                 return;
@@ -127,6 +147,8 @@ private:
         const uint32_t nch = ob.channel_count;
         if (!ob.data32 || nch == 0) return CLAP_PROCESS_ERROR;
         const uint32_t frames = pr->frames_count;
+        if constexpr (HasSetTempo<typename P::Core>::value)
+            if (pr->transport && (pr->transport->flags & CLAP_TRANSPORT_HAS_TEMPO)) s->core_.setTempo(pr->transport->tempo);
         const uint32_t nev = pr->in_events ? pr->in_events->size(pr->in_events) : 0;
         uint32_t ev = 0, pos = 0;
         while (pos < frames) {   // sample-accurate events: render up to each one

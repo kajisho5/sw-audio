@@ -43,7 +43,14 @@ public:
     void snapLengths() { len_ = target_; }
     void setDecay(double rt60Seconds) { rt60_ = std::max(0.05, rt60Seconds); }
     void setDamping(double hz) { const double f = std::clamp(hz, 200.0, 0.45 * fs_); damp_ = std::exp(-2.0 * 3.14159265358979323846 * f / fs_); }
-    void setModulation(double depthSamples, double rateHz) { modDepth_ = depthSamples; modInc_ = rateHz / fs_; }
+    void setModulation(double depthSamples, double rateHz) { modDepth_ = depthSamples; modInc_ = rateHz / fs_; rot_ = false; }
+    // the same modulation from rotating phasors instead of a sine per line and sample (IN07: about half the cost of the network);
+    // opt-in, so the products that use the sine stay bit-identical. Renormalised every 32 samples.
+    void setFastModulation(double depthSamples, double rateHz) {
+        modDepth_ = depthSamples; modInc_ = rateHz / fs_; rot_ = true;
+        const double w = 6.283185307179586 * modInc_; rc_ = std::cos(w); rs_ = std::sin(w);
+        for (int i = 0; i < n_; ++i) { const size_t k = static_cast<size_t>(i); pc_[k] = std::cos(6.283185307179586 * phase_[k]); ps_[k] = std::sin(6.283185307179586 * phase_[k]); }
+    }
     void setFreeze(bool on) { freeze_ = on; }
     // one mono input sample -> two output samples
     void process(double in, double& outL, double& outR) { run(in, in, false, outL, outR); }
@@ -52,7 +59,10 @@ public:
 
 private:
     void run(double in, double in2, bool stereo, double& outL, double& outR) {
-        if (ctl_ == 0) { ctl_ = 32; updateGains(); }
+        if (ctl_ == 0) {
+            ctl_ = 32; updateGains();
+            if (rot_) for (int i = 0; i < n_; ++i) { const size_t k = static_cast<size_t>(i); const double m = 1.0 / std::sqrt(pc_[k] * pc_[k] + ps_[k] * ps_[k]); pc_[k] *= m; ps_[k] *= m; }
+        }
         --ctl_;
         const double fz = freezeGain_ += ((freeze_ ? 1.0 : 0.0) - freezeGain_) * 0.0005;
         const double inG = inGain_ += ((freeze_ ? 0.0 : 1.0) - inGain_) * 0.002;
@@ -62,8 +72,9 @@ private:
         for (int i = 0; i < n_; ++i) {
             const size_t k = static_cast<size_t>(i);
             const double step = std::clamp(target_[k] - len_[k], -0.05, 0.05); len_[k] += step;
-            phase_[k] += modInc_; if (phase_[k] >= 1.0) phase_[k] -= 1.0;
-            const double d = len_[k] + modDepth_ * std::sin(6.283185307179586 * phase_[k]);
+            double d;
+            if (rot_) { const double c = pc_[k] * rc_ - ps_[k] * rs_; ps_[k] = ps_[k] * rc_ + pc_[k] * rs_; pc_[k] = c; d = len_[k] + modDepth_ * ps_[k]; }
+            else { phase_[k] += modInc_; if (phase_[k] >= 1.0) phase_[k] -= 1.0; d = len_[k] + modDepth_ * std::sin(6.283185307179586 * phase_[k]); }
             const double y = read(k, d);
             lp_[k] += (1.0 - p) * (y - lp_[k]);
             s[k] = lp_[k] * (g_[k] + (0.99995 - g_[k]) * fz);
@@ -90,7 +101,9 @@ private:
     double fs_ = 48000.0, rt60_ = 2.0, damp_ = 0.5, modDepth_ = 4.0, modInc_ = 0.0, freezeGain_ = 0.0, inGain_ = 1.0;
     int n_ = 16, ctl_ = 0;
     LineHook* hook_ = nullptr;
-    bool freeze_ = false;
+    bool freeze_ = false, rot_ = false;
+    double rc_ = 1.0, rs_ = 0.0;
+    std::array<double, kMax> pc_{}, ps_{};
     size_t mask_ = 0, pos_ = 0;
     std::array<std::vector<float>, kMax> buf_;
     std::array<double, kMax> len_{}, target_{}, lp_{}, g_{}, phase_{}, sgnIn_{}, sgnIn2_{}, sgnL_{}, sgnR_{};
