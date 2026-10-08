@@ -5,3 +5,4 @@ third_party/
 .vs/
 .vscode/
 ui/skins.json
+__pycache__/

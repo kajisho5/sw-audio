@@ -49,20 +49,31 @@ a{text-decoration:none}
     <path d="{{path}}" fill="none" stroke="#3fd1a0" stroke-opacity=".35" stroke-width="1.4"></path>
     <path d="{{path}}" fill="none" stroke="#8de0c3" stroke-opacity=".5" stroke-width="1.4" stroke-dasharray="2 10" stroke-dashoffset="{{flow}}"></path>
     <sc-for list="{{stations}}" as="st" hint-placeholder-count="6">
-      <circle cx="{{st.x}}" cy="{{st.y}}" r="46" fill="url(#fxGlow)" opacity="{{st.glow}}"></circle>
-      <circle cx="{{st.x}}" cy="{{st.y}}" r="24" fill="{{st.fill}}" stroke="#8de0c3" stroke-opacity="{{st.ring}}" stroke-width="1.4" stroke-dasharray="{{st.dash}}"></circle>
-      <text x="{{st.x}}" y="{{st.ly}}" fill="{{st.ink}}" font-family="Michroma, sans-serif" font-size="11" letter-spacing="2" text-anchor="middle">{{st.name}}</text>
-      <text x="{{st.x}}" y="{{st.vy}}" fill="#8e8e8e" font-family="Space Mono, monospace" font-size="10" text-anchor="middle">{{st.sub}}</text>
-      <text x="{{st.x}}" y="{{st.ny}}" fill="{{st.ink}}" font-family="Space Mono, monospace" font-size="11" text-anchor="middle">{{st.no}}</text>
+      <circle cx="{{st.x}}" cy="{{st.y}}" r="52" fill="url(#fxGlow)" opacity="{{st.glow}}"></circle>
+      <circle cx="{{st.x}}" cy="{{st.y}}" r="40" fill="none" stroke="#8de0c3" stroke-opacity="{{st.ring}}" stroke-width="1" stroke-dasharray="{{st.dash}}"></circle>
     </sc-for>
+    <circle cx="1200" cy="214" r="6" fill="none" stroke="#8de0c3" stroke-opacity=".6" stroke-width="1.4"></circle>
+  </svg>
+  <sc-for list="{{stations}}" as="st" hint-placeholder-count="6">
+    <div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: {{st.sp.s}}px; height: {{st.sp.s}}px; overflow: hidden; opacity: {{st.op}}; filter: {{st.filter}}; transform: translate3d({{st.sp.left}}px, {{st.sp.top}}px, 0); will-change: transform;">
+      <img src="{{st.sp.src}}" alt="" style="display: block; max-width: none; width: {{st.sp.bw}}px; height: {{st.sp.bh}}px; transform: translate3d({{st.sp.bx}}px, {{st.sp.by}}px, 0); will-change: transform;">
+    </div>
+    <div style="position: absolute; left: {{st.lx}}px; top: {{st.ly}}px; width: 140px; display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;">
+      <span style="font-family: Michroma, sans-serif; font-size: 11px; letter-spacing: .16em; color: {{st.ink}}; white-space: nowrap;">{{st.no}} · {{st.name}}</span>
+      <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: #8e8e8e;">{{st.sub}}</span>
+    </div>
+  </sc-for>
+  <svg viewBox="0 0 1280 380" width="1280" height="380" aria-hidden="true" style="position: absolute; left: 0; top: 56px; display: block; pointer-events: none;">
     <sc-for list="{{trail}}" as="d" hint-placeholder-count="12">
       <circle cx="{{d.x}}" cy="{{d.y}}" r="{{d.r}}" fill="#bff3df" fill-opacity="{{d.op}}"></circle>
     </sc-for>
-    <circle cx="{{probe.x}}" cy="{{probe.y}}" r="14" fill="url(#fxGlow)"></circle>
+    <circle cx="{{probe.x}}" cy="{{probe.y}}" r="14" fill="url(#fxGlow2)"></circle>
     <circle cx="{{probe.x}}" cy="{{probe.y}}" r="4" fill="#e8fff6"></circle>
-    <text x="1200" y="238" fill="#a8a8a8" font-family="Space Mono, monospace" font-size="11" text-anchor="middle">OUT</text>
-    <circle cx="1200" cy="214" r="6" fill="none" stroke="#8de0c3" stroke-opacity=".6" stroke-width="1.4"></circle>
+    <defs>
+      <radialGradient id="fxGlow2" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#8de0c3" stop-opacity=".55"></stop><stop offset="1" stop-color="#8de0c3" stop-opacity="0"></stop></radialGradient>
+    </defs>
   </svg>
+  <span style="position: absolute; left: 1180px; top: 284px; width: 40px; text-align: center; font-family: 'Space Mono', monospace; font-size: 11px; color: #a8a8a8;">OUT</span>
   <img src="/_blob/90121e1a7bee5f359e51e024081e48ca" alt="" style="position: absolute; left: 30px; top: 210px; width: 120px; height: 120px; display: block;">
   <span style="position: absolute; left: 40px; top: 336px; font-size: 11px; letter-spacing: .3em; color: #a8a8a8;">THE VOICE</span>
 
@@ -162,11 +173,17 @@ class Component extends DCLogic {
     var ph = (t * 0.16) % 1, pp = at(ph), trail = [];
     for (var n = 1; n <= 12; n++) { var tp = ph - n * 0.006; if (tp < 0) break; var q2 = at(tp); trail.push({ x: f1(q2[0]), y: f1(q2[1]), r: f1(3 - n * 0.2), op: Math.round((0.6 - n * 0.045) * 100) / 100 }); }
 
+    // each effect is its own Blender world, turning (tools/blender/in07_orbital.py body fx_*; 96 frames, 12 columns, 128 px a frame)
+    var SHEET = { drive: '/_blob/fe87118687e9fb3359a02b9dbc9fdcbd', chorus: '/_blob/ce619443ef6e3e08f54434c374143598', delay: '/_blob/043458125b4f450392ec146178f4c7a4', reverb: '/_blob/7ebc58bb2417d398eb1ee5ceacc9c52a', eq: '/_blob/56941051af29746414654413d55d0cf3', limit: '/_blob/4a8c4eb3f89a1d3aaaa204b0dbd11874' };
+    var SZ = 84, SPIN = { drive: 0.10, chorus: 0.16, delay: 0.08, reverb: 0.06, eq: 0.12, limit: 0.09 };
     var stations = st.map(function (x, i) {
-      var en = !!onMap[x.k], up = i % 2 === 0;
+      var en = !!onMap[x.k], up = i % 2 === 0, turns = SPIN[x.k] * t + i * 0.17;
+      var fr = Math.floor(((turns % 1) + 1) % 1 * 96) % 96;
       return { x: x.x, y: x.y, name: FX[x.k].name, no: String(i + 1), sub: en ? FX[x.k].p[0][2](val(x.k, 0)) : 'BYPASS',
-        ly: up ? x.y - 42 : x.y + 50, vy: up ? x.y - 28 : x.y + 64, ny: x.y + 4,
-        glow: en ? 1 : 0, ring: en ? 0.9 : 0.35, dash: en ? 'none' : '3 5', fill: en ? 'rgba(63,209,160,.18)' : 'rgba(255,255,255,.02)', ink: en ? '#e8fff6' : '#5c7a70' };
+        lx: x.x - 70, ly: up ? x.y + 56 - 98 : x.y + 56 + 50,
+        sp: { src: SHEET[x.k], s: SZ, left: x.x - SZ / 2, top: x.y + 56 - SZ / 2, bw: SZ * 12, bh: SZ * 8, bx: -(fr % 12) * SZ, by: -Math.floor(fr / 12) * SZ },
+        op: en ? 1 : 0.55, filter: en ? 'none' : 'grayscale(0.9) brightness(0.6)',
+        glow: en ? 0.8 : 0, ring: en ? 0.45 : 0.18, dash: en ? 'none' : '3 5', ink: en ? '#e8fff6' : '#5c7a70' };
     });
     var cards = order.map(function (k, i) {
       var en = !!onMap[k];

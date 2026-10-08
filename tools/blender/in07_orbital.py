@@ -8,7 +8,8 @@
       one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees (default 96), transparent,
       96 x 96 (ring 160 x 160: displayed up to about 70 px, so 2x for high-density screens).
       kinds: ring (L1, banded with a ring), pearl (L2), crater (L3), crystal (L4, faceted glass with a glowing core),
-      lfo (the LFO moon), bead (a unison moonlet). Pack the frames with tools/blender/pack_sheet.py.
+      lfo (the LFO moon), bead (a unison moonlet); the FX stations fx_drive, fx_chorus, fx_delay, fx_reverb, fx_eq, fx_limit
+      (128 x 128). Pack the frames with tools/blender/pack_sheet.py.
       The body turns under fixed lights (the surface moves, the light stays top left), so the screen may step through the
       frames; it still never rotates the image itself.
 The sprites are lit from the top left (key) with a weak bottom-right fill and a rim, like every SW AUDIO part. The screen moves them along
@@ -301,6 +302,99 @@ def crystal_material():
     return m
 
 
+def drive_material():
+    """FX DRIVE: dark basalt with glowing teal cracks (heat, in the category colour)"""
+    m, nt, p = principled('fxdrive')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    vo = nt.nodes.new('ShaderNodeTexVoronoi'); vo.feature = 'DISTANCE_TO_EDGE'; vo.inputs['Scale'].default_value = 3.2
+    nt.links.new(tc.outputs['Object'], vo.inputs['Vector'])
+    crack = nt.nodes.new('ShaderNodeValToRGB'); cr = crack.color_ramp
+    cr.elements[0].position = 0.0; cr.elements[0].color = (1, 1, 1, 1)
+    cr.elements[1].position = 0.022; cr.elements[1].color = (0, 0, 0, 1)
+    nt.links.new(vo.outputs['Distance'], crack.inputs['Fac'])
+    nz = node(nt, 'ShaderNodeTexNoise', Scale=6.0, Detail=8.0, Roughness=0.6)
+    nt.links.new(tc.outputs['Object'], nz.inputs['Vector'])
+    mask_n = node(nt, 'ShaderNodeTexNoise', Scale=1.6, Detail=2.0, Roughness=0.5)
+    nt.links.new(tc.outputs['Object'], mask_n.inputs['Vector'])
+    mask = nt.nodes.new('ShaderNodeValToRGB'); mr_ = mask.color_ramp
+    mr_.elements[0].position = 0.45; mr_.elements[0].color = (0.08, 0.08, 0.08, 1)
+    mr_.elements[1].position = 0.62; mr_.elements[1].color = (1, 1, 1, 1)
+    nt.links.new(mask_n.outputs['Fac'], mask.inputs['Fac'])
+    hot = nt.nodes.new('ShaderNodeMath'); hot.operation = 'MULTIPLY'
+    nt.links.new(crack.outputs['Color'], hot.inputs[0]); nt.links.new(mask.outputs['Color'], hot.inputs[1])
+    em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = 4.0
+    nt.links.new(hot.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], p.inputs['Emission Strength'])
+    p.inputs['Emission Color'].default_value = (*TEAL_HI, 1)
+    tone = nt.nodes.new('ShaderNodeValToRGB'); ct = tone.color_ramp
+    ct.elements[0].position = 0.3; ct.elements[0].color = (0.020, 0.026, 0.026, 1)
+    ct.elements[1].position = 0.8; ct.elements[1].color = (0.090, 0.110, 0.105, 1)
+    nt.links.new(nz.outputs['Fac'], tone.inputs['Fac']); nt.links.new(tone.outputs['Color'], p.inputs['Base Color'])
+    bump = node(nt, 'ShaderNodeBump', Strength=0.4, Distance=0.05)
+    nt.links.new(nz.outputs['Fac'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], p.inputs['Normal'])
+    p.inputs['Roughness'].default_value = 0.75
+    return m
+
+
+def eq_material():
+    """FX EQ: three bands (low, mid, high) with wavy edges that drift as it turns"""
+    m, nt, p = principled('fxeq')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    sep = nt.nodes.new('ShaderNodeSeparateXYZ'); nt.links.new(tc.outputs['Object'], sep.inputs[0])
+    nz = node(nt, 'ShaderNodeTexNoise', Scale=2.4, Detail=3.0, Roughness=0.5)
+    nt.links.new(tc.outputs['Object'], nz.inputs['Vector'])
+    wob = nt.nodes.new('ShaderNodeMath'); wob.operation = 'MULTIPLY_ADD'; wob.inputs[1].default_value = 0.22
+    nt.links.new(nz.outputs['Fac'], wob.inputs[0]); nt.links.new(sep.outputs['Z'], wob.inputs[2])
+    mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = -0.7; mr.inputs['From Max'].default_value = 1.1
+    nt.links.new(wob.outputs['Value'], mr.inputs['Value'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp; cr.interpolation = 'CONSTANT'
+    cr.elements[0].position = 0.0; cr.elements[0].color = (0.02, 0.24, 0.17, 1)
+    cr.elements[1].position = 0.64; cr.elements[1].color = (0.62, 0.92, 0.80, 1)
+    e = cr.elements.new(0.36); e.color = (0.04, 0.50, 0.34, 1)
+    nt.links.new(mr.outputs['Result'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], p.inputs['Base Color'])
+    p.inputs['Roughness'].default_value = 0.35; p.inputs['Coat Weight'].default_value = 0.5
+    return m
+
+
+def metal_material(color, rough, name):
+    m, nt, p = principled(name)
+    p.inputs['Base Color'].default_value = (*color, 1); p.inputs['Metallic'].default_value = 1.0; p.inputs['Roughness'].default_value = rough
+    return m
+
+
+def soft_material(color, alpha, name):
+    m, nt, p = principled(name)
+    p.inputs['Base Color'].default_value = (*color, 1); p.inputs['Roughness'].default_value = 0.5; p.inputs['Alpha'].default_value = alpha
+    m.blend_method = 'BLEND'
+    return m
+
+
+def haze_material(radius, density):
+    """FX REVERB: a soft atmosphere, densest near the planet and fading out (scatters, so it has alpha)"""
+    m = bpy.data.materials.new('haze'); m.use_nodes = True; nt = m.node_tree
+    for n in list(nt.nodes):
+        if n.type != 'OUTPUT_MATERIAL':
+            nt.nodes.remove(n)
+    pv = nt.nodes.new('ShaderNodeVolumePrincipled')
+    pv.inputs['Color'].default_value = (0.55, 0.92, 0.80, 1); pv.inputs['Emission Color'].default_value = (*TEAL_HI, 1)
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    ln = nt.nodes.new('ShaderNodeVectorMath'); ln.operation = 'LENGTH'; nt.links.new(tc.outputs['Object'], ln.inputs[0])
+    fall = nt.nodes.new('ShaderNodeMapRange'); fall.inputs['From Min'].default_value = 0.75; fall.inputs['From Max'].default_value = radius
+    fall.inputs['To Min'].default_value = 1.0; fall.inputs['To Max'].default_value = 0.0
+    nt.links.new(ln.outputs['Value'], fall.inputs['Value'])
+    sq = nt.nodes.new('ShaderNodeMath'); sq.operation = 'POWER'; sq.inputs[1].default_value = 2.0
+    nt.links.new(fall.outputs['Result'], sq.inputs[0])
+    d = nt.nodes.new('ShaderNodeMath'); d.operation = 'MULTIPLY'; d.inputs[1].default_value = density
+    nt.links.new(sq.outputs['Value'], d.inputs[0]); nt.links.new(d.outputs['Value'], pv.inputs['Density'])
+    e = nt.nodes.new('ShaderNodeMath'); e.operation = 'MULTIPLY'; e.inputs[1].default_value = 0.6
+    nt.links.new(sq.outputs['Value'], e.inputs[0]); nt.links.new(e.outputs['Value'], pv.inputs['Emission Strength'])
+    nt.links.new(pv.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
+    return m
+
+
+def pivot():
+    bpy.ops.object.empty_add(location=(0, 0, 0)); return bpy.context.active_object
+
+
 def annulus(r0, r1, mat, segs=192):
     me = bpy.data.meshes.new('annulus'); bm = bmesh.new()
     inner = [bm.verts.new((r0 * math.cos(2 * math.pi * i / segs), r0 * math.sin(2 * math.pi * i / segs), 0)) for i in range(segs)]
@@ -389,6 +483,37 @@ if mode == 'body':
         sphere(0.5, (0, 0, 0), emit_material('bellcore', (0.55, 1.0, 0.82), 1.6), 48)   # a glow inside, seen through the gem
         scene.cycles.film_transparent_glass = False   # the gem stays opaque in alpha (refraction shows the studio, not holes)
         scene.cycles.transmission_bounces = 12; scene.cycles.max_bounces = 16
+    elif kind == 'fx_drive':
+        res = 128; parts.append(sphere(1.0, (0, 0, 0), drive_material(), 160))
+    elif kind == 'fx_chorus':   # a pearl with two moons close by, turning together: voices a little apart
+        res, ortho = 128, 2.9
+        pv = pivot(); parts.append(pv)
+        for o in (sphere(0.66, (0, 0, 0), pearl_material(0.3), 96), sphere(0.2, (1.0, 0, 0), pearl_material(0.7, False), 48), sphere(0.17, (-0.98, 0.2, 0), pearl_material(0.7, False), 48)):
+            o.parent = pv
+    elif kind == 'fx_delay':    # a planet with three thin rings, fainter outward: echoes
+        res, ortho = 128, 3.2
+        parts.append(sphere(0.62, (0, 0, 0), pearl_material(0.3), 128))
+        for (r0, r1, a) in ((0.80, 0.85, 0.9), (1.06, 1.10, 0.55), (1.32, 1.35, 0.3)):
+            ring = annulus(r0, r1, soft_material((0.72, 0.88, 0.82), a, 'echo')); ring.rotation_mode = 'ZYX'; ring.rotation_euler = tilt
+    elif kind == 'fx_reverb':   # a soft gas planet in a wide haze: the room around the sound
+        res, ortho = 128, 2.9
+        parts.append(sphere(0.72, (0, 0, 0), banded_material(), 128))
+        sphere(1.3, (0, 0, 0), haze_material(1.3, 1.1), 64)
+        scene.cycles.volume_step_rate = 0.5
+    elif kind == 'fx_eq':
+        res = 128; parts.append(sphere(1.0, (0, 0, 0), eq_material(), 160))
+    elif kind == 'fx_limit':    # a metal sphere held by a band with rivets: the ceiling
+        res = 128
+        pv = pivot(); parts.append(pv)
+        ceramic, _, cp = principled('ceramic'); cp.inputs['Base Color'].default_value = (0.78, 0.83, 0.81, 1); cp.inputs['Roughness'].default_value = 0.3
+        cp.inputs['Coat Weight'].default_value = 0.6
+        core = sphere(0.78, (0, 0, 0), ceramic, 128); core.parent = pv   # a light ceramic ball (metal would mirror the dark studio and lose its lower half)
+        bpy.ops.mesh.primitive_torus_add(major_radius=0.82, minor_radius=0.13, major_segments=96, minor_segments=24)
+        band = bpy.context.active_object; bpy.ops.object.shade_smooth()
+        band.data.materials.append(metal_material((0.10, 0.55, 0.40), 0.4, 'anodized')); band.parent = pv
+        for i in range(10):
+            a = 2 * math.pi * i / 10
+            sphere(0.05, (0.95 * math.cos(a), 0.95 * math.sin(a), 0), metal_material((0.9, 0.92, 0.91), 0.25, 'rivet'), 16).parent = pv
     elif kind in ('pearl', 'lfo', 'bead'):
         parts.append(sphere(1.0, (0, 0, 0), pearl_material({'pearl': 0.25, 'lfo': 0.9, 'bead': 0.6}[kind], kind != 'bead'), 96))
         if kind == 'bead':

@@ -78,12 +78,14 @@ body{margin:0}
     </sc-for>
     <sc-for list="{{sources}}" as="s" hint-placeholder-count="0">
       <circle cx="{{s.x}}" cy="{{s.y}}" r="{{s.r}}" fill="none" stroke="{{s.ink}}" stroke-opacity="{{s.op}}" stroke-width="1.2"></circle>
-      <text x="{{s.x}}" y="{{s.ty}}" fill="{{s.ink}}" fill-opacity="{{s.op}}" font-family="Space Mono, monospace" font-size="9" text-anchor="middle">{{s.label}}</text>
-    </sc-for>
-    <sc-for list="{{labels}}" as="l" hint-placeholder-count="5">
-      <text x="{{l.x}}" y="{{l.y}}" fill="{{l.ink}}" font-family="Space Mono, monospace" font-size="{{l.size}}">{{l.text}}</text>
     </sc-for>
   </svg>
+  <sc-for list="{{sources}}" as="s" hint-placeholder-count="0">
+    <span aria-hidden="true" style="position: absolute; left: {{s.lx}}px; top: {{s.lt}}px; width: 40px; text-align: center; font-family: 'Space Mono', monospace; font-size: 9px; line-height: 12px; color: {{s.ink}}; opacity: {{s.op}}; pointer-events: none;">{{s.label}}</span>
+  </sc-for>
+  <sc-for list="{{labels}}" as="l" hint-placeholder-count="5">
+    <span aria-hidden="true" style="position: absolute; left: {{l.x}}px; top: {{l.top}}px; font-family: 'Space Mono', monospace; font-size: {{l.size}}px; line-height: 1; color: {{l.ink}}; white-space: nowrap; pointer-events: none;">{{l.text}}</span>
+  </sc-for>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"values":{"editor":null},"layers":{"editor":null},"mods":{"editor":null},"arpSteps":{"editor":null},"gateSteps":{"editor":null},"focus":{"editor":"int","default":0,"min":-1,"max":3},"view":{"editor":"enum","default":"system","options":["system","close","arp","mod"]},"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"motion":{"editor":"enum","default":"60","options":["60","30","off"]},"arpOn":{"editor":"boolean","default":true},"gateOn":{"editor":"boolean","default":false},"noteKey":{"editor":null},"scale":{"editor":"float","default":1,"min":0.3,"max":1.5,"step":0.01},"$preview":{"width":820,"height":740}}'>
@@ -137,9 +139,9 @@ class Component extends DCLogic {
 
     // Blender sprite sheets: 96 frames of one turn, 12 columns (tools/blender/in07_orbital.py body + pack_sheet.py)
     var SHEETS = {
-      ring: { src: '/_blob/3341631c227c8aade470dfec3d0d726a', n: 96, c: 12, k: 4.3 }, pearl: { src: '/_blob/bdd7922e58267cbdd1b4e838ee5b49ba', n: 96, c: 12, k: 2.4 },
-      crater: { src: '/_blob/aae5418aeadcff37bb3e2812abd80c04', n: 96, c: 12, k: 2.4 }, crystal: { src: '/_blob/639cefbbc92ef239b87a6de8ed15b861', n: 96, c: 12, k: 2.4 },
-      lfo: { src: '/_blob/ce81993733920666e278fda64e72b1a3', n: 1, c: 1, k: 2.4 }, bead: { src: '/_blob/5701416b5dde780df97efa7d7fc7d86a', n: 1, c: 1, k: 2.4 }
+      ring: { src: '/_blob/e6ee8b6569e63ef27cedfc1666d39d47', n: 96, c: 12, k: 4.3 }, pearl: { src: '/_blob/7709cc70a363f53b1b2d78aa4da28c56', n: 96, c: 12, k: 2.4 },
+      crater: { src: '/_blob/8c95e5bce1ae22c9f1954ef07f849f45', n: 96, c: 12, k: 2.4 }, crystal: { src: '/_blob/af099d0a5b96dfa72328a1af6c2cb648', n: 96, c: 12, k: 2.4 },
+      lfo: { src: '/_blob/d939afb85ed95fb8e9491d08127f2208', n: 1, c: 1, k: 2.4 }, bead: { src: '/_blob/e38db7eb052c9ac25fd71783f0559f60', n: 1, c: 1, k: 2.4 }
     };
     var backBodies = [], frontBodies = [], midBodies = [], back = [], front = [], labels = [];
     var put = function (behind, d) { (behind ? back : front).push(d); };
@@ -252,7 +254,7 @@ class Component extends DCLogic {
       (p.mods || []).forEach(function (m) { if (m && m.on !== false) used[m.from] = true; });
       row.forEach(function (k, i) {
         srcPts[k] = [110 + i * 60, 708];
-        sources.push({ x: 110 + i * 60, y: 708, ty: 728, r: 6, label: names[k], ink: used[k] ? pal.cur : pal.dim, op: used[k] ? 0.95 : 0.5 });
+        sources.push({ x: 110 + i * 60, y: 708, lx: 90 + i * 60, lt: 718, r: 6, label: names[k], ink: used[k] ? pal.cur : pal.dim, op: used[k] ? 0.95 : 0.5 });
       });
       var dstPts = { cutoff: [cx, cy - haloR], res: [cx + haloR * 0.9, cy], pitch: [cx, cy], drive: [cx, cy + 52], pan: [cx - 74, cy],
         lforate: lfoPt, L1: bodyPos[0], L2: bodyPos[1], L3: bodyPos[2], L4: bodyPos[3] };
@@ -268,6 +270,7 @@ class Component extends DCLogic {
       });
     }
 
+    labels.forEach(function (l) { l.top = f1(l.y - l.size); });
     var sz = 2.3 * 64;
     return {
       scale: scale, pal: pal,
@@ -281,7 +284,7 @@ class Component extends DCLogic {
       reso: { r: f1(Math.max(8, haloR * 0.9)), op: f2(res01 * (0.25 + 0.75 * pulse)), w: f1(0.8 + res01 * 1.8) },
       // the core has real alpha (no blend mode: a scaled parent isolates blending, and a black square showed on light screens):
       // dark = the glowing render keyed by brightness, light = a render whose mist absorbs and scatters (tools/blender, mode coreday)
-      core: { on: !close, src: light ? '/_blob/141202212812cc9e70ffa3fb1c13d439' : '/_blob/90121e1a7bee5f359e51e024081e48ca', s: f1(sz), left: f1(410 - sz / 2), top: f1(360 - sz / 2), k: Math.round((1 + 0.16 * env) * 1000) / 1000 },
+      core: { on: !close, src: light ? '/_blob/dbb1f155628a29abbb82a4a9674392c5' : '/_blob/90121e1a7bee5f359e51e024081e48ca', s: f1(sz), left: f1(410 - sz / 2), top: f1(360 - sz / 2), k: Math.round((1 + 0.16 * env) * 1000) / 1000 },
       backBodies: backBodies, frontBodies: frontBodies, midBodies: midBodies,
       wave: { on: dn >= 0 && dn < 1.5, r: f1((close ? cR + 4 : 66) + Math.max(0, dn) * 260), op: f2(Math.max(0, 0.6 * (1 - dn / 1.5))) }
     };
