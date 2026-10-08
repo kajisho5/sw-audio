@@ -55,7 +55,7 @@ tools/validate_all.sh                      # ビルド＋単体テスト＋全�
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
 # ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
 g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
-    $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) tests/test_main.cpp -o /tmp/tests_asan && /tmp/tests_asan
+    $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) core/src/*.cpp core/third_party/monocypher/*.c tests/test_main.cpp -o /tmp/tests_asan && /tmp/tests_asan
 ```
 
 - 初回の CMake は CLAP SDK・clap-wrapper・VST3 SDK・doctest を GitHub から取る（クラウド環境なら github.com への通信を許可）。

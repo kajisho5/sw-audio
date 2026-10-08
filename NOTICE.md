@@ -9,3 +9,4 @@ SW AUDIO plugins are built with the following libraries. All are fetched at buil
 | VST3 SDK (Steinberg, fetched by clap-wrapper) | VST3 wrapper | MIT (VST trademark/logo per Steinberg's guidelines) |
 | AudioUnitSDK (Apple, macOS only, fetched by clap-wrapper) | AUv2 wrapper | Apache 2.0 |
 | doctest 2.4.11 | unit tests only (not shipped) | MIT |
+| Monocypher 4.0.3 (vendored in `core/third_party/monocypher/`) | Ed25519 checks of licence files | BSD-2-Clause or CC0-1.0 (dual; `LICENCE.md`) |

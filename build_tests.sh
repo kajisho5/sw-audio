@@ -8,4 +8,4 @@ mkdir -p build
 python3 tools/embed_ui.py build/gui_assets.hpp
 rm -f build/tests
 g++ -std=c++17 -O2 -Wall -Wextra -Werror -Icore/include -Iproducts -Iplugin/clap -Ibuild \
-    $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) build/test_main.o -o build/tests
+    $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) core/src/*.cpp core/third_party/monocypher/*.c build/test_main.o -o build/tests
