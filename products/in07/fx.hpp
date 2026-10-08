@@ -72,6 +72,9 @@ public:
     void snapSwitches() { for (int f = 0; f < kFx; ++f) gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; }
 
     // in place, n samples of left and right
+    // the highest peak into the limiter (after its Gain) since the last reset: how hard it works (a meter; tests and the preset tool)
+    double limiterPeak() const { return limPeak_; }
+    void resetLimiterPeak() { limPeak_ = 0.0; }
     void process(float* l, float* r, int n) {
         int off = 0;
         while (off < n) {
@@ -229,14 +232,20 @@ private:
     }
 
     void reverb(double xl, double xr, double& yl, double& yr) {
+        // mono in, two decorrelated outputs: the FDN's stereo input with a centred (L = R) source left the wet L and R at a correlation
+        // of -0.59 (a mono fold-down lost 5.9 dB of the reverb); (L + R) / sqrt 2 keeps the wet level within about 1 dB of before
+        // its two outputs still lean negative (-0.04 .. -0.23 by octave band on noise): 12 % of each side into the other brings them to about +0.1
         double ol = 0.0, or_ = 0.0;
-        fdn_.processStereo(xl, xr, ol, or_);
+        fdn_.process((xl + xr) * 0.70710678118654752, ol, or_);
+        const double a = ol + 0.12 * or_, b = or_ + 0.12 * ol;
+        ol = a; or_ = b;
         yl = xl + reverbMix_ * (ol * reverbNorm_ - xl);
         yr = xr + reverbMix_ * (or_ * reverbNorm_ - xr);
     }
 
     void limit(double xl, double xr, double& yl, double& yr) {
         const double a = xl * limGain_, b = xr * limGain_, pk = std::max(std::abs(a), std::abs(b));
+        if (pk > limPeak_) limPeak_ = pk;
         const double need = pk > limCeil_ ? limCeil_ / pk : 1.0;
         limEnv_ = need < limEnv_ ? need : need + (limEnv_ - need) * limRel_;
         yl = a * limEnv_; yr = b * limEnv_;
@@ -267,7 +276,7 @@ private:
     // eq
     std::array<std::array<Svf, 3>, 2> eq_;
     // limit
-    double limGain_ = 1.0, limCeil_ = 1.0, limEnv_ = 1.0, limRel_ = 0.999;
+    double limGain_ = 1.0, limCeil_ = 1.0, limEnv_ = 1.0, limRel_ = 0.999, limPeak_ = 0.0;
 };
 
 }  // namespace sw::in07

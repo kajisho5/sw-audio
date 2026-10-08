@@ -929,7 +929,22 @@ TEST_CASE("IN07 OSC: the Classic table goes from saw to square, the level stays"
         }
 }
 
-TEST_CASE("IN07 OSC: wavetables and FM stay clean high up (mipmaps, index limit)") {
+TEST_CASE("IN07 OSC: wavetables stay clean across the keyboard (mipmaps, table length, cubic read)") {
+    Processor p; typed(p, OscWavetable);
+    double worstClassic = 0.0, worstSync = 0.0;
+    for (int note = 24; note <= 108; note += 6) {
+        p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
+        const double c = aliasOfLayer(p, note);
+        p.setParam(lp(0, Table), 2); p.setParam(lp(0, Position), 100);   // Sync, the brightest frame
+        const double y = aliasOfLayer(p, note);
+        MESSAGE("note " << note << ": classic " << c << " dB, sync " << y << " dB");
+        worstClassic = std::max(worstClassic == 0.0 ? -999.0 : worstClassic, c); worstSync = std::max(worstSync == 0.0 ? -999.0 : worstSync, y);
+    }
+    CHECK(worstClassic < -70.0);
+    CHECK(worstSync < -60.0);
+}
+
+TEST_CASE("IN07 OSC: FM stays clean high up (index and feedback limits)") {
     Processor p; typed(p, OscWavetable); p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
     const double wt = aliasOfLayer(p, 94);                 // 1865 Hz
     p.setParam(lp(0, Table), 2); p.setParam(lp(0, Position), 100);   // Sync, the brightest frame
@@ -991,6 +1006,62 @@ TEST_CASE("IN07 OSC: samples loop or end, and follow the key") {
     CHECK(l72 / l60 == doctest::Approx(0.5).epsilon(0.05));
 }
 
+TEST_CASE("IN07 OSC: every sample level holds its band (content under 0.21 of its stored rate)") {
+    const auto& sb = sampleBank();
+    for (int id = 0; id < kSamples; ++id)
+        for (int j = 0; j < SampleBank::kLevels; ++j) {
+            const auto& v = sb.s[static_cast<size_t>(id)].lv[static_cast<size_t>(j)];
+            double in = 0.0, out = 0.0;
+            if (!sb.s[static_cast<size_t>(id)].loop) {   // a one-shot starts and ends at 0: the whole of it, zero-padded, no window
+                int n = 1; while (n < static_cast<int>(v.size())) n *= 2;
+                std::vector<std::complex<double>> x(static_cast<size_t>(n));
+                for (size_t i = 0; i < v.size(); ++i) x[i] = v[i];
+                sw::Fft f(n); f.forward(x);
+                for (int b = 1; b < n / 2; ++b) (b < n / 4 ? in : out) += std::norm(x[static_cast<size_t>(b)]);
+            }
+            const int n = 4096;
+            std::vector<std::complex<double>> x(static_cast<size_t>(n));
+            for (size_t off = 8; sb.s[static_cast<size_t>(id)].loop && off + static_cast<size_t>(n) + 8 < v.size(); off += static_cast<size_t>(n)) {
+                for (int i = 0; i < n; ++i) { const double t = 2 * tu::kPi * i / n; x[static_cast<size_t>(i)] = v[off + static_cast<size_t>(i)] * (0.35875 - 0.48829 * std::cos(t) + 0.14128 * std::cos(2 * t) - 0.01168 * std::cos(3 * t)); }
+                sw::Fft f(n); f.forward(x);
+                for (int b = 1; b < n / 2; ++b) (b < n / 4 ? in : out) += std::norm(x[static_cast<size_t>(b)]);
+            }
+            // the out-of-band share of this level's power, against the power of the sample itself (level 0): a level whose band holds
+            // nothing of the sample (Tick's partials lie above level 4) is nearly empty, and its own ratio would compare two traces of noise
+            auto ms = [](const std::vector<float>& u) { double a = 0; for (float q : u) a += static_cast<double>(q) * q; return a / static_cast<double>(u.size()); };
+            const double db = 10 * std::log10(out / (in + out + 1e-30) * ms(v) / ms(sb.s[static_cast<size_t>(id)].lv[0]) + 1e-30);
+            MESSAGE(std::string(kSampleNames[id]) << " level " << j << ": " << db << " dB above 0.25 of the stored rate");
+            CHECK_MESSAGE(db < -60.0, std::string(kSampleNames[id]) << " level " << j);
+        }
+}
+
+TEST_CASE("IN07 OSC: the sample read (8-tap windowed sinc) leaves no images at any speed") {
+    // a multi-tone signal in the lower 0.21 of a 2x-oversampled buffer, read at increments 0.3 .. 3: everything off the tones is an image
+    const int N = 200000;
+    std::vector<float> buf(static_cast<size_t>(N));
+    const double tones[5] = {0.013, 0.051, 0.097, 0.143, 0.205};   // cycles per stored sample
+    for (int i = 0; i < N; ++i) { double y = 0; for (double t : tones) y += 0.2 * std::sin(2 * tu::kPi * t * i + t * 100); buf[static_cast<size_t>(i)] = static_cast<float>(y); }
+    for (double inc : {0.3, 0.77, 1.0, 1.31, 2.0, 2.6, 3.0}) {
+        const int n = 32768;
+        std::vector<std::complex<double>> x(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i) {
+            const double t = 2 * tu::kPi * i / n;
+            x[static_cast<size_t>(i)] = sampleRead(buf.data(), 50.0 + i * inc) * (0.35875 - 0.48829 * std::cos(t) + 0.14128 * std::cos(2 * t) - 0.01168 * std::cos(3 * t));
+        }
+        sw::Fft f(n); f.forward(x);
+        double on = 0, off = 0;
+        for (int b = 1; b < n / 2; ++b) {
+            const double fb = static_cast<double>(b) / n;   // cycles per output sample
+            bool near = false;
+            for (double t : tones) { double q = std::fmod(t * inc, 1.0); if (q > 0.5) q = 1.0 - q; near = near || std::abs(fb - q) < 6.0 / n; }
+            (near ? on : off) += std::norm(x[static_cast<size_t>(b)]);
+        }
+        const double db = 10 * std::log10(off / on);
+        MESSAGE("sample read at increment " << inc << ": " << db << " dB off the tones");
+        CHECK(db < -60.0);
+    }
+}
+
 TEST_CASE("IN07 OSC: modulation of the wavetable position and the FM index; gravity on a wavetable") {
     Processor p; typed(p, OscWavetable); p.setParam(lp(0, Table), 0); p.setParam(lp(0, Position), 0);
     p.setParam(modId(0, ModSrc), SrcModWheel); p.setParam(modId(0, ModDst), DstWtPos); p.setParam(modId(0, ModAmount), 100);
@@ -1025,4 +1096,19 @@ TEST_CASE("IN07 OSC: the block size does not change any oscillator type") {
     REQUIRE(x.size() == y.size());
     size_t diff = 0; for (size_t i = 0; i < x.size(); ++i) if (x[i] != y[i]) ++diff;
     CHECK(diff == 0);
+}
+
+TEST_CASE("IN07: a layer whose decay reaches a sustain of 0 sleeps while the key is still held, and reports its end") {
+    Processor p; plain(p);
+    p.setParam(lp(0, AmpS), 0); p.setParam(lp(0, AmpD), 10);
+    p.noteOn(60, 1.0, 0, 7);
+    render(p, 240);
+    CHECK(p.active());
+    render(p, 2000);                                     // past the 10 ms decay
+    CHECK_FALSE(p.active());
+    int key = -1, ch = -1, id = -1;
+    REQUIRE(p.takeEnded(key, ch, id));
+    CHECK(key == 60); CHECK(id == 7);
+    p.noteOff(60);                                       // the late note-off finds nothing to release
+    CHECK_FALSE(p.takeEnded(key, ch, id));
 }

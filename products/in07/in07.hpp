@@ -18,7 +18,7 @@
 //   Drive 0 .. 100 %: G = 1 + 9 d, x + d (tanh(G x) / G - x) at 2x (unity gain for small signals, Drive 0 = exactly linear and not oversampled;
 //   tanh is a [7/6] Pade approximant within 1e-4).
 //   Envelopes: attack = exponential approach to 1.2, reaching 1.0 at the set time (from 0); decay = to within 0.1 % (-60 dB) of the step at the set time,
-//   then Sustain; release = to -80 dB of its start level at the set time, then 0 and the voice sleeps. Re-trigger starts the attack from the current level.
+//   then Sustain (Sustain 0: the voice sleeps there, even with the key held); release = to -80 dB of its start level at the set time, then 0 and the voice sleeps. Re-trigger starts the attack from the current level.
 //   Velocity: amplitude (1 - s) + s v^2 (s = Vel sens). Glide: constant time, linear in semitones.
 //   Layer: level -60 .. +6 dB (-60 = Off), pan equal power with the centre at unity (as the unison spread), pitch = key + 12 Octave + Semi + Fine / 100 + bend.
 //   Notes: Poly = a note per key (the same key again re-triggers its own voice); at the voice limit the oldest released note goes, else the oldest
@@ -193,8 +193,8 @@ private:
     std::array<double, kMaxUnison> detune_{}, gl_{}, gr_{};
     // the other oscillator types: per copy the (carrier) phase, the modulator phase and its last two outputs, the sample position (level-0 samples)
     int otype_ = OscAnalog, table_ = 0, sample_ = 0;
-    std::array<double, kMaxUnison> ph_{}, pm_{}, fb0_{}, fb1_{}, spos_{}, sinc_{}, sscale_{};
-    std::array<const float*, kMaxUnison> wbase_{}, sptr_{};
+    std::array<double, kMaxUnison> ph_{}, pm_{}, fb0_{}, fb1_{}, spos_{}, sinc_{}, sscale_{}, sblend_{};
+    std::array<const float*, kMaxUnison> wbase_{}, sptr_{}, sptr2_{};   // sptr2_: the next level, faded in by sblend_ near a level's limit
     std::array<int, kMaxUnison> wsize_{};
     std::array<bool, kMaxUnison> sdone_{};
     double wp0_ = 0.0, wp1_ = 0.0;                        // the wavetable position (frames) at the start and the end of the control period
@@ -218,6 +218,8 @@ public:
     void snapToTargets() { fx_.snapSwitches(); }
     void setTempo(double bpm) { if (bpm > 0.0) { bpm_ = std::clamp(bpm, 30.0, 300.0); fx_.setTempo(bpm); } }   // the host tempo (delay, LFO sync); 120 until told
     std::array<int, kFx> fxOrder() const { return fx_.order(); }
+    double limiterPeak() const { return fx_.limiterPeak(); }   // the peak into the Limit effect since the last reset (linear)
+    void resetLimiterPeak() { fx_.resetLimiterPeak(); }
     // velocity 0..1; channel and noteId are only carried to the end report (CLAP); channel -1 / key -1 in noteOff = any
     void noteOn(int key, double velocity, int channel = 0, int noteId = -1);
     void noteOff(int key, int channel = -1);

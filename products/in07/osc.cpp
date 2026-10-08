@@ -153,8 +153,8 @@ const WaveBank& waveBank() {
         size_t off = 0;
         for (int l = 0; l < WaveBank::kLevels; ++l) {
             const int H = std::max(1, static_cast<int>(std::lround(1024.0 * std::exp2(-0.5 * l))));
-            int n = 256;
-            while (n < 4 * H && n < 2048) n *= 2;
+            int n = 512;
+            while (n < 8 * H && n < 4096) n *= 2;
             w.harmonics[static_cast<size_t>(l)] = H;
             w.size[static_cast<size_t>(l)] = n;
             w.offset[static_cast<size_t>(l)] = off + 1;
@@ -162,7 +162,7 @@ const WaveBank& waveBank() {
         }
         w.stride = off;
         w.data.assign(w.stride * kWaveTables * WaveBank::kFrames, 0.0f);
-        Fft ffts[4] = {Fft(256), Fft(512), Fft(1024), Fft(2048)};
+        Fft ffts[5] = {Fft(256), Fft(512), Fft(1024), Fft(2048), Fft(4096)};
         Coeffs a(WaveBank::kMaxHarmonics + 1), b(WaveBank::kMaxHarmonics + 1);
         std::vector<std::complex<double>> y;
         for (int t = 0; t < kWaveTables; ++t)
@@ -179,7 +179,7 @@ const WaveBank& waveBank() {
                         y[static_cast<size_t>(h)] = c;
                         y[static_cast<size_t>(n - h)] = std::conj(c);
                     }
-                    const int fi = n == 256 ? 0 : n == 512 ? 1 : n == 1024 ? 2 : 3;
+                    const int fi = n == 256 ? 0 : n == 512 ? 1 : n == 1024 ? 2 : n == 2048 ? 3 : 4;
                     ffts[fi].inverse(y);
                     float* dst = w.data.data() + (static_cast<size_t>(t) * WaveBank::kFrames + static_cast<size_t>(f)) * w.stride + w.offset[static_cast<size_t>(l)];
                     for (int i = 0; i < n; ++i) dst[i] = static_cast<float>(y[static_cast<size_t>(i)].real());
@@ -344,32 +344,85 @@ std::vector<double> make(int id) {
     }
 }
 
-// half-band-ish decimation by 2: a 95-tap Blackman-windowed sinc at 0.21 of the input rate (stop band from about 0.24: under the output's Nyquist),
-// zero phase (sample i of the output sits on sample 2i of the input); a loop is filtered around its seam
-std::vector<double> decimate(const std::vector<double>& x, bool circular, int outLen) {
-    constexpr int T = 95, C = T / 2;
-    static const std::array<double, T> h = [] {
-        std::array<double, T> k{};
-        double s = 0.0;
-        for (int i = 0; i < T; ++i) {
-            const double t = i - C, u = 2.0 * 0.21 * t;
-            const double sinc = t == 0 ? 1.0 : std::sin(kPi * u) / (kPi * u);
-            const double w = 0.42 - 0.5 * std::cos(2.0 * kPi * i / (T - 1)) + 0.08 * std::cos(4.0 * kPi * i / (T - 1));
-            k[static_cast<size_t>(i)] = sinc * w; s += sinc * w;
-        }
-        for (double& v : k) v /= s;
-        return k;
-    }();
+// a Blackman-windowed sinc low-pass of T taps (odd) at fc (of the rate it runs at), DC gain 1
+std::vector<double> lowpass(int T, double fc) {
+    std::vector<double> h(static_cast<size_t>(T));
+    const int C = T / 2;
+    double sum = 0.0;
+    for (int i = 0; i < T; ++i) {
+        const double t = i - C, u = 2.0 * fc * t;
+        const double sinc = t == 0 ? 1.0 : std::sin(kPi * u) / (kPi * u);
+        const double w = 0.42 - 0.5 * std::cos(2.0 * kPi * i / (T - 1)) + 0.08 * std::cos(4.0 * kPi * i / (T - 1));
+        h[static_cast<size_t>(i)] = sinc * w; sum += sinc * w;
+    }
+    for (double& v : h) v /= sum;
+    return h;
+}
+// the minimum-phase filter with the same magnitude (real cepstrum, as for minBLEP): no ringing before the input, so a one-shot's onset
+// stays at its start instead of being cut out of a symmetric filter's pre-ringing (which left a step: broadband energy at -30 dB)
+std::vector<double> minimumPhase(const std::vector<double>& h) {
+    const int T = static_cast<int>(h.size()), M = 16384;
+    std::vector<std::complex<double>> x(static_cast<size_t>(M));
+    for (int i = 0; i < T; ++i) x[static_cast<size_t>(i)] = h[static_cast<size_t>(i)];
+    Fft f(M);
+    f.forward(x);
+    for (auto& v : x) v = std::log(std::max(std::abs(v), 1e-12));
+    f.inverse(x);
+    for (int i = 1; i < M / 2; ++i) { x[static_cast<size_t>(i)] *= 2.0; x[static_cast<size_t>(M - i)] = 0.0; }
+    f.forward(x);
+    for (auto& v : x) v = std::exp(v);
+    f.inverse(x);
+    std::vector<double> m(static_cast<size_t>(T));
+    double sum = 0.0;
+    for (int i = 0; i < T; ++i) { m[static_cast<size_t>(i)] = x[static_cast<size_t>(i)].real(); sum += m[static_cast<size_t>(i)]; }
+    for (double& v : m) v /= sum;
+    return m;
+}
+// x padded with `pre` samples before and `post` after: the loop's own samples around the seam, or zeros
+std::vector<double> padded(const std::vector<double>& x, int pre, int post, bool circular) {
     const int n = static_cast<int>(x.size());
-    std::vector<double> y(static_cast<size_t>(outLen), 0.0);
-    for (int i = 0; i < outLen; ++i) {
+    std::vector<double> y(static_cast<size_t>(pre + n + post), 0.0);
+    for (int i = -pre; i < n + post; ++i) {
+        int j = i;
+        if (circular) { j %= n; if (j < 0) j += n; } else if (j < 0 || j >= n) continue;
+        y[static_cast<size_t>(i + pre)] = x[static_cast<size_t>(j)];
+    }
+    return y;
+}
+constexpr int kT = 191, kC = kT / 2;   // the level filters: 191 taps
+// x2 up: zero-stuff and low-pass at 0.21 of the new rate (flat to 0.195, gone from 0.225), polyphase (the stuffed zeros are skipped).
+// Loops: zero phase, around the seam. One-shots: minimum phase (causal; the output runs on by the filter's length).
+std::vector<double> up2(const std::vector<double>& x, bool circular) {
+    static const std::vector<double> hz = lowpass(kT, 0.21), hm = minimumPhase(lowpass(kT, 0.21));
+    const std::vector<double>& h = circular ? hz : hm;
+    const int n = static_cast<int>(x.size()), m = circular ? 2 * n : 2 * n + kT;
+    const int pre = circular ? kC / 2 + 2 : kC + 2, post = kC + 2;   // the causal sum reaches 95 inputs back
+    const std::vector<double> xp = padded(x, pre, post, circular);
+    std::vector<double> y(static_cast<size_t>(m), 0.0);
+    for (int o = 0; o < m; ++o) {
+        const int i = o >> 1, r = o & 1;
         double acc = 0.0;
-        for (int k = 0; k < T; ++k) {
-            int j = 2 * i + k - C;
-            if (circular) { j %= n; if (j < 0) j += n; }
-            else if (j < 0 || j >= n) continue;
-            acc += h[static_cast<size_t>(k)] * x[static_cast<size_t>(j)];
+        if (circular) {   // y[2i + r] = 2 sum_t h[k0 + 2t] x[i + t - 47], k0 = (95 - r) & 1
+            const int k0 = (kC - r) & 1;
+            for (int t = 0; k0 + 2 * t < kT; ++t) acc += h[static_cast<size_t>(k0 + 2 * t)] * xp[static_cast<size_t>(i + t - kC / 2 + pre)];
+        } else {          // y[2i + r] = 2 sum_t h[r + 2t] x[i - t]
+            for (int t = 0; r + 2 * t < kT; ++t) acc += h[static_cast<size_t>(r + 2 * t)] * xp[static_cast<size_t>(i - t + pre)];
         }
+        y[static_cast<size_t>(o)] = 2.0 * acc;
+    }
+    return y;
+}
+// /2 down: low-pass at 0.105 of the input rate (flat to 0.09, gone from 0.12 = 0.24 of the new rate), every second sample
+std::vector<double> down2(const std::vector<double>& x, bool circular) {
+    static const std::vector<double> hz = lowpass(kT, 0.105), hm = minimumPhase(lowpass(kT, 0.105));
+    const std::vector<double>& h = circular ? hz : hm;
+    const int n = static_cast<int>(x.size()), m = circular ? n / 2 : (n + kT) / 2 + 1;
+    const std::vector<double> xp = padded(x, kT, kT + 2, circular);
+    std::vector<double> y(static_cast<size_t>(m), 0.0);
+    for (int i = 0; i < m; ++i) {
+        double acc = 0.0;
+        if (circular) { const double* q = xp.data() + 2 * i - kC + kT; for (int k = 0; k < kT; ++k) acc += h[static_cast<size_t>(k)] * q[k]; }
+        else { const double* q = xp.data() + 2 * i + kT; for (int k = 0; k < kT; ++k) acc += h[static_cast<size_t>(k)] * q[-k]; }
         y[static_cast<size_t>(i)] = acc;
     }
     return y;
@@ -385,17 +438,47 @@ const SampleBank& sampleBank() {
             std::vector<double> x = make(id);
             s.length = static_cast<int>(x.size());
             if (!s.loop) x.resize(x.size() + SampleBank::kTail, 0.0);   // room for the filters' smear
+            x = up2(x, s.loop);                                          // level 0: 96 kHz, content under 20.2 kHz
             for (int j = 0; j < SampleBank::kLevels; ++j) {
-                if (j > 0) x = decimate(x, s.loop, s.loop ? static_cast<int>(x.size()) / 2 : (static_cast<int>(x.size()) + 1) / 2);
+                if (j > 0) x = down2(x, s.loop);
+                const int n = static_cast<int>(x.size());
                 auto& v = s.lv[static_cast<size_t>(j)];
-                v.assign(x.begin(), x.end());   // to float
-                if (s.loop) { v.push_back(v[0]); v.push_back(v[1]); }
-                else { v.push_back(0.0f); v.push_back(0.0f); }
+                v.assign(static_cast<size_t>(SampleBank::kPre + n + SampleBank::kPost), 0.0f);
+                for (int i = 0; i < n; ++i) v[static_cast<size_t>(SampleBank::kPre + i)] = static_cast<float>(x[static_cast<size_t>(i)]);
+                if (s.loop) {   // the guards wrap around the seam
+                    for (int i = 0; i < SampleBank::kPre; ++i) v[static_cast<size_t>(i)] = v[static_cast<size_t>(n + i)];
+                    for (int i = 0; i < SampleBank::kPost; ++i) v[static_cast<size_t>(SampleBank::kPre + n + i)] = v[static_cast<size_t>(SampleBank::kPre + i)];
+                }
             }
         }
         return b;
     }();
     return bank;
+}
+
+const SincTable& sincTable() {
+    static const SincTable table = [] {
+        SincTable k;
+        constexpr int T = SincTable::kTaps, P = SincTable::kPhases;
+        constexpr double beta = 7.0, fc = 0.45;
+        auto i0 = [](double x) { double s = 1.0, term = 1.0; for (int m = 1; m < 40; ++m) { term *= (x / (2.0 * m)) * (x / (2.0 * m)); s += term; } return s; };
+        std::vector<double> all(static_cast<size_t>((P + 1) * T));
+        for (int p = 0; p <= P; ++p) {
+            const double frac = static_cast<double>(p) / P;
+            double sum = 0.0;
+            for (int t = 0; t < T; ++t) {
+                const double tau = (t - 3) - frac, u = 2.0 * fc * tau, r = tau / 4.0;
+                const double sinc = std::abs(u) < 1e-12 ? 1.0 : std::sin(kPi * u) / (kPi * u);
+                const double w = std::abs(r) >= 1.0 ? 0.0 : i0(beta * std::sqrt(1.0 - r * r)) / i0(beta);
+                all[static_cast<size_t>(p * T + t)] = sinc * w; sum += sinc * w;
+            }
+            for (int t = 0; t < T; ++t) all[static_cast<size_t>(p * T + t)] /= sum;   // unity gain at DC at every phase
+        }
+        k.h.resize(static_cast<size_t>(P * T)); k.d.resize(static_cast<size_t>(P * T));
+        for (int i = 0; i < P * T; ++i) { k.h[static_cast<size_t>(i)] = static_cast<float>(all[static_cast<size_t>(i)]); k.d[static_cast<size_t>(i)] = static_cast<float>(all[static_cast<size_t>(i + T)] - all[static_cast<size_t>(i)]); }
+        return k;
+    }();
+    return table;
 }
 
 }  // namespace sw::in07

@@ -321,7 +321,7 @@ double Adsr::next() {
             break;
         case Decay:
             level_ = s_ + (level_ - s_) * cd_;
-            if (++count_ >= dN_) { level_ = s_; stage_ = Sustain; }
+            if (++count_ >= dN_) { level_ = s_; stage_ = s_ <= 0.0 ? Idle : Sustain; }   // Sustain 0: the sound has ended (the voice sleeps, held or not)
             break;
         case Sustain:
             if (level_ != s_) { level_ += (s_ - level_) * 0.004; if (std::abs(level_ - s_) < 1e-6) level_ = s_; }   // a moved Sustain knob: about 5 ms
@@ -527,8 +527,10 @@ void Voice::control() {
             for (int i = 0; i < unison_; ++i) {
                 const size_t k = static_cast<size_t>(i);
                 const double speed = inc0_[k] * fs_ / SampleBank::kRootHz;
-                const int lev = SampleBank::level(speed, fs_);
-                sptr_[k] = smp.lv[static_cast<size_t>(lev)].data(); sscale_[k] = 1.0 / static_cast<double>(1 << lev);
+                double blend = 0.0;
+                const int lev = SampleBank::level(speed, fs_, blend);
+                sptr_[k] = smp.at(lev); sscale_[k] = 2.0 / static_cast<double>(1 << lev);   // stored samples per sample at kRate
+                sptr2_[k] = blend > 0.0 ? smp.at(lev + 1) : nullptr; sblend_[k] = blend;
                 sinc_[k] = speed * SampleBank::kRate / fs_;
             }
             break;
@@ -633,8 +635,9 @@ void Voice::oscillate(double* xl, double* xr, int m, int done) {
             }
             break;
         }
-        case OscSample: {   // linear interpolation in the level chosen for the speed; loops wrap, one-shots stop
+        case OscSample: {   // the 8-tap sinc read in the level chosen for the speed; loops wrap, one-shots stop
             const auto& smp = sampleBank().s[static_cast<size_t>(sample_)];
+            const SincTable& kt = sincTable();
             const double len = smp.length, end = smp.length + SampleBank::kTail;
             const bool loop = smp.loop;
             for (int i = 0; i < m; ++i) {
@@ -643,9 +646,8 @@ void Voice::oscillate(double* xl, double* xr, int m, int done) {
                     const size_t k = static_cast<size_t>(u);
                     if (sdone_[k]) continue;
                     const double x = spos_[k] * sscale_[k];
-                    const int j = static_cast<int>(x);
-                    const float* v = sptr_[k];
-                    const double s = v[j] + (x - j) * (v[j + 1] - v[j]);
+                    double s = sampleRead(kt, sptr_[k], x);
+                    if (sptr2_[k]) s += sblend_[k] * (sampleRead(kt, sptr2_[k], 0.5 * x) - s);
                     double q = spos_[k] + sinc_[k];
                     if (loop) { if (q >= len) q -= len; }
                     else if (q >= end) sdone_[k] = true;
@@ -732,7 +734,7 @@ Processor::Processor() : slots_(static_cast<size_t>(kSlots)) {
 
 void Processor::prepare(double sampleRate, int maxBlock) {
     (void)minBlep();   // build the tables here, not on the audio thread
-    (void)waveBank(); (void)sampleBank(); (void)sineTable();
+    (void)waveBank(); (void)sampleBank(); (void)sineTable(); (void)sincTable();
     fs_ = sampleRate;
     const size_t m = static_cast<size_t>(std::max(1, maxBlock));
     l_.assign(m, 0.0f); r_.assign(m, 0.0f);

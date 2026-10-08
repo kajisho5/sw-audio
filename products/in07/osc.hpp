@@ -8,10 +8,14 @@
 //   FM: two sine operators (carrier, modulator at a ratio), the index (0..10 rad) with its own decay; the index is held under the level where the first
 //   sideband past Nyquist stays under 0.002 (-54 dB; an upper and a lower one can fold together: -51 dB), (I/2)^k / k! <= 0.002 for the k-th sideband
 //   (the series' first term: J_k is smaller still). Feedback is limited by pitch and index too (fmFeedbackLimit).
-//   Samples: 5 loops (2 s, crossfaded seams) and 3 one-shots at 48 kHz, the root at C4 (key 60). Stored at 5 levels (48 kHz and 4 octaves down, each
-//   low-passed under its Nyquist): a note reads the level whose top lands under fs - 18 kHz (what folds back stays above 18 kHz).
+//   Samples: 5 loops (2 s, crossfaded seams) and 3 one-shots made at 48 kHz, the root at C4 (key 60). Stored at 5 levels (an octave apart), each
+//   2x oversampled (its content under 0.21 of the stored rate, nothing above 0.25: 191-tap filters) and read with an 8-tap Kaiser-windowed sinc
+//   (512 phases, interpolated): the images of the read stay under -70 dB at any speed. A note reads the richest level whose content, at its
+//   speed, folds back no lower than 18 kHz, with the read at most 3 stored samples per output sample.
 #pragma once
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -51,22 +55,55 @@ struct WaveBank {
 const WaveBank& waveBank();
 
 struct SampleBank {
-    static constexpr int kLevels = 5, kTail = 96;  // a one-shot ends kTail level-0 samples after its length (the decimation filters' smear)
+    static constexpr int kLevels = 5, kTail = 96;  // a one-shot ends kTail samples (at kRate) after its length (the filters' smear)
+    static constexpr int kPre = 3, kPost = 6;      // guard points around the stored data (the 8-tap read looks 3 back and 4 ahead)
     static constexpr double kRate = 48000.0, kRootHz = 261.6255653005986;   // C4
     struct Sample {
         bool loop = false;
-        int length = 0;                          // level-0 samples (a loop's is a multiple of 16)
-        std::array<std::vector<float>, kLevels> lv;   // level j at kRate / 2^j; a loop's ends with its first samples again, a one-shot's with zeros
+        int length = 0;                          // samples at kRate (a loop's is a multiple of 16)
+        std::array<std::vector<float>, kLevels> lv;   // level j stored at 2 kRate / 2^j; a loop's guards wrap, a one-shot's are zeros
+        const float* at(int j) const { return lv[static_cast<size_t>(j)].data() + kPre; }
     };
     std::array<Sample, kSamples> s;
-    static int level(double speed, double fs) {  // speed: 1 = the sample's own pitch
-        const double top = fs - 18000.0 > 0.5 * fs ? fs - 18000.0 : 0.5 * fs, f = 21600.0 * speed;
-        int j = 0;
-        while (j < kLevels - 1 && f > top * static_cast<double>(1 << j)) ++j;
+    // speed: 1 = the sample's own pitch. The content of level j reaches 21.6 kHz / 2^j (at kRate): at this speed it must fold back no lower
+    // than 18 kHz (or not at all), and the read must take at most 3 stored samples per output sample (the kernel's design range).
+    static int level(double speed, double fs) { double b; return level(speed, fs, b); }
+    // with a blend: over the last quarter octave before a level runs out, the next (darker) level fades in (weight `blend` 0..1), so a pitch
+    // that sweeps across the boundary (glide, bend, flyby) changes the top of the sound smoothly instead of in one step
+    static int level(double speed, double fs, double& blend) {
+        const double top = fs - 18000.0 > 0.5 * fs ? fs - 18000.0 : 0.5 * fs;
+        const double g = std::max(std::log2(std::max(1e-9, 21600.0 * speed / top)), std::log2(std::max(1e-9, 2.0 * kRate * speed / (3.0 * fs))));
+        int j = static_cast<int>(std::ceil(g));
+        if (j < 0) j = 0;
+        if (j > kLevels - 1) j = kLevels - 1;
+        constexpr double w = 0.25;
+        blend = j < kLevels - 1 ? std::min(1.0, std::max(0.0, (g - (j - w)) / w)) : 0.0;
         return j;
     }
 };
 const SampleBank& sampleBank();
+
+// the sample read: an 8-tap Kaiser-windowed sinc (beta 7, cutoff 0.45 of the stored rate; passband to 0.21 within 0.05 dB, images from 0.79
+// under -76 dB), 512 phases with linear interpolation between them. Reads data[floor(x) - 3 .. floor(x) + 4]; x >= 0.
+struct SincTable {
+    static constexpr int kTaps = 8, kPhases = 512;
+    std::vector<float> h, d;                     // h[p * 8 + t]; d = the step to the next phase
+};
+const SincTable& sincTable();
+inline double sampleRead(const SincTable& k, const float* data, double x) {
+    const long long i = static_cast<long long>(x);
+    const double u = (x - static_cast<double>(i)) * SincTable::kPhases;
+    const int p = static_cast<int>(u);
+    const double w = u - p;
+    const float* h = k.h.data() + p * SincTable::kTaps;
+    const float* d = k.d.data() + p * SincTable::kTaps;
+    const float* s = data + i - 3;
+    const float wf = static_cast<float>(w);
+    float acc[SincTable::kTaps];   // in float (the data and the taps are float): eight independent products the compiler can vectorise
+    for (int t = 0; t < SincTable::kTaps; ++t) acc[t] = (h[t] + wf * d[t]) * s[t];
+    return static_cast<double>(((acc[0] + acc[1]) + (acc[2] + acc[3])) + ((acc[4] + acc[5]) + (acc[6] + acc[7])));
+}
+inline double sampleRead(const float* data, double x) { return sampleRead(sincTable(), data, x); }
 
 // sin(2 pi x) for any x (cycles) from a 4096-point table with linear interpolation (within 3e-7)
 const float* sineTable();
