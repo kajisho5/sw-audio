@@ -3,35 +3,61 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <deque>
+#include <string>
 
 namespace sw::in07 {
 
 const std::vector<ParamSpec>& specs() {
-    static const std::vector<ParamSpec> s = {
-        {"in07.osc.wave",   "Wave",        0, 3, Saw,     Curve::Step, 1, {0, 1, 2, 3}, "", {"Sine", "Triangle", "Saw", "Square"}},
-        {"in07.osc.pw",     "Pulse width", 5, 95, 50,     Curve::Lin, 1, {}, "%"},
-        {"in07.osc.octave", "Octave",      -2, 2, 0,      Curve::Step, 1, {-2, -1, 0, 1, 2}, "", {"-2", "-1", "0", "+1", "+2"}},
-        {"in07.osc.unison", "Unison",      1, 8, 1,       Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, "v", {"1", "2", "3", "4", "5", "6", "7", "8"}},
-        {"in07.osc.detune", "Detune",      0, 100, 22,    Curve::Lin, 1, {}, "%"},
-        {"in07.osc.spread", "Spread",      0, 100, 80,    Curve::Lin, 1, {}, "%"},
-        {"in07.flt.type",   "Filter",      0, 3, LP24,    Curve::Step, 1, {0, 1, 2, 3}, "", {"LP 12", "LP 24", "BP 12", "HP 12"}},
-        {"in07.flt.cutoff", "Cutoff",      20, 20000, 2400, Curve::Log, 1, {}, "Hz"},
-        {"in07.flt.res",    "Resonance",   0, 100, 30,    Curve::Lin, 1, {}, "%"},
-        {"in07.flt.drive",  "Drive",       0, 100, 18,    Curve::Lin, 1, {}, "%"},
-        {"in07.flt.env",    "Env",         -100, 100, 40, Curve::Lin, 1, {}, "%"},
-        {"in07.flt.key",    "Key track",   0, 100, 50,    Curve::Lin, 1, {}, "%"},
-        {"in07.amp.a",      "Attack",      0.5, 10000, 5,   Curve::Log, 1, {}, "ms"},
-        {"in07.amp.d",      "Decay",       1, 10000, 320,   Curve::Log, 1, {}, "ms"},
-        {"in07.amp.s",      "Sustain",     0, 100, 70,      Curve::Lin, 1, {}, "%"},
-        {"in07.amp.r",      "Release",     1, 20000, 420,   Curve::Log, 1, {}, "ms"},
-        {"in07.fenv.a",     "Filter attack",  0.5, 10000, 2, Curve::Log, 1, {}, "ms"},
-        {"in07.fenv.d",     "Filter decay",   1, 10000, 600, Curve::Log, 1, {}, "ms"},
-        {"in07.fenv.s",     "Filter sustain", 0, 100, 20,    Curve::Lin, 1, {}, "%"},
-        {"in07.fenv.r",     "Filter release", 1, 20000, 500, Curve::Log, 1, {}, "ms"},
-        {"in07.vel",        "Vel sens",    0, 100, 50,    Curve::Lin, 1, {}, "%"},
-        {"in07.glide",      "Glide",       0, 2000, 0,    Curve::Skew, 3, {}, "ms", {}, "Off"},
-        {"in07.level",      "Level",       -40, 6, -6,    Curve::Lin, 1, {}, "dB"},
-    };
+    static const std::vector<ParamSpec> s = [] {
+        std::vector<ParamSpec> v;
+        std::vector<double> voices; std::vector<std::string> voiceLabels;
+        for (int i = 1; i <= Processor::kMaxVoices; ++i) { voices.push_back(i); voiceLabels.push_back(std::to_string(i)); }
+        std::vector<double> semis; std::vector<std::string> semiLabels;
+        for (int i = -12; i <= 12; ++i) { semis.push_back(i); semiLabels.push_back(i > 0 ? "+" + std::to_string(i) : std::to_string(i)); }
+        std::vector<double> bends; std::vector<std::string> bendLabels;
+        for (int i = 0; i <= 24; ++i) { bends.push_back(i); bendLabels.push_back(std::to_string(i)); }
+        v.push_back({"in07.voices", "Voices", 1, Processor::kMaxVoices, 16, Curve::Step, 1, voices, "", voiceLabels});
+        v.push_back({"in07.mode",   "Mode",   0, 2, Poly, Curve::Step, 1, {0, 1, 2}, "", {"Poly", "Mono", "Legato"}});
+        v.push_back({"in07.glide",  "Glide",  0, 2000, 0, Curve::Skew, 3, {}, "ms", {}, "Off"});
+        v.push_back({"in07.bend",   "Bend range", 0, 24, 2, Curve::Step, 1, bends, "st", bendLabels});
+        v.push_back({"in07.level",  "Level",  -40, 6, -6, Curve::Lin, 1, {}, "dB"});
+        // the ids and names of the layer blocks live here (ParamSpec keeps pointers)
+        static std::deque<std::string> text;
+        auto str = [](const std::string& x) { text.push_back(x); return text.back().c_str(); };
+        static const int kWave[kLayers] = {Saw, Square, Triangle, Sine}, kOct[kLayers] = {0, -1, 1, 0};
+        for (int l = 0; l < kLayers; ++l) {
+            const std::string id = "in07.l" + std::to_string(l + 1) + ".", nm = "L" + std::to_string(l + 1) + " ";
+            auto add = [&](const char* key, const char* name, ParamSpec ps) { ps.id = str(id + key); ps.name = str(nm + name); v.push_back(ps); };
+            add("on",         "On",          {"", "", 0, 1, l == 0 ? 1.0 : 0.0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}});
+            add("level",      "Level",       {"", "", -60, 6, 0, Curve::Lin, 1, {}, "dB", {}, "Off"});
+            add("pan",        "Pan",         {"", "", -100, 100, 0, Curve::Lin, 1, {}, ""});
+            add("osc.wave",   "Wave",        {"", "", 0, 3, static_cast<double>(kWave[l]), Curve::Step, 1, {0, 1, 2, 3}, "", {"Sine", "Triangle", "Saw", "Square"}});
+            add("osc.pw",     "Pulse width", {"", "", 5, 95, 50, Curve::Lin, 1, {}, "%"});
+            add("osc.octave", "Octave",      {"", "", -2, 2, static_cast<double>(kOct[l]), Curve::Step, 1, {-2, -1, 0, 1, 2}, "", {"-2", "-1", "0", "+1", "+2"}});
+            add("osc.semi",   "Semi",        {"", "", -12, 12, 0, Curve::Step, 1, semis, "st", semiLabels});
+            add("osc.fine",   "Fine",        {"", "", -100, 100, 0, Curve::Lin, 1, {}, "ct"});
+            add("osc.unison", "Unison",      {"", "", 1, 8, 1, Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, "v", {"1", "2", "3", "4", "5", "6", "7", "8"}});
+            add("osc.detune", "Detune",      {"", "", 0, 100, 22, Curve::Lin, 1, {}, "%"});
+            add("osc.spread", "Spread",      {"", "", 0, 100, 80, Curve::Lin, 1, {}, "%"});
+            add("flt.type",   "Filter",      {"", "", 0, 3, LP24, Curve::Step, 1, {0, 1, 2, 3}, "", {"LP 12", "LP 24", "BP 12", "HP 12"}});
+            add("flt.cutoff", "Cutoff",      {"", "", 20, 20000, 2400, Curve::Log, 1, {}, "Hz"});
+            add("flt.res",    "Resonance",   {"", "", 0, 100, 30, Curve::Lin, 1, {}, "%"});
+            add("flt.drive",  "Drive",       {"", "", 0, 100, 18, Curve::Lin, 1, {}, "%"});
+            add("flt.env",    "Filter env",  {"", "", -100, 100, 40, Curve::Lin, 1, {}, "%"});
+            add("flt.key",    "Key track",   {"", "", 0, 100, 50, Curve::Lin, 1, {}, "%"});
+            add("amp.a",      "Attack",      {"", "", 0.5, 10000, 5, Curve::Log, 1, {}, "ms"});
+            add("amp.d",      "Decay",       {"", "", 1, 10000, 320, Curve::Log, 1, {}, "ms"});
+            add("amp.s",      "Sustain",     {"", "", 0, 100, 70, Curve::Lin, 1, {}, "%"});
+            add("amp.r",      "Release",     {"", "", 1, 20000, 420, Curve::Log, 1, {}, "ms"});
+            add("fenv.a",     "Filter attack",  {"", "", 0.5, 10000, 2, Curve::Log, 1, {}, "ms"});
+            add("fenv.d",     "Filter decay",   {"", "", 1, 10000, 600, Curve::Log, 1, {}, "ms"});
+            add("fenv.s",     "Filter sustain", {"", "", 0, 100, 20, Curve::Lin, 1, {}, "%"});
+            add("fenv.r",     "Filter release", {"", "", 1, 20000, 500, Curve::Log, 1, {}, "ms"});
+            add("vel",        "Vel sens",    {"", "", 0, 100, 50, Curve::Lin, 1, {}, "%"});
+        }
+        return v;
+    }();
     return s;
 }
 
@@ -166,8 +192,15 @@ void Adsr::update() {
 
 void Adsr::gate(bool on) {
     if (dirty_) update();
-    if (on) { stage_ = Attack; count_ = 0; }
-    else if (stage_ != Idle) { stage_ = Release; count_ = 0; }
+    if (on) { stage_ = Attack; count_ = 0; quick_ = false; }
+    else if (stage_ != Idle && !quick_) { stage_ = Release; count_ = 0; }
+}
+
+void Adsr::quickRelease(double seconds) {
+    if (stage_ == Idle) return;
+    qN_ = std::max(1, static_cast<int>(std::lround(seconds * fs_)));
+    cq_ = std::pow(1e-4, 1.0 / qN_);
+    quick_ = true; stage_ = Release; count_ = 0;
 }
 
 double Adsr::next() {
@@ -185,30 +218,37 @@ double Adsr::next() {
             if (level_ != s_) { level_ += (s_ - level_) * 0.004; if (std::abs(level_ - s_) < 1e-6) level_ = s_; }   // a moved Sustain knob: about 5 ms
             break;
         case Release:
-            level_ *= cr_;
-            if (++count_ >= rN_) { level_ = 0.0; stage_ = Idle; }
+            level_ *= quick_ ? cq_ : cr_;
+            if (++count_ >= (quick_ ? qN_ : rN_)) { level_ = 0.0; stage_ = Idle; quick_ = false; }
             break;
     }
     return level_;
 }
 
 // ---- voice
-void Voice::prepare(double fs, const std::array<double, kNumParams>* params) {
-    fs_ = fs; params_ = params;
-    amp_.prepare(fs); fenv_.prepare(fs); amp_.reset(); fenv_.reset();
-    for (auto& ch : svf_) for (auto& f : ch) f.reset();
-    for (auto& o : os_) o.reset();
-    rng_ = 0x5EED1234u; ctl_ = 0; first_ = true;
+void Voice::prepare(double fs, const double* layerParams, const Shared* shared) {
+    fs_ = fs; lp_ = layerParams; sh_ = shared;
+    amp_.prepare(fs); fenv_.prepare(fs);
+    reset();
+    rng_ = 0x5EED1234u;
 }
 
-void Voice::noteOn(int note, double velocity, bool glide) {
+void Voice::reset() {
+    amp_.reset(); fenv_.reset();
+    for (auto& ch : svf_) for (auto& f : ch) f.reset();
+    for (auto& o : os_) o.reset();
+    ctl_ = 0; first_ = true; killed_ = false; glideLeft_ = 0;
+}
+
+void Voice::noteOn(int key, double velocity, double glideFrom) {
     const bool wasActive = amp_.active();
-    note_ = note;
+    note_ = key; killed_ = false;
     const double s = p(VelSens) / 100.0, v = std::clamp(velocity, 0.0, 1.0);
     velGain_ = (1.0 - s) + s * v * v;
-    if (glide && wasActive && p(Glide) > 0.0) {
-        glideFrom_ = pitch_;
-        glideN_ = glideLeft_ = std::max(1, static_cast<int>(std::lround(p(Glide) * 1e-3 * fs_)));
+    const double gms = sh_ ? sh_->glideMs : 0.0;
+    if (glideFrom >= 0.0 && gms > 0.0 && glideFrom != key) {
+        glideFrom_ = glideFrom;
+        glideN_ = glideLeft_ = std::max(1, static_cast<int>(std::lround(gms * 1e-3 * fs_)));
     } else {
         glideLeft_ = 0;
     }
@@ -228,20 +268,34 @@ void Voice::noteOn(int note, double velocity, bool glide) {
     amp_.gate(true); fenv_.gate(true);
 }
 
+void Voice::legato(int key, double glideFrom) {
+    note_ = key;
+    const double gms = sh_ ? sh_->glideMs : 0.0;
+    if (glideFrom >= 0.0 && gms > 0.0 && glideFrom != key) {
+        glideFrom_ = glideFrom;
+        glideN_ = glideLeft_ = std::max(1, static_cast<int>(std::lround(gms * 1e-3 * fs_)));
+    } else {
+        glideLeft_ = 0;
+    }
+    ctl_ = 0;
+}
+
 void Voice::noteOff() { amp_.gate(false); fenv_.gate(false); }
+
+void Voice::kill() { killed_ = true; amp_.quickRelease(0.003); }
 
 double Voice::frequency() const { return 440.0 * std::exp2((pitch_ - 69.0) / 12.0); }
 
 void Voice::control() {
     // pitch (glide: linear in semitones over a constant time)
-    const double target = note_ + 12.0 * p(Octave);
-    if (glideLeft_ > 0) {
-        const double prog = 1.0 - static_cast<double>(glideLeft_) / glideN_;
-        pitch_ = glideFrom_ + (target - glideFrom_) * prog;
+    if (glideLeft_ > 0) {   // the key at the end of this control period (it lands on the note when the glide time is up)
         glideLeft_ = std::max(0, glideLeft_ - kCtl);
+        const double prog = 1.0 - static_cast<double>(glideLeft_) / glideN_;
+        key_ = glideFrom_ + (note_ - glideFrom_) * prog;
     } else {
-        pitch_ = target;
+        key_ = note_;
     }
+    pitch_ = key_ + 12.0 * p(Octave) + p(Semi) + p(Fine) / 100.0 + (sh_ ? sh_->bendSemis : 0.0);
     const double f = frequency();
     const double det = p(Detune) / 100.0 * kDetuneCents, spread = p(Spread) / 100.0, norm = 1.0 / std::sqrt(static_cast<double>(unison_));
     const int wave = static_cast<int>(std::lround(p(Wave)));
@@ -256,6 +310,12 @@ void Voice::control() {
         if (std::abs(pan) < 1e-12) { gl_[k] = gr_[k] = norm; }
         else { const double th = (pan + 1.0) * kPi / 4.0; gl_[k] = norm * kSqrt2 * std::cos(th); gr_[k] = norm * kSqrt2 * std::sin(th); stereo = true; }
     }
+    // the layer: level (the bottom of the range is Off) and pan, equal power with the centre at unity
+    const double lev = p(LayerLevel) <= -60.0 + 1e-9 ? 0.0 : dbToGain(p(LayerLevel)), pan = std::clamp(p(Pan) / 100.0, -1.0, 1.0);
+    double nl = lev, nr = lev;
+    if (std::abs(pan) > 1e-12) { const double th = (pan + 1.0) * kPi / 4.0; nl = lev * kSqrt2 * std::cos(th); nr = lev * kSqrt2 * std::sin(th); stereo = true; }
+    gL0_ = first_ ? nl : gL_; gR0_ = first_ ? nr : gR_;   // ramp from the last period's gains (the first period of a note starts there)
+    gL_ = nl; gR_ = nr;
     if (stereo && !stereo_) { svf_[1] = svf_[0]; os_[1] = os_[0]; }   // the right chain takes over the left chain's state: no click
     stereo_ = stereo;
 
@@ -293,6 +353,9 @@ void Voice::render(float* l, float* r, int n) {
         const int m = std::min(n - off, ctl_);
         const double d = drive_, g = 1.0 + 9.0 * d;
         const bool lp24 = type_ == LP24;
+        // the layer gains ramp linearly across the control period (kCtl - ctl_ samples of it are done)
+        const double dl = (gL_ - gL0_) / kCtl, dr = (gR_ - gR0_) / kCtl;
+        double cl = gL0_ + dl * (kCtl - ctl_), cr = gR0_ + dr * (kCtl - ctl_);
         for (int i = 0; i < m; ++i) {
             double xl = 0.0, xr = 0.0;
             for (int u = 0; u < unison_; ++u) {
@@ -317,23 +380,31 @@ void Voice::render(float* l, float* r, int n) {
             }
             if (!stereo_) y[1] = y[0];
             fenv_.next();
+            cl += dl; cr += dr;
             const double a = amp_.next() * velGain_;
-            l[off + i] += static_cast<float>(y[0] * a);
-            r[off + i] += static_cast<float>(y[1] * a);
+            l[off + i] += static_cast<float>(y[0] * a * cl);
+            r[off + i] += static_cast<float>(y[1] * a * cr);
         }
         ctl_ -= m; off += m;
         if (!amp_.active()) {   // the release ended inside this block: the rest stays silent
             fenv_.reset();
             for (auto& ch : svf_) for (auto& f : ch) f.reset();
             for (auto& o : os_) o.reset();
+            killed_ = false;
             break;
         }
     }
 }
 
-// ---- monophonic shell
+// ---- the synth: notes, layers, voice allocation
+bool Processor::Slot::sounding() const {
+    for (const auto& x : v) if (x.active()) return true;
+    return false;
+}
+
 Processor::Processor() {
     for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def;
+    for (int l = 0; l < kLayers; ++l) layerOn_[static_cast<size_t>(l)] = target_[static_cast<size_t>(lp(l, On))] > 0.5;
     held_.reserve(128);
 }
 
@@ -342,9 +413,15 @@ void Processor::prepare(double sampleRate, int maxBlock) {
     fs_ = sampleRate;
     const size_t m = static_cast<size_t>(std::max(1, maxBlock));
     l_.assign(m, 0.0f); r_.assign(m, 0.0f);
-    held_.clear();
+    held_.clear(); monoSlot_ = -1; pedal_ = false; bend_ = 0.0; lastKey_ = -1.0; clock_ = 0;
+    endHead_ = endTail_ = 0;
     level_.reset(fs_, 20.0, dbToGain(target_[Level]));
-    voice_.prepare(fs_, &target_);
+    shared_.bendSemis = 0.0; shared_.glideMs = p(Glide);
+    mode_ = static_cast<int>(std::lround(p(Mode)));
+    for (auto& s : slots_) {
+        for (int l = 0; l < kLayers; ++l) s.v[static_cast<size_t>(l)].prepare(fs_, &target_[static_cast<size_t>(lp(l, 0))], &shared_);
+        s.key = -1; s.held = s.sustained = s.stolen = false;
+    }
     prepared_ = true;
 }
 
@@ -354,26 +431,211 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
     if (id == Level) level_.setTarget(dbToGain(v));
+    else if (id == Glide) shared_.glideMs = v;
+    else if (id == Bend) shared_.bendSemis = bend_ * v;
+    else if (id == Mode) {
+        const int m = static_cast<int>(std::lround(v));
+        if (m != mode_ && prepared_) allNotesOff();   // switching between poly and mono lets the notes go
+        mode_ = m;
+    } else if (id >= kNumGlobal && (id - kNumGlobal) % kLayerParams == On) {
+        const int l = (id - kNumGlobal) / kLayerParams;
+        const bool on = v > 0.5;
+        if (layerOn_[static_cast<size_t>(l)] && !on && prepared_)   // a layer turned off: its sounding voices fade
+            for (auto& s : slots_) { Voice& x = s.v[static_cast<size_t>(l)]; if (x.active()) x.kill(); }
+        layerOn_[static_cast<size_t>(l)] = on;
+    }
 }
 
-void Processor::noteOn(int note, double velocity) {
-    if (!prepared_) return;
-    held_.erase(std::remove(held_.begin(), held_.end(), note), held_.end());
-    if (held_.size() < held_.capacity()) held_.push_back(note);
+void Processor::pushEnded(int key, int channel, int noteId) {
+    if (endHead_ - endTail_ >= kEnded) ++endTail_;   // full: the oldest report is dropped
+    ended_[endHead_ % kEnded] = {key, channel, noteId};
+    ++endHead_;
+}
+
+bool Processor::takeEnded(int& key, int& channel, int& noteId) {
+    if (endTail_ == endHead_) return false;
+    const Ended& e = ended_[endTail_ % kEnded];
+    key = e.key; channel = e.channel; noteId = e.noteId;
+    ++endTail_;
+    return true;
+}
+
+void Processor::end(Slot& s) {
+    if (s.key >= 0) pushEnded(s.key, s.channel, s.noteId);
+    s.key = -1; s.held = s.sustained = s.stolen = false;
+}
+
+void Processor::start(Slot& s, int key, double vel, int channel, int noteId, double glideFrom) {
+    s.key = key; s.channel = channel; s.noteId = noteId;
+    s.held = true; s.sustained = false; s.stolen = false; s.age = ++clock_;
+    for (int l = 0; l < kLayers; ++l)
+        if (layerOn_[static_cast<size_t>(l)]) s.v[static_cast<size_t>(l)].noteOn(key, vel, glideFrom);
+}
+
+void Processor::release(Slot& s) {
+    s.held = false;
+    if (pedal_) { s.sustained = true; return; }
+    s.sustained = false;
+    for (auto& x : s.v) x.noteOff();
+}
+
+// a free slot; at the voice limit the oldest released note (else the oldest held one) is faded out first
+Processor::Slot* Processor::allocate() {
+    const int limit = std::clamp(static_cast<int>(std::lround(p(Voices))), 1, kMaxVoices);
+    int count = 0;
+    for (const auto& s : slots_) if (s.key >= 0 && !s.stolen) ++count;
+    while (count >= limit) {
+        Slot* victim = nullptr;
+        for (auto& s : slots_) {
+            if (s.key < 0 || s.stolen) continue;
+            const bool rel = !s.held && !s.sustained, vrel = victim && !victim->held && !victim->sustained;
+            if (!victim || (rel && !vrel) || (rel == vrel && s.age < victim->age)) victim = &s;
+        }
+        if (!victim) break;
+        victim->stolen = true;
+        for (auto& x : victim->v) if (x.active()) x.kill();
+        --count;
+    }
+    for (auto& s : slots_) if (s.key < 0 && !s.sounding()) return &s;
+    // every slot busy (all spares still fading): cut the oldest fading one
+    Slot* oldest = nullptr;
+    for (auto& s : slots_) if (s.stolen && (!oldest || s.age < oldest->age)) oldest = &s;
+    if (!oldest) oldest = &slots_[0];
+    for (auto& x : oldest->v) x.reset();
+    end(*oldest);
+    return oldest;
+}
+
+void Processor::noteOn(int key, double velocity, int channel, int noteId) {
+    if (!prepared_ || key < 0 || key > 127) return;
     lastVel_ = velocity;
-    voice_.noteOn(note, velocity, voice_.active());
+    bool any = false;
+    for (bool on : layerOn_) any = any || on;
+    if (!any) { pushEnded(key, channel, noteId); return; }   // nothing to play: the note ends at once
+    if (mode_ != Poly) { monoOn(key, velocity, channel, noteId); return; }
+    // poly glide: from the previous note while one is held
+    bool anyHeld = false;
+    for (const auto& s : slots_) anyHeld = anyHeld || (s.key >= 0 && !s.stolen && s.held);
+    const double from = anyHeld ? lastKey_ : -1.0;
+    lastKey_ = key;
+    for (auto& s : slots_)   // the same key again: its own slot re-triggers (from the current level)
+        if (s.key == key && s.channel == channel && !s.stolen && s.sounding()) {
+            if (s.noteId != noteId) pushEnded(s.key, s.channel, s.noteId);   // the old note id has no voice any more
+            start(s, key, velocity, channel, noteId, from);
+            return;
+        }
+    Slot* s = allocate();
+    start(*s, key, velocity, channel, noteId, from);
 }
 
-void Processor::noteOff(int note) {
+void Processor::noteOff(int key, int channel) {
     if (!prepared_) return;
-    const bool current = !held_.empty() && held_.back() == note;
-    held_.erase(std::remove(held_.begin(), held_.end(), note), held_.end());
-    if (!current) return;
-    if (held_.empty()) voice_.noteOff();
-    else voice_.noteOn(held_.back(), lastVel_, true);   // back to the note still held (legato)
+    if (mode_ != Poly) { monoOff(key); return; }
+    for (auto& s : slots_)
+        if (s.key >= 0 && !s.stolen && s.held && (key < 0 || s.key == key) && (channel < 0 || s.channel == channel)) release(s);
 }
 
-void Processor::allNotesOff() { held_.clear(); voice_.noteOff(); }
+void Processor::choke(int key, int channel) {
+    if (!prepared_) return;
+    for (auto& s : slots_)
+        if (s.key >= 0 && !s.stolen && (key < 0 || s.key == key) && (channel < 0 || s.channel == channel)) {
+            s.stolen = true; s.held = s.sustained = false;
+            for (auto& x : s.v) if (x.active()) x.kill();
+        }
+    if (mode_ != Poly) { held_.clear(); monoSlot_ = -1; }
+}
+
+// mono / legato: one slot, last-note priority
+void Processor::monoOn(int key, double vel, int channel, int noteId) {
+    const bool legatoHeld = !held_.empty();
+    held_.erase(std::remove(held_.begin(), held_.end(), key), held_.end());
+    if (held_.size() < held_.capacity()) held_.push_back(key);
+    Slot* s = monoSlot_ >= 0 ? &slots_[static_cast<size_t>(monoSlot_)] : nullptr;
+    if (s && (s->stolen || s->key < 0 || !s->sounding())) s = nullptr;
+    if (s) {
+        double cur = -1.0;   // the (gliding) key in use: a glide continues from where it is
+        for (const auto& x : s->v) if (x.active()) { cur = x.keyInUse(); break; }
+        if (s->key != key || s->noteId != noteId) pushEnded(s->key, s->channel, s->noteId);   // the old note has no voice any more
+        s->key = key; s->channel = channel; s->noteId = noteId; s->held = true; s->sustained = false; s->age = ++clock_;
+        if (mode_ == Legato && legatoHeld) {
+            for (auto& x : s->v) if (x.active()) x.legato(key, cur);
+        } else {
+            for (int l = 0; l < kLayers; ++l)
+                if (layerOn_[static_cast<size_t>(l)]) s->v[static_cast<size_t>(l)].noteOn(key, vel, mode_ == Mono ? cur : -1.0);
+        }
+        lastKey_ = key;
+        return;
+    }
+    // nothing sounding: a fresh note (the limit is one note)
+    for (auto& o : slots_) if (o.key >= 0 && !o.stolen) { o.stolen = true; for (auto& x : o.v) if (x.active()) x.kill(); }
+    Slot* n = allocate();
+    start(*n, key, vel, channel, noteId, -1.0);
+    monoSlot_ = static_cast<int>(n - slots_.data());
+    lastKey_ = key;
+}
+
+void Processor::monoOff(int key) {
+    const bool top = !held_.empty() && (key < 0 || held_.back() == key);
+    if (key < 0) held_.clear();
+    else held_.erase(std::remove(held_.begin(), held_.end(), key), held_.end());
+    if (!top || monoSlot_ < 0) return;
+    Slot& s = slots_[static_cast<size_t>(monoSlot_)];
+    if (s.key < 0 || s.stolen) return;
+    if (held_.empty()) { release(s); return; }
+    // back to the key still held
+    const int k = held_.back();
+    double cur = -1.0;
+    for (const auto& x : s.v) if (x.active()) { cur = x.keyInUse(); break; }
+    if (s.key != k) pushEnded(s.key, s.channel, s.noteId);
+    s.key = k; s.noteId = -1; s.held = true; s.age = ++clock_;
+    if (mode_ == Legato) { for (auto& x : s.v) if (x.active()) x.legato(k, cur); }
+    else for (int l = 0; l < kLayers; ++l) if (layerOn_[static_cast<size_t>(l)]) s.v[static_cast<size_t>(l)].noteOn(k, lastVel_, cur);
+    lastKey_ = k;
+}
+
+void Processor::pitchBend(double v) {
+    bend_ = std::clamp(v, -1.0, 1.0);
+    shared_.bendSemis = bend_ * p(Bend);
+}
+
+void Processor::sustain(bool down) {
+    pedal_ = down;
+    if (down || !prepared_) return;
+    for (auto& s : slots_)
+        if (s.key >= 0 && !s.stolen && s.sustained) { s.sustained = false; for (auto& x : s.v) x.noteOff(); }
+}
+
+void Processor::allNotesOff() {
+    if (!prepared_) return;
+    pedal_ = false; held_.clear();
+    for (auto& s : slots_) if (s.key >= 0 && !s.stolen) { s.held = false; s.sustained = false; for (auto& x : s.v) x.noteOff(); }
+}
+
+void Processor::allSoundOff() {
+    if (!prepared_) return;
+    pedal_ = false; held_.clear(); monoSlot_ = -1;
+    for (auto& s : slots_) { for (auto& x : s.v) x.reset(); if (s.key >= 0) end(s); }
+}
+
+bool Processor::active() const {
+    for (const auto& s : slots_) if (s.sounding()) return true;
+    return false;
+}
+
+int Processor::notes() const {
+    int n = 0;
+    for (const auto& s : slots_) if (s.key >= 0 && !s.stolen && s.sounding()) ++n;
+    return n;
+}
+
+const Voice* Processor::find(int key, int layer) const {
+    if (layer < 0 || layer >= kLayers) return nullptr;
+    for (const auto& s : slots_) {
+        const Voice& x = s.v[static_cast<size_t>(layer)];
+        if (s.key == key && !s.stolen && x.active() && !x.killed()) return &x;
+    }
+    return nullptr;
+}
 
 void Processor::process(float** ch, int numCh, int n) {
     for (int c = 0; c < numCh; ++c) std::fill(ch[c], ch[c] + n, 0.0f);
@@ -383,7 +645,14 @@ void Processor::process(float** ch, int numCh, int n) {
         const int m = std::min(cap, n - off);
         std::fill(l_.begin(), l_.begin() + m, 0.0f);
         std::fill(r_.begin(), r_.begin() + m, 0.0f);
-        voice_.render(l_.data(), r_.data(), m);
+        for (auto& s : slots_) {
+            if (s.key < 0 && !s.sounding()) continue;
+            for (auto& x : s.v) x.render(l_.data(), r_.data(), m);
+            if (s.key >= 0 && !s.sounding()) {   // the note's sound has ended
+                if (static_cast<int>(&s - slots_.data()) == monoSlot_) monoSlot_ = -1;
+                end(s);
+            }
+        }
         for (int i = 0; i < m; ++i) {
             const double g = level_.next();
             double yl = l_[static_cast<size_t>(i)] * g, yr = r_[static_cast<size_t>(i)] * g;

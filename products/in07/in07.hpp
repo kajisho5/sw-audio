@@ -1,9 +1,10 @@
-// SWINGBY (SW IN07) — lightweight preset synth, engine prototype (added 2026-10-08 at the client's request; IN01..IN06 stay unbuilt).
+// SWINGBY (SW IN07) — lightweight preset synth (added 2026-10-08 at the client's request; IN01..IN06 stay unbuilt).
 //   No section in spec v1.0: every value here is a design value (README「IN07 の設計」). The plan: claude/IN07_synth_plan.md in the project docs.
-//   One voice = oscillator (1..8 unison copies) -> drive -> filter -> amp, with an amp envelope and a filter envelope. The voice is written so the
-//   coming voice allocator can run N of them; Processor here is a monophonic shell (last-note priority) for tests and listening.
-//   Light by construction: a silent voice returns at once (sleep), the filter coefficients move at control rate (every 32 samples, linear coefficient
-//   ramps in between), the 2x oversampler runs only around the drive stage and only when Drive > 0 at note-on.
+//   Four layers (L1..L4), each a full voice: oscillator (1..8 unison copies) -> drive -> filter -> amp, with an amp envelope and a filter
+//   envelope, its own level, pan and pitch offsets. A note plays every layer that is on. Polyphony 1..32 notes; Mono and Legato modes.
+//   Light by construction: a silent voice returns at once (sleep), the filter coefficients and the layer gains move at control rate (every 32
+//   samples, linear ramps in between), the 2x oversampler runs only around the drive stage and only when Drive > 0 at note-on, a layer that
+//   is off costs nothing.
 //   Oscillator: naive waveform + minBLEP at each jump (saw, square: a 64-sample minimum-phase band-limited step, Blackman-windowed sinc at 0.45 fs made
 //   minimum phase through the real cepstrum, 64 sub-sample phases with linear interpolation; no delay) and 2-point polyBLAMP at each corner (triangle);
 //   sine is exact. The cost of minBLEP is per jump (64 adds), not per sample. A minimum-phase step is late by its centroid (about 3.3 samples) while the
@@ -18,8 +19,13 @@
 //   tanh is a [7/6] Pade approximant within 1e-4).
 //   Envelopes: attack = exponential approach to 1.2, reaching 1.0 at the set time (from 0); decay = to within 0.1 % (-60 dB) of the step at the set time,
 //   then Sustain; release = to -80 dB of its start level at the set time, then 0 and the voice sleeps. Re-trigger starts the attack from the current level.
-//   Velocity: amplitude (1 - s) + s v^2 (s = Vel sens). Glide: constant time, linear in semitones, from the pitch in use.
-//   Parameter changes reach the voice at control rate. Unison count, the drive path and the start phases are taken at note-on.
+//   Velocity: amplitude (1 - s) + s v^2 (s = Vel sens). Glide: constant time, linear in semitones.
+//   Layer: level -60 .. +6 dB (-60 = Off), pan equal power with the centre at unity (as the unison spread), pitch = key + 12 Octave + Semi + Fine / 100 + bend.
+//   Notes: Poly = a note per key (the same key again re-triggers its own voice); at the voice limit the oldest released note goes, else the oldest
+//   held one, with a 3 ms fade (spare slots let it fade while the new note starts). Glide in Poly starts from the previous note while one is held.
+//   Mono = one voice, last-note priority, every new pitch re-triggers, glides whenever Glide > 0. Legato = one voice, no new attack while a key is
+//   held, glides only between held keys. Sustain pedal holds released notes. Every note reports its end once (CLAP note end).
+//   Parameter changes reach the voices at control rate. Unison count, the drive path and the start phases are taken at note-on.
 #pragma once
 #include "sw/oversample.hpp"
 #include "sw/param.hpp"
@@ -31,8 +37,14 @@
 
 namespace sw::in07 {
 
-enum ParamId { Wave, PulseWidth, Octave, Unison, Detune, Spread, FilterType, Cutoff, Resonance, Drive, FilterEnv, KeyTrack,
-               AmpA, AmpD, AmpS, AmpR, FenvA, FenvD, FenvS, FenvR, VelSens, Glide, Level, kNumParams };
+// host ids: the global parameters, then each layer's block (lp(layer, param))
+enum GlobalId { Voices, Mode, Glide, Bend, Level, kNumGlobal };
+enum LayerParam { On, LayerLevel, Pan, Wave, PulseWidth, Octave, Semi, Fine, Unison, Detune, Spread, FilterType, Cutoff, Resonance, Drive, FilterEnv,
+                  KeyTrack, AmpA, AmpD, AmpS, AmpR, FenvA, FenvD, FenvS, FenvR, VelSens, kLayerParams };
+constexpr int kLayers = 4;
+constexpr int kNumParams = kNumGlobal + kLayers * kLayerParams;
+constexpr int lp(int layer, int param) { return kNumGlobal + layer * kLayerParams + param; }
+enum ModeId { Poly = 0, Mono = 1, Legato = 2 };
 enum WaveId { Sine = 0, Triangle = 1, Saw = 2, Square = 3 };
 enum FilterTypeId { LP12 = 0, LP24 = 1, BP12 = 2, HP12 = 3 };
 
@@ -73,8 +85,9 @@ public:
     void prepare(double fs) { fs_ = fs; dirty_ = true; }
     void setTimes(double attackS, double decayS, double sustain, double releaseS);
     void gate(bool on);
+    void quickRelease(double seconds);   // a fast release (voice stealing): to -80 dB in `seconds`, whatever the Release time
     double next();
-    void reset() { stage_ = Idle; level_ = 0.0; }
+    void reset() { stage_ = Idle; level_ = 0.0; quick_ = false; }
     bool active() const { return stage_ != Idle; }
     Stage stage() const { return stage_; }
     double level() const { return level_; }
@@ -82,34 +95,49 @@ public:
 private:
     void update();
     double fs_ = 48000.0, a_ = 0.005, d_ = 0.3, s_ = 0.7, r_ = 0.4;
-    double ca_ = 0.0, cd_ = 0.0, cr_ = 0.0, sus_ = 0.7, level_ = 0.0;
-    int dN_ = 1, rN_ = 1, count_ = 0;
-    bool dirty_ = true;
+    double ca_ = 0.0, cd_ = 0.0, cr_ = 0.0, cq_ = 0.0, sus_ = 0.7, level_ = 0.0;
+    int dN_ = 1, rN_ = 1, qN_ = 1, count_ = 0;
+    bool dirty_ = true, quick_ = false;
     Stage stage_ = Idle;
 };
 
+// what every voice reads from the synth
+struct Shared {
+    double bendSemis = 0.0;   // pitch bend now (semitones)
+    double glideMs = 0.0;
+};
+
+// one layer of one note
 class Voice {
 public:
     static constexpr int kMaxUnison = 8;
     static constexpr int kCtl = 32;   // control-rate period (samples)
 
-    void prepare(double fs, const std::array<double, kNumParams>* params);
-    void noteOn(int note, double velocity, bool glide);
+    void prepare(double fs, const double* layerParams, const Shared* shared);
+    // glideFrom: the key to glide from (a negative value = no glide); the time is Shared::glideMs
+    void noteOn(int key, double velocity, double glideFrom);
+    void legato(int key, double glideFrom);   // a new key, no new attack
     void noteOff();
-    void render(float* l, float* r, int n);   // adds into l and r
+    void kill();                               // a 3 ms fade (stealing, a layer turned off)
+    void reset();                              // silent at once
+    void render(float* l, float* r, int n);    // adds into l and r
     bool active() const { return amp_.active(); }
+    bool killed() const { return killed_; }
     double cutoffInUse() const { return cutoff_; }
-    double frequency() const;                  // the pitch in use (Hz)
-    int note() const { return note_; }
+    double frequency() const;                  // the pitch in use (Hz), with the layer offsets and the bend
+    double keyInUse() const { return key_; }   // the (gliding) key, without the layer offsets
+    int key() const { return note_; }
     const Adsr& ampEnv() const { return amp_; }
 
 private:
     void control();
-    double p(int id) const { return (*params_)[static_cast<size_t>(id)]; }
-    const std::array<double, kNumParams>* params_ = nullptr;
-    double fs_ = 48000.0, pitch_ = 60.0, glideFrom_ = 60.0, velGain_ = 1.0, cutoff_ = 2400.0, drive_ = 0.0;
+    double p(int id) const { return lp_[id]; }
+    const double* lp_ = nullptr;
+    const Shared* sh_ = nullptr;
+    double fs_ = 48000.0, key_ = 60.0, glideFrom_ = 60.0, velGain_ = 1.0, cutoff_ = 2400.0, drive_ = 0.0, pitch_ = 60.0;
+    double gL_ = 1.0, gR_ = 1.0, gL0_ = 1.0, gR0_ = 1.0;   // the layer's level and pan, ramped over each control period
     int note_ = 60, unison_ = 1, ctl_ = 0, glideN_ = 0, glideLeft_ = 0, type_ = LP24;
-    bool oversample_ = false, first_ = true, stereo_ = false;
+    bool oversample_ = false, first_ = true, stereo_ = false, killed_ = false;
     uint32_t rng_ = 0x5EED1234u;
     std::array<BlepOsc, kMaxUnison> osc_;
     std::array<double, kMaxUnison> detune_{}, gl_{}, gr_{};
@@ -118,29 +146,64 @@ private:
     Adsr amp_, fenv_;
 };
 
-// monophonic shell for tests and listening (last-note priority); polyphony comes with the voice allocator
 class Processor {
 public:
+    static constexpr int kMaxVoices = 32;               // the top of the Voices parameter
+    static constexpr int kSlots = kMaxVoices + 8;       // spare slots: a stolen note fades out while the new one starts
+
     Processor();
     void prepare(double sampleRate, int maxBlock);
     void setParam(int id, double plainValue);
+    double param(int id) const { return (id >= 0 && id < kNumParams) ? target_[static_cast<size_t>(id)] : 0.0; }
     void snapToTargets() {}
-    void noteOn(int note, double velocity);    // velocity 0..1
-    void noteOff(int note);
-    void allNotesOff();
-    void process(float** ch, int numCh, int n);   // writes (replaces) the output
+    // velocity 0..1; channel and noteId are only carried to the end report (CLAP); channel -1 / key -1 in noteOff = any
+    void noteOn(int key, double velocity, int channel = 0, int noteId = -1);
+    void noteOff(int key, int channel = -1);
+    void choke(int key, int channel = -1);              // stop at once (3 ms)
+    void pitchBend(double v);                           // -1 .. +1 of the bend range
+    void sustain(bool down);
+    void allNotesOff();                                 // release everything (the pedal is lifted too)
+    void allSoundOff();                                 // silent at once
+    void process(float** ch, int numCh, int n);         // writes (replaces) the output
     int latencySamples() const { return 0; }
-    bool active() const { return voice_.active(); }
-    const Voice& voice() const { return voice_; }
+    bool active() const;                                // anything sounding
+    int notes() const;                                  // notes sounding, without the ones fading after a steal
+    const Voice* find(int key, int layer = 0) const;    // the sounding (not fading) voice of a key on a layer, or null
+    bool takeEnded(int& key, int& channel, int& noteId); // notes whose sound has ended, oldest first
 
 private:
-    double fs_ = 48000.0, lastVel_ = 1.0;
-    bool prepared_ = false;
+    struct Slot {
+        std::array<Voice, kLayers> v;
+        int key = -1, channel = 0, noteId = -1;
+        bool held = false, sustained = false, stolen = false;
+        uint64_t age = 0;
+        bool sounding() const;
+    };
+    void start(Slot& s, int key, double vel, int channel, int noteId, double glideFrom);
+    void release(Slot& s);
+    void end(Slot& s);                                  // report the note's end
+    Slot* allocate();
+    void pushEnded(int key, int channel, int noteId);
+    void monoOn(int key, double vel, int channel, int noteId);
+    void monoOff(int key);
+    double p(int id) const { return target_[static_cast<size_t>(id)]; }
+
+    double fs_ = 48000.0, lastVel_ = 1.0, bend_ = 0.0, lastKey_ = -1.0;
+    bool prepared_ = false, pedal_ = false;
+    uint64_t clock_ = 0;
+    int mode_ = Poly;
     std::array<double, kNumParams> target_{};
-    std::vector<int> held_;
+    std::array<bool, kLayers> layerOn_{};
+    Shared shared_;
+    std::array<Slot, kSlots> slots_;
+    std::vector<int> held_;                             // mono / legato: the keys held, in order
+    int monoSlot_ = -1;
+    struct Ended { int key, channel, noteId; };
+    static constexpr size_t kEnded = 256;
+    std::array<Ended, kEnded> ended_{};
+    size_t endHead_ = 0, endTail_ = 0;
     std::vector<float> l_, r_;
     LinearSmoother level_;
-    Voice voice_;
 };
 
 }  // namespace sw::in07

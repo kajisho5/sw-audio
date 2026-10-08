@@ -1,6 +1,6 @@
-// IN07 engine prototype: render listening demos and measure the cost of one voice on this machine.
+// IN07 engine: render listening demos and measure the cost of one voice (and a chord) on this machine.
 //   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/in07.cpp -o build/in07_render && build/in07_render build/in07
-// Writes demo_lead.wav, demo_bass.wav (dry, one voice, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
+// Writes demo_lead.wav, demo_bass.wav, demo_pad.wav (dry, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
 // and prints the time per sample of one voice in four set-ups. The numbers are this machine's, not a design estimate.
 #include "in07/in07.hpp"
 #include <algorithm>
@@ -71,15 +71,15 @@ void seq(std::vector<Ev>& ev, const std::vector<int>& notes, double start, doubl
 }
 
 void leadPatch(Processor& p) {
-    p.setParam(Wave, Saw); p.setParam(Unison, 8); p.setParam(Detune, 25); p.setParam(Spread, 85);
-    p.setParam(FilterType, LP24); p.setParam(Cutoff, 2400); p.setParam(Resonance, 30); p.setParam(Drive, 18);
-    p.setParam(FilterEnv, 40); p.setParam(KeyTrack, 50);
-    p.setParam(AmpA, 5); p.setParam(AmpD, 320); p.setParam(AmpS, 70); p.setParam(AmpR, 420);
-    p.setParam(FenvA, 2); p.setParam(FenvD, 600); p.setParam(FenvS, 20); p.setParam(FenvR, 500);
-    p.setParam(VelSens, 50); p.setParam(Glide, 0); p.setParam(Level, -6);
+    p.setParam(lp(0, Wave), Saw); p.setParam(lp(0, Unison), 8); p.setParam(lp(0, Detune), 25); p.setParam(lp(0, Spread), 85);
+    p.setParam(lp(0, FilterType), LP24); p.setParam(lp(0, Cutoff), 2400); p.setParam(lp(0, Resonance), 30); p.setParam(lp(0, Drive), 18);
+    p.setParam(lp(0, FilterEnv), 40); p.setParam(lp(0, KeyTrack), 50);
+    p.setParam(lp(0, AmpA), 5); p.setParam(lp(0, AmpD), 320); p.setParam(lp(0, AmpS), 70); p.setParam(lp(0, AmpR), 420);
+    p.setParam(lp(0, FenvA), 2); p.setParam(lp(0, FenvD), 600); p.setParam(lp(0, FenvS), 20); p.setParam(lp(0, FenvR), 500);
+    p.setParam(lp(0, VelSens), 50); p.setParam(Glide, 0); p.setParam(Level, -6);
 }
 
-double benchNsPerSample(Processor& p, bool hold) {
+double benchNsPerSample(Processor& p, bool hold, int chord = 1) {
     const int seconds = 20, block = 256;
     std::vector<float> l(block), r(block);
     float* c[2] = {l.data(), r.data()};
@@ -87,7 +87,7 @@ double benchNsPerSample(Processor& p, bool hold) {
     for (int rep = 0; rep < 3; ++rep) {
         p.allNotesOff();
         for (int i = 0; i < 200; ++i) p.process(c, 2, block);   // let a previous note sleep
-        if (hold) p.noteOn(57, 0.9);
+        if (hold) for (int k = 0; k < chord; ++k) p.noteOn(57 + 3 * k, 0.9);
         const auto t0 = std::chrono::steady_clock::now();
         const int blocks = static_cast<int>(seconds * kFs / block);
         volatile float sink = 0.0f;
@@ -117,12 +117,12 @@ int main(int argc, char** argv) {
     }
     {   // bass: a 16th-note pluck, octave jumps, same chords
         Processor p; p.prepare(kFs, 256);
-        p.setParam(Wave, Square); p.setParam(PulseWidth, 35); p.setParam(Unison, 1);
-        p.setParam(FilterType, LP24); p.setParam(Cutoff, 180); p.setParam(Resonance, 45); p.setParam(Drive, 30);
-        p.setParam(FilterEnv, 75); p.setParam(KeyTrack, 30);
-        p.setParam(AmpA, 1); p.setParam(AmpD, 300); p.setParam(AmpS, 40); p.setParam(AmpR, 80);
-        p.setParam(FenvA, 1); p.setParam(FenvD, 160); p.setParam(FenvS, 0); p.setParam(FenvR, 100);
-        p.setParam(VelSens, 60); p.setParam(Level, -6);
+        p.setParam(lp(0, Wave), Square); p.setParam(lp(0, PulseWidth), 35); p.setParam(lp(0, Unison), 1);
+        p.setParam(lp(0, FilterType), LP24); p.setParam(lp(0, Cutoff), 180); p.setParam(lp(0, Resonance), 45); p.setParam(lp(0, Drive), 30);
+        p.setParam(lp(0, FilterEnv), 75); p.setParam(lp(0, KeyTrack), 30);
+        p.setParam(lp(0, AmpA), 1); p.setParam(lp(0, AmpD), 300); p.setParam(lp(0, AmpS), 40); p.setParam(lp(0, AmpR), 80);
+        p.setParam(lp(0, FenvA), 1); p.setParam(lp(0, FenvD), 160); p.setParam(lp(0, FenvS), 0); p.setParam(lp(0, FenvR), 100);
+        p.setParam(lp(0, VelSens), 60); p.setParam(Level, -6);
         const double step = 60.0 / 138.0 / 4.0;
         std::vector<int> notes;
         for (int root : {33, 29, 36, 31, 33, 29, 36, 31})
@@ -134,6 +134,21 @@ int main(int argc, char** argv) {
         }
         play(p, ev, 0.25 + notes.size() * step + 0.6, l, r);
         writeWav(dir + "/demo_bass.wav", l, r, -1.0);
+    }
+    {   // pad: two layers (L1 detuned saws, L2 a square an octave down panned against it), four-note chords, 8 bars
+        Processor p; p.prepare(kFs, 256); leadPatch(p);
+        p.setParam(lp(0, Cutoff), 1400); p.setParam(lp(0, AmpA), 400); p.setParam(lp(0, AmpR), 1800); p.setParam(lp(0, FilterEnv), 25);
+        p.setParam(lp(0, Pan), -25);
+        p.setParam(lp(1, On), 1); p.setParam(lp(1, Wave), Square); p.setParam(lp(1, PulseWidth), 30); p.setParam(lp(1, Octave), -1);
+        p.setParam(lp(1, Unison), 2); p.setParam(lp(1, Detune), 10); p.setParam(lp(1, Cutoff), 700); p.setParam(lp(1, Resonance), 20);
+        p.setParam(lp(1, AmpA), 600); p.setParam(lp(1, AmpR), 2000); p.setParam(lp(1, LayerLevel), -6); p.setParam(lp(1, Pan), 25);
+        const double bar = 60.0 / 90.0 * 4.0;
+        const std::vector<std::vector<int>> chords = {{57, 60, 64, 67}, {53, 57, 60, 64}, {48, 55, 60, 64}, {55, 59, 62, 67}};
+        std::vector<Ev> ev;
+        for (int b = 0; b < 8; ++b)
+            for (int k : chords[static_cast<size_t>(b % 4)]) { const double t = 0.25 + b * bar; ev.push_back({t, k, true, 0.8}); ev.push_back({t + bar * 0.95, k, false, 0.0}); }
+        play(p, ev, 0.25 + 8 * bar + 2.5, l, r);
+        writeWav(dir + "/demo_pad.wav", l, r, -1.0);
     }
     for (int correct = 0; correct < 2; ++correct) {   // saw sweep 100 Hz -> 10 kHz over 8 s, exponential
         BlepOsc o; o.setWave(Saw); o.setCorrection(correct == 1);
@@ -153,10 +168,20 @@ int main(int argc, char** argv) {
     std::printf("one voice, 48 kHz, blocks of 256 (best of 3 x 20 s):\n");
     for (const auto& s : setups) {
         Processor p; p.prepare(kFs, 256); leadPatch(p);
-        p.setParam(Unison, s.unison); p.setParam(FilterType, s.type); p.setParam(Drive, s.drive); p.setParam(Spread, s.spread);
-        p.setParam(AmpS, 100);
+        p.setParam(lp(0, Unison), s.unison); p.setParam(lp(0, FilterType), s.type); p.setParam(lp(0, Drive), s.drive); p.setParam(lp(0, Spread), s.spread);
+        p.setParam(lp(0, AmpS), 100);
         const double ns = benchNsPerSample(p, s.hold);
         std::printf("  %s  %7.1f ns/sample  = %6.3f %% of one core in real time\n", s.name, ns, ns * kFs / 1e9 * 100.0);
+    }
+    {   // a chord of 8 notes on L1 (saw x8 stereo, LP24, Drive 18) and the same with all four layers on
+        Processor p; p.prepare(kFs, 256); leadPatch(p); p.setParam(lp(0, AmpS), 100);
+        std::printf("  8 notes, L1 only (saw x8 stereo, LP24, Drive 18)  %7.1f ns/sample\n", benchNsPerSample(p, true, 8));
+        for (int l = 1; l < kLayers; ++l) {
+            p.setParam(lp(l, On), 1);
+            for (int id = LayerLevel; id < kLayerParams; ++id) p.setParam(lp(l, id), p.param(lp(0, id)));
+        }
+        const double ns = benchNsPerSample(p, true, 8);
+        std::printf("  8 notes, 4 layers alike                          %7.1f ns/sample  = %6.3f %% of one core in real time\n", ns, ns * kFs / 1e9 * 100.0);
     }
     return 0;
 }

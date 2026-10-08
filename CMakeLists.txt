@@ -39,7 +39,7 @@ foreach(code IN LISTS SW_PRODUCTS)
     target_include_directories(sw-${code} PUBLIC products)
     target_link_libraries(sw-${code} PUBLIC sw-core)
 endforeach()
-# instruments in progress: the DSP only, no plug-in yet (IN07, added 2026-10-08)
+# instruments (IN07 SWINGBY, added 2026-10-08): no design-canvas screen yet, so they stay out of SW_PRODUCTS (the skins)
 set(SW_ENGINES in07)
 foreach(code IN LISTS SW_ENGINES)
     add_library(sw-${code} STATIC products/${code}/${code}.cpp)
@@ -132,9 +132,13 @@ if (SW_BUILD_PLUGINS)
     set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES TRUE CACHE BOOL "" FORCE)  # VST3 SDK / AudioUnit SDK
     FetchContent_MakeAvailable(clap-wrapper)
 
-    # sw_add_plugin(<code> <display name> <AU subtype 4cc> [aufx|aumf])
+    # sw_add_plugin(<code> <display name> <AU subtype 4cc> [aufx|aumu]): aumu = an instrument (notes in, no audio in)
     function(sw_add_plugin code name ausub)
         set(SW_CODE ${code})
+        set(autype aufx)
+        if (ARGC GREATER 3)
+            set(autype ${ARGV3})
+        endif()
         configure_file(${CMAKE_SOURCE_DIR}/plugin/clap/entry.cpp.in ${CMAKE_BINARY_DIR}/entry/${code}_entry.cpp @ONLY)
         add_library(sw-${code}-impl STATIC plugin/clap/${code}_clap.cpp)
         target_link_libraries(sw-${code}-impl PUBLIC sw-${code} clap sw-gui-view)
@@ -160,7 +164,7 @@ if (SW_BUILD_PLUGINS)
             AUV2_MANUFACTURER_NAME "SEVENTHWELL"
             AUV2_MANUFACTURER_CODE "SvWl"
             AUV2_SUBTYPE_CODE "${ausub}"
-            AUV2_INSTRUMENT_TYPE "aufx"
+            AUV2_INSTRUMENT_TYPE "${autype}"
         )
     endfunction()
 
@@ -297,4 +301,5 @@ if (SW_BUILD_PLUGINS)
     sw_add_plugin(lv29 "SW LV29 Interp Mix" Lv29)
     sw_add_plugin(lv30 "SW LV30 Recorder" Lv30)
     sw_add_plugin(gt03 "SW GT03 Pedalboard" Gt03)
+    sw_add_plugin(in07 "SW IN07 SWINGBY" In07 aumu)   # an instrument: plugin/clap/instrument_adapter.hpp
 endif()

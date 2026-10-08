@@ -108,9 +108,10 @@ jobs:
           mkdir -p ~/Library/Audio/Plug-Ins/Components
           find build -maxdepth 4 -name "*.component" -not -path "*/cpm/*" -exec cp -R {} ~/Library/Audio/Plug-Ins/Components/ \;
           killall -9 AudioComponentRegistrar || true
-          for SUB in $(auval -a | awk '$3 == "SvWl" {print $2}'); do
-            echo "== auval aufx $SUB SvWl"
-            auval -v aufx "$SUB" SvWl || exit 1
+          # effects are aufx, the instruments (IN07) aumu: take the type from the listing
+          auval -a | awk '$3 == "SvWl" {print $1, $2}' | while read -r TYPE SUB; do
+            echo "== auval $TYPE $SUB SvWl"
+            auval -v "$TYPE" "$SUB" SvWl || exit 1
           done
 
       - name: Collect plugins
