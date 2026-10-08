@@ -98,8 +98,11 @@ jobs:
             echo "== validating $CLAP"
             # preset-discovery-crawl/-load are left out: clap-validator (0.4.1 and its master) deadlocks in its own metadata receiver at the
             # second preset of a container (begin_preset holds the result lock while flush_preset takes it again; see README "IN07 のユーザープリセット").
-            # tools/clap_note_host.cpp indexes and loads the presets instead.
-            "cv/$CV" validate -x "preset-discovery-(crawl|load)" "$CLAP" || exit 1
+            # On Windows every preset-discovery test is left out: the validator wants a file location to start with '/' ("/C:\..."), which is
+            # not a Windows path (CLAP: a path that works with the OS file functions). tools/clap_note_host.cpp indexes and loads the presets instead.
+            X="preset-discovery-(crawl|load)"
+            if [ "$RUNNER_OS" = "Windows" ]; then X="preset-discovery"; fi
+            "cv/$CV" validate -x "$X" "$CLAP" || exit 1
           done
 
       - name: Instrument host checks (notes, states, preset browser)
