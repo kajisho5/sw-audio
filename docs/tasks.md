@@ -140,7 +140,7 @@
 - [ ] IN04 Bass — Slides and ghost notes from MIDI velocity （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN05 Organ — Drawbar settings morph with an expression pedal （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN06 Sampler — Auto maps slices to keys by transient （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
-- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：1 ボイスのエンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド）とテスト。残り：ボイス割り当て（ポリ）・レイヤー 4・LFO・変調マトリクス・マクロ・ARP・トランスゲート・FX・ウェーブテーブル／FM／サンプル・プリセット・プラグイン層（CLAP の音符入力）・画面（A 案 Orbital、名前・ロゴタイプは決定済み。動きの設定 MOTION 60／30／OFF を利用者の画面設定として保存）・商標の確認。README「開発中の楽器」
+- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：1 ボイスのエンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド）とテスト。残り：ボイス割り当て（ポリ）・レイヤー 4・LFO・変調マトリクス・マクロ・ARP・トランスゲート・FX・ウェーブテーブル／FM／サンプル・プリセット・プラグイン層（CLAP の音符入力）・画面の実装（デザインは `docs/design/in07/` の 6 画面＋星系ビュー部品で済み。名前・ロゴタイプ決定済み。動きの設定 MOTION 60／30／OFF を利用者の画面設定として保存）・商標の確認。README「開発中の楽器」
 
 ### MT
 - [x] MT01 Loudness — Loudness presets for Japanese broadcast and streaming

@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SWINGBY orbit view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 820px; height: 740px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{pal.text}}; transform: scale({{scale}}); transform-origin: 0 0;">
+  <svg viewBox="0 0 820 740" width="820" height="740" role="img" aria-label="{{aria}}" style="position: absolute; left: 0; top: 0; display: block;">
+    <defs>
+      <radialGradient id="obHalo" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="{{pal.halo}}" stop-opacity=".34"></stop><stop offset=".5" stop-color="{{pal.halo}}" stop-opacity=".09"></stop><stop offset="1" stop-color="{{pal.halo}}" stop-opacity="0"></stop></radialGradient>
+      <radialGradient id="obGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="{{pal.trail}}" stop-opacity=".55"></stop><stop offset="1" stop-color="{{pal.trail}}" stop-opacity="0"></stop></radialGradient>
+    </defs>
+    <sc-if value="{{arp.on}}" hint-placeholder-val="{{true}}">
+      <circle cx="410" cy="360" r="338" fill="none" stroke="{{pal.orbit}}" stroke-opacity=".14" stroke-width="1"></circle>
+      <sc-for list="{{arp.ticks}}" as="k" hint-placeholder-count="16">
+        <path d="{{k.d}}" stroke="{{k.ink}}" stroke-opacity="{{k.op}}" stroke-width="{{k.w}}" stroke-linecap="round"></path>
+      </sc-for>
+      <circle cx="{{arp.x}}" cy="{{arp.y}}" r="16" fill="url(#obGlow)"></circle>
+      <circle cx="{{arp.x}}" cy="{{arp.y}}" r="5" fill="{{pal.spark}}"></circle>
+    </sc-if>
+    <sc-if value="{{gate.on}}" hint-placeholder-val="{{false}}">
+      <sc-for list="{{gate.arcs}}" as="g" hint-placeholder-count="16">
+        <path d="{{g.d}}" fill="none" stroke="{{g.ink}}" stroke-opacity="{{g.op}}" stroke-width="6" stroke-linecap="butt"></path>
+      </sc-for>
+    </sc-if>
+    <sc-for list="{{orbits}}" as="o" hint-placeholder-count="4">
+      <ellipse cx="410" cy="360" rx="{{o.a}}" ry="{{o.b}}" transform="{{o.tf}}" fill="none" stroke="{{pal.orbit}}" stroke-opacity="{{o.op}}" stroke-width="{{o.w}}"></ellipse>
+    </sc-for>
+    <ellipse cx="{{lfo.cx}}" cy="{{lfo.cy}}" rx="{{lfo.a}}" ry="{{lfo.b}}" transform="{{lfo.tf}}" fill="none" stroke="{{pal.trail}}" stroke-opacity=".32" stroke-width="1" stroke-dasharray="3 5"></ellipse>
+    <sc-for list="{{back}}" as="d" hint-placeholder-count="20">
+      <circle cx="{{d.x}}" cy="{{d.y}}" r="{{d.r}}" fill="{{d.fill}}" fill-opacity="{{d.op}}"></circle>
+    </sc-for>
+    <circle cx="{{halo.x}}" cy="{{halo.y}}" r="{{halo.r}}" fill="url(#obHalo)" opacity="{{halo.op}}"></circle>
+    <circle cx="{{halo.x}}" cy="{{halo.y}}" r="{{reso.r}}" fill="none" stroke="{{pal.reso}}" stroke-opacity="{{reso.op}}" stroke-width="{{reso.w}}"></circle>
+    <sc-for list="{{sparks}}" as="s" hint-placeholder-count="8">
+      <circle cx="{{s.x}}" cy="{{s.y}}" r="{{s.r}}" fill="{{pal.spark}}" fill-opacity="{{s.op}}"></circle>
+    </sc-for>
+  </svg>
+  <sc-for list="{{backBodies}}" as="b" hint-placeholder-count="2">
+    <div style="position: absolute; left: 0; top: 0; width: {{b.s}}px; height: {{b.s}}px; overflow: hidden; opacity: {{b.op}}; transform: translate3d({{b.left}}px, {{b.top}}px, 0); will-change: transform;">
+      <img src="{{b.src}}" alt="" style="display: block; max-width: none; width: {{b.bw}}px; height: {{b.bh}}px; transform: translate3d({{b.bx}}px, {{b.by}}px, 0); will-change: transform;">
+    </div>
+  </sc-for>
+  <sc-if value="{{core.on}}" hint-placeholder-val="{{true}}">
+    <img src="{{core.src}}" alt="" style="position: absolute; left: {{core.left}}px; top: {{core.top}}px; width: {{core.s}}px; height: {{core.s}}px; display: block; transform: scale({{core.k}}); will-change: transform;">
+  </sc-if>
+  <sc-for list="{{midBodies}}" as="b" hint-placeholder-count="1">
+    <div style="position: absolute; left: 0; top: 0; width: {{b.s}}px; height: {{b.s}}px; overflow: hidden; opacity: {{b.op}}; transform: translate3d({{b.left}}px, {{b.top}}px, 0) scale({{b.k}}); will-change: transform;">
+      <img src="{{b.src}}" alt="" style="display: block; max-width: none; width: {{b.bw}}px; height: {{b.bh}}px; transform: translate3d({{b.bx}}px, {{b.by}}px, 0); will-change: transform;">
+    </div>
+  </sc-for>
+  <svg viewBox="0 0 820 740" width="820" height="740" aria-hidden="true" style="position: absolute; left: 0; top: 0; display: block; pointer-events: none;">
+    <sc-if value="{{wave.on}}" hint-placeholder-val="{{false}}">
+      <circle cx="{{halo.x}}" cy="{{halo.y}}" r="{{wave.r}}" fill="none" stroke="{{pal.wave}}" stroke-opacity="{{wave.op}}" stroke-width="1.5"></circle>
+    </sc-if>
+    <sc-for list="{{front}}" as="d" hint-placeholder-count="40">
+      <circle cx="{{d.x}}" cy="{{d.y}}" r="{{d.r}}" fill="{{d.fill}}" fill-opacity="{{d.op}}"></circle>
+    </sc-for>
+  </svg>
+  <sc-for list="{{frontBodies}}" as="b" hint-placeholder-count="3">
+    <div style="position: absolute; left: 0; top: 0; width: {{b.s}}px; height: {{b.s}}px; overflow: hidden; opacity: {{b.op}}; transform: translate3d({{b.left}}px, {{b.top}}px, 0); will-change: transform;">
+      <img src="{{b.src}}" alt="" style="display: block; max-width: none; width: {{b.bw}}px; height: {{b.bh}}px; transform: translate3d({{b.bx}}px, {{b.by}}px, 0); will-change: transform;">
+    </div>
+  </sc-for>
+  <svg viewBox="0 0 820 740" width="820" height="740" aria-hidden="true" style="position: absolute; left: 0; top: 0; display: block; pointer-events: none;">
+    <sc-for list="{{lines}}" as="g" hint-placeholder-count="0">
+      <path d="{{g.d}}" fill="none" stroke="{{g.ink}}" stroke-opacity="{{g.op}}" stroke-width="{{g.w}}" stroke-dasharray="{{g.dash}}" stroke-dashoffset="{{g.off}}" stroke-linecap="round"></path>
+      <circle cx="{{g.tx}}" cy="{{g.ty}}" r="3.5" fill="{{g.ink}}" fill-opacity="{{g.op}}"></circle>
+    </sc-for>
+    <sc-for list="{{sources}}" as="s" hint-placeholder-count="0">
+      <circle cx="{{s.x}}" cy="{{s.y}}" r="{{s.r}}" fill="none" stroke="{{s.ink}}" stroke-opacity="{{s.op}}" stroke-width="1.2"></circle>
+      <text x="{{s.x}}" y="{{s.ty}}" fill="{{s.ink}}" fill-opacity="{{s.op}}" font-family="Space Mono, monospace" font-size="9" text-anchor="middle">{{s.label}}</text>
+    </sc-for>
+    <sc-for list="{{labels}}" as="l" hint-placeholder-count="5">
+      <text x="{{l.x}}" y="{{l.y}}" fill="{{l.ink}}" font-family="Space Mono, monospace" font-size="{{l.size}}">{{l.text}}</text>
+    </sc-for>
+  </svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"values":{"editor":null},"layers":{"editor":null},"mods":{"editor":null},"arpSteps":{"editor":null},"gateSteps":{"editor":null},"focus":{"editor":"int","default":0,"min":-1,"max":3},"view":{"editor":"enum","default":"system","options":["system","close","arp","mod"]},"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"motion":{"editor":"enum","default":"60","options":["60","30","off"]},"arpOn":{"editor":"boolean","default":true},"gateOn":{"editor":"boolean","default":false},"noteKey":{"editor":null},"scale":{"editor":"float","default":1,"min":0.3,"max":1.5,"step":0.01},"$preview":{"width":820,"height":740}}'>
+class Component extends DCLogic {
+  // The live orbit view of SWINGBY, shared by the screens (dc-import). Its own loop: motion '60' = every display frame,
+  // '30' = 30 frames a second, 'off' = a still picture (no frames at all; a new prop still redraws it).
+  // view: 'system' (the core and the four layer worlds), 'close' (one layer world close up), 'arp' (rhythm rings), 'mod' (gravity lines).
+  componentDidMount() {
+    var self = this;
+    this._alive = true; this._last = 0; this._raf = 0;
+    var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._motion = this.props.motion || (reduce ? 'off' : '60');
+    this._tick = function (ts) {
+      self._raf = 0;
+      if (!self._alive || self._motion === 'off') return;
+      var hidden = typeof document !== 'undefined' && document.hidden;
+      if (!hidden && (self._motion === '60' || ts - self._last >= 1000 / 30 - 4)) { self._last = ts; self.setState({ t: ts / 1000 }); }
+      self._raf = requestAnimationFrame(self._tick);
+    };
+    if (this._motion !== 'off') this._raf = requestAnimationFrame(this._tick);
+    else this.setState({ t: 0 });
+  }
+  componentWillUnmount() { this._alive = false; if (this._raf) cancelAnimationFrame(this._raf); this._raf = 0; }
+  renderVals() {
+    var p = this.props || {}, self = this;
+    var t = (this.state && this.state.t) || 0, PI = Math.PI, cx = 410, cy = 360;
+    // follow the motion and note props (a parent changes them)
+    if (p.motion && p.motion !== this._motion) {
+      this._motion = p.motion;
+      if (p.motion !== 'off' && this._alive && !this._raf && this._tick) this._raf = requestAnimationFrame(this._tick);
+    }
+    if (p.noteKey !== undefined && p.noteKey !== this._nk) { if (this._nk !== undefined) this._noteT = t; this._nk = p.noteKey; }
+    var v = Object.assign({ cutoff: 2400, res: 30, unison: 8, detune: 22, lfoRate: 0.8, lfoDepth: 35, drive: 18, release: 420, bpm: 138 }, p.values || {});
+    var layers = p.layers || [
+      { name: 'L1 SAW TABLE', kind: 'ring', lvl: 0.82, on: true }, { name: 'L2 SUB SINE', kind: 'pearl', lvl: 0.64, on: true },
+      { name: 'L3 AIR NOISE', kind: 'crater', lvl: 0.30, on: true }, { name: 'L4 BELL SHIMMER', kind: 'crystal', lvl: 0.45, on: true }
+    ];
+    var view = p.view || 'system', focus = p.focus === undefined || p.focus === null ? 0 : Number(p.focus);
+    var light = p.theme === 'light', scale = p.scale ? parseFloat(p.scale) : 1;
+    var pal = light
+      ? { text: '#1b2622', orbit: '#178a64', trail: '#22a87c', label: '#0b5a41', dim: '#6b8a80', halo: '#22a87c', reso: '#0b5a41', spark: '#178a64', wave: '#178a64', tick: '#178a64', cur: '#0b5a41', glowOp: 0.10 }
+      : { text: '#e8e8e8', orbit: '#3fd1a0', trail: '#8de0c3', label: '#8de0c3', dim: '#5c7a70', halo: '#3fd1a0', reso: '#8de0c3', spark: '#e8fff6', wave: '#bff3df', tick: '#3fd1a0', cur: '#e8fff6', glowOp: 0.14 };
+    var f1 = function (x) { return Math.round(x * 10) / 10; }, f2 = function (x) { return Math.round(x * 100) / 100; };
+    var hash = function (n) { var x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    var clamp = function (x, a, b) { return Math.max(a, Math.min(b, x)); };
+
+    var c01 = clamp(Math.log(v.cutoff / 20) / Math.log(1000), 0, 1), res01 = clamp(v.res / 100, 0, 1), det01 = clamp(v.detune / 100, 0, 1);
+    var dep01 = clamp(v.lfoDepth / 100, 0, 1), drv01 = clamp(v.drive / 100, 0, 1), rel01 = clamp(Math.log(v.release / 10) / Math.log(400), 0, 1);
+    var nT = this._noteT === undefined ? -10 : this._noteT, dn = t - nT, env = 0;
+    if (dn >= 0) env = dn < 0.02 ? dn / 0.02 : Math.exp(-(dn - 0.02) / Math.max(0.01, v.release / 1000 / 3));
+
+    // Blender sprite sheets: 96 frames of one turn, 12 columns (tools/blender/in07_orbital.py body + pack_sheet.py)
+    var SHEETS = {
+      ring: { src: '/_blob/3341631c227c8aade470dfec3d0d726a', n: 96, c: 12, k: 4.3 }, pearl: { src: '/_blob/bdd7922e58267cbdd1b4e838ee5b49ba', n: 96, c: 12, k: 2.4 },
+      crater: { src: '/_blob/aae5418aeadcff37bb3e2812abd80c04', n: 96, c: 12, k: 2.4 }, crystal: { src: '/_blob/639cefbbc92ef239b87a6de8ed15b861', n: 96, c: 12, k: 2.4 },
+      lfo: { src: '/_blob/ce81993733920666e278fda64e72b1a3', n: 1, c: 1, k: 2.4 }, bead: { src: '/_blob/5701416b5dde780df97efa7d7fc7d86a', n: 1, c: 1, k: 2.4 }
+    };
+    var backBodies = [], frontBodies = [], midBodies = [], back = [], front = [], labels = [];
+    var put = function (behind, d) { (behind ? back : front).push(d); };
+    var sprite = function (list, x, y, r, kind, turns, op) {
+      var sh = SHEETS[kind] || SHEETS.pearl, sz = sh.k * r, rows = Math.ceil(sh.n / sh.c);
+      var fr = sh.n > 1 ? Math.floor((((turns || 0) % 1) + 1) % 1 * sh.n) % sh.n : 0;
+      list.push({ left: f2(x - sz / 2), top: f2(y - sz / 2), s: f2(sz), src: sh.src, op: op === undefined ? 1 : f2(op), k: 1,
+        bw: f2(sz * sh.c), bh: f2(sz * rows), bx: f2(-(fr % sh.c) * sz), by: f2(-Math.floor(fr / sh.c) * sz) });
+    };
+    var spins = [0.12, 0.09, 0.07, 0.16], phs = [0.35, 2.55, 1.35, 3.0];
+    var dimAll = view === 'arp' ? 0.45 : (view === 'mod' ? 0.7 : 1);
+
+    // ---- centre: the core (system views) or the focused world (close view)
+    var close = view === 'close', fl = layers[clamp(focus, 0, layers.length - 1)] || layers[0];
+    var cR = close ? (fl.kind === 'ring' ? 52 : 64) : 64;
+    var haloR = close ? cR * 1.5 + 120 * c01 : 80 + 130 * c01;
+    var lfoA = close ? 250 : 104, lfoB = lfoA * (1 - 0.75 * dep01), lph = 2 * PI * Math.min(5, v.lfoRate * 0.5) * t, lfoVal = Math.sin(lph);
+    haloR += 30 * dep01 * lfoVal;
+    var lr = 24 * PI / 180, lx = lfoA * Math.cos(lph), ly = lfoB * Math.sin(lph);
+    var lfoPt = [cx + lx * Math.cos(lr) - ly * Math.sin(lr), cy + lx * Math.sin(lr) + ly * Math.cos(lr)];
+    var pulse = 0.5 + 0.5 * Math.sin(t * (2 + res01 * 12));
+    var jit = drv01 * 4;
+    var bodyPos = [];
+
+    var L = [
+      { a: 300, b: 86, tilt: -9, w: 0.10 }, { a: 240, b: 68, tilt: -6, w: 0.14 }, { a: 185, b: 52, tilt: -3, w: 0.19 }, { a: 130, b: 37, tilt: 0, w: 0.26 }
+    ];
+    var pt = function (o, th) {
+      var x = o.a * Math.cos(th), y = o.b * Math.sin(th), r = o.tilt * PI / 180;
+      return [cx + x * Math.cos(r) - y * Math.sin(r), cy + x * Math.sin(r) + y * Math.cos(r)];
+    };
+    var orbits = [];
+    var trailN = Math.round(3 + rel01 * 22);
+    var l1 = [cx, cy], l1behind = false;
+    if (!close) {
+      layers.forEach(function (ly, i) {
+        if (i > 3) return;
+        var o = L[i], th = phs[i] + o.w * 2 * PI * t, isF = i === focus, on = ly.on !== false;
+        var dimL = (on ? 1 : 0.35) * dimAll * (focus >= 0 && !isF && view === 'system' ? 0.75 : 1);
+        orbits.push({ a: o.a, b: o.b, tf: 'rotate(' + o.tilt + ' 410 360)', op: f2((0.18 + 0.3 * ly.lvl + (isF ? 0.25 : 0)) * dimAll), w: isF ? 1.8 : 1.1 });
+        if (on) for (var k = trailN; k >= 1; k--) {
+          var tt = th - k * 0.035, q = pt(o, tt);
+          put(Math.sin(tt) < 0, { x: f1(q[0]), y: f1(q[1]), r: f1(2.6 - 1.6 * k / trailN), fill: pal.trail, op: f2(0.6 * (1 - k / (trailN + 1)) * (0.4 + ly.lvl) * dimL) });
+        }
+        var p0 = pt(o, th), behind = Math.sin(th) < 0;
+        var x = p0[0] + jit * Math.sin(t * 37 + i * 1.7), y = p0[1] + jit * Math.cos(t * 29 + i * 2.3);
+        var size = 10 + 7 * ly.lvl, reach = ly.kind === 'ring' ? size * 2.05 : size;
+        put(behind, { x: f1(x), y: f1(y), r: f1(size * 2.4), fill: 'url(#obGlow)', op: f2(pal.glowOp * 5 * dimL) });   // a soft glow, not a flat disc
+        sprite(behind ? backBodies : frontBodies, x, y, size, ly.kind, spins[i] * t + phs[i] / (2 * PI), (behind ? 0.85 : 1) * dimL);
+        labels.push({ x: f1(x + reach + 6), y: f1(y - size - 4), text: ly.name, size: isF ? 11 : 10, ink: isF ? pal.cur : (behind ? pal.dim : pal.label) });
+        bodyPos.push([x, y]);
+        if (i === 0) { l1 = [x, y]; l1behind = behind; }
+      });
+    }
+
+    // unison moonlets: around L1 in the system views, around the world in the close view
+    var N = Math.round(clamp(v.unison, 1, 8)), mc = close ? [cx, cy] : l1;
+    var ru = close ? cR * 1.9 + det01 * 40 : 14 + det01 * 26 + 14, flat = close ? 0.42 : 0.55;
+    if (N > 1 || close) for (var u = 0; u < N; u++) {
+      var spread = N > 1 ? (u - (N - 1) / 2) / ((N - 1) / 2) : 0;
+      var ph = 2 * PI * u / N + t * (1.6 + det01 * 1.4 * spread) * (close ? 0.6 : 1);
+      var mbehind = close ? Math.sin(ph) < 0 : l1behind;
+      sprite(mbehind ? backBodies : frontBodies, mc[0] + ru * Math.cos(ph), mc[1] + ru * flat * Math.sin(ph), close ? 6 : 3.4, 'bead', 0, dimAll);
+    }
+    // the LFO moon
+    put(Math.sin(lph) < 0, { x: f1(lfoPt[0]), y: f1(lfoPt[1]), r: 16, fill: 'url(#obGlow)', op: f2((light ? 0.6 : 0.9) * dimAll) });
+    sprite(Math.sin(lph) < 0 ? backBodies : frontBodies, lfoPt[0], lfoPt[1], close ? 8 : 6, 'lfo', 0, dimAll);
+    labels.push({ x: f1(lfoPt[0] + 12), y: f1(lfoPt[1] + 17), text: 'LFO ' + Number(v.lfoRate).toFixed(2) + ' Hz', size: 10, ink: pal.label });
+
+    // the close-up world, turning (between the back and front layers)
+    if (close) {
+      var fi = clamp(focus, 0, 3);
+      sprite(midBodies, cx + jit * Math.sin(t * 37), cy + jit * Math.cos(t * 29), cR, fl.kind, spins[fi] * t, fl.on === false ? 0.4 : 1);
+      midBodies[0].k = Math.round((1 + 0.08 * env) * 1000) / 1000;
+      labels.push({ x: f1(cx - 150), y: f1(cy - haloR - 18), text: fl.name, size: 12, ink: pal.cur });
+    }
+
+    // drive: sparks near the centre, 0.6 s each, flying outward
+    var sparks = [], sn = Math.round(drv01 * 26), life = 0.6, sr0 = close ? cR + 8 : 70;
+    for (var s = 0; s < sn; s++) {
+      var uu = t / life + hash(s * 13 + 1), gen = Math.floor(uu), age = uu - gen;
+      var a = hash(gen * 31 + s * 7) * 2 * PI, rr = sr0 + (8 + hash(gen * 17 + s * 3) * 30) + age * 26;
+      sparks.push({ x: f2(cx + rr * Math.cos(a)), y: f2(cy + rr * Math.sin(a) * 0.8), r: f2((0.8 + hash(s * 11 + gen) * 1.4) * (1 - 0.5 * age)), op: f2((0.3 + 0.7 * hash(s + gen * 5)) * Math.sin(PI * age)) });
+    }
+
+    // arpeggiator ring (16 steps) and trance gate ring
+    var steps = p.arpSteps || [1, .4, .7, .4, .9, 0, .6, .4, 1, .4, .7, 0, .85, .4, .6, .3].map(function (x) { return { v: x }; });
+    // steps per beat: 4 = 1/16 (values.spb for the arpeggiator, values.gateSpb for the gate)
+    var bpm = v.bpm || 138, step = Math.floor(t * bpm / 60 * (v.spb || 4)) % 16, gstep = Math.floor(t * bpm / 60 * (v.gateSpb || 4)) % 16;
+    var big = view === 'arp';
+    var ticks = steps.map(function (st, i) {
+      var vv = typeof st === 'number' ? st : st.v, a = -PI / 2 + i * 2 * PI / 16, r0 = 338 - 4, r1 = 338 + 4 + vv * (big ? 22 : 12);
+      return { d: 'M' + f1(cx + r0 * Math.cos(a)) + ' ' + f1(cy + r0 * Math.sin(a)) + 'L' + f1(cx + r1 * Math.cos(a)) + ' ' + f1(cy + r1 * Math.sin(a)),
+        ink: i === step ? pal.cur : pal.tick, op: vv === 0 ? 0.15 : (i === step ? 1 : 0.55), w: big ? 3 : 2 };
+    });
+    var aa = -PI / 2 + step * 2 * PI / 16;
+    var gs = p.gateSteps || [1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1];
+    var arcs = gs.map(function (g, i) {
+      var a0 = -PI / 2 + (i + 0.08) * 2 * PI / 16, a1 = -PI / 2 + (i + 0.92) * 2 * PI / 16, r = 316;
+      return { d: 'M' + f1(cx + r * Math.cos(a0)) + ' ' + f1(cy + r * Math.sin(a0)) + 'A' + r + ' ' + r + ' 0 0 1 ' + f1(cx + r * Math.cos(a1)) + ' ' + f1(cy + r * Math.sin(a1)),
+        ink: i === gstep ? pal.cur : pal.tick, op: g ? (i === gstep ? 0.95 : 0.5) : 0.08 };
+    });
+
+    // modulation: gravity lines from each source to its target, bending toward the centre, flowing source -> target
+    var lines = [], sources = [];
+    if (view === 'mod') {
+      var srcPts = { lfo: lfoPt, env: [cx, cy] }, row = ['vel', 'mw', 'at', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
+      var names = { vel: 'VEL', mw: 'MW', at: 'AT', m1: 'M1', m2: 'M2', m3: 'M3', m4: 'M4', m5: 'M5', m6: 'M6', m7: 'M7', m8: 'M8' };
+      var used = {};
+      (p.mods || []).forEach(function (m) { if (m && m.on !== false) used[m.from] = true; });
+      row.forEach(function (k, i) {
+        srcPts[k] = [110 + i * 60, 708];
+        sources.push({ x: 110 + i * 60, y: 708, ty: 728, r: 6, label: names[k], ink: used[k] ? pal.cur : pal.dim, op: used[k] ? 0.95 : 0.5 });
+      });
+      var dstPts = { cutoff: [cx, cy - haloR], res: [cx + haloR * 0.9, cy], pitch: [cx, cy], drive: [cx, cy + 52], pan: [cx - 74, cy],
+        lforate: lfoPt, L1: bodyPos[0], L2: bodyPos[1], L3: bodyPos[2], L4: bodyPos[3] };
+      (p.mods || []).forEach(function (m, i) {
+        if (!m || m.on === false) return;
+        var a = srcPts[m.from], b = dstPts[m.to];
+        if (!a || !b) return;
+        var amt = clamp(Number(m.amt) || 0, -1, 1), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+        var qx = mx + (cx - mx) * 0.35, qy = my + (cy - my) * 0.35;
+        lines.push({ d: 'M' + f1(a[0]) + ' ' + f1(a[1]) + 'Q' + f1(qx) + ' ' + f1(qy) + ' ' + f1(b[0]) + ' ' + f1(b[1]),
+          ink: pal.cur, op: f2(0.3 + 0.6 * Math.abs(amt)), w: f2(1 + 2.4 * Math.abs(amt)), dash: amt < 0 ? '2 6' : '7 7',
+          off: f1(-((t * 36 * (amt < 0 ? -1 : 1)) % 56) - i * 5), tx: f1(b[0]), ty: f1(b[1]) });
+      });
+    }
+
+    var sz = 2.3 * 64;
+    return {
+      scale: scale, pal: pal,
+      aria: close ? 'Layer world close up: ' + fl.name : 'Orbit view: the core is the sound, orbits are layers, moons follow the values',
+      arp: { on: p.arpOn !== false && !close, ticks: ticks, x: f1(cx + 338 * Math.cos(aa)), y: f1(cy + 338 * Math.sin(aa)) },
+      gate: { on: !!p.gateOn && !close, arcs: arcs },
+      orbits: orbits,
+      lfo: { cx: 410, cy: 360, a: lfoA, b: f1(lfoB), tf: 'rotate(24 410 360)' },
+      back: back, front: front, labels: labels, sparks: sparks, lines: lines, sources: sources,
+      halo: { x: 410, y: 360, r: f1(Math.max(10, haloR)), op: f2((0.35 + 0.65 * c01) * (light ? 0.8 : 1)) },
+      reso: { r: f1(Math.max(8, haloR * 0.9)), op: f2(res01 * (0.25 + 0.75 * pulse)), w: f1(0.8 + res01 * 1.8) },
+      // the core has real alpha (no blend mode: a scaled parent isolates blending, and a black square showed on light screens):
+      // dark = the glowing render keyed by brightness, light = a render whose mist absorbs and scatters (tools/blender, mode coreday)
+      core: { on: !close, src: light ? '/_blob/141202212812cc9e70ffa3fb1c13d439' : '/_blob/90121e1a7bee5f359e51e024081e48ca', s: f1(sz), left: f1(410 - sz / 2), top: f1(360 - sz / 2), k: Math.round((1 + 0.16 * env) * 1000) / 1000 },
+      backBodies: backBodies, frontBodies: frontBodies, midBodies: midBodies,
+      wave: { on: dn >= 0 && dn < 1.5, r: f1((close ? cR + 4 : 66) + Math.max(0, dn) * 260), op: f2(Math.max(0, 0.6 * (1 - dn / 1.5))) }
+    };
+  }
+}
+</script>
+</body>
+</html>

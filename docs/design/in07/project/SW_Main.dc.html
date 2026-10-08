@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SWINGBY main screen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit;color:inherit;cursor:pointer;margin:0}
+a{text-decoration:none}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{c.text}}; background: {{c.bg}};">
+  <sc-if value="{{c.stars}}" hint-placeholder-val="{{true}}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 23% 82%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 37% 7%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 52% 92%, rgba(255,255,255,.35), rgba(0,0,0,0)), radial-gradient(1.2px 1.2px at 64% 6%, rgba(255,255,255,.5), rgba(0,0,0,0)), radial-gradient(1px 1px at 78% 77%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.5px 1.5px at 91% 21%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 51%, rgba(255,255,255,.35), rgba(0,0,0,0));"></div>
+  </sc-if>
+
+  <header style="position: absolute; left: 24px; right: 24px; top: 0; height: 56px; display: flex; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 10px; width: 300px;">
+      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: {{c.cat}};"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
+      <span style="font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; line-height: 14px; padding: 2px 6px; border-radius: 3px; background: #22a87c; color: #0c0c0d;">IN07</span>
+      <img src="{{c.logo}}" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
+    </div>
+    <nav aria-label="Screens" style="display: flex; align-items: center; gap: 4px;">
+      <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="5">
+        <a href="{{tb.href}}" aria-current="{{tb.current}}" style="height: 44px; min-width: 64px; padding: 0 12px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; letter-spacing: .3em; {{tb.look}}">{{tb.label}}</a>
+      </sc-for>
+    </nav>
+    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 300px;">
+      <div role="radiogroup" aria-label="Motion" style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">MOTION</span>
+        <div style="display: flex; border: 1px solid {{c.line2}}; border-radius: 13px; overflow: hidden;">
+          <sc-for list="{{motionOpts}}" as="m" hint-placeholder-count="3">
+            <button type="button" role="radio" aria-checked="{{m.on}}" title="{{m.title}}" onClick="{{m.pick}}" style="height: 26px; min-width: 40px; padding: 0 9px; border: none; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .06em; {{m.look}}">{{m.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: {{c.sub}};"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
+    </div>
+  </header>
+
+  <div style="position: absolute; left: 320px; width: 640px; top: 58px; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <button type="button" aria-label="Previous preset" onClick="{{prev}}" style="width: 44px; height: 44px; padding: 0; border: none; background: none; color: {{c.sub}};"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2.5 4.5 7 9 11.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+      <span style="font-family: Michroma, sans-serif; font-size: 17px; letter-spacing: .32em; color: {{c.strong}}; white-space: nowrap;">{{preset.upper}}</span>
+      <button type="button" aria-label="Next preset" onClick="{{next}}" style="width: 44px; height: 44px; padding: 0; border: none; background: none; color: {{c.sub}};"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2.5 9.5 7 5 11.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+    </div>
+    <span style="font-size: 11px; letter-spacing: .34em; color: {{c.sub}};">{{preset.cat}} · FACTORY · {{preset.no}}</span>
+  </div>
+
+  <div style="position: absolute; left: 320px; top: 112px; width: 640px; height: 577px; overflow: hidden;">
+    <dc-import name="Orbit" values="{{ov}}" layers="{{olayers}}" focus="{{focus}}" view="system" theme="{{theme}}" motion="{{motion}}" note-key="{{noteKey}}" arp-on="{{arpOn}}" scale="0.78" hint-size="640px,577px"></dc-import>
+  </div>
+
+  <aside aria-label="Presets" style="position: absolute; left: 24px; top: 112px; width: 248px; height: 560px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
+    <span style="font-size: 11px; letter-spacing: .34em; color: {{c.sub}};">CONSTELLATIONS</span>
+    <div role="radiogroup" aria-label="Category" style="display: flex; flex-wrap: wrap; gap: 2px;">
+      <sc-for list="{{cats}}" as="k" hint-placeholder-count="8">
+        <button type="button" role="radio" aria-checked="{{k.on}}" onClick="{{k.pick}}" style="height: 30px; padding: 0 8px; border: none; border-radius: 15px; font-size: 12px; letter-spacing: .16em; {{k.look}}">{{k.label}}</button>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-height: 0; overflow: auto;">
+      <sc-for list="{{list}}" as="r" hint-placeholder-count="8">
+        <button type="button" aria-pressed="{{r.on}}" onClick="{{r.pick}}" style="min-height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 10px; text-align: left; {{r.look}}"><span style="width: {{r.dot}}px; height: {{r.dot}}px; border-radius: 50%; flex-shrink: 0; background: {{r.dotInk}};"></span><span style="flex: 1; font-size: 16px; font-weight: {{r.weight}}; letter-spacing: .04em;">{{r.name}}</span><span style="font-family: 'Space Mono', monospace; font-size: 9px; color: {{c.sub}};">{{r.cat}}</span></button>
+      </sc-for>
+    </div>
+    <button type="button" title="Find presets that sound like the one playing (planned EVO feature)" style="height: 44px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid {{c.line2}}; border-radius: 22px; background: none; font-size: 12px; letter-spacing: .26em; color: {{c.text}};"><span style="font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .1em; color: {{c.acc}};">EVO</span>FIND SIMILAR</button>
+  </aside>
+
+  <aside aria-label="Selected orbit" style="position: absolute; right: 24px; top: 112px; width: 248px; height: 560px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 12px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
+    <span style="font-size: 11px; letter-spacing: .34em; color: {{c.sub}};">ORBITS</span>
+    <div role="radiogroup" aria-label="Layer" style="display: flex; flex-direction: column; gap: 4px;">
+      <sc-for list="{{chips}}" as="h" hint-placeholder-count="4">
+        <button type="button" role="radio" aria-checked="{{h.on}}" onClick="{{h.pick}}" style="height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 10px; text-align: left; {{h.look}}">
+          <span style="position: relative; width: {{h.th.s}}px; height: {{h.th.s}}px; overflow: hidden; flex-shrink: 0; margin: {{h.th.m}}px; opacity: {{h.op}};"><img src="{{h.th.src}}" alt="" style="display: block; max-width: none; width: {{h.th.bw}}px; height: {{h.th.bh}}px;"></span>
+          <span style="flex: 1; display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 14px; letter-spacing: .06em;">{{h.name}}</span><span style="position: relative; height: 2px; background: {{c.track}};"><span style="position: absolute; left: 0; top: 0; height: 2px; width: {{h.lvl}}%; background: {{c.acc}};"></span></span></span>
+          <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.sub}};">{{h.type}}</span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="height: 1px; background: {{c.line}};"></div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 11px; letter-spacing: .3em; color: {{c.sub}};">CUTOFF</span>
+      <span style="font-family: Michroma, sans-serif; font-size: 30px; line-height: 36px; color: {{c.strong}};">{{sel.cut}}<span style="font-size: 14px; color: {{c.sub}}; margin-left: 6px;">{{sel.cutUnit}}</span></span>
+      <span style="position: relative; height: 2px; margin-top: 6px; background: {{c.track}};"><span style="position: absolute; left: 0; top: 0; height: 2px; width: {{sel.cutPct}}%; background: {{c.acc}};"></span></span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+      <sc-for list="{{sel.grid}}" as="g" hint-placeholder-count="4">
+        <div style="display: flex; flex-direction: column; gap: 1px;"><span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">{{g.k}}</span><span style="font-family: Michroma, sans-serif; font-size: 16px; color: {{c.strong}};">{{g.v}}<span style="font-size: 10px; color: {{c.sub}};">{{g.u}}</span></span></div>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 11px; letter-spacing: .3em; color: {{c.sub}};">AMP ENVELOPE</span>
+      <svg viewBox="0 0 216 52" width="216" height="52" role="img" aria-label="{{sel.envAria}}" style="display: block;"><path d="M2 50H214" stroke="{{c.track}}" stroke-width="1"></path><path d="{{sel.env}}" fill="none" stroke="{{c.acc}}" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+      <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.sub}};">{{sel.envText}}</span>
+    </div>
+    <a href="SW_Layer.dc.html" style="margin-top: auto; height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid {{c.line2}}; border-radius: 22px; font-size: 12px; letter-spacing: .26em; color: {{c.text}};">EDIT LAYER<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg></a>
+  </aside>
+
+  <section aria-label="Macros" style="position: absolute; left: 200px; width: 880px; top: 694px; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr));">
+    <sc-for list="{{macros}}" as="k" hint-placeholder-count="8">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+        <div style="position: relative; width: 60px; height: 60px;">
+          <div aria-hidden="true" style="position: absolute; inset: 0; border-radius: 50%; border: 1px solid {{c.track}};"></div>
+          <div aria-hidden="true" style="position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 225deg, {{c.acc}} 0deg {{k.deg}}deg, rgba(0,0,0,0) {{k.deg}}deg 360deg); -webkit-mask: radial-gradient(farthest-side, rgba(0,0,0,0) calc(100% - 2px), #000 calc(100% - 1.5px)); mask: radial-gradient(farthest-side, rgba(0,0,0,0) calc(100% - 2px), #000 calc(100% - 1.5px));"></div>
+          <div aria-hidden="true" style="position: absolute; inset: 9px; border-radius: 50%; background: {{c.knob}}; display: flex; align-items: center; justify-content: center; font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}};">{{k.v}}</div>
+          <input type="range" min="0" max="100" step="1" value="{{k.v}}" onChange="{{k.change}}" aria-label="{{k.aria}}" style="position: absolute; inset: 0; width: 60px; height: 60px; margin: 0; opacity: 0; cursor: ew-resize;">
+        </div>
+        <span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">{{k.label}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <div style="position: absolute; left: 24px; right: 24px; bottom: 14px; height: 44px; display: flex; align-items: center; gap: 14px;">
+    <span style="width: 70px; font-size: 10px; letter-spacing: .3em; color: {{c.sub}};">RIBBON</span>
+    <button type="button" onClick="{{play}}" aria-label="Pitch ribbon: press to play a note" style="position: relative; flex: 1; height: 44px; padding: 0; border: none; background: none;">
+      <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 21px; height: 1px; background: linear-gradient(90deg, rgba(0,0,0,0), {{c.acc}} 10%, {{c.acc}} 90%, rgba(0,0,0,0)); opacity: .55;"></span>
+      <sc-for list="{{octaves}}" as="o" hint-placeholder-count="6">
+        <span aria-hidden="true" style="position: absolute; left: {{o.x}}%; top: 14px; width: 1px; height: 15px; background: {{c.track}};"></span>
+        <span aria-hidden="true" style="position: absolute; left: {{o.x}}%; top: 30px; margin-left: 4px; font-family: 'Space Mono', monospace; font-size: 9px; color: {{c.sub}};">{{o.label}}</span>
+      </sc-for>
+    </button>
+    <button type="button" aria-pressed="{{arpOn}}" onClick="{{toggleArp}}" style="width: 112px; height: 44px; border: 1px solid; border-radius: 22px; font-size: 12px; letter-spacing: .26em; {{arpLook}}">ARP {{arpState}}</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) this.setState({ motion: 'off' });
+  }
+  renderVals() {
+    var self = this, s = this.state || {};
+    var theme = this.props.theme === 'light' ? 'light' : 'dark', light = theme === 'light';
+    var c = light ? {
+      bg: 'linear-gradient(180deg, #f1f6f4 0, #e2ece8 55%, #d4e1dc 100%)', stars: false, text: '#1b2622', strong: '#101614', sub: '#4c5f58',
+      acc: '#0b5a41', cat: '#178a64', line: 'rgba(11,90,65,.14)', line2: 'rgba(11,90,65,.35)', track: 'rgba(11,90,65,.16)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.52) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.9), 8px 14px 30px rgba(40,70,60,.14)',
+      knob: 'radial-gradient(circle at 34% 28%, #ffffff, #e4ece9 75%)', sel: 'rgba(23,138,100,.12)', logo: '/_blob/702f4b752a177d6e1601ccac384e7886', ink: '#ffffff'
+    } : {
+      bg: 'radial-gradient(ellipse 60% 60% at 50% 46%, #0e1516 0, #070a0b 50%, #030405 100%)', stars: true, text: '#e8e8e8', strong: '#f2f2f2', sub: '#8e8e8e',
+      acc: '#8de0c3', cat: '#3fd1a0', line: 'rgba(141,224,195,.14)', line2: 'rgba(141,224,195,.35)', track: 'rgba(255,255,255,.12)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45)',
+      knob: 'radial-gradient(circle at 34% 28%, rgba(141,224,195,.16), rgba(255,255,255,.02) 70%)', sel: 'rgba(63,209,160,.10)', logo: '/_blob/eea73410a66867fa6abf11bd1a56eee6', ink: '#0c0c0d'
+    };
+    var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;';
+
+    // factory presets (design values for the mock-up: names are ours, the values are what the orbit view shows)
+    var P = [
+      ['Anthem Supersaw', 'LEAD', [2400, 30, 8, 22, 0.8, 35, 18, 420], [['SAW TABLE', 'WT', 82], ['SUB SINE', 'VA', 64], ['AIR NOISE', 'SMP', 30], ['BELL SHIMMER', 'FM', 45]]],
+      ['Hoover Stab', 'LEAD', [5200, 45, 7, 60, 5.5, 20, 55, 180], [['HOOVER TABLE', 'WT', 90], ['PULSE SUB', 'VA', 55], ['GRIT', 'SMP', 40], ['METAL', 'FM', 0]]],
+      ['Detuned Lead', 'LEAD', [3600, 25, 4, 40, 6.0, 12, 25, 260], [['TWIN SAW', 'VA', 85], ['OCTAVE SINE', 'VA', 40], ['BREATH', 'SMP', 20], ['GLASS', 'FM', 30]]],
+      ['Glass Horizon', 'PAD', [1400, 20, 6, 30, 0.15, 70, 5, 2600], [['CHOIR TABLE', 'WT', 70], ['WARM PAD', 'VA', 60], ['RAIN', 'SMP', 35], ['CHIME', 'FM', 55]]],
+      ['Solar Wind', 'PAD', [900, 55, 8, 45, 0.3, 80, 10, 3500], [['DRIFT TABLE', 'WT', 75], ['NOISE BED', 'SMP', 50], ['SUB', 'VA', 40], ['HALO', 'FM', 35]]],
+      ['Night Pulse', 'SEQ', [1800, 60, 2, 10, 2.2, 40, 30, 120], [['PULSE', 'VA', 80], ['TICK', 'SMP', 45], ['FORMANT', 'WT', 50], ['BELL', 'FM', 20]]],
+      ['Polar Bass', 'BASS', [300, 40, 1, 0, 0.5, 10, 45, 90], [['SQUARE SUB', 'VA', 90], ['GROWL TABLE', 'WT', 60], ['KNOCK', 'SMP', 30], ['TONE', 'FM', 0]]],
+      ['Quiet Comet', 'PLUCK', [3000, 35, 3, 15, 1.2, 25, 8, 600], [['MALLET', 'FM', 75], ['PLUCK TABLE', 'WT', 60], ['NOISE TAP', 'SMP', 25], ['SINE', 'VA', 35]]],
+      ['Velvet Keys', 'KEYS', [2000, 15, 2, 8, 4.5, 15, 12, 900], [['TINE', 'FM', 80], ['BODY', 'VA', 55], ['KEY CLICK', 'SMP', 20], ['AIR TABLE', 'WT', 25]]],
+      ['Radio Static', 'FX', [8000, 70, 5, 85, 8.0, 90, 70, 1800], [['SCAN TABLE', 'WT', 70], ['STATIC', 'SMP', 80], ['WHINE', 'FM', 50], ['HUM', 'VA', 30]]]
+    ];
+    var KIND = { WT: 'ring', VA: 'pearl', SMP: 'crater', FM: 'crystal' };
+    var TYPE = { WT: 'WAVETABLE', VA: 'ANALOG', SMP: 'SAMPLE', FM: 'FM' };
+    var SHEETS = { ring: ['/_blob/3341631c227c8aade470dfec3d0d726a', 4.3], pearl: ['/_blob/bdd7922e58267cbdd1b4e838ee5b49ba', 2.4], crater: ['/_blob/aae5418aeadcff37bb3e2812abd80c04', 2.4], crystal: ['/_blob/639cefbbc92ef239b87a6de8ed15b861', 2.4] };
+    var pi = s.preset === undefined ? 0 : s.preset, pr = P[pi], focus = s.focus === undefined ? 0 : s.focus;
+    var cat = s.cat || 'ALL', motion = s.motion || '60', noteKey = s.noteKey || 0, arpOn = s.arp === undefined ? true : s.arp;
+    var macros = s.macros || [50, 50, 50, 50, 50, 50, 22, 35];
+
+    // the macros move the view: BRIGHT +-2 octaves of cutoff, RESO, RELEASE +-2 octaves, DRIVE, WIDTH (detune)
+    var base = pr[2], m = function (i) { return (macros[i] - 50) / 50; };
+    var clamp = function (x, a, b) { return Math.max(a, Math.min(b, x)); };
+    var ov = {
+      cutoff: clamp(base[0] * Math.pow(4, m(0)), 20, 20000), res: clamp(base[1] + 30 * m(1), 0, 100), unison: base[2],
+      detune: clamp(base[3] + 30 * m(5), 0, 100), lfoRate: base[4], lfoDepth: base[5], drive: clamp(base[6] + 40 * m(4), 0, 100),
+      release: clamp(base[7] * Math.pow(4, m(3)), 10, 4000), bpm: 138
+    };
+    var olayers = pr[3].map(function (l, i) { return { name: 'L' + (i + 1) + ' ' + l[0], kind: KIND[l[1]], lvl: l[2] / 100, on: l[2] > 0 }; });
+
+    var tabs = [['PLAY', 'SW_Main.dc.html'], ['LAYER', 'SW_Layer.dc.html'], ['ARP', 'SW_Arp.dc.html'], ['MOD', 'SW_Mod.dc.html'], ['FX', 'SW_FX.dc.html']].map(function (x, i) {
+      return { label: x[0], href: x[1], current: i === 0 ? 'page' : 'false', look: i === 0 ? 'color: ' + c.strong + '; box-shadow: inset 0 -2px 0 ' + c.cat + ';' : 'color: ' + c.sub + ';' };
+    });
+    var motionOpts = [['60', '60', 'Full motion: every display frame'], ['30', '30', 'Lighter: 30 frames a second'], ['off', 'OFF', 'No motion: a still picture (values still update it)']].map(function (x) {
+      var sel = motion === x[0];
+      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: ' + c.sub + ';', pick: function () { self.setState({ motion: x[0] }); } };
+    });
+    var cats = ['ALL', 'LEAD', 'PAD', 'BASS', 'PLUCK', 'KEYS', 'SEQ', 'FX'].map(function (k) {
+      var sel = cat === k;
+      return { label: k, on: sel ? 'true' : 'false', look: sel ? 'background: ' + c.sel + '; color: ' + c.strong + '; box-shadow: inset 0 0 0 1px ' + c.line2 + ';' : 'background: none; color: ' + c.sub + ';', pick: function () { self.setState({ cat: k }); } };
+    });
+    var list = [];
+    P.forEach(function (x, i) {
+      if (cat !== 'ALL' && x[1] !== cat) return;
+      var sel = i === pi;
+      list.push({ name: x[0], cat: x[1], on: sel ? 'true' : 'false', dot: sel ? 6 : 4, dotInk: sel ? c.cat : c.track, weight: sel ? 500 : 300,
+        look: sel ? 'border: 1px solid ' + c.line2 + '; background: ' + c.sel + '; color: ' + c.strong + ';' : 'border: 1px solid rgba(0,0,0,0); background: none; color: ' + c.text + ';',
+        pick: function () { self.setState({ preset: i, noteKey: noteKey + 1 }); } });
+    });
+    var chips = pr[3].map(function (l, i) {
+      var sel = i === focus, kind = KIND[l[1]], sh = SHEETS[kind], sz = kind === 'ring' ? 40 : 30;
+      return { name: 'L' + (i + 1) + ' ' + l[0], type: l[1], lvl: l[2], on: sel ? 'true' : 'false', op: l[2] > 0 ? 1 : 0.35,
+        th: { src: sh[0], s: sz, m: kind === 'ring' ? -5 : 0, bw: sz * 12, bh: sz * 8 },
+        look: sel ? 'border: 1px solid ' + c.line2 + '; background: ' + c.sel + '; color: ' + c.strong + ';' : 'border: 1px solid rgba(0,0,0,0); background: none; color: ' + c.text + ';',
+        pick: function () { self.setState({ focus: i }); } };
+    });
+    var cut = ov.cutoff >= 1000 ? (ov.cutoff / 1000).toFixed(1) : String(Math.round(ov.cutoff));
+    var A = 5, D = 320, S = 70, R = Math.round(ov.release);
+    var ex = function (ms) { return Math.log(1 + ms) / Math.log(1 + 4000); };
+    var xa = 2 + 50 * ex(A), xd = xa + 60 * ex(D), xs = xd + 40, xr = Math.min(214, xs + 60 * ex(R) * 1.4), ys = 50 - 46 * S / 100;
+    var env = 'M2 50 L' + xa.toFixed(1) + ' 4 Q' + (xa + 6).toFixed(1) + ' ' + ys.toFixed(1) + ' ' + xd.toFixed(1) + ' ' + ys.toFixed(1) + ' L' + xs.toFixed(1) + ' ' + ys.toFixed(1) + ' Q' + (xs + 8).toFixed(1) + ' 50 ' + xr.toFixed(1) + ' 50';
+    var sel = {
+      cut: cut, cutUnit: ov.cutoff >= 1000 ? 'kHz' : 'Hz', cutPct: Math.round(Math.log(ov.cutoff / 20) / Math.log(1000) * 100),
+      grid: [{ k: 'RES', v: Math.round(ov.res), u: ' %' }, { k: 'DRIVE', v: Math.round(ov.drive), u: ' %' }, { k: 'UNISON', v: ov.unison, u: ' v' }, { k: 'DETUNE', v: Math.round(ov.detune), u: ' %' }],
+      env: env, envText: A + ' ms · ' + D + ' ms · ' + S + ' % · ' + (R >= 1000 ? (R / 1000).toFixed(2) + ' s' : R + ' ms'),
+      envAria: 'Attack ' + A + ' ms, decay ' + D + ' ms, sustain ' + S + ' %, release ' + R + ' ms'
+    };
+    var names = ['BRIGHT', 'RESO', 'ATTACK', 'RELEASE', 'DRIVE', 'WIDTH', 'DELAY', 'REVERB'];
+    var mac = macros.map(function (val, i) {
+      return { label: names[i], v: val, deg: Math.round(val / 100 * 270), aria: 'Macro ' + (i + 1) + ' ' + names[i] + ', ' + val,
+        change: function (e) { var nm = macros.slice(); nm[i] = Number(e.target.value); self.setState({ macros: nm }); } };
+    });
+    var octaves = [];
+    for (var o = 0; o <= 5; o++) octaves.push({ x: (o / 5 * 100).toFixed(2), label: 'C' + (o + 1) });
+    return {
+      theme: theme, c: c, tabs: tabs, motionOpts: motionOpts, motion: motion, noteKey: noteKey, arpOn: arpOn,
+      preset: { upper: pr[0].toUpperCase(), cat: pr[1], no: String(pi + 1).padStart(3, '0') },
+      prev: function () { self.setState({ preset: (pi + P.length - 1) % P.length, noteKey: noteKey + 1 }); },
+      next: function () { self.setState({ preset: (pi + 1) % P.length, noteKey: noteKey + 1 }); },
+      ov: ov, olayers: olayers, focus: focus, cats: cats, list: list, chips: chips, sel: sel, macros: mac, octaves: octaves,
+      play: function () { self.setState({ noteKey: noteKey + 1 }); },
+      toggleArp: function () { self.setState({ arp: !arpOn }); },
+      arpLook: arpOn ? 'border-color: #0b5a41; ' + on : 'border-color: ' + c.line2 + '; background: none; color: ' + c.text + ';',
+      arpState: arpOn ? 'ON' : 'OFF'
+    };
+  }
+}
+</script>
+</body>
+</html>
