@@ -77,6 +77,29 @@ def band_groups(params, alias):
     return groups
 
 
+def make_static(ctl, st):
+    """A part with no parameter (meter mode, tuner, music state) becomes a switch or a read-out, not a knob."""
+    lab = ctl.select_one('.lbl')
+    value = ctl.select_one('.val')
+    text = value.get_text().strip() if value else st.get('text', '')
+    for t in ctl.select('.dk, .knob, .pos, .rng, .val'):
+        t.decompose()
+    if st['kind'] == 'switch':
+        seg = BeautifulSoup('<div data-seg="1" style="display:flex;gap:2px;margin-bottom:6px"></div>', 'html.parser').find()
+        for k, o in enumerate(st['options']):
+            b = BeautifulSoup('<button style="font:600 11px \'Space Mono\',monospace;color:#cfcfcf;background:#161617;border:1px solid #3a3a3d;padding:4px 7px;border-radius:3px;cursor:pointer"></button>', 'html.parser').find()
+            b.string = o
+            if k == 0:
+                b['data-on'] = '1'
+            seg.append(b)
+        lab.insert_before(seg)
+    else:
+        ro = BeautifulSoup('<div data-readout="1" style="display:flex;align-items:center;gap:8px;min-width:96px;margin-bottom:6px;padding:7px 12px;background:#0c0c0d;border:1px solid #2c2c2f;border-radius:4px"><i style="width:7px;height:7px;border-radius:50%;background:var(--acc);box-shadow:0 0 6px var(--acc)"></i><span style="font:11px \'Space Mono\',monospace;color:#e6e6e6;white-space:nowrap"></span></div>', 'html.parser').find()
+        ro.find('span').string = text
+        lab.insert_before(ro)
+    ctl['data-static'] = '1'
+
+
 def apply_edits(root, alias):
     """Pattern B: the design is brought in line with the specification (see the README, 画面の項目を仕様に合わせた箇所).
     alias['_edit']: '<label>' or '<label>#<n>' (n-th control with that label, from 1) -> {label, p, rng, pos, remove, dup}
@@ -229,8 +252,9 @@ def build(code, report):
         report.setdefault(code, []).append('btn:' + t)
     for ctl in root.select('.ctl'):
         if ctl.select_one('.dk, .knob') and ctl.select_one('.lbl') and not ctl.get('data-p') and not ctl.get('data-pb'):
-            if norm(ctl.select_one('.lbl').get_text()) in alias.get('_static', []):
-                ctl['data-static'] = '1'    # a display widget (meter mode, tuner ...): no parameter; wired when the live displays are
+            st = alias.get('_static', {}).get(norm(ctl.select_one('.lbl').get_text()))
+            if st:
+                make_static(ctl, st)    # no parameter: it is not drawn as a knob any more
                 continue
             report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl').get_text())
     style = re.sub(r'@import[^;]*;', '', style)

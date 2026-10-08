@@ -243,6 +243,12 @@
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
         return () => { const i = cur(), h = hostOf(i); if (!h) return; b.classList.toggle('on', toggle ? h.c.norm(vals[i]) > 0.5 : Math.abs(vals[i] - t) < 1e-9); };
       }
+      // switches without a parameter (DY02 meter mode): a setting of the screen only, until the live meters are wired
+      skinBox.querySelectorAll('[data-seg]').forEach(seg => {
+        const bs = [...seg.querySelectorAll('button')], acc = 'var(--acc)';
+        const show = k => bs.forEach((b, j) => { const on = j === k; b.style.background = on ? acc : '#161617'; b.style.color = on ? '#0c0c0d' : '#cfcfcf'; b.style.borderColor = on ? acc : '#3a3a3d'; });
+        bs.forEach((b, k) => b.addEventListener('click', () => show(k))); show(Math.max(0, bs.findIndex(b => b.dataset.on)));
+      });
       const draws = new Map();                  // host index -> [draw functions]
       const reg = (i, f) => { (draws.get(i) || draws.set(i, []).get(i)).push(f); };
       const list = o => JSON.parse(o.dataset.pb);
