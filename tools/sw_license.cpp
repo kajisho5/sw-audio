@@ -9,9 +9,11 @@
 //   build/sw_license machine                                     this computer's hash (for a licence bound to it)
 #include "sw/license.hpp"
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
