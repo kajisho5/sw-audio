@@ -559,7 +559,7 @@ bool Processor::Slot::sounding() const {
     return false;
 }
 
-Processor::Processor() {
+Processor::Processor() : slots_(static_cast<size_t>(kSlots)) {
     for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def;
     for (int l = 0; l < kLayers; ++l) layerOn_[static_cast<size_t>(l)] = target_[static_cast<size_t>(lp(l, On))] > 0.5;
     held_.reserve(128);

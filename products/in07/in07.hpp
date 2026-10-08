@@ -245,7 +245,7 @@ private:
     std::array<double, kNumParams> target_{};
     std::array<bool, kLayers> layerOn_{};
     Shared shared_;
-    std::array<Slot, kSlots> slots_;
+    std::vector<Slot> slots_;                           // kSlots, on the heap (40 x 4 voices are about 750 kB: too big for a stack)
     std::vector<int> held_;                             // mono / legato: the keys held, in order
     int monoSlot_ = -1;
     struct Ended { int key, channel, noteId; };
