@@ -3,7 +3,8 @@
   blender -b -P tools/blender/in07_orbital.py -- moon  <out.png> [samples]   a layer body / moon, 192 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- hero  <out.png> [samples]   the whole system for the sales material, 1920 x 1080
   blender -b -P tools/blender/in07_orbital.py -- body <kind> <out-prefix> [samples] [frames]
-      one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees, transparent.
+      one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees (default 96), transparent,
+      96 x 96 (ring 160 x 160: displayed up to about 70 px, so 2x for high-density screens).
       kinds: ring (L1, banded with a ring), pearl (L2), crater (L3), crystal (L4, faceted glass with a glowing core),
       lfo (the LFO moon), bead (a unison moonlet). Pack the frames with tools/blender/pack_sheet.py.
       The body turns under fixed lights (the surface moves, the light stays top left), so the screen may step through the
@@ -21,7 +22,7 @@ mode = argv[0]
 if mode == 'body':
     kind, out = argv[1], argv[2]
     samples = int(argv[3]) if len(argv) > 3 else 64
-    frames = int(argv[4]) if len(argv) > 4 else 24
+    frames = int(argv[4]) if len(argv) > 4 else 96   # 96 steps a turn: the surface moves under 1 px a step on screen (smooth at 60 fps)
 else:
     out = argv[1]
     samples = int(argv[2]) if len(argv) > 2 else 96
@@ -314,10 +315,10 @@ def ortho_camera(scale):
 if mode == 'body':
     scene.render.film_transparent = True
     scene.cycles.film_transparent_glass = True
-    res, ortho, tilt = 128, 2.4, (math.radians(18), math.radians(-14), 0.0)   # the spin axis leans toward the camera (we see the north) and to the left
+    res, ortho, tilt = 96, 2.4, (math.radians(18), math.radians(-14), 0.0)   # the spin axis leans toward the camera (we see the north) and to the left
     parts = []
     if kind == 'ring':
-        res, ortho = 192, 4.3
+        res, ortho = 160, 4.3
         parts.append(sphere(1.0, (0, 0, 0), banded_material(), 128))
         r = annulus(1.35, 2.05, ring_material(1.35, 2.05)); r.rotation_mode = 'ZYX'; r.rotation_euler = tilt   # in the equator plane
     elif kind == 'crater':
@@ -340,7 +341,7 @@ if mode == 'body':
     body = parts[0]; body.rotation_mode = 'ZYX'
     for f in range(frames):
         body.rotation_euler = (tilt[0], tilt[1], 2 * math.pi * f / frames)   # Z (the spin) first, then the lean
-        scene.render.filepath = f'{out}_{f:02d}.png'
+        scene.render.filepath = f'{out}_{f:03d}.png'
         bpy.ops.render.render(write_still=True)
     sys.exit(0)
 
