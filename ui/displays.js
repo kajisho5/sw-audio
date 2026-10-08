@@ -100,7 +100,31 @@
     };
   }
 
+  // ---- tape reels (DL02, SA01): the Blender reels turn while sound goes through; the take-up reel turns faster (its pack is smaller)
+  function reelDisplay(box, ctx, speedOf) {
+    const reels = [...box.querySelectorAll('.reel')];
+    if (!reels.length) return null;
+    let rate = 0, want = 0, ang = reels.map(() => 0), last = 0, alive = true;
+    const frame = t => {
+      if (!alive || !box.isConnected) return;
+      const dt = last ? Math.min(0.1, (t - last) / 1000) : 0; last = t;
+      rate += (want - rate) * Math.min(1, dt * 3);                           // the reels spin up and coast down
+      reels.forEach((r, k) => { ang[k] = (ang[k] + rate * (k ? 1.4 : 1) * dt) % 360; r.style.transform = 'rotate(' + ang[k].toFixed(1) + 'deg)'; });
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    return {
+      update(info) {
+        const m = info && info.meters; if (!m) return;
+        want = peakDb(m) > -70 ? 110 * (speedOf ? speedOf(ctx) : 1) : 0;     // degrees per second
+      },
+      destroy() { alive = false; }
+    };
+  }
+
   const registry = {
+    DL02: (box, ctx) => reelDisplay(box, ctx, null),
+    SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
     DY01: (box, ctx) => vuDisplay(box, ctx, 'gr'),
     DY02: (box, ctx) => vuDisplay(box, ctx, 'meter'),
     DY06: (box, ctx) => vuDisplay(box, ctx, 'gr'),

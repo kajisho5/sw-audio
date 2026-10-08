@@ -38,3 +38,4 @@ SW AUDIO の画面・販売素材で使っている Blender 描画（Blender 4.0
 照明は元の素材と同じ構成（左上キー＋右下フィル＋リム）。元の素材の描画スクリプト（handover の zip）は無いので、形状・材質は新しく作ったもの。
 
 | `parts/vu-bezel-frame.webp` | VU メーターの枠（900×546、中は透明で枠の影だけ）。`tools/blender/vu_bezel.py`。border-image（slice 30）で全サイズに使う |
+| `parts/reel.webp` | テープのリール（288×288、透明）。リム・3 本のスポーク・ハブ。`tools/blender/reel.py`。画面で回す（光が回らないよう、柔らかい上からの光だけ）。DL02・SA01 |

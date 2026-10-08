@@ -223,7 +223,35 @@ def vu_frames(root, params):
     return '' if not n else 'x'
 
 
-HOOKS = {'GT03': gt03_pedals}
+def tape_reels(root, params):
+    """DL02 and SA01: the two small circles with three lines become Blender-rendered reels (tools/blender/reel.py) that ui/displays.js turns."""
+    for sv in root.find_all('svg'):
+        if sv.get('viewbox') != '0 0 246 56' or len(sv.find_all('circle')) < 4:
+            continue
+        circles = [c for c in sv.find_all('circle')]
+        hubs = [c for c in circles if c.get('r') == '8.4']
+        accent = hubs[0].get('fill') if hubs else '#9a8df0'
+        centers = [(float(c['cx']), float(c['cy'])) for c in hubs]
+        for c in circles:
+            c.decompose()
+        for l in list(sv.find_all('line')):
+            if l.get('stroke') == '#8a8c92':
+                l.decompose()
+        holder = sv.parent
+        holder['style'] = holder.get('style', '') + ';position:relative'
+        for k, (cx, cy) in enumerate(centers):
+            pack = (21, 14)[k]
+            html = ('<div style="position:absolute;left:%gpx;top:%gpx;width:48px;height:48px;pointer-events:none">'
+                    '<div style="position:absolute;left:%gpx;top:%gpx;width:%dpx;height:%dpx;border-radius:50%%;background:radial-gradient(circle,#1d140c 0,#3a2a1c 60%%,#241810 100%%)"></div>'
+                    '<div class="reel" style="position:absolute;inset:0;background:url(@@REEL@@) center/100%% 100%% no-repeat"></div>'
+                    '<div style="position:absolute;left:%gpx;top:%gpx;width:17px;height:17px;border-radius:50%%;background:%s;opacity:.8"></div>'
+                    '<div style="position:absolute;inset:0;border-radius:50%%;background:linear-gradient(135deg,rgba(255,255,255,.22),transparent 38%%)"></div></div>'
+                    % (cx - 24 + 2, cy - 24 + 2, 24 - pack, 24 - pack, pack * 2, pack * 2, 15.5, 15.5, accent))
+            holder.append(BeautifulSoup(html, 'html.parser'))
+    return ''
+
+
+HOOKS = {'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 def build(code, report):
@@ -352,7 +380,7 @@ def build(code, report):
     for part in (style, str(root)):
         if re.search(r'</script', part, re.I):
             raise SystemExit(code + ': the design contains a closing script tag')
-    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp')))
+    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp'))).replace('@@REEL@@', data_uri(os.path.join(RENDERS, 'parts/reel.webp')))
     return {'css': style, 'html': html, 'w': width, 'h': height, 'knobs': [nb, nk], 'buttons': [nbb, nbt]}
 
 
