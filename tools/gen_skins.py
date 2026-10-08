@@ -229,6 +229,9 @@ def build(code, report):
         report.setdefault(code, []).append('btn:' + t)
     for ctl in root.select('.ctl'):
         if ctl.select_one('.dk, .knob') and ctl.select_one('.lbl') and not ctl.get('data-p') and not ctl.get('data-pb'):
+            if norm(ctl.select_one('.lbl').get_text()) in alias.get('_static', []):
+                ctl['data-static'] = '1'    # a display widget (meter mode, tuner ...): no parameter; wired when the live displays are
+                continue
             report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl').get_text())
     style = re.sub(r'@import[^;]*;', '', style)
     m = re.match(r'<div[^>]*style="([^"]*)"', str(root))

@@ -21,7 +21,10 @@
   }
  },
  "DY02": {
-  "peak reduction": 1
+  "peak reduction": 1,
+  "_static": [
+   "meter"
+  ]
  },
  "EQ06": {
   "hz": [
@@ -214,5 +217,15 @@
     ]
    }
   }
+ },
+ "GT03": {
+  "_static": [
+   "tuner"
+  ]
+ },
+ "VO05": {
+  "_static": [
+   "music"
+  ]
  }
 }
