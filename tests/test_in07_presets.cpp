@@ -57,7 +57,7 @@ TEST_CASE("IN07 PRESETS: a preset sets every parameter (the defaults first, then
     int diff = 0;
     for (int i = 0; i < kNumParams; ++i) diff += a.param(i) != b.param(i);
     CHECK(diff == 0);
-    CHECK(b.param(Level) == kPresetLevel);
+    CHECK(b.param(Level) == doctest::Approx(kPresetLevel).epsilon(1e-9).scale(1.0));   // through the normalised round trip (not exact on every platform)
     const Preset& p0 = factoryPresets()[0];
     for (int l = 0; l < kLayers; ++l)   // the trim moves every layer that is on
         if (b.param(lp(l, On)) > 0.5) CHECK(b.param(lp(l, LayerLevel)) == doctest::Approx(layerVal(p0, l, "level") + p0.trim));
