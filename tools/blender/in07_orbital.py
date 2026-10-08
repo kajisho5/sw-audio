@@ -2,16 +2,29 @@
   blender -b -P tools/blender/in07_orbital.py -- core  <out.png> [samples]   the sound core (planet), 640 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- moon  <out.png> [samples]   a layer body / moon, 192 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- hero  <out.png> [samples]   the whole system for the sales material, 1920 x 1080
+  blender -b -P tools/blender/in07_orbital.py -- body <kind> <out-prefix> [samples] [frames]
+      one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees, transparent.
+      kinds: ring (L1, banded with a ring), pearl (L2), crater (L3), crystal (L4, faceted glass with a glowing core),
+      lfo (the LFO moon), bead (a unison moonlet). Pack the frames with tools/blender/pack_sheet.py.
+      The body turns under fixed lights (the surface moves, the light stays top left), so the screen may step through the
+      frames; it still never rotates the image itself.
 The sprites are lit from the top left (key) with a weak bottom-right fill and a rim, like every SW AUDIO part. The screen moves them along
 their orbits but never turns them, so the light stays where it is. Orbits, trails and the halo are drawn by the screen (they follow the values).
 Denoise afterwards with tools/blender/post.py (this Blender build has no OpenImageDenoise)."""
 import sys, math, random
+import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
 argv = sys.argv[sys.argv.index('--') + 1:]
-mode, out = argv[0], argv[1]
-samples = int(argv[2]) if len(argv) > 2 else 96
+mode = argv[0]
+if mode == 'body':
+    kind, out = argv[1], argv[2]
+    samples = int(argv[3]) if len(argv) > 3 else 64
+    frames = int(argv[4]) if len(argv) > 4 else 24
+else:
+    out = argv[1]
+    samples = int(argv[2]) if len(argv) > 2 else 96
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'; scene.cycles.device = 'CPU'; scene.cycles.samples = samples; scene.cycles.use_denoising = False
@@ -121,6 +134,124 @@ def moon_material():
     return m
 
 
+def principled(name):
+    m = bpy.data.materials.new(name); m.use_nodes = True
+    return m, m.node_tree, m.node_tree.nodes['Principled BSDF']
+
+
+def pearl_material(emission=0.25, marble=True):
+    """the L2 / LFO / moonlet body: pearl with a faint marbling (so its turning shows)"""
+    m, nt, p = principled('pearl')
+    p.inputs['Subsurface Weight'].default_value = 0.35
+    p.inputs['Subsurface Radius'].default_value = (0.2, 0.6, 0.45)
+    p.inputs['Roughness'].default_value = 0.28
+    p.inputs['Coat Weight'].default_value = 0.7; p.inputs['Coat Roughness'].default_value = 0.05
+    p.inputs['Emission Color'].default_value = (*TEAL_HI, 1); p.inputs['Emission Strength'].default_value = emission
+    if marble:
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        nz = node(nt, 'ShaderNodeTexNoise', Scale=3.2, Detail=6.0, Roughness=0.55, Distortion=2.2)
+        nt.links.new(tc.outputs['Object'], nz.inputs['Vector'])
+        ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
+        cr.elements[0].position = 0.35; cr.elements[0].color = (0.46, 0.64, 0.58, 1)
+        cr.elements[1].position = 0.70; cr.elements[1].color = (0.70, 0.84, 0.79, 1)
+        nt.links.new(nz.outputs['Fac'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], p.inputs['Base Color'])
+    else:
+        p.inputs['Base Color'].default_value = (0.55, 0.72, 0.66, 1)
+    return m
+
+
+def banded_material():
+    """L1 (wavetable): latitude bands broken up like a gas giant, teal and pearl"""
+    m, nt, p = principled('banded')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    wv = nt.nodes.new('ShaderNodeTexWave'); wv.wave_type = 'BANDS'; wv.bands_direction = 'Z'
+    wv.inputs['Scale'].default_value = 1.6; wv.inputs['Distortion'].default_value = 7.0
+    wv.inputs['Detail'].default_value = 4.0; wv.inputs['Detail Scale'].default_value = 1.4
+    nt.links.new(tc.outputs['Object'], wv.inputs['Vector'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
+    cr.elements[0].position = 0.0; cr.elements[0].color = (0.05, 0.22, 0.17, 1)
+    cr.elements[1].position = 1.0; cr.elements[1].color = (0.36, 0.62, 0.53, 1)
+    e = cr.elements.new(0.45); e.color = (0.62, 0.80, 0.73, 1)
+    e = cr.elements.new(0.70); e.color = (0.86, 0.93, 0.90, 1)
+    nt.links.new(wv.outputs['Fac'], ramp.inputs['Fac']); nt.links.new(ramp.outputs['Color'], p.inputs['Base Color'])
+    p.inputs['Roughness'].default_value = 0.42
+    p.inputs['Coat Weight'].default_value = 0.35; p.inputs['Coat Roughness'].default_value = 0.08
+    p.inputs['Emission Color'].default_value = (*TEAL, 1); p.inputs['Emission Strength'].default_value = 0.06
+    return m
+
+
+def ring_material(r0, r1):
+    """the ring of L1: bands across its width (with a gap), tinted pearl, partly see-through"""
+    m, nt, p = principled('ring')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    ln = nt.nodes.new('ShaderNodeVectorMath'); ln.operation = 'LENGTH'
+    nt.links.new(tc.outputs['Object'], ln.inputs[0])
+    mr = nt.nodes.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = r0; mr.inputs['From Max'].default_value = r1
+    nt.links.new(ln.outputs['Value'], mr.inputs['Value'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
+    stops = [(0.0, 0.10), (0.10, 0.70), (0.30, 0.55), (0.36, 0.05), (0.42, 0.05), (0.48, 0.85), (0.72, 0.65), (0.90, 0.30), (1.0, 0.0)]
+    cr.elements[0].position, cr.elements[0].color = stops[0][0], (stops[0][1],) * 3 + (1,)
+    cr.elements[1].position, cr.elements[1].color = stops[-1][0], (stops[-1][1],) * 3 + (1,)
+    for pos, v in stops[1:-1]:
+        e = cr.elements.new(pos); e.color = (v, v, v, 1)
+    nt.links.new(mr.outputs['Result'], ramp.inputs['Fac'])
+    p.inputs['Base Color'].default_value = (0.62, 0.82, 0.75, 1)
+    p.inputs['Roughness'].default_value = 0.55
+    nt.links.new(ramp.outputs['Color'], p.inputs['Alpha'])
+    m.blend_method = 'BLEND'
+    return m
+
+
+def crater_material():
+    """L3 (samples, noise): a rocky moon with craters"""
+    m, nt, p = principled('crater')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    vo = node(nt, 'ShaderNodeTexVoronoi', Scale=3.4, Randomness=0.9)
+    nt.links.new(tc.outputs['Object'], vo.inputs['Vector'])
+    bowl = nt.nodes.new('ShaderNodeValToRGB'); cr = bowl.color_ramp      # distance to a crater centre -> height (bowl + rim)
+    cr.elements[0].position = 0.0; cr.elements[0].color = (0.15, 0.15, 0.15, 1)
+    cr.elements[1].position = 0.55; cr.elements[1].color = (0.6, 0.6, 0.6, 1)
+    e = cr.elements.new(0.32); e.color = (1.0, 1.0, 1.0, 1)
+    nt.links.new(vo.outputs['Distance'], bowl.inputs['Fac'])
+    nz = node(nt, 'ShaderNodeTexNoise', Scale=9.0, Detail=10.0, Roughness=0.6)
+    nt.links.new(tc.outputs['Object'], nz.inputs['Vector'])
+    mix = nt.nodes.new('ShaderNodeMath'); mix.operation = 'MULTIPLY_ADD'
+    nt.links.new(nz.outputs['Fac'], mix.inputs[0]); mix.inputs[1].default_value = 0.35
+    nt.links.new(bowl.outputs['Color'], mix.inputs[2])
+    bump = node(nt, 'ShaderNodeBump', Strength=0.55, Distance=0.08)
+    nt.links.new(mix.outputs['Value'], bump.inputs['Height']); nt.links.new(bump.outputs['Normal'], p.inputs['Normal'])
+    tone = nt.nodes.new('ShaderNodeValToRGB'); ct = tone.color_ramp
+    ct.elements[0].position = 0.3; ct.elements[0].color = (0.20, 0.26, 0.25, 1)
+    ct.elements[1].position = 0.75; ct.elements[1].color = (0.52, 0.60, 0.57, 1)
+    nt.links.new(nz.outputs['Fac'], tone.inputs['Fac']); nt.links.new(tone.outputs['Color'], p.inputs['Base Color'])
+    p.inputs['Roughness'].default_value = 0.85
+    return m
+
+
+def crystal_material():
+    """L4 (FM, bells): a faceted gem; the facets catch the key light as it turns"""
+    m, nt, p = principled('crystal')
+    p.inputs['Base Color'].default_value = (0.30, 0.72, 0.58, 1)
+    p.inputs['Transmission Weight'].default_value = 0.35
+    p.inputs['Roughness'].default_value = 0.10
+    p.inputs['IOR'].default_value = 1.6
+    p.inputs['Coat Weight'].default_value = 1.0; p.inputs['Coat Roughness'].default_value = 0.02
+    p.inputs['Emission Color'].default_value = (*TEAL_HI, 1); p.inputs['Emission Strength'].default_value = 0.12
+    return m
+
+
+def annulus(r0, r1, mat, segs=192):
+    me = bpy.data.meshes.new('annulus'); bm = bmesh.new()
+    inner = [bm.verts.new((r0 * math.cos(2 * math.pi * i / segs), r0 * math.sin(2 * math.pi * i / segs), 0)) for i in range(segs)]
+    outer = [bm.verts.new((r1 * math.cos(2 * math.pi * i / segs), r1 * math.sin(2 * math.pi * i / segs), 0)) for i in range(segs)]
+    for i in range(segs):
+        j = (i + 1) % segs
+        bm.faces.new((inner[i], outer[i], outer[j], inner[j]))
+    bm.to_mesh(me); bm.free()
+    ob = bpy.data.objects.new('ring', me); scene.collection.objects.link(ob); me.materials.append(mat)
+    return ob
+
+
 def emit_material(name, color, strength):
     m = bpy.data.materials.new(name); m.use_nodes = True; nt = m.node_tree
     for n in list(nt.nodes):
@@ -179,6 +310,39 @@ def ortho_camera(scale):
     bpy.ops.object.camera_add(location=(0, -10, 0), rotation=(math.radians(90), 0, 0))
     cam = bpy.context.active_object; cam.data.type = 'ORTHO'; cam.data.ortho_scale = scale; scene.camera = cam
 
+
+if mode == 'body':
+    scene.render.film_transparent = True
+    scene.cycles.film_transparent_glass = True
+    res, ortho, tilt = 128, 2.4, (math.radians(18), math.radians(-14), 0.0)   # the spin axis leans toward the camera (we see the north) and to the left
+    parts = []
+    if kind == 'ring':
+        res, ortho = 192, 4.3
+        parts.append(sphere(1.0, (0, 0, 0), banded_material(), 128))
+        r = annulus(1.35, 2.05, ring_material(1.35, 2.05)); r.rotation_mode = 'ZYX'; r.rotation_euler = tilt   # in the equator plane
+    elif kind == 'crater':
+        parts.append(sphere(1.0, (0, 0, 0), crater_material(), 160))
+    elif kind == 'crystal':
+        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=1.0); o = bpy.context.active_object   # flat facets
+        o.data.materials.append(crystal_material()); parts.append(o)
+        sphere(0.5, (0, 0, 0), emit_material('bellcore', (0.55, 1.0, 0.82), 1.6), 48)   # a glow inside, seen through the gem
+        scene.cycles.film_transparent_glass = False   # the gem stays opaque in alpha (refraction shows the studio, not holes)
+        scene.cycles.transmission_bounces = 12; scene.cycles.max_bounces = 16
+    elif kind in ('pearl', 'lfo', 'bead'):
+        parts.append(sphere(1.0, (0, 0, 0), pearl_material({'pearl': 0.25, 'lfo': 0.9, 'bead': 0.6}[kind], kind != 'bead'), 96))
+        if kind == 'bead':
+            res, frames = 64, 1
+        if kind == 'lfo':
+            frames = 1
+    ortho_camera(ortho)
+    scene.render.resolution_x = scene.render.resolution_y = res
+    studio_lights()
+    body = parts[0]; body.rotation_mode = 'ZYX'
+    for f in range(frames):
+        body.rotation_euler = (tilt[0], tilt[1], 2 * math.pi * f / frames)   # Z (the spin) first, then the lean
+        scene.render.filepath = f'{out}_{f:02d}.png'
+        bpy.ops.render.render(write_still=True)
+    sys.exit(0)
 
 if mode in ('core', 'moon'):
     scene.render.film_transparent = True
