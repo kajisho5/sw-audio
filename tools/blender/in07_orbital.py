@@ -99,9 +99,9 @@ def mist_material(radius, density, emission):
         if n.type != 'OUTPUT_MATERIAL':
             nt.nodes.remove(n)
     pv = nt.nodes.new('ShaderNodeVolumePrincipled')
-    pv.inputs['Color'].default_value = (0.22, 0.70, 0.52, 1)
-    pv.inputs['Absorption Color'].default_value = (0.02, 0.30, 0.20, 1)
-    pv.inputs['Emission Color'].default_value = (*TEAL_HI, 1)
+    pv.inputs['Color'].default_value = (0.10, 0.62, 0.46, 1)              # scattering: a saturated teal, so the lit side is not grey
+    pv.inputs['Absorption Color'].default_value = (0.12, 0.60, 0.45, 1)   # what passes through keeps the teal tint
+    pv.inputs['Emission Color'].default_value = (*TEAL, 1)
     tc = nt.nodes.new('ShaderNodeTexCoord')
     noise = node(nt, 'ShaderNodeTexNoise', Scale=2.6, Detail=8.0, Roughness=0.62, Distortion=0.9)
     nt.links.new(tc.outputs['Object'], noise.inputs['Vector'])
@@ -111,7 +111,7 @@ def mist_material(radius, density, emission):
     fall.inputs['To Min'].default_value = 1.0; fall.inputs['To Max'].default_value = 0.0
     nt.links.new(ln.outputs['Value'], fall.inputs['Value'])
     ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
-    cr.elements[0].position = 0.42; cr.elements[0].color = (0.04, 0.04, 0.04, 1)
+    cr.elements[0].position = 0.42; cr.elements[0].color = (0.03, 0.03, 0.03, 1)
     cr.elements[1].position = 0.80; cr.elements[1].color = (1, 1, 1, 1)
     nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
     mul = nt.nodes.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'
@@ -121,6 +121,31 @@ def mist_material(radius, density, emission):
     em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = emission
     nt.links.new(mul.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], pv.inputs['Emission Strength'])
     nt.links.new(pv.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
+    return m
+
+
+def glowworld_material():
+    """the sound inside, for light screens: a teal world with drifting clouds that glows from its centre (a surface: crisp alpha,
+    saturated on a light background, shaded by the key like the other bodies)"""
+    m, nt, p = principled('glowworld')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    noise = node(nt, 'ShaderNodeTexNoise', Scale=2.2, Detail=5.0, Roughness=0.55, Distortion=0.6)
+    nt.links.new(tc.outputs['Object'], noise.inputs['Vector'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
+    cr.elements[0].position = 0.32; cr.elements[0].color = (0.010, 0.16, 0.11, 1)
+    cr.elements[1].position = 0.80; cr.elements[1].color = (0.50, 0.93, 0.78, 1)
+    e = cr.elements.new(0.55); e.color = (0.03, 0.50, 0.34, 1)
+    nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    nt.links.new(ramp.outputs['Color'], p.inputs['Base Color']); nt.links.new(ramp.outputs['Color'], p.inputs['Emission Color'])
+    lw = node(nt, 'ShaderNodeLayerWeight', Blend=0.5)
+    inv = nt.nodes.new('ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1.0
+    nt.links.new(lw.outputs['Facing'], inv.inputs[1])
+    pw = nt.nodes.new('ShaderNodeMath'); pw.operation = 'POWER'; pw.inputs[1].default_value = 3.0
+    nt.links.new(inv.outputs['Value'], pw.inputs[0])
+    em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY_ADD'; em.inputs[1].default_value = 2.4; em.inputs[2].default_value = 0.25
+    nt.links.new(pw.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], p.inputs['Emission Strength'])
+    p.inputs['Roughness'].default_value = 0.4
+    p.inputs['Coat Weight'].default_value = 0.4; p.inputs['Coat Roughness'].default_value = 0.1
     return m
 
 
@@ -385,10 +410,9 @@ if mode == 'coreday':
     scene.cycles.film_transparent_glass = True
     scene.cycles.volume_step_rate = 0.5
     # a bright sky for the reflections (the screen is light); the camera still sees nothing (transparent film)
-    wramp.color_ramp.elements[0].color = (0.32, 0.38, 0.36, 1); wramp.color_ramp.elements[1].color = (0.92, 0.97, 0.95, 1)
+    wramp.color_ramp.elements[0].color = (0.20, 0.25, 0.24, 1); wramp.color_ramp.elements[1].color = (0.70, 0.76, 0.74, 1)
     shell(1.0, (0, 0, 0), glass_material())
-    sphere(0.95, (0, 0, 0), mist_material(0.95, 9.0, 1.6), 96)
-    sphere(0.45, (0, 0, 0), glow_volume(8.0, 0.45, 2.5), 64)
+    sphere(0.86, (0, 0, 0), glowworld_material(), 128)
     ortho_camera(2.3)
     scene.render.resolution_x = scene.render.resolution_y = 640
     studio_lights()
