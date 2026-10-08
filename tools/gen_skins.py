@@ -170,14 +170,14 @@ def gt03_pedals(root, params):
     for c in list(holder.children):
         if getattr(c, 'decompose', None):
             c.decompose()
-    holder['style'] = 'display:flex;justify-content:space-around;align-items:center;height:100%;padding:0 12px'
+    holder['style'] = 'display:flex;justify-content:space-evenly;align-items:center;height:100%;padding:0 12px'
     labels = next(p['labels'] for p in params if p['name'] == 'Pedal 1 Type')
     idx = {p['name']: p['i'] for p in params}
     for k in range(1, 7):
         t, on, a, b, c = (idx['Pedal %d %s' % (k, n)] for n in ('Type', 'On', 'A', 'B', 'C'))
         knobs = ''.join(
-            '<div class="ctl" data-p="%d" title="%s" style="position:absolute;left:%dpx;top:25px;width:30px;height:30px"><div class="pk" data-dial="1">'
-            '<div class="pcap"></div><div class="ptr"><i></i></div></div></div>' % (i, nm, x) for i, nm, x in ((a, 'A', 13), (b, 'B', 55), (c, 'C', 97)))
+            '<div class="ctl" data-p="%d" title="%s" style="position:absolute"><div class="pk" data-dial="1">'
+            '<div class="pcap"></div><div class="ptr"><i></i></div></div></div>' % (i, nm) for i, nm in ((a, 'A'), (b, 'B'), (c, 'C')))
         html = ('<div class="pedal" data-typep="%d" data-names=\'%s\' style="position:relative;width:140px;height:226px;flex:none">'
                 '<div class="pshell"></div><span class="pname" title="Type">Comp</span>%s'
                 '<button class="pled" data-p="%d" data-toggle="1"></button><button class="pstomp" data-p="%d" data-toggle="1"></button></div>') % (t, json.dumps(labels), knobs, on, on)
@@ -193,7 +193,15 @@ def gt03_pedals(root, params):
            '.pedal.t0 .pshell{left:0;top:0;width:140px;height:226px;border:1px dashed #44464b;border-radius:10px;background:none}'
            '.pedal.t0 .ctl,.pedal.t0 .pled,.pedal.t0 .pstomp{display:none}.pedal.t0 .pname{color:#6b6d72}'
            '.pedal .pstomp{background-image:url(@@STOMP@@)}').replace('@@STOMP@@', data_uri(os.path.join(RENDERS, 'pedals/stomp.webp'))).replace('@@KNOB@@', data_uri(os.path.join(RENDERS, 'pedals/knob-small.webp')))
+    layout = json.load(open(os.path.join(ROOT, 'tools/blender/pedals.json')))['types']
     for n, name in enumerate(('comp', 'drive', 'fuzz', 'chorus', 'delay', 'reverb'), 1):
+        L = layout[name]; q = '.pedal.t%d ' % n
+        for j, (kx, ky, ks) in enumerate(L['knobs']):
+            css += '%s.ctl:nth-child(%d){left:%gpx;top:%gpx;width:%dpx;height:%dpx}%s.ctl:nth-child(%d) .pk{width:%dpx;height:%dpx}' % (q, 3 + j, kx - ks / 2, ky - ks / 2, ks, ks, q, 3 + j, ks, ks)
+        lx, ly, ls = L['led']
+        css += '%s.pled{left:%gpx;top:%gpx;width:%dpx;height:%dpx}' % (q, lx - ls / 2, ly - ls / 2, ls, ls)
+        sx, sy, ss = L['stomp']; box = ss + 14
+        css += '%s.pstomp{left:%gpx;top:%gpx;width:%dpx;height:%dpx}%s.pname{top:%dpx}' % (q, sx - box / 2, sy - box / 2, box, box, q, L['name'][1])
         css += '.pedal.t' + str(n) + ' .pshell{background-image:url(' + data_uri(os.path.join(RENDERS, 'pedals/%s.webp' % name)) + ')}'
     return css
 

@@ -1,0 +1,225 @@
+{
+ "_doc": "Layout of the GT03 stomp boxes in screen px (shell 140 x 226, origin top left). Read by tools/blender/pedal.py (seats and engravings) and tools/gen_skins.py (positions of knobs, LED, name, foot switch).",
+ "shell": {
+  "w": 140,
+  "h": 226
+ },
+ "types": {
+  "comp": {
+   "color": "#9fb7c9",
+   "finish": "brushed",
+   "radius": 0.07,
+   "knobs": [
+    [
+     36,
+     46,
+     40
+    ],
+    [
+     104,
+     46,
+     40
+    ],
+    [
+     70,
+     98,
+     26
+    ]
+   ],
+   "led": [
+    112,
+    146,
+    10
+   ],
+   "name": [
+    0,
+    136
+   ],
+   "stomp": [
+    70,
+    196,
+    44
+   ]
+  },
+  "drive": {
+   "color": "#e7c35a",
+   "finish": "hammered",
+   "radius": 0.16,
+   "knobs": [
+    [
+     70,
+     52,
+     50
+    ],
+    [
+     32,
+     104,
+     28
+    ],
+    [
+     108,
+     104,
+     28
+    ]
+   ],
+   "led": [
+    70,
+    156,
+    12
+   ],
+   "name": [
+    0,
+    129
+   ],
+   "stomp": [
+    70,
+    198,
+    44
+   ]
+  },
+  "fuzz": {
+   "color": "#e0693f",
+   "finish": "flake",
+   "radius": 0.11,
+   "knobs": [
+    [
+     38,
+     52,
+     46
+    ],
+    [
+     102,
+     52,
+     46
+    ],
+    [
+     70,
+     108,
+     28
+    ]
+   ],
+   "led": [
+    32,
+    150,
+    10
+   ],
+   "name": [
+    0,
+    136
+   ],
+   "stomp": [
+    70,
+    196,
+    44
+   ]
+  },
+  "chorus": {
+   "color": "#6fc7b6",
+   "finish": "gloss",
+   "radius": 0.2,
+   "knobs": [
+    [
+     28,
+     62,
+     28
+    ],
+    [
+     70,
+     44,
+     28
+    ],
+    [
+     112,
+     62,
+     28
+    ]
+   ],
+   "led": [
+    70,
+    100,
+    10
+   ],
+   "name": [
+    0,
+    112
+   ],
+   "stomp": [
+    70,
+    196,
+    44
+   ]
+  },
+  "delay": {
+   "color": "#8f8ce0",
+   "finish": "wrinkle",
+   "radius": 0.09,
+   "knobs": [
+    [
+     50,
+     52,
+     44
+    ],
+    [
+     96,
+     100,
+     30
+    ],
+    [
+     44,
+     128,
+     30
+    ]
+   ],
+   "led": [
+    106,
+    140,
+    10
+   ],
+   "name": [
+    0,
+    150
+   ],
+   "stomp": [
+    70,
+    198,
+    44
+   ]
+  },
+  "reverb": {
+   "color": "#d9d6c4",
+   "finish": "cream",
+   "radius": 0.12,
+   "knobs": [
+    [
+     30,
+     50,
+     28
+    ],
+    [
+     70,
+     50,
+     28
+    ],
+    [
+     110,
+     50,
+     28
+    ]
+   ],
+   "led": [
+    70,
+    96,
+    10
+   ],
+   "name": [
+    0,
+    118
+   ],
+   "stomp": [
+    70,
+    196,
+    44
+   ]
+  }
+ }
+}
