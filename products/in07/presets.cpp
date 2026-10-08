@@ -28,14 +28,26 @@ struct Raw { const char* name; const char* cat; B b; };
 const std::vector<Raw>& rawTable() {
     static const std::vector<Raw> t = {
         // ---- the PLAY screen's ten
+        // a hard supersaw (the client asked for a heavier one, 2026-10-08): three saw stacks (x8, x8 an octave up, x6 an octave down), each
+        // saturated before its filter, the filters open, no sine sub (it muddied the chords); Drive, then a presence EQ (lows down, highs up),
+        // then a short delay and room; the limiter's gain set to shave the peaks (density)
         {"Anthem Supersaw", "LEAD", B()
-            .g({{"fx.drive.on", 0}, {"fx.chorus.on", 0}, {"fx.delay.time", "1/8 D"}, {"fx.delay.feedback", 30}, {"fx.delay.mix", 16}, {"fx.reverb.size", 2.6}, {"fx.reverb.mix", 24}})
-            .l(1, {{"osc.type", "Wavetable"}, {"wt.table", "Classic"}, {"wt.pos", 0}, {"osc.unison", 8}, {"osc.detune", 35}, {"osc.spread", 90},
-                   {"flt.type", "LP 24"}, {"flt.cutoff", 6000}, {"flt.res", 15}, {"flt.env", 20}, {"flt.drive", 10}, {"amp.a", 3}, {"amp.d", 400}, {"amp.s", 85}, {"amp.r", 420}})
-            .l(2, {{"on", 1}, {"osc.wave", "Sine"}, {"osc.octave", -1}, {"level", -8}, {"flt.cutoff", 20000}, {"flt.drive", 0}, {"flt.env", 0}, {"amp.s", 100}, {"amp.r", 300}})
-            .l(3, {{"on", 1}, {"osc.type", "Sample"}, {"smp.id", "Air"}, {"osc.octave", 0}, {"level", -22}, {"flt.type", "HP 12"}, {"flt.cutoff", 3000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 0}, {"amp.s", 100}, {"amp.r", 300}})
-            .l(4, {{"on", 1}, {"osc.type", "FM"}, {"fm.ratio", "3"}, {"fm.index", 15}, {"fm.decay", 600}, {"osc.octave", 1}, {"level", -20}, {"flt.cutoff", 12000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 0},
-                   {"amp.a", 2}, {"amp.d", 900}, {"amp.s", 0}, {"amp.r", 600}})},
+            .g({{"fx.slot1", "Drive"}, {"fx.slot2", "EQ"}, {"fx.slot3", "Delay"}, {"fx.slot4", "Reverb"}, {"fx.slot5", "Chorus"}, {"fx.slot6", "Limit"},
+                {"fx.drive.amount", 60}, {"fx.drive.tone", 100}, {"fx.drive.mix", 100}, {"fx.chorus.on", 0},
+                {"fx.eq.on", 1}, {"fx.eq.low", -4}, {"fx.eq.mid", 2}, {"fx.eq.high", 6},
+                {"fx.delay.time", "1/8 D"}, {"fx.delay.feedback", 25}, {"fx.delay.mix", 10}, {"fx.reverb.size", 1.6}, {"fx.reverb.damp", 50}, {"fx.reverb.mix", 12},
+                {"fx.limit.gain", 4}})
+            .l(1, {{"osc.type", "Wavetable"}, {"wt.table", "Classic"}, {"wt.pos", 0}, {"osc.unison", 8}, {"osc.detune", 50}, {"osc.spread", 100},
+                   {"flt.type", "LP 12"}, {"flt.cutoff", 16000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 50}, {"flt.key", 0},
+                   {"amp.a", 1}, {"amp.d", 300}, {"amp.s", 100}, {"amp.r", 300}})
+            .l(2, {{"on", 1}, {"osc.wave", "Saw"}, {"osc.octave", 1}, {"osc.unison", 8}, {"osc.detune", 45}, {"osc.spread", 100}, {"level", -3},
+                   {"flt.type", "LP 12"}, {"flt.cutoff", 18000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 35}, {"flt.key", 0},
+                   {"amp.a", 1}, {"amp.d", 300}, {"amp.s", 100}, {"amp.r", 300}})
+            .l(3, {{"on", 1}, {"osc.wave", "Saw"}, {"osc.octave", -1}, {"osc.unison", 6}, {"osc.detune", 25}, {"osc.spread", 60}, {"level", -6},
+                   {"flt.type", "LP 24"}, {"flt.cutoff", 3000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 40}, {"flt.key", 0},
+                   {"amp.a", 1}, {"amp.d", 300}, {"amp.s", 100}, {"amp.r", 300}})
+            .l(4, {{"on", 1}, {"osc.type", "Sample"}, {"smp.id", "Air"}, {"osc.octave", 0}, {"level", -16}, {"flt.type", "HP 12"}, {"flt.cutoff", 5000}, {"flt.res", 0}, {"flt.env", 0}, {"flt.drive", 0},
+                   {"amp.a", 1}, {"amp.s", 100}, {"amp.r", 300}})},
         {"Hoover Stab", "LEAD", B()
             .g({{"glide", 60}, {"fx.drive.on", 0}, {"fx.chorus.rate", 0.6}, {"fx.chorus.depth", 70}, {"fx.chorus.mix", 50}, {"fx.delay.on", 0}, {"fx.reverb.size", 1.8}, {"fx.reverb.mix", 20},
                 {"mod1.src", "Env 2"}, {"mod1.dst", "Pitch"}, {"mod1.amount", -10}})   // the dive: starts 1.2 semitones low and rises with the filter envelope
@@ -283,9 +295,10 @@ const std::vector<Raw>& rawTable() {
     return t;
 }
 
-const std::pair<const char*, double> kTrims[] = {
-#include "in07/preset_trims.inc"
-    {nullptr, 0.0}
+struct LevelRow { const char* name; double trim, level, boost; };
+const LevelRow kLevels[] = {
+#include "in07/preset_levels.inc"
+    {nullptr, 0.0, 0.0, 0.0}
 };
 
 struct Built { std::vector<Preset> presets; std::vector<std::string> errors; };
@@ -317,7 +330,7 @@ const Built& built() {
                 for (auto& x : p.values) if (x.first == it->second) { r.errors.push_back(p.name + ": " + id + " twice"); dup = true; }
                 if (!dup) p.values.push_back({it->second, v});
             }
-            for (const auto& t : kTrims) if (t.first && p.name == t.first) p.trim = t.second;
+            for (const auto& t : kLevels) if (t.name && p.name == t.name) { p.trim = t.trim; p.level = t.level; p.boost = t.boost; }
             r.presets.push_back(std::move(p));
         }
         return r;
@@ -338,20 +351,22 @@ void applyInit(Processor& p) {
 }
 const std::vector<std::string>& presetErrors() { return built().errors; }
 
-void applyPreset(Processor& p, int index, double trim) {
+void applyPreset(Processor& p, int index, const PresetLevels& lv) {
     const auto& P = factoryPresets();
     if (index < 0 || index >= static_cast<int>(P.size())) return;
     applyInit(p);
     const Preset& pr = P[static_cast<size_t>(index)];
     for (const auto& v : pr.values) p.setParam(v.first, v.second);
-    p.setParam(Level, kPresetLevel);
+    p.setParam(Level, std::clamp(lv.level, -40.0, 0.0));
+    p.setParam(FxLimitGain, std::clamp(p.param(FxLimitGain) + std::max(0.0, lv.boost), 0.0, 12.0));
     for (int l = 0; l < kLayers; ++l)
-        if (p.param(lp(l, On)) > 0.5) p.setParam(lp(l, LayerLevel), std::clamp(p.param(lp(l, LayerLevel)) + trim, -60.0, 6.0));
+        if (p.param(lp(l, On)) > 0.5) p.setParam(lp(l, LayerLevel), std::clamp(p.param(lp(l, LayerLevel)) + lv.trim, -60.0, 6.0));
 }
 
 void applyPreset(Processor& p, int index) {
     if (index < 0 || index >= static_cast<int>(factoryPresets().size())) return;
-    applyPreset(p, index, factoryPresets()[static_cast<size_t>(index)].trim);
+    const Preset& pr = factoryPresets()[static_cast<size_t>(index)];
+    applyPreset(p, index, PresetLevels{pr.trim, pr.level, pr.boost});
 }
 
 std::vector<AuditionNote> audition(const std::string& c, double& total) {
@@ -366,12 +381,13 @@ std::vector<AuditionNote> audition(const std::string& c, double& total) {
     return n;
 }
 
-PresetMeasure measurePreset(int index, double fs, double trim) {
+PresetMeasure measurePreset(int index, double fs, const PresetLevels* lv, bool preFx) {
     PresetMeasure m;
     const auto& P = factoryPresets();
     if (index < 0 || index >= static_cast<int>(P.size())) return m;
     Processor p;
-    if (std::isnan(trim)) applyPreset(p, index); else applyPreset(p, index, trim);
+    if (lv) applyPreset(p, index, *lv); else applyPreset(p, index);
+    if (preFx) { for (int f = 0; f < kFx; ++f) p.setParam(fxOnId(f), 0); p.setParam(Level, 0); }
     p.prepare(fs, 256);   // after the values: the level and the effects start where the preset puts them
     p.setTempo(120.0);
     double total = 0.0;

@@ -47,9 +47,17 @@ TEST_CASE("IN07 PRESETS: the table") {
             CHECK_MESSAGE(layerVal(p, l, "level") + p.trim <= 6.0, p.name);
             CHECK_MESSAGE(layerVal(p, l, "level") + p.trim > -60.0, p.name);
         }
+    // the output side: the master Level only turns down (it sits after the limiter); what has to come up goes into the limiter's gain
+    for (const auto& p : P) {
+        CHECK_MESSAGE(p.level <= 0.0, p.name);
+        CHECK_MESSAGE(p.level >= -40.0, p.name);
+        CHECK_MESSAGE(p.boost >= 0.0, p.name);
+        CHECK_MESSAGE(val(p, "in07.fx.limit.gain") + p.boost <= 12.0, p.name);
+        CHECK_MESSAGE((p.level == 0.0 || p.boost == 0.0), p.name);   // one or the other
+    }
 }
 
-TEST_CASE("IN07 PRESETS: a preset sets every parameter (the defaults first, then its own values, then its trim)") {
+TEST_CASE("IN07 PRESETS: a preset sets every parameter (the defaults first, then its own values, then its staging and output level)") {
     Processor a, b;
     a.prepare(48000, 256); b.prepare(48000, 256);
     applyPreset(a, 5); applyPreset(a, 0);
@@ -57,15 +65,16 @@ TEST_CASE("IN07 PRESETS: a preset sets every parameter (the defaults first, then
     int diff = 0;
     for (int i = 0; i < kNumParams; ++i) diff += a.param(i) != b.param(i);
     CHECK(diff == 0);
-    CHECK(b.param(Level) == doctest::Approx(kPresetLevel).epsilon(1e-9).scale(1.0));   // through the normalised round trip (not exact on every platform)
     const Preset& p0 = factoryPresets()[0];
+    CHECK(b.param(Level) == doctest::Approx(p0.level).epsilon(1e-9).scale(1.0));   // through the normalised round trip (not exact on every platform)
+    CHECK(b.param(FxLimitGain) == doctest::Approx(val(p0, "in07.fx.limit.gain") + p0.boost).epsilon(1e-9).scale(1.0));
     for (int l = 0; l < kLayers; ++l)   // the trim moves every layer that is on
         if (b.param(lp(l, On)) > 0.5) CHECK(b.param(lp(l, LayerLevel)) == doctest::Approx(layerVal(p0, l, "level") + p0.trim));
     // a parameter the preset does not name is at its default
     const auto& s = specs();
     const auto& v = p0.values;
     for (int i = 0; i < kNumParams; ++i) {
-        if (i == Level || (i >= kNumGlobal && i < kFxBase && (i - kNumGlobal) % kLayerParams == LayerLevel)) continue;
+        if (i == Level || i == FxLimitGain || (i >= kNumGlobal && i < kFxBase && (i - kNumGlobal) % kLayerParams == LayerLevel)) continue;
         bool named = false;
         for (const auto& x : v) named = named || x.first == i;
         if (!named) CHECK_MESSAGE(b.param(i) == doctest::Approx(s[static_cast<size_t>(i)].def).epsilon(1e-9), std::string(s[static_cast<size_t>(i)].id));   // log curves round-trip within 1e-9
@@ -82,6 +91,10 @@ TEST_CASE("IN07 PRESETS: every preset plays at the target loudness, under the ce
         CHECK_MESSAGE(m.rawPeakDb <= 3.0, P[static_cast<size_t>(i)].name);         // the limiter only trims (at most 4 dB off the peaks)
         CHECK_MESSAGE(m.lufs - m.monoLufs <= 3.0, P[static_cast<size_t>(i)].name); // a wide sound does not collapse in mono
         CHECK_MESSAGE(std::isfinite(m.lufs), P[static_cast<size_t>(i)].name);
+        // the gain staging: the voices' sum, before the effects, sits at the same loudness in every preset (so a Drive or a limiter
+        // works on the level it was set for)
+        const PresetMeasure pre = measurePreset(i, 48000.0, nullptr, true);
+        CHECK_MESSAGE(std::abs(pre.lufs - kPresetStageLufs) <= 0.5, P[static_cast<size_t>(i)].name);
     }
 }
 
