@@ -1,8 +1,8 @@
 """SW AUDIO — Blender renders for the IN07 Orbital screen (Blender 4.0.2, Cycles, CPU).
   blender -b -P tools/blender/in07_orbital.py -- core  <out.png> [samples]   the sound core (planet), 640 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- moon  <out.png> [samples]   a layer body / moon, 192 px, transparent
-  blender -b -P tools/blender/in07_orbital.py -- coreday <out.png> [samples] the core for light screens: real alpha (the mist absorbs and
-      scatters, lit from the top left, instead of only glowing), glass reflecting a bright sky; 640 px, transparent
+  blender -b -P tools/blender/in07_orbital.py -- daycore <out.png> [samples] [porcelain|armillary|frost]  the core for light screens:
+      a white porcelain world with lit teal seams (porcelain, used), 640 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- hero  <out.png> [samples]   the whole system for the sales material, 1920 x 1080
   blender -b -P tools/blender/in07_orbital.py -- body <kind> <out-prefix> [samples] [frames]
       one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees (default 96), transparent,
@@ -89,64 +89,6 @@ def glow_volume(strength, radius, power=3.0):
     mul = nt.nodes.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'; mul.inputs[1].default_value = strength
     nt.links.new(pw.outputs['Value'], mul.inputs[0]); nt.links.new(mul.outputs['Value'], vol.inputs['Strength'])
     nt.links.new(vol.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
-    return m
-
-
-def mist_material(radius, density, emission):
-    """the sound inside, for light screens: a teal mist that absorbs and scatters (so it has alpha and is lit by the key)
-    and still glows a little; noise x radial falloff like the nebula"""
-    m = bpy.data.materials.new('mist'); m.use_nodes = True; nt = m.node_tree
-    for n in list(nt.nodes):
-        if n.type != 'OUTPUT_MATERIAL':
-            nt.nodes.remove(n)
-    pv = nt.nodes.new('ShaderNodeVolumePrincipled')
-    pv.inputs['Color'].default_value = (0.10, 0.62, 0.46, 1)              # scattering: a saturated teal, so the lit side is not grey
-    pv.inputs['Absorption Color'].default_value = (0.12, 0.60, 0.45, 1)   # what passes through keeps the teal tint
-    pv.inputs['Emission Color'].default_value = (*TEAL, 1)
-    tc = nt.nodes.new('ShaderNodeTexCoord')
-    noise = node(nt, 'ShaderNodeTexNoise', Scale=2.6, Detail=8.0, Roughness=0.62, Distortion=0.9)
-    nt.links.new(tc.outputs['Object'], noise.inputs['Vector'])
-    ln = nt.nodes.new('ShaderNodeVectorMath'); ln.operation = 'LENGTH'
-    nt.links.new(tc.outputs['Object'], ln.inputs[0])
-    fall = nt.nodes.new('ShaderNodeMapRange'); fall.inputs['From Max'].default_value = radius
-    fall.inputs['To Min'].default_value = 1.0; fall.inputs['To Max'].default_value = 0.0
-    nt.links.new(ln.outputs['Value'], fall.inputs['Value'])
-    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
-    cr.elements[0].position = 0.42; cr.elements[0].color = (0.03, 0.03, 0.03, 1)
-    cr.elements[1].position = 0.80; cr.elements[1].color = (1, 1, 1, 1)
-    nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
-    mul = nt.nodes.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'
-    nt.links.new(ramp.outputs['Color'], mul.inputs[0]); nt.links.new(fall.outputs['Result'], mul.inputs[1])
-    dens = nt.nodes.new('ShaderNodeMath'); dens.operation = 'MULTIPLY'; dens.inputs[1].default_value = density
-    nt.links.new(mul.outputs['Value'], dens.inputs[0]); nt.links.new(dens.outputs['Value'], pv.inputs['Density'])
-    em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = emission
-    nt.links.new(mul.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], pv.inputs['Emission Strength'])
-    nt.links.new(pv.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
-    return m
-
-
-def glowworld_material():
-    """the sound inside, for light screens: a teal world with drifting clouds that glows from its centre (a surface: crisp alpha,
-    saturated on a light background, shaded by the key like the other bodies)"""
-    m, nt, p = principled('glowworld')
-    tc = nt.nodes.new('ShaderNodeTexCoord')
-    noise = node(nt, 'ShaderNodeTexNoise', Scale=2.2, Detail=5.0, Roughness=0.55, Distortion=0.6)
-    nt.links.new(tc.outputs['Object'], noise.inputs['Vector'])
-    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
-    cr.elements[0].position = 0.32; cr.elements[0].color = (0.010, 0.16, 0.11, 1)
-    cr.elements[1].position = 0.80; cr.elements[1].color = (0.50, 0.93, 0.78, 1)
-    e = cr.elements.new(0.55); e.color = (0.03, 0.50, 0.34, 1)
-    nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
-    nt.links.new(ramp.outputs['Color'], p.inputs['Base Color']); nt.links.new(ramp.outputs['Color'], p.inputs['Emission Color'])
-    lw = node(nt, 'ShaderNodeLayerWeight', Blend=0.5)
-    inv = nt.nodes.new('ShaderNodeMath'); inv.operation = 'SUBTRACT'; inv.inputs[0].default_value = 1.0
-    nt.links.new(lw.outputs['Facing'], inv.inputs[1])
-    pw = nt.nodes.new('ShaderNodeMath'); pw.operation = 'POWER'; pw.inputs[1].default_value = 3.0
-    nt.links.new(inv.outputs['Value'], pw.inputs[0])
-    em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY_ADD'; em.inputs[1].default_value = 2.4; em.inputs[2].default_value = 0.25
-    nt.links.new(pw.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], p.inputs['Emission Strength'])
-    p.inputs['Roughness'].default_value = 0.4
-    p.inputs['Coat Weight'].default_value = 0.4; p.inputs['Coat Roughness'].default_value = 0.1
     return m
 
 
@@ -530,14 +472,58 @@ if mode == 'body':
         bpy.ops.render.render(write_still=True)
     sys.exit(0)
 
-if mode == 'coreday':
+if mode == 'daycore':
+    # light screens: a core of its own (not the dark screens' glow, which needs night around it), made of the same white
+    # porcelain as the light knobs, with the sound shown as teal light. argv[3] = porcelain | armillary | frost
+    variant = argv[3] if len(argv) > 3 else 'porcelain'
     scene.render.film_transparent = True
     scene.cycles.film_transparent_glass = True
     scene.cycles.volume_step_rate = 0.5
-    # a bright sky for the reflections (the screen is light); the camera still sees nothing (transparent film)
-    wramp.color_ramp.elements[0].color = (0.20, 0.25, 0.24, 1); wramp.color_ramp.elements[1].color = (0.70, 0.76, 0.74, 1)
-    shell(1.0, (0, 0, 0), glass_material())
-    sphere(0.86, (0, 0, 0), glowworld_material(), 128)
+    wramp.color_ramp.elements[0].color = (0.10, 0.13, 0.12, 1); wramp.color_ramp.elements[1].color = (0.45, 0.50, 0.48, 1)
+    tilt = (math.radians(18), math.radians(-14), 0.0)   # as the bodies: the axis leans toward the camera and to the left
+
+    def porcelain(name='porcelain'):
+        m, nt, p = principled(name)
+        p.inputs['Base Color'].default_value = (0.62, 0.68, 0.66, 1); p.inputs['Roughness'].default_value = 0.34
+        p.inputs['Subsurface Weight'].default_value = 0.2; p.inputs['Subsurface Radius'].default_value = (0.3, 0.5, 0.45)
+        p.inputs['Coat Weight'].default_value = 0.8; p.inputs['Coat Roughness'].default_value = 0.06
+        return m
+
+    def light_line(major, minor, z, strength, parent):
+        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=192, minor_segments=16, location=(0, 0, z))
+        t = bpy.context.active_object; bpy.ops.object.shade_smooth()
+        m, nt, p = principled('seam')
+        p.inputs['Base Color'].default_value = (*TEAL, 1); p.inputs['Emission Color'].default_value = (*TEAL, 1)
+        p.inputs['Emission Strength'].default_value = strength
+        t.data.materials.append(m); t.parent = parent
+        return t
+
+    def ring(major, minor, mat, rot):
+        bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=192, minor_segments=24)
+        t = bpy.context.active_object; bpy.ops.object.shade_smooth(); t.data.materials.append(mat)
+        t.rotation_mode = 'ZYX'; t.rotation_euler = rot
+        return t
+
+    pv = pivot(); pv.rotation_mode = 'ZYX'; pv.rotation_euler = tilt
+    if variant == 'porcelain':    # a white ball with a lit seam round its equator and two fainter latitudes
+        sphere(1.0, (0, 0, 0), porcelain(), 160).parent = pv
+        light_line(1.0, 0.018, 0.0, 1.4, pv)   # strength kept under clipping: brighter turns the teal cyan
+        for lat in (-46, 46):
+            light_line(math.cos(math.radians(lat)), 0.007, math.sin(math.radians(lat)), 0.8, pv)
+    elif variant == 'armillary':  # a smaller ball held in orbit rings (anodized teal and satin white), like an instrument
+        sphere(0.64, (0, 0, 0), porcelain(), 160).parent = pv
+        light_line(0.64, 0.014, 0.0, 1.4, pv)
+        teal = metal_material((0.10, 0.55, 0.40), 0.32, 'anodized')
+        satin = metal_material((0.86, 0.89, 0.88), 0.28, 'satin')
+        ring(0.98, 0.030, teal, (math.radians(76), math.radians(-14), 0.0))
+        ring(0.87, 0.022, satin, (math.radians(-62), math.radians(0), math.radians(38)))
+        ring(0.77, 0.020, teal, (math.radians(24), math.radians(48), math.radians(-20)))
+    else:                         # frosted glass lit from inside by a teal nucleus
+        g, gnt, gp = principled('frost')
+        gp.inputs['Base Color'].default_value = (0.95, 1.0, 0.98, 1); gp.inputs['Transmission Weight'].default_value = 1.0
+        gp.inputs['Roughness'].default_value = 0.42; gp.inputs['IOR'].default_value = 1.45
+        sphere(1.0, (0, 0, 0), g, 160)
+        sphere(0.55, (0, 0, 0), glow_volume(14.0, 0.55, 2.0), 64)
     ortho_camera(2.3)
     scene.render.resolution_x = scene.render.resolution_y = 640
     studio_lights()

@@ -27,7 +27,7 @@
 | eea73410a66867fa6abf11bd1a56eee6 | `docs/design/design-system/project/assets/product-logos/swingby-dark.svg` |
 | 702f4b752a177d6e1601ccac384e7886 | `…/product-logos/swingby-light.svg` |
 | 90121e1a7bee5f359e51e024081e48ca | `docs/design/design-system/project/assets/renders/in07/core-alpha.webp`（暗い画面の中心の球） |
-| dbb1f155628a29abbb82a4a9674392c5 | `…/renders/in07/coreday.webp`（ライト画面の中心の球） |
+| 68aab30db9e061801ca79d72df3ac6e2 | `…/renders/in07/daycore.webp`（ライト画面の中心の球：白い磁器の星と光る継ぎ目） |
 | e6ee8b6569e63ef27cedfc1666d39d47 | `…/renders/in07/bodies/ring.webp` |
 | 7709cc70a363f53b1b2d78aa4da28c56 | `…/renders/in07/bodies/pearl.webp` |
 | 8c95e5bce1ae22c9f1954ef07f849f45 | `…/renders/in07/bodies/crater.webp` |
