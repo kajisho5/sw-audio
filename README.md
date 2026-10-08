@@ -1035,7 +1035,7 @@ cmake/             MinGW 用ツールチェーン
 
 **決定（依頼者、2026-10-08）**：Nexus 系の「プリセット先行」の操作感を持つシンセを新しく作る。軽量路線（巨大サンプルは持たず、音は合成主体）、外観はダーク／ライト切替。IN01〜IN06 を作らない決定はそのまま。**名前は SWINGBY（スイングバイ）**（依頼者の決定、2026-10-08。惑星の重力で探査機を加速する軌道の名前で、頭の「SW」がブランド名と重なる）。型番・パラメータ ID は IN07 のまま（`in07.*`）。商標の調査はまだ（使い始める前に J-PlatPat・USPTO・EUIPO の第9類を確認する）。ロゴタイプは `docs/design/design-system/project/assets/product-logos/`（SW AUDIO のワードマークの字形で組み、SW だけカテゴリ色）。仕様書 v1.0 に節がないため、値はすべて設計値（下）。方針の全体はプロジェクト資料 `claude/IN07_synth_plan.md`、画面案はデザインキャンバス「SW IN07 Synth UI」。
 
-**いまできているもの**（2026-10-08）：4 レイヤー・最大 32 音のエンジン、発振器 4 種（Analog・Wavetable・FM・Sample）、後段の FX 6 スロット（順番入れ替え可）、LFO 2・変調マトリクス 8・マクロ 8、惑星型ならではの 3 機能（楕円軌道 LFO・フライバイ・重力）、ファクトリープリセット 31 種（ラウドネスを実測でそろえたもの）（`products/in07/`、テスト `tests/test_in07.cpp`・`tests/test_in07_presets.cpp` 計 61 件）と、楽器のプラグイン層 `plugin/clap/instrument_adapter.hpp`（CLAP、clap-wrapper で VST3／AU（aumu））。プラグイン「SW IN07 SWINGBY」は Linux で clap-validator（35 合格・0 不合格・9 対象外）・Steinberg VST3 validator（47 合格・0 不合格）とも通り、自作の簡易ホスト `tools/clap_note_host.cpp` で CLAP と MIDI の音符・サステインペダル・ノート終了の通知・FX の余韻と休止・状態の保存と読み込み・プリセットの選択（値がホストへ届くこと、保存した演奏が手直しを保つこと）を確認した。画面はまだない（ホストの汎用パラメータ表示で操作する）。デザインキャンバスの画面がないので `SW_PRODUCTS`（画面の生成対象）ではなく `SW_ENGINES` に置き、`sw_add_plugin(in07 … aumu)` でプラグインにしている。
+**いまできているもの**（2026-10-08）：4 レイヤー・最大 32 音のエンジン、発振器 4 種（Analog・Wavetable・FM・Sample）、後段の FX 6 スロット（順番入れ替え可）、LFO 2・変調マトリクス 8・マクロ 8、惑星型ならではの 3 機能（楕円軌道 LFO・フライバイ・重力）、ファクトリープリセット 128 種（ラウドネスを実測でそろえたもの）（`products/in07/`、テスト `tests/test_in07.cpp`・`tests/test_in07_presets.cpp` 計 61 件）と、楽器のプラグイン層 `plugin/clap/instrument_adapter.hpp`（CLAP、clap-wrapper で VST3／AU（aumu））。プラグイン「SW IN07 SWINGBY」は Linux で clap-validator（35 合格・0 不合格・9 対象外）・Steinberg VST3 validator（47 合格・0 不合格）とも通り、自作の簡易ホスト `tools/clap_note_host.cpp` で CLAP と MIDI の音符・サステインペダル・ノート終了の通知・FX の余韻と休止・状態の保存と読み込み・プリセットの選択（値がホストへ届くこと、保存した演奏が手直しを保つこと）を確認した。画面はまだない（ホストの汎用パラメータ表示で操作する）。デザインキャンバスの画面がないので `SW_PRODUCTS`（画面の生成対象）ではなく `SW_ENGINES` に置き、`sw_add_plugin(in07 … aumu)` でプラグインにしている。
 
 **画面一式（A 案、2026-10-08）**：PLAY（ダーク／ライト）・LAYER・ARP／ゲート・MOD・FX の 6 画面と共通の星系ビュー部品をデザインキャンバスに作った。ソースと画像の対応は `docs/design/in07/`（README）。FX 画面の 6 つの駅も、エフェクトごとに別の天体を Blender で描いた（Drive＝ひびから光が漏れる岩、Chorus＝真珠と 2 つの月、Delay＝外へ薄れる 3 重の輪、Reverb＝霧に包まれた縞の惑星、EQ＝3 本の帯の球、Limit＝リベット留めの帯で締めた球。各 96 コマの自転、Off の駅は色と明るさを落とす。依頼者の希望 2026-10-08）。あわせて、ノイズ除去で輪郭の薄い画素が状態色の緑側へずれる不具合を直した（`tools/blender/denoise.py`。数値は素材の README）。星系ビューでは、中心の球の後ろに回った天体の名前を隠す（球の上に名前だけが重なっていたため）。
 
@@ -1100,7 +1100,7 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 | in07.macro1〜8 | M1 Bright・M2 Reso・M3 Attack・M4 Release・M5 Drive・M6 Width・M7 Delay・M8 Reverb | 0〜100 %（50 = そのまま） | 50 | 直線 |
 | in07.flyby.mode／depth／time／near／side | Flyby／depth／time／closeness／side | Off・Arrive・Pass・Leave／0〜100 %／0.05〜8 s／0〜100 %／L > R・R > L・Alternate | Off／60／1.5 s／50／Alternate | 段階／直線／対数 |
 | in07.modN.on／src／dst／amount（N = 1〜8） | Mod N on／source／target／amount | Off/On／下の表／下の表／−100〜+100 % | On／None／None／0 | 段階／直線 |
-| in07.preset | Preset | Init／ファクトリープリセット 31 種（名前で表示） | Init | 段階（オートメーション不可） |
+| in07.preset | Preset | Init／ファクトリープリセット 128 種（名前で表示） | Init | 段階（オートメーション不可） |
 
 変調の行き先と、量 100 %・入力 1 のときの幅：Cutoff ±5 oct、Resonance ±100、Pitch ±12 半音、Drive ±100、Pan 端から端、Level（全レイヤー）と L1〜L4 level は ×(1 + 量×入力)（0 未満は 0）、LFO 1／2 rate ±4 oct、Pulse width ±45、Detune ±100、Gravity ±100、WT position ±100、FM index ±100（±10 rad）。
 入力：LFO 1・2（−1〜1）、Env 2（そのレイヤーのフィルターエンベロープ 0〜1）、Velocity（0〜1）、Mod wheel（CC 1、0〜1）、Aftertouch（チャンネルプレッシャー・CLAP の pressure、0〜1）、Key（(キー − 60) / 60）、M1〜M8（中央 0 の −1〜1）。
@@ -1163,30 +1163,32 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 
 同じツールで試聴用の WAV（`demo_lead.wav`・`demo_bass.wav`・`demo_pad.wav`（レイヤー 2 枚の和音）・`demo_gravity.wav`（重力を LFO で 0〜100 % に揺らす和音）・`demo_flyby.wav`（Arrive のリードと Pass の長音）・`demo_orbit_lfo.wav`（離心率 85 %・1/4 同期の軌道 LFO でカットオフ）：既定の FX あり、ピーク −1 dBFS に正規化、`sweep_naive.wav`／`sweep_minblep.wav`：鋸 100 Hz → 10 kHz）も書き出す。
 
-### IN07 のファクトリープリセット（`products/in07/presets.cpp`）
+### IN07 のファクトリープリセット（`products/in07/presets.cpp`・`presets_more.cpp`）
 
-31 種。PLAY 画面の 10 種を画面の順に先頭へ置き、カテゴリごとに 4〜5 種になるよう足した（依頼者「お任せ」、2026-10-08。名前は自作、実在機材の名前は使っていない）。
+128 種（LEAD 18・PAD 19・BASS 19・PLUCK 18・KEYS 18・SEQ 18・FX 18）。PLAY 画面の 10 種を画面の順に先頭へ置き、残りはカテゴリ順（LEAD・PAD・BASS・PLUCK・KEYS・SEQ・FX）に並べる。最初の 31 種（依頼者「お任せ」、2026-10-08）に、依頼者の「プリセットたくさん作っといて」（2026-10-09）で 97 種を足した。名前は自作で、実在機材・製品の名前は使っていない（楽器の一般名は使う）。
 
 | カテゴリ | プリセット |
 | --- | --- |
-| LEAD | Anthem Supersaw（ハードなスーパーソウ）・Hoover Stab・Detuned Lead・Sync Runner・Comet Tail（離した音がフライバイで飛び去る） |
-| PAD | Glass Horizon・Solar Wind（重力 50 %・軌道 LFO）・Gravity Choir・Aurora・Eclipse Drone（離心率 85 % の軌道 LFO で、長い暗い時間と短い明るい通過） |
-| SEQ | Night Pulse・Orbit Gate（16 分の軌道 LFO で音量を開く＝衛星の接近ごとに鳴る）・Binary Star・Tick Machine |
-| BASS | Polar Bass・Sub Orbit・Drift Bass（軌道 LFO で重力を揺らし、2 本の鋸がうなっては揃う）・Moon Slap・Fold Bass |
-| PLUCK | Quiet Comet・Glass Pluck・Kalimba Moon・Pizz Saw |
-| KEYS | Velvet Keys・Satellite EP・Drawbar Station・Porcelain Keys |
-| FX | Radio Static・Swing-by Pass（フライバイ Pass）・Rain Planet・Gravity Well（軌道 LFO で重力 0〜100 %） |
+| LEAD | Anthem Supersaw（ハードなスーパーソウ）・Hoover Stab・Detuned Lead・Sync Runner・Comet Tail（離した音がフライバイで飛び去る）・Trance Lead・Square Pilot・Sine Glide・Acid Spike・FM Laser Lead・Vowel Lead・Screamer・Flute Moon・Bell Lead・Wide Saw Lead・Gravity Lead・Orbit Wah Lead・Brass Lead |
+| PAD | Glass Horizon・Solar Wind（重力 50 %・軌道 LFO）・Gravity Choir・Aurora・Eclipse Drone（離心率 85 % の軌道 LFO で、長い暗い時間と短い明るい通過）・Warm Analog Pad・String Ensemble・Cathedral Choir・Glass Cloud・Dust Pad・PWM Dream・Slow Sweep・Orbit Shimmer・Deep Field・FM Halo Pad・Breath Pad・Pump Pad・Frozen Pad・Tape Pad |
+| BASS | Polar Bass・Sub Orbit・Drift Bass（軌道 LFO で重力を揺らし、2 本の鋸がうなっては揃う）・Moon Slap・Fold Bass・Sub Pressure・Acid Line・Wobble Monster・Boom Sub・Pulse Bass・Saw Bass・Pluck Bass・Growl Fold・Hollow FM Bass・Octave Funk・Grit Engine・Square Depth・Stab Bass・Liquid Bass |
+| PLUCK | Quiet Comet・Glass Pluck・Kalimba Moon・Pizz Saw・Deep House Pluck・Marimba Orbit・Harp Light・Music Box・Steel Drop・Koto Wind・Water Drop・Lo-Fi Pluck・Glass Mallet・Short Stab・Orbit Pluck・Sync Pluck・Bell Pluck・Nylon Moon |
+| KEYS | Velvet Keys・Satellite EP・Drawbar Station・Porcelain Keys・Tine Piano・Bark EP・Funk Keys・Jazz Organ・Church Organ・Vibra Moon・Celesta Dust・Harpsichord Comet・Toy Piano・Grand Synth・Glass EP・Choir Keys・Stage Organ Drive・Felt Keys |
+| SEQ | Night Pulse・Orbit Gate（16 分の軌道 LFO で音量を開く＝衛星の接近ごとに鳴る）・Binary Star・Tick Machine・Trance Gate・Acid Seq・FM Ticker・Pump Chords・Bounce Seq・Glass Steps・Formant Seq・Echo Orbit・Digital Rain Seq・Stutter Saw・Arp Pulse・Sidechain Bass・Click Grid・Swing Chop |
+| FX | Radio Static・Swing-by Pass（フライバイ Pass）・Rain Planet・Gravity Well（軌道 LFO で重力 0〜100 %）・Riser Noise・Downlifter・Impact Moon・Wind Tunnel・Siren Orbit・Laser Zap・Underwater・Glitch Storm・Space Drone・Scanner Beam・Comms Beep・Flyby Jet・Engine Room・Cosmic Bell Swell |
 
+- **書き方**：プリセットは小さな記述言語（`products/in07/preset_dsl.hpp`）で、作り方がそのまま読める形にした（`saw(0, 8, 25)`＝鋸 ×8・デチューン 25、`flt("LP 24", 1800, 30, 40)`、`amp(…)`、`.drv(…)`・`.rev(…)`、`.lfoSync(1, "Orbit", "1/16")`・`.mod(1, "LFO 1", "Cutoff", 40)` など）。最初の 31 種は `presets.cpp`、足した 97 種は `presets_more.cpp`。新しい表（`N()`）は、設定しなかったエフェクトを Off にする（Limit だけは On のまま）。既定値の FX が勝手に乗らないようにするため。
+- **似すぎの検査（数値）**：`tools/in07_presets.cpp` が試聴フレーズの音から、9 オクターブ帯のエネルギー・スペクトルの重心・24 区間の音量の形・左右の広がりを取り、同じカテゴリの中で一番近い組を並べる。最初の版で近すぎた組は作り直した（House Pluck → Deep House Pluck に、Rain Machine は Engine Room に差し替え、Tine Piano を明るく、Sub Pressure を飽和させ、Glass Steps を 1 オクターブ上へ）。残った近い組（距離 1.76〜1.97：Saw Bass／Growl Fold、Glass Horizon／Orbit Shimmer、Quiet Comet／Orbit Pluck、FM Laser Lead／Vowel Lead など）は、音の狙い（たとえば Growl Fold は折り返しの倍音、Saw Bass は素直な鋸）が違うので残した。数値で近いだけで、耳での確認はしていない。
 - **形式**：プリセットは変える値だけをパラメータ ID の文字列で持つ（ホストの番号が並び替わっても壊れない）。読み込むと全パラメータを既定値に戻してから値を入れる。表の ID・段階の名前・範囲は起動時に確かめ、テストで誤りゼロを確認。
 - **音量の決め方（実測、2 段）**：カテゴリごとの試聴フレーズ（LEAD＝C5 付近の 4 音、BASS＝C2 付近の 4 音、PAD＝3 和音 3 秒、KEYS＝4 和音 2 つ、PLUCK＝8 音のアルペジオ、SEQ＝16 分 16 個（120 BPM）、FX＝1 音 3 秒、ベロシティ 0.8）を鳴らし、BS.1770 の積分ラウドネスで、ミキサーの仕込みと同じ順に合わせる（`tools/in07_presets.cpp` が測っては直し、`preset_levels.inc` に書く）。
   - **仕込み（ゲイン構成）**：On のレイヤーのレベルを全部同じだけ動かす「トリム」で、エフェクトの前のボイスの合計を **−18 LUFS** にする（0.02 LU 以内）。エフェクト（Drive・ディレイの帰還・リミッター）が、設計したときと同じ入力レベルで働く。
   - **出口**：エフェクトの後を **−16 LUFS** に（0.05 LU 以内）。下げるときはマスターの Level（リミッターの後ろなので下げる方向だけ）、上げるときはリミッターの Gain（ピークは天井の下に保たれる）。
   - 経緯：最初はトリムだけで出口を合わせていた。トリムはエフェクトの前に効くので、Anthem Supersaw で −20 dB になったとき Drive の入力も 20 dB 下がり、ほとんど歪んでいなかった（Radio Static・Fold Bass・Drawbar Station の Drive も同じく弱まっていた）。その前は Level（リミッターの後ろ）で合わせようとしてピークが天井を越えることが分かり、やめた。
   - Chorus・Delay・Reverb の Mix は原音と処理音のクロスフェードなので、処理音が原音と無相関だと音量が下がる（Mix 50 % で −3 dB）。このため多くのプリセットでリミッターの Gain が +2〜+10 dB になる（リミッター自体はほぼ働かない）。
-- **結果**：31 種すべて −16.0〜−16.04 LUFS、ピーク −1.0 dBFS 以下（リミッターの天井）、リミッターへの入力は最大 −0.06 dBFS（Pizz Saw）、モノラルにまとめたときの低下は最大 2.8 LU（Rain Planet。無相関の 2 チャンネルで 3 dB）。トリム −22.0〜−3.1 dB、Level −9.2〜0 dB、リミッターの Gain の追加 0〜+9.6 dB。テストは ±1 LU・天井以下・リミッター入力 +3 dBFS 以下・モノラル低下 3 LU 以下・仕込みが −18 ± 0.5 LUFS・Level は 0 以下・Gain の追加は 0 以上で、どちらか一方だけ。
+- **結果**（128 種）：すべて −16.00〜−16.04 LUFS、ピーク −1.0 dBFS 以下（リミッターの天井）、リミッターへの入力は最大 +2.46 dBFS（Harpsichord Comet。テストの上限は +3）、モノラルにまとめたときの低下は最大 2.91 LU（Underwater。上限 3）。トリム −23.2〜+1.2 dB、Level −9.2〜0 dB、リミッターの Gain の追加 0〜+9.6 dB。短い音でリミッターを叩いていたもの（Stab Bass・Digital Rain Seq・Arp Pulse・Click Grid）は胴の長さを足し、モノラルで 3 LU を超えて下がったもの（Frozen Pad・Underwater・Cosmic Bell Swell）はリバーブとコーラスを減らし、Laser Zap（−16.47 LUFS：リミッターの天井で上がりきらなかった）は減衰を長く、Impact Moon（モノラル低下 2.97 LU）はリバーブを減らした。テストは ±1 LU・天井以下・リミッター入力 +3 dBFS 以下・モノラル低下 3 LU 以下・仕込みが −18 ± 0.5 LUFS・Level は 0 以下・Gain の追加は 0 以上で、どちらか一方だけ。
 - **Anthem Supersaw の作り直し**（依頼者「ゴリゴリのスーパーソウほしい」、2026-10-08）：最初の版は鋸 ×8（±17 cent）1 層を 6 kHz のローパスで丸め、サイン波のサブを重ねた軽いもので、低域（250 Hz 未満）が全体の −3.4 dB、つまり半分近くをサブが占めていた。作り直した版は鋸 ×8（±25 cent、1 本ずつ Drive 50 %）＋ 1 オクターブ上の鋸 ×8 ＋ 1 オクターブ下の鋸 ×6 ＋ 空気のサンプル、フィルターは開け、サブはなし。エフェクトは Drive 60 % → EQ（低域 −4・中域 +2・高域 +6 dB）→ 短いディレイ・小さめの部屋 → リミッター（Gain +4 dB でピークを削る）。和音（128 BPM、Am–F–C–G を 4 小節伸ばして 4 小節 8 分刻み、`tools/in07_chords.cpp` で測定）で、スペクトルの重心 586 → 1876 Hz、5 kHz 以上 −19.0 → −9.5 dB、250 Hz 未満 −3.4 → −10.2 dB、クレストファクター 11.4 → 8.9 dB（密度が上がった）。発振器のコピーは 1 音あたり 23（上限 24）。和音 4 音で 1 サンプルあたり約 3.6 µs（このコンテナ）。
 - **カテゴリの決まりごと（テスト）**：PAD は全レイヤーのリリース 1.5 秒以上・主レイヤーのアタック 100 ms 以上、PLUCK はサステイン 5 % 以下・ディケイ 2 秒以下、SEQ はリリース 400 ms 以下、KEYS・PLUCK・BASS・SEQ はアタック 10 ms 以下、BASS は Mono か Legato、1 音あたりの発振器のコピーは 24 以下、Limit は On。
-- **試聴フレーズの CPU**（同じツール、3 回の最良値、このコンテナ）：最大で 1 サンプルあたり約 2 µs（Glass Horizon・Solar Wind など、3 和音 × 4 レイヤー × ユニゾン）。測定のぶれは ±30 % ほど。
+- **試聴フレーズの CPU**（同じツール、3 回の最良値、このコンテナでの実測）：最大で 1 サンプルあたり約 1.5 µs（Anthem Supersaw の和音でない 4 音フレーズ。Glass Horizon の 3 和音は約 1.5 µs）。測定のぶれは ±30 % ほど。
 - 試聴用 WAV は `build/in07_presets products/in07/preset_levels.inc <フォルダー>` で書き出せる（リポジトリには入れていない）。
 - **プラグインでの選択**：最後のパラメータ `in07.preset`（Init とプリセット名の一覧、オートメーション不可）。ホストがこれを変えると、プラグイン層（`instrument_adapter.hpp` の「プログラム選択」：製品が `kProgramParam`・`loadProgram`・`warmUp` を持てば有効）がプリセットを読み込み、変わった値をすべて CLAP のパラメータ値イベントでホストへ返す（Polar Bass で 50 個。ホストの表示とオートメーションがずれない。flush（音を止めている間）でも同じ）。エンジンは値を持つだけ。保存した演奏を開いたときは選択の値だけを戻して読み込みはしない（手直しが残る）。プリセットの表は activate で作る（音声スレッドで確保しない）。Init は全パラメータを既定値に戻す。
 

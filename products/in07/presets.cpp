@@ -1,4 +1,5 @@
 #include "in07/presets.hpp"
+#include "in07/preset_dsl.hpp"
 #include "sw/loudness.hpp"
 #include <algorithm>
 #include <map>
@@ -7,25 +8,11 @@
 namespace sw::in07 {
 
 namespace {
-// one entry: an id without "in07." (and without "lN." inside a layer block), a plain value or a step label
-struct V {
-    const char* id;
-    double v = 0.0;
-    std::string_view label{};
-    int layer = 0;   // 1..4 inside a layer block
-    V(const char* i, double x) : id(i), v(x) {}
-    V(const char* i, std::string_view l) : id(i), label(l) {}
-};
-struct B {   // a preset under construction
-    std::vector<V> v;
-    B& g(std::initializer_list<V> x) { v.insert(v.end(), x); return *this; }
-    B& l(int n, std::initializer_list<V> x) { for (V e : x) { e.layer = n; v.push_back(e); } return *this; }
-};
-struct Raw { const char* name; const char* cat; B b; };
+using namespace dsl;
 
 // sound design: values chosen to the categories' usual shapes (pads swell and ring out, plucks and keys start at once, basses are mono,
 // sequences stay tight); the loudness is not set here (preset_levels.inc). FX left unnamed keep their defaults (Drive, Chorus, Delay, Reverb on).
-const std::vector<Raw>& rawTable() {
+const std::vector<Raw>& firstTable() {
     static const std::vector<Raw> t = {
         // ---- the PLAY screen's ten
         // a hard supersaw (the client asked for a heavier one, 2026-10-08): three saw stacks (x8, x8 an octave up, x6 an octave down), each
@@ -292,6 +279,19 @@ const std::vector<Raw>& rawTable() {
             .l(1, {{"osc.wave", "Saw"}, {"osc.unison", 8}, {"osc.detune", 60}, {"osc.spread", 100}, {"osc.gravity", 0},
                    {"flt.cutoff", 3000}, {"flt.res", 20}, {"flt.env", 0}, {"flt.drive", 10}, {"amp.a", 50}, {"amp.s", 100}, {"amp.r", 1500}})},
     };
+    return t;
+}
+
+// every factory preset: the PLAY screen's ten first (in its order), then the rest grouped by the screen's category order
+const std::vector<Raw>& rawTable() {
+    static const std::vector<Raw> t = [] {
+        std::vector<Raw> all = firstTable();
+        for (const Raw& r : morePresets()) all.push_back(r);
+        static const char* const order[] = {"LEAD", "PAD", "BASS", "PLUCK", "KEYS", "SEQ", "FX"};
+        auto rank = [](const char* c) { for (int i = 0; i < 7; ++i) if (std::string_view(c) == order[i]) return i; return 7; };
+        std::stable_sort(all.begin() + 10, all.end(), [&](const Raw& a, const Raw& b) { return rank(a.cat) < rank(b.cat); });
+        return all;
+    }();
     return t;
 }
 

@@ -1,5 +1,5 @@
 // IN07 engine: render listening demos and measure the cost of one voice (and a chord) on this machine.
-//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/in07.cpp products/in07/osc.cpp -o build/in07_render && build/in07_render build/in07
+//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_render.cpp products/in07/*.cpp -o build/in07_render && build/in07_render build/in07
 // Writes demo_lead.wav, demo_bass.wav, demo_pad.wav, demo_gravity.wav, demo_flyby.wav, demo_orbit_lfo.wav (the default effects on, peak-normalised to -1 dBFS), sweep_naive.wav / sweep_minblep.wav (saw 100 Hz -> 10 kHz, -12 dBFS)
 // and prints the time per sample of one voice in four set-ups, the default effect chain and an 8-note chord. The numbers are this machine's, not a design estimate.
 #include "in07/in07.hpp"

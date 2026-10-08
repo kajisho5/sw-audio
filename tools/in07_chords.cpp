@@ -1,7 +1,7 @@
 // SWINGBY (SW IN07): play a factory preset on a chord phrase (128 BPM, Am F C G: 4 bars held, then 4 bars of eighths), write it as a WAV
 // (16-bit) and measure the held bars: loudness (BS.1770), crest factor, spectral centroid, the share of the energy above 5 kHz and below
 // 250 Hz, side over mid, CPU. Extra arguments switch effects off by number (0 Drive, 1 Chorus, 2 Delay, 3 Reverb, 4 EQ, 5 Limit).
-//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_chords.cpp products/in07/in07.cpp products/in07/osc.cpp products/in07/presets.cpp -o build/in07_chords
+//   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_chords.cpp products/in07/*.cpp -o build/in07_chords
 //   build/in07_chords <preset index> <out.wav> [fx off ...]
 #include "in07/presets.hpp"
 #include "sw/loudness.hpp"
