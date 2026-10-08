@@ -251,7 +251,21 @@ def tape_reels(root, params):
     return ''
 
 
-HOOKS = {'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
+def rotary_rotors(root, params):
+    """MD05: the wedge drawing becomes the two Blender-rendered rotors (horn and drum, tools/blender/rotor.py) that ui/displays.js turns at the speeds of the rotary model."""
+    for sv in root.find_all('svg'):
+        if sv.get('viewbox') != '0 0 246 56':
+            continue
+        for t in sv.find_all(['circle', 'path']):
+            t.decompose()
+        holder = sv.parent
+        holder['style'] = holder.get('style', '') + ';position:relative'
+        for name, cx in (('horn', 44), ('drum', 100)):
+            holder.append(BeautifulSoup('<div class="rotor" data-rotor="%s" style="position:absolute;left:%dpx;top:10px;width:40px;height:40px;background:url(@@ROTOR_%s@@) center/100%% 100%% no-repeat;pointer-events:none"></div>' % (name, cx - 20 + 2, name.upper()), 'html.parser'))
+    return ''
+
+
+HOOKS = {'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 def build(code, report):
@@ -380,7 +394,7 @@ def build(code, report):
     for part in (style, str(root)):
         if re.search(r'</script', part, re.I):
             raise SystemExit(code + ': the design contains a closing script tag')
-    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp'))).replace('@@REEL@@', data_uri(os.path.join(RENDERS, 'parts/reel.webp')))
+    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp'))).replace('@@REEL@@', data_uri(os.path.join(RENDERS, 'parts/reel.webp'))).replace('@@ROTOR_HORN@@', data_uri(os.path.join(RENDERS, 'parts/rotor-horn.webp'))).replace('@@ROTOR_DRUM@@', data_uri(os.path.join(RENDERS, 'parts/rotor-drum.webp')))
     return {'css': style, 'html': html, 'w': width, 'h': height, 'knobs': [nb, nk], 'buttons': [nbb, nbt]}
 
 

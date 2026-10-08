@@ -122,7 +122,28 @@
     };
   }
 
+  // ---- rotary speaker (MD05): the horn and the drum turn at the speeds of the model in products/md05 (README: Speed, Accel); the Hz read-outs follow
+  function rotaryDisplay(box, ctx) {
+    const rot = { horn: box.querySelector('[data-rotor="horn"]'), drum: box.querySelector('[data-rotor="drum"]') };
+    if (!rot.horn || !rot.drum) return null;
+    const texts = [...box.querySelectorAll('svg text')], hornT = texts.find(t => /^Horn/.test(t.textContent)), drumT = texts.find(t => /^Drum/.test(t.textContent));
+    const hz = { horn: 0, drum: 0 }, ang = { horn: 0, drum: 0 }; let last = 0, shown = 0, alive = true;
+    const TARGET = [[0, 0], [0.8, 0.67], [6.7, 5.7]];                       // Stop, Slow, Fast (horn, drum)
+    const frame = t => {
+      if (!alive || !box.isConnected) return;
+      const dt = last ? Math.min(0.1, (t - last) / 1000) : 0; last = t;
+      const sp = Math.round(ctx.value('Speed') || 0), acc = ctx.value('Accel'), tau = 0.3 + 0.2 * (acc === undefined ? 5 : acc);
+      hz.horn += (TARGET[sp][0] - hz.horn) * (1 - Math.exp(-dt / tau)); hz.drum += (TARGET[sp][1] - hz.drum) * (1 - Math.exp(-dt / (3 * tau)));
+      for (const k of ['horn', 'drum']) { ang[k] = (ang[k] + hz[k] * 360 * dt) % 360; rot[k].style.transform = 'rotate(' + ang[k].toFixed(1) + 'deg)'; }
+      if ((shown += dt) > 0.15) { shown = 0; if (hornT) hornT.textContent = 'Horn ' + hz.horn.toFixed(1) + ' Hz'; if (drumT) drumT.textContent = 'Drum ' + hz.drum.toFixed(1) + ' Hz'; }
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+    return { update() {}, destroy() { alive = false; } };
+  }
+
   const registry = {
+    MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL02: (box, ctx) => reelDisplay(box, ctx, null),
     SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
     DY01: (box, ctx) => vuDisplay(box, ctx, 'gr'),
