@@ -80,7 +80,9 @@ TEST_CASE("LV30 FLAC and a rate that differs are reported, not hidden") {
     Processor p; prep(p, {{Container, Flac}, {Rate, 0}}); CHECK(p.flacFallback()); CHECK(p.rateFallback()); Processor q; prep(q); CHECK_FALSE(q.flacFallback()); CHECK_FALSE(q.rateFallback());
 }
 TEST_CASE("LV30 the folder is part of the saved state; start refuses a bad folder; the destructor stops the thread") {
-    Processor p; p.setFolder("/some/where/Recordings"); std::vector<uint8_t> st; p.saveExtra(st); Processor q; q.loadExtra(st.data(), st.size()); CHECK(q.folder() == "/some/where/Recordings"); q.loadExtra(nullptr, 0); std::vector<uint8_t> bad = {255, 255, 1}; q.loadExtra(bad.data(), bad.size()); CHECK(q.folder() == "/some/where/Recordings");
+    // an absolute path on this platform ("/some/where" is not absolute on Windows, and a project only brings absolute folders: test_extra_state.cpp)
+    const std::string where = (std::filesystem::temp_directory_path() / "some" / "where" / "Recordings").u8string();
+    Processor p; p.setFolder(where); std::vector<uint8_t> st; p.saveExtra(st); Processor q; q.loadExtra(st.data(), st.size()); CHECK(q.folder() == where); q.loadExtra(nullptr, 0); std::vector<uint8_t> bad = {255, 255, 1}; q.loadExtra(bad.data(), bad.size()); CHECK(q.folder() == where);
     Tmp blocked; { std::ofstream f(blocked.dir / "afile", std::ios::binary); f << "x"; }
     Processor r; prep(r); r.setFolder((blocked.dir / "afile" / "sub").string()); CHECK_FALSE(r.start());   // a folder under a regular file cannot be made on any OS
     Tmp t; { Processor s; s.setFolder(t.dir.string()); prep(s, {{AutoStart, 1}}); CHECK(s.recording()); feed(s, sine(-12, 0.5, 440)); }   // Auto start with a folder starts at prepare; leaving scope stops and closes
