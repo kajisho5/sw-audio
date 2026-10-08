@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SWINGBY control kit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&amp;family=Michroma&amp;family=Space+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button,select{font-family:inherit;color:inherit;cursor:pointer;margin:0}
+@keyframes swFlow{to{stroke-dashoffset:-14}}
+.sw-flow{animation:swFlow .9s linear infinite}
+.sw-back{animation-direction:reverse}
+@media (prefers-reduced-motion: reduce){.sw-flow{animation:none}}
+.sw-range{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{c.text}}; background: {{c.bg}};">
+  <div style="position: absolute; left: 24px; top: 18px; display: flex; flex-direction: column; gap: 4px;">
+    <span style="font-family: Michroma, sans-serif; font-size: 15px; letter-spacing: .3em; color: {{c.strong}};">CONTROL KIT</span>
+    <span style="font-size: 13px; color: {{c.sub}};">SWINGBY's own controls, lit from the top left like the worlds: grooves sit in the glass, handles cast to the lower right.</span>
+  </div>
+
+  <!-- before / after: slot 1 of the MOD matrix -->
+  <section aria-label="Before" style="position: absolute; left: 24px; top: 74px; width: 572px; box-sizing: border-box; padding: 10px 14px 14px; border-radius: 14px; border: 1px dashed {{c.line2}};">
+    <span style="font-size: 11px; letter-spacing: .3em; color: {{c.sub}};">BEFORE · THE BROWSER'S OWN CONTROLS</span>
+    <div style="display: grid; grid-template-columns: 48px minmax(0, 1fr) 16px minmax(0, 1fr) 130px 36px; align-items: center; gap: 8px; margin-top: 8px;">
+      <button type="button" style="height: 28px; border: 1px solid #0b5a41; border-radius: 14px; font-family: 'Space Mono', monospace; font-size: 9px; background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;">ON</button>
+      <select aria-label="Source (before)" style="height: 34px; padding: 0 8px; border: 1px solid {{c.line2}}; border-radius: 8px; background: {{c.field}}; font-size: 14px; color: {{c.strong}};"><option>LFO</option></select>
+      <span style="color: {{c.acc}};">→</span>
+      <select aria-label="Target (before)" style="height: 34px; padding: 0 8px; border: 1px solid {{c.line2}}; border-radius: 8px; background: {{c.field}}; font-size: 14px; color: {{c.strong}};"><option>CUTOFF</option></select>
+      <input type="range" aria-label="Amount (before)" min="-100" max="100" value="35" style="width: 100%; margin: 0;">
+      <span style="font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}}; text-align: right;">+35</span>
+    </div>
+  </section>
+
+  <section aria-label="After" style="position: absolute; left: 24px; top: 168px; width: 572px; box-sizing: border-box; padding: 10px 14px 14px; border-radius: 14px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
+    <span style="font-size: 11px; letter-spacing: .3em; color: {{c.acc}};">AFTER · THE KIT</span>
+    <div style="display: grid; grid-template-columns: 48px minmax(0, 1fr) 40px minmax(0, 1fr) 130px 36px; align-items: center; gap: 8px; margin-top: 8px;">
+      <sc-for list="{{demo}}" as="r" hint-placeholder-count="1">
+        <button type="button" role="switch" aria-checked="{{r.tg.on}}" aria-label="Slot on" onClick="{{r.toggle}}" style="position: relative; width: 46px; height: 26px; padding: 0; border: none; border-radius: 13px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};">
+          <span aria-hidden="true" style="position: absolute; top: 6px; left: {{r.tg.x}}px; width: 14px; height: 14px; border-radius: 50%; background: {{r.tg.jewel}}; box-shadow: {{r.tg.glow}};"></span>
+        </button>
+        <button type="button" aria-label="{{r.src.aria}}" style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; border: 1px solid {{c.chipLine}}; background: {{c.chip}}; box-shadow: {{c.chipShadow}}; color: {{c.strong}}; min-width: 0;">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{r.src.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{r.src.f}}" fill="currentColor"></path></svg>
+          <span style="flex: 1; text-align: left; font-size: 14px; font-weight: 500; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.src.label}}</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink: 0; color: {{c.sub}};"><path d="M2 4.5c2 3 6 3 8 0" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"></path><path d="M11 4.5a1.2 1.2 0 1 1 -2.4 0a1.2 1.2 0 1 1 2.4 0" fill="currentColor"></path></svg>
+        </button>
+        <svg width="40" height="24" viewBox="0 0 40 24" aria-hidden="true" style="display: block;">
+          <path d="M4 12H36" stroke="{{c.track}}" stroke-width="1"></path>
+          <path class="{{r.line.cls}}" d="M4 12H36" stroke="{{c.cat}}" stroke-width="{{r.line.w}}" stroke-linecap="round" stroke-dasharray="{{r.line.dash}}" opacity="{{r.line.op}}"></path>
+          <path d="M5.5 12a1.5 1.5 0 1 1 -3 0a1.5 1.5 0 1 1 3 0" fill="{{c.acc}}"></path><path d="M37.5 12a1.5 1.5 0 1 1 -3 0a1.5 1.5 0 1 1 3 0" fill="{{c.acc}}"></path>
+        </svg>
+        <button type="button" aria-label="{{r.dst.aria}}" style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; border: 1px solid {{c.chipLine}}; background: {{c.chip}}; box-shadow: {{c.chipShadow}}; color: {{c.strong}}; min-width: 0;">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{r.dst.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{r.dst.f}}" fill="currentColor"></path></svg>
+          <span style="flex: 1; text-align: left; font-size: 14px; font-weight: 500; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.dst.label}}</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink: 0; color: {{c.sub}};"><path d="M2 4.5c2 3 6 3 8 0" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"></path><path d="M11 4.5a1.2 1.2 0 1 1 -2.4 0a1.2 1.2 0 1 1 2.4 0" fill="currentColor"></path></svg>
+        </button>
+        <div style="position: relative; height: 28px;">
+          <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 11px; height: 6px; border-radius: 3px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};"></span>
+          <span aria-hidden="true" style="position: absolute; left: 50%; top: 7px; width: 1px; height: 14px; background: {{c.tick}};"></span>
+          <span aria-hidden="true" style="position: absolute; left: {{r.sl.fx}}%; width: {{r.sl.fw}}%; top: 12px; height: 4px; border-radius: 2px; background: {{r.sl.fill}}; box-shadow: {{c.fillGlow}}; opacity: {{r.sl.op}};"></span>
+          <img src="{{c.bead}}" alt="" aria-hidden="true" style="position: absolute; top: 3px; left: calc({{r.sl.x}}% - 11px); width: 22px; height: 22px; filter: {{c.beadShadow}}; opacity: {{r.sl.thumbOp}};">
+          <input class="sw-range" type="range" min="-100" max="100" step="1" value="{{r.amt}}" onChange="{{r.setAmt}}" aria-label="{{r.amtAria}}">
+        </div>
+        <span style="font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: {{r.ink}}; text-align: right;">{{r.amtText}}</span>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- the parts -->
+  <section aria-label="Sliders" style="position: absolute; left: 24px; top: 270px; width: 572px; display: flex; flex-direction: column; gap: 6px;">
+    <span style="font-size: 11px; letter-spacing: .3em; color: {{c.label}};">SLIDER · BIPOLAR FROM THE MIDDLE, THE MOON IS THE HANDLE</span>
+    <sc-for list="{{sliders}}" as="s" hint-placeholder-count="4">
+      <div style="display: grid; grid-template-columns: 120px minmax(0, 1fr) 44px; align-items: center; gap: 12px; height: 34px;">
+        <span style="font-size: 12px; letter-spacing: .14em; color: {{c.label2}};">{{s.name}}</span>
+        <div style="position: relative; height: 28px;">
+          <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 11px; height: 6px; border-radius: 3px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};"></span>
+          <sc-for list="{{ticks}}" as="t" hint-placeholder-count="9">
+            <span aria-hidden="true" style="position: absolute; left: {{t.x}}%; top: {{t.y}}px; width: 1px; height: {{t.h}}px; background: {{c.tick}};"></span>
+          </sc-for>
+          <span aria-hidden="true" style="position: absolute; left: {{s.sl.fx}}%; width: {{s.sl.fw}}%; top: 12px; height: 4px; border-radius: 2px; background: {{s.sl.fill}}; box-shadow: {{s.glow}}; opacity: {{s.sl.op}};"></span>
+          <img src="{{c.bead}}" alt="" aria-hidden="true" style="position: absolute; top: {{s.thumb.t}}px; left: calc({{s.sl.x}}% - {{s.thumb.h}}px); width: {{s.thumb.s}}px; height: {{s.thumb.s}}px; filter: {{s.thumb.f}}; opacity: {{s.sl.thumbOp}};">
+          <input class="sw-range" type="range" min="-100" max="100" step="1" value="{{s.v}}" onChange="{{s.set}}" aria-label="{{s.name}}" disabled="{{s.disabled}}">
+        </div>
+        <span style="font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: {{s.ink}}; text-align: right;">{{s.text}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <section aria-label="Switches and gravity lines" style="position: absolute; left: 24px; top: 448px; width: 572px; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 11px; letter-spacing: .3em; color: {{c.label}};">SWITCH · JEWEL LAMP</span>
+      <div style="display: flex; gap: 18px; align-items: center;">
+        <sc-for list="{{switches}}" as="w" hint-placeholder-count="2">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+            <button type="button" role="switch" aria-checked="{{w.on}}" aria-label="{{w.label}}" onClick="{{w.toggle}}" style="position: relative; width: 46px; height: 26px; padding: 0; border: none; border-radius: 13px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};">
+              <span aria-hidden="true" style="position: absolute; top: 6px; left: {{w.x}}px; width: 14px; height: 14px; border-radius: 50%; background: {{w.jewel}}; box-shadow: {{w.glow}};"></span>
+            </button>
+            <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.sub}};">{{w.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-size: 11px; letter-spacing: .3em; color: {{c.label}};">GRAVITY LINE · THICKER = MORE</span>
+      <div style="display: flex; gap: 22px; align-items: center;">
+        <sc-for list="{{lines}}" as="g" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+            <svg width="80" height="24" viewBox="0 0 80 24" aria-hidden="true" style="display: block;">
+              <path d="M5 12H75" stroke="{{c.track}}" stroke-width="1"></path>
+              <path class="{{g.cls}}" d="M5 12H75" stroke="{{c.cat}}" stroke-width="{{g.w}}" stroke-linecap="round" stroke-dasharray="{{g.dash}}" opacity="{{g.op}}"></path>
+              <path d="M7 12a2 2 0 1 1 -4 0a2 2 0 1 1 4 0" fill="{{c.acc}}"></path><path d="M77 12a2 2 0 1 1 -4 0a2 2 0 1 1 4 0" fill="{{c.acc}}"></path>
+            </svg>
+            <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.sub}};">{{g.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section aria-label="Pickers" style="position: absolute; left: 24px; top: 560px; width: 572px; display: flex; flex-direction: column; gap: 8px;">
+    <span style="font-size: 11px; letter-spacing: .3em; color: {{c.label}};">SOURCE / TARGET · A GLYPH FOR EACH, THE CARET IS A SMALL ORBIT</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+      <sc-for list="{{chips}}" as="k" hint-placeholder-count="8">
+        <div style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; border: 1px solid {{c.chipLine}}; background: {{c.chip}}; box-shadow: {{c.chipShadow}}; color: {{c.strong}}; min-width: 0;">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{k.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{k.f}}" fill="currentColor"></path></svg>
+          <span style="flex: 1; font-size: 14px; font-weight: 500; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{k.label}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section aria-label="Notes" style="position: absolute; left: 24px; top: 694px; width: 572px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45; color: {{c.sub}};">
+    <span>Grooves are cut into the glass: the inner shadow is on the upper left edge, the handle (the pearl moonlet rendered in Blender) casts to the lower right, as every SW AUDIO part.</span>
+    <span>Numbers are set in Space Mono: Michroma's zero reads as a square. The jewel lamp glows in the category teal, not the status green. Every control is 44 px wide or more to hit, the slider's whole row takes the drag.</span>
+  </section>
+
+  <!-- macro knobs: the digital arc knob, bipolar from the top, the moon rides the arc -->
+  <section aria-label="Macro knobs" style="position: absolute; left: 626px; top: 612px; width: 630px; display: flex; flex-direction: column; gap: 10px;">
+    <span style="font-size: 11px; letter-spacing: .3em; color: {{c.label}};">MACRO KNOB · THE MOON RIDES THE ARC, 50 = THE PRESET AS IT IS</span>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;">
+      <sc-for list="{{knobs}}" as="k" hint-placeholder-count="4">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px;">
+          <div style="position: relative; width: 84px; height: 84px;">
+            <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true" style="position: absolute; inset: 0;">
+              <path d="{{k.track}}" fill="none" stroke="{{c.knobTrack}}" stroke-width="5" stroke-linecap="round"></path>
+              <path d="{{k.arc}}" fill="none" stroke="{{c.cat}}" stroke-width="3" stroke-linecap="round" opacity="{{k.arcOp}}" style="filter: drop-shadow(0 0 4px rgba(63,209,160,.6));"></path>
+              <path d="M42 4.5v6" stroke="{{c.tick}}" stroke-width="1.2" stroke-linecap="round"></path>
+            </svg>
+            <div aria-hidden="true" style="position: absolute; inset: 17px; border-radius: 50%; background: {{c.knobFace}}; box-shadow: {{c.knobShadow}}; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; color: {{c.strong}};">{{k.v}}</div>
+            <img src="{{c.bead}}" alt="" aria-hidden="true" style="position: absolute; left: {{k.bx}}px; top: {{k.by}}px; width: {{k.bs}}px; height: {{k.bs}}px; filter: {{k.bf}};">
+            <input class="sw-range" type="range" min="0" max="100" step="1" value="{{k.v}}" onChange="{{k.set}}" aria-label="{{k.aria}}" style="border-radius: 50%;">
+          </div>
+          <span style="font-size: 11px; letter-spacing: .26em; color: {{c.label2}};">{{k.name}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- the MOD matrix built from the kit -->
+  <section aria-label="Modulation matrix" style="position: absolute; left: 626px; top: 74px; width: 630px; box-sizing: border-box; padding: 14px 18px 12px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
+    <div style="display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) 40px minmax(0, 1fr) 126px 38px; align-items: center; gap: 8px; padding-bottom: 6px;">
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">#</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">ON</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">SOURCE</span>
+      <span></span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">TARGET</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">AMOUNT</span>
+      <span></span>
+    </div>
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+      <div style="display: grid; grid-template-columns: 22px 48px minmax(0, 1fr) 40px minmax(0, 1fr) 126px 38px; align-items: center; gap: 8px; height: 58px; border-top: 1px solid {{c.line}}; opacity: {{r.op}};">
+        <span style="font-family: 'Space Mono', monospace; font-size: 11px; color: {{c.label}};">{{r.no}}</span>
+        <button type="button" role="switch" aria-checked="{{r.tg.on}}" aria-label="{{r.tg.aria}}" onClick="{{r.toggle}}" style="position: relative; width: 46px; height: 26px; padding: 0; border: none; border-radius: 13px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};">
+          <span aria-hidden="true" style="position: absolute; top: 6px; left: {{r.tg.x}}px; width: 14px; height: 14px; border-radius: 50%; background: {{r.tg.jewel}}; box-shadow: {{r.tg.glow}};"></span>
+        </button>
+        <button type="button" aria-haspopup="listbox" aria-expanded="{{r.src.open}}" aria-label="{{r.src.aria}}" onClick="{{r.src.pick}}" style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; border: 1px solid {{r.src.line}}; background: {{c.chip}}; box-shadow: {{c.chipShadow}}; color: {{c.strong}}; min-width: 0;">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{r.src.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{r.src.f}}" fill="currentColor"></path></svg>
+          <span style="flex: 1; text-align: left; font-size: 14px; font-weight: 500; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.src.label}}</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink: 0; color: {{c.sub}};"><path d="M2 4.5c2 3 6 3 8 0" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"></path><path d="M11 4.5a1.2 1.2 0 1 1 -2.4 0a1.2 1.2 0 1 1 2.4 0" fill="currentColor"></path></svg>
+        </button>
+        <svg width="40" height="24" viewBox="0 0 40 24" aria-hidden="true" style="display: block;">
+          <path d="M4 12H36" stroke="{{c.track}}" stroke-width="1"></path>
+          <path class="{{r.line.cls}}" d="M4 12H36" stroke="{{c.cat}}" stroke-width="{{r.line.w}}" stroke-linecap="round" stroke-dasharray="{{r.line.dash}}" opacity="{{r.line.op}}"></path>
+          <path d="M5.5 12a1.5 1.5 0 1 1 -3 0a1.5 1.5 0 1 1 3 0" fill="{{c.acc}}"></path><path d="M37.5 12a1.5 1.5 0 1 1 -3 0a1.5 1.5 0 1 1 3 0" fill="{{c.acc}}"></path>
+        </svg>
+        <button type="button" aria-haspopup="listbox" aria-expanded="{{r.dst.open}}" aria-label="{{r.dst.aria}}" onClick="{{r.dst.pick}}" style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; border: 1px solid {{r.dst.line}}; background: {{c.chip}}; box-shadow: {{c.chipShadow}}; color: {{c.strong}}; min-width: 0;">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{r.dst.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{r.dst.f}}" fill="currentColor"></path></svg>
+          <span style="flex: 1; text-align: left; font-size: 14px; font-weight: 500; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.dst.label}}</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" style="flex-shrink: 0; color: {{c.sub}};"><path d="M2 4.5c2 3 6 3 8 0" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"></path><path d="M11 4.5a1.2 1.2 0 1 1 -2.4 0a1.2 1.2 0 1 1 2.4 0" fill="currentColor"></path></svg>
+        </button>
+        <div style="position: relative; height: 28px;">
+          <span aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 11px; height: 6px; border-radius: 3px; background: {{c.groove}}; box-shadow: {{c.grooveShadow}};"></span>
+          <span aria-hidden="true" style="position: absolute; left: 50%; top: 7px; width: 1px; height: 14px; background: {{c.tick}};"></span>
+          <span aria-hidden="true" style="position: absolute; left: {{r.sl.fx}}%; width: {{r.sl.fw}}%; top: 12px; height: 4px; border-radius: 2px; background: {{r.sl.fill}}; box-shadow: {{c.fillGlow}}; opacity: {{r.sl.op}};"></span>
+          <img src="{{c.bead}}" alt="" aria-hidden="true" style="position: absolute; top: 3px; left: calc({{r.sl.x}}% - 11px); width: 22px; height: 22px; filter: {{c.beadShadow}}; opacity: {{r.sl.thumbOp}};">
+          <input class="sw-range" type="range" min="-100" max="100" step="1" value="{{r.amt}}" onChange="{{r.setAmt}}" aria-label="{{r.amtAria}}">
+        </div>
+        <span style="font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: {{r.ink}}; text-align: right;">{{r.amtText}}</span>
+      </div>
+    </sc-for>
+    <!-- the open list (one at a time), placed under its chip -->
+    <sc-if value="{{menu.on}}" hint-placeholder-val="{{true}}">
+      <div role="listbox" aria-label="{{menu.aria}}" style="position: absolute; left: {{menu.x}}px; top: {{menu.y}}px; width: 214px; box-sizing: border-box; padding: 6px; border-radius: 12px; border: 1px solid {{c.line2}}; background: {{c.menu}}; box-shadow: {{c.menuShadow}}; z-index: 5;">
+        <sc-for list="{{menu.items}}" as="it" hint-placeholder-count="9">
+          <button type="button" role="option" aria-selected="{{it.sel}}" onClick="{{it.pick}}" style="position: relative; width: 100%; height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border: none; border-radius: 8px; text-align: left; {{it.look}}">
+            <span aria-hidden="true" style="position: absolute; left: 0; top: 7px; width: 2px; height: 18px; border-radius: 1px; background: {{it.bar}};"></span>
+            <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true" style="flex-shrink: 0; color: {{c.acc}};"><path d="{{it.d}}" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="{{it.f}}" fill="currentColor"></path></svg>
+            <span style="flex: 1; font-size: 14px; letter-spacing: .06em;">{{it.label}}</span>
+            <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.acc}};">{{it.mark}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var self = this, s = this.state || {};
+    var theme = this.props.theme === 'light' ? 'light' : 'dark', light = theme === 'light';
+    var c = light ? {
+      bg: 'linear-gradient(180deg, #f1f6f4 0, #e2ece8 55%, #d4e1dc 100%)', text: '#1b2622', strong: '#101614', sub: '#4c5f58', label: '#3a4a44', label2: '#2e3b36',
+      acc: '#0b5a41', cat: '#178a64', line: 'rgba(11,90,65,.14)', line2: 'rgba(11,90,65,.35)', track: 'rgba(11,90,65,.18)', tick: 'rgba(11,90,65,.3)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.52) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.9), 8px 14px 30px rgba(40,70,60,.14)',
+      field: '#ffffff', groove: 'linear-gradient(180deg, rgba(11,90,65,.16), rgba(255,255,255,.7))',
+      grooveShadow: 'inset 1px 1px 2px rgba(20,50,40,.35), inset -1px -1px 1px rgba(255,255,255,.9)',
+      chip: 'linear-gradient(160deg, rgba(255,255,255,.95), rgba(240,246,244,.8))', chipLine: 'rgba(11,90,65,.2)', chipShadow: 'inset 0 1px 0 #ffffff, 2px 3px 6px rgba(40,70,60,.12)',
+      fill: 'linear-gradient(90deg, #22a87c, #3fd1a0)', fillNeg: 'linear-gradient(90deg, #3fd1a0, #22a87c)', fillGlow: '0 0 6px rgba(34,168,124,.35)',
+      bead: '/_blob/e38db7eb052c9ac25fd71783f0559f60', beadShadow: 'drop-shadow(2px 3px 2px rgba(30,60,50,.35))',
+      jewelOn: 'radial-gradient(circle at 38% 34%, #ffffff 0, #8de0c3 30%, #22a87c 62%, #0b5a41 100%)', glowOn: '0 0 8px rgba(34,168,124,.55), 1px 2px 2px rgba(20,50,40,.3)',
+      jewelOff: 'radial-gradient(circle at 38% 34%, #ffffff 0, #dfe7e4 45%, #9fb0aa 100%)', glowOff: '1px 2px 2px rgba(20,50,40,.3)',
+      knobTrack: 'rgba(11,90,65,.14)', knobFace: 'radial-gradient(circle at 34% 28%, #ffffff, #e4ece9 75%)', knobShadow: 'inset 0 1px 0 #ffffff, 3px 5px 10px rgba(40,70,60,.22)',
+      menu: 'linear-gradient(160deg, #ffffff, #f2f7f5)', menuShadow: '10px 18px 36px rgba(40,70,60,.22)', hover: 'rgba(23,138,100,.08)', sel: 'rgba(23,138,100,.14)', selLine: 'rgba(11,90,65,.55)'
+    } : {
+      bg: 'radial-gradient(ellipse 60% 70% at 70% 40%, #0e1516 0, #070a0b 55%, #030405 100%)', text: '#e8e8e8', strong: '#f2f2f2', sub: '#8e8e8e', label: '#a8a8a8', label2: '#cacaca',
+      acc: '#8de0c3', cat: '#3fd1a0', line: 'rgba(141,224,195,.12)', line2: 'rgba(141,224,195,.35)', track: 'rgba(255,255,255,.1)', tick: 'rgba(141,224,195,.3)',
+      panel: 'linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45)',
+      field: '#0d1314', groove: 'linear-gradient(180deg, rgba(0,0,0,.6), rgba(255,255,255,.04))',
+      grooveShadow: 'inset 1px 1px 2px rgba(0,0,0,.8), inset -1px -1px 1px rgba(255,255,255,.06), 0 1px 0 rgba(255,255,255,.04)',
+      chip: 'linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02))', chipLine: 'rgba(141,224,195,.2)', chipShadow: 'inset 0 1px 0 rgba(255,255,255,.08), 2px 3px 8px rgba(0,0,0,.35)',
+      fill: 'linear-gradient(90deg, #22a87c, #8de0c3)', fillNeg: 'linear-gradient(90deg, #8de0c3, #22a87c)', fillGlow: '0 0 8px rgba(63,209,160,.45)',
+      bead: '/_blob/e38db7eb052c9ac25fd71783f0559f60', beadShadow: 'drop-shadow(2px 3px 2px rgba(0,0,0,.55))',
+      jewelOn: 'radial-gradient(circle at 38% 34%, #ffffff 0, #bff3df 22%, #3fd1a0 55%, #0b5a41 100%)', glowOn: '0 0 10px rgba(63,209,160,.7), 0 0 2px rgba(191,243,223,.9)',
+      jewelOff: 'radial-gradient(circle at 38% 34%, rgba(255,255,255,.55) 0, #2a3432 30%, #0d1314 100%)', glowOff: '1px 2px 2px rgba(0,0,0,.6)',
+      knobTrack: 'rgba(0,0,0,.55)', knobFace: 'radial-gradient(circle at 34% 28%, #1f2a2a, #0c1112 75%)', knobShadow: 'inset 1px 1px 0 rgba(255,255,255,.08), 3px 5px 12px rgba(0,0,0,.6)',
+      menu: 'linear-gradient(160deg, #141c1d, #0b1011)', menuShadow: '0 24px 48px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06)', hover: 'rgba(141,224,195,.06)', sel: 'rgba(63,209,160,.12)', selLine: 'rgba(141,224,195,.6)'
+    };
+    // glyphs: [stroke path, fill path] on an 18 x 18 grid
+    var G = {
+      none: ['M5 9h8', ''],
+      lfo: ['M2 9a7 3.2 0 1 0 14 0a7 3.2 0 1 0 -14 0', 'M15.6 7.4a1.7 1.7 0 1 1 -3.4 0a1.7 1.7 0 1 1 3.4 0'],
+      env: ['M2 15L5.5 3.5L8.5 9.5H12L15.5 15', ''],
+      vel: ['M4 15v-3.5M9 15V8M14 15V3.5', ''],
+      wheel: ['M6.5 2.5h5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1 -1.5 1.5h-5a1.5 1.5 0 0 1 -1.5 -1.5V4a1.5 1.5 0 0 1 1.5 -1.5zM7 6.5h4M7 9h4M7 11.5h4', ''],
+      press: ['M9 2v7.5M6 6.5l3 3 3-3M3 14.5h12', ''],
+      key: ['M2.5 4h13v10h-13zM7 10v4M11 10v4', 'M5.6 4h2.6v6H5.6zM9.8 4h2.6v6H9.8z'],
+      macro: ['M15 9a6 6 0 1 1 -12 0a6 6 0 1 1 12 0M9 9l3.2 -3.2', ''],
+      cutoff: ['M2 6h7.5c3 0 4 2.5 5 9', ''],
+      res: ['M2 7h6.5c1.6 0 2-4 3.5-4s2 9 4 12', ''],
+      pitch: ['M9 2.5v13M5.5 6L9 2.5 12.5 6M5.5 12L9 15.5 12.5 12', ''],
+      drive: ['M2 12l3-6 3 8 3-10 3 8 2-3', ''],
+      pan: ['M2.5 9h13M5.5 6l-3 3 3 3M12.5 6l3 3-3 3', ''],
+      level: ['M4 15v-2M7 15v-5M10 15V7M13 15V4', ''],
+      rate: ['M3 9a6 6 0 1 1 6 6M9 15l-2.2-1.6M9 15l-1.6 2.2', ''],
+      planet: ['M13 9a4 4 0 1 1 -8 0a4 4 0 1 1 8 0M1.5 12c4.5 0 11.5-2.8 15-6.5', ''],
+      pw: ['M2 13V5h5v8h9', ''],
+      detune: ['M2 9c2-5 4-5 6 0s4 5 6 0M2 11c2-3 4-3 6 0', ''],
+      gravity: ['M9 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M2 5c4 0 6 2 6 4M16 13c-4 0-6-2-6-4', '']
+    };
+    var SRC = [['none', 'None', 'none'], ['lfo1', 'LFO 1', 'lfo'], ['lfo2', 'LFO 2', 'lfo'], ['env2', 'Env 2', 'env'], ['vel', 'Velocity', 'vel'], ['wheel', 'Mod wheel', 'wheel'],
+      ['at', 'Aftertouch', 'press'], ['key', 'Key', 'key'], ['m1', 'M1 Bright', 'macro'], ['m2', 'M2 Reso', 'macro'], ['m3', 'M3 Attack', 'macro'], ['m4', 'M4 Release', 'macro'],
+      ['m5', 'M5 Drive', 'macro'], ['m6', 'M6 Width', 'macro'], ['m7', 'M7 Delay', 'macro'], ['m8', 'M8 Reverb', 'macro']];
+    var DST = [['none', 'None', 'none'], ['cutoff', 'Cutoff', 'cutoff'], ['res', 'Resonance', 'res'], ['pitch', 'Pitch', 'pitch'], ['drive', 'Drive', 'drive'], ['pan', 'Pan', 'pan'],
+      ['level', 'Level', 'level'], ['l1', 'L1 level', 'planet'], ['l2', 'L2 level', 'planet'], ['l3', 'L3 level', 'planet'], ['l4', 'L4 level', 'planet'],
+      ['r1', 'LFO 1 rate', 'rate'], ['r2', 'LFO 2 rate', 'rate'], ['pw', 'Pulse width', 'pw'], ['det', 'Detune', 'detune'], ['grav', 'Gravity', 'gravity']];
+    var find = function (list, v) { for (var i = 0; i < list.length; i++) if (list[i][0] === v) return list[i]; return list[0]; };
+    var slots = s.slots || [
+      { from: 'lfo1', to: 'cutoff', amt: 35, on: true }, { from: 'env2', to: 'cutoff', amt: 40, on: true }, { from: 'vel', to: 'res', amt: -20, on: true },
+      { from: 'wheel', to: 'r1', amt: 60, on: true }, { from: 'm1', to: 'cutoff', amt: 50, on: true }, { from: 'm5', to: 'drive', amt: 45, on: true },
+      { from: 'at', to: 'l4', amt: 25, on: true }, { from: 'm6', to: 'pan', amt: 0, on: false }
+    ];
+    // the open list: which slot and which side (the sample opens slot 1's source)
+    var open = s.open === undefined ? { i: 0, side: 'src' } : s.open;
+    var upd = function (i, k, v) { var ns = slots.map(function (x, j) { if (j !== i) return x; var o = Object.assign({}, x); o[k] = v; return o; }); self.setState({ slots: ns }); };
+    // a bipolar slider: fill from the middle to the value
+    var slider = function (v, on) {
+      var x = (v + 100) / 2, lo = Math.min(50, x), hi = Math.max(50, x);
+      return { x: x, fx: lo, fw: hi - lo, fill: v < 0 ? c.fillNeg : c.fill, op: on ? 1 : 0.35, thumbOp: on ? 1 : 0.55 };
+    };
+    var sw = function (on) { return { on: on ? 'true' : 'false', x: on ? 26 : 6, jewel: on ? c.jewelOn : c.jewelOff, glow: on ? c.glowOn : c.glowOff }; };
+    var gline = function (amt, on) {
+      var a = Math.abs(amt) / 100;
+      return { w: (1 + 2.6 * a).toFixed(2), dash: amt < 0 ? '1 6' : '7 7', cls: on && amt !== 0 ? 'sw-flow' + (amt < 0 ? ' sw-back' : '') : '', op: on && amt !== 0 ? (0.45 + 0.55 * a).toFixed(2) : 0.25 };
+    };
+    var chip = function (list, v, isOpen) { var e = find(list, v), g = G[e[2]]; return { label: e[1], d: g[0], f: g[1], line: isOpen ? c.selLine : c.chipLine, open: isOpen ? 'true' : 'false' }; };
+    var fmt = function (v) { return v > 0 ? '+' + v : (v < 0 ? '−' + Math.abs(v) : '0'); };
+    var rows = slots.map(function (x, i) {
+      var so = open && open.i === i && open.side === 'src', dO = open && open.i === i && open.side === 'dst';
+      var src = chip(SRC, x.from, so), dst = chip(DST, x.to, dO);
+      src.aria = 'Slot ' + (i + 1) + ' source, ' + src.label; dst.aria = 'Slot ' + (i + 1) + ' target, ' + dst.label;
+      src.pick = function () { self.setState({ open: so ? null : { i: i, side: 'src' } }); };
+      dst.pick = function () { self.setState({ open: dO ? null : { i: i, side: 'dst' } }); };
+      var tg = sw(x.on); tg.aria = 'Slot ' + (i + 1) + (x.on ? ' on' : ' off');
+      return {
+        no: String(i + 1), op: x.on ? 1 : 0.6, tg: tg, toggle: function () { upd(i, 'on', !x.on); }, src: src, dst: dst,
+        line: gline(x.amt, x.on), sl: slider(x.amt, x.on), amt: x.amt, amtText: fmt(x.amt), ink: x.amt === 0 || !x.on ? c.sub : c.strong,
+        amtAria: 'Slot ' + (i + 1) + ' amount, ' + x.amt + ' %', setAmt: function (e) { upd(i, 'amt', Number(e.target.value)); }
+      };
+    });
+    // the list under the open chip (panel coordinates: header 14 + 30, rows of 58; source column at 104, target at 104 + w + 48)
+    var menu = { on: false, items: [], x: 0, y: 0, aria: '' };
+    if (open) {
+      var list = open.side === 'src' ? SRC : DST, cur = open.side === 'src' ? slots[open.i].from : slots[open.i].to, colW = (630 - 36 - 22 - 48 - 40 - 126 - 38 - 48) / 2;
+      menu = { on: true, aria: (open.side === 'src' ? 'Source' : 'Target') + ' of slot ' + (open.i + 1),
+        x: 18 + 22 + 8 + 48 + 8 + (open.side === 'src' ? 0 : colW + 8 + 40 + 8), y: 14 + 30 + open.i * 58 + 50,
+        items: list.slice(0, 9).map(function (e, k) {
+          var sel = e[0] === cur, hov = !sel && k === 3, g = G[e[2]];
+          return { label: e[1], d: g[0], f: g[1], sel: sel ? 'true' : 'false', mark: sel ? '●' : '', bar: sel ? c.cat : 'rgba(0,0,0,0)',
+            look: 'background: ' + (sel ? c.sel : (hov ? c.hover : 'none')) + '; color: ' + (sel ? c.strong : c.text) + ';',
+            pick: function () { upd(open.i, open.side === 'src' ? 'from' : 'to', e[0]); self.setState({ open: null }); } };
+        }) };
+    }
+    var ticks = [];
+    for (var t = 0; t <= 8; t++) ticks.push({ x: (t * 12.5).toFixed(2), y: t === 4 ? 6 : 19, h: t === 4 ? 16 : 4 });
+    var dv = s.demoAmt === undefined ? 35 : s.demoAmt, don = s.demoOn === undefined ? true : s.demoOn;
+    var demo = [{ tg: sw(don), toggle: function () { self.setState({ demoOn: !don }); }, src: chip(SRC, 'lfo1', false), dst: chip(DST, 'cutoff', false),
+      line: gline(dv, don), sl: slider(dv, don), amt: dv, amtText: fmt(dv), ink: don ? c.strong : c.sub, amtAria: 'Amount', setAmt: function (e) { self.setState({ demoAmt: Number(e.target.value) }); } }];
+    demo[0].src.aria = 'Source, LFO 1'; demo[0].dst.aria = 'Target, Cutoff';
+    var sv = s.sv || [35, -20, 0, 60];
+    var sliders = [['+35 · resting', 0, true, false], ['−20 · negative', 1, true, false], ['0 · the middle', 2, true, false], ['+60 · held (drag)', 3, true, true]].map(function (d) {
+      var v = sv[d[1]], held = d[3];
+      return { name: d[0], v: v, text: fmt(v), ink: v === 0 ? c.sub : c.strong, sl: slider(v, d[2]), disabled: false, glow: held ? '0 0 14px rgba(63,209,160,.8)' : c.fillGlow,
+        thumb: held ? { s: 28, h: 14, t: 0, f: c.beadShadow + ' drop-shadow(0 0 6px rgba(141,224,195,.85))' } : { s: 22, h: 11, t: 3, f: c.beadShadow },
+        set: function (e) { var n = sv.slice(); n[d[1]] = Number(e.target.value); self.setState({ sv: n }); } };
+    });
+    var sws = s.sws || [true, false];
+    var switches = sws.map(function (on, k) { var x = sw(on); x.label = on ? 'ON' : 'OFF'; x.toggle = function () { var n = sws.slice(); n[k] = !on; self.setState({ sws: n }); }; return x; });
+    var lines = [[60, '+60'], [-20, '−20'], [0, '0 / off']].map(function (d) { var g = gline(d[0], true); g.label = d[1]; return g; });
+    var chips = [['lfo', 'LFO 1'], ['env', 'Env 2'], ['vel', 'Velocity'], ['wheel', 'Mod wheel'], ['macro', 'M1 Bright'], ['cutoff', 'Cutoff'], ['pitch', 'Pitch'], ['planet', 'L4 level']].map(function (d) {
+      return { label: d[1], d: G[d[0]][0], f: G[d[0]][1] };
+    });
+    // knobs: 270 degrees of travel (-135 .. +135 from the top), bipolar about 50; the moon sits on the arc at the value
+    var arcPath = function (a0, a1, r) {
+      var p = function (a) { var t = (a - 90) * Math.PI / 180; return [42 + r * Math.cos(t), 42 + r * Math.sin(t)]; };
+      var s0 = p(a0), s1 = p(a1), big = Math.abs(a1 - a0) > 180 ? 1 : 0, sweep = a1 > a0 ? 1 : 0;
+      return 'M' + s0[0].toFixed(2) + ' ' + s0[1].toFixed(2) + 'A' + r + ' ' + r + ' 0 ' + big + ' ' + sweep + ' ' + s1[0].toFixed(2) + ' ' + s1[1].toFixed(2);
+    };
+    var kv = s.kv || [50, 78, 22, 64];
+    var knobs = [['BRIGHT', 0, false], ['RESO', 1, false], ['RELEASE', 2, false], ['DRIVE · HELD', 3, true]].map(function (d) {
+      var v = kv[d[1]], ang = (v - 50) / 50 * 135, held = d[2], r = 36, t = (ang - 90) * Math.PI / 180, bs = held ? 18 : 14;
+      return { name: d[0], v: v, track: arcPath(-135, 135, r), arc: Math.abs(ang) < 0.5 ? 'M42 6' : arcPath(Math.min(0, ang), Math.max(0, ang), r), arcOp: Math.abs(ang) < 0.5 ? 0 : 1,
+        bx: (42 + r * Math.cos(t) - bs / 2).toFixed(1), by: (42 + r * Math.sin(t) - bs / 2).toFixed(1), bs: bs,
+        bf: held ? c.beadShadow + ' drop-shadow(0 0 6px rgba(141,224,195,.85))' : c.beadShadow, aria: 'Macro ' + d[0] + ', ' + v,
+        set: function (e) { var n = kv.slice(); n[d[1]] = Number(e.target.value); self.setState({ kv: n }); } };
+    });
+    return { theme: theme, c: c, rows: rows, menu: menu, ticks: ticks, demo: demo, sliders: sliders, switches: switches, lines: lines, chips: chips, knobs: knobs };
+  }
+}
+</script>
+</body>
+</html>
