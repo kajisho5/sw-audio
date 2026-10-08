@@ -6,8 +6,10 @@
 //   build/sw_license keygen <secret-key-file>                    writes a new key (hex, owner-only permissions); prints the public key
 //   build/sw_license sign <secret-key-file> <key-id> <products> <licence-id> <major> [machine-hash]   prints a licence (issued today, UTC)
 //   build/sw_license verify <public-key-hex> <key-id> <licence-file> <product> <major> [machine-hash]
+//   build/sw_license pkcs8 <secret-key-file>                     the secret key as PKCS#8 base64, for the licence server's secret store
 //   build/sw_license machine                                     this computer's hash (for a licence bound to it)
 #include "sw/license.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -121,12 +123,23 @@ int main(int argc, char** argv) {
         std::printf("%s\n", lic::statusText(s));
         return s == lic::Status::Valid ? 0 : 1;
     }
+    if (cmd == "pkcs8" && argc == 3) {   // the secret key as PKCS#8 (base64) for the licence server (wrangler secret put LICENSE_PRIVATE_KEY)
+        uint8_t secret[64];
+        if (!readSecret(argv[2], secret)) { std::fprintf(stderr, "cannot read the secret key\n"); return 1; }
+        static const uint8_t prefix[16] = {0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20};   // RFC 8410
+        std::vector<uint8_t> der(prefix, prefix + 16);
+        der.insert(der.end(), secret, secret + 32);   // the seed
+        std::memset(secret, 0, sizeof secret);
+        std::printf("%s\n", lic::encodeBase64(der).c_str());
+        std::fill(der.begin(), der.end(), 0);
+        return 0;
+    }
     if (cmd == "machine" && argc == 2) {
         const std::string h = lic::machineHash(lic::kMachineSalt);
         std::printf("%s\n", h.empty() ? "(no machine id)" : h.c_str());
         return h.empty() ? 1 : 0;
     }
     std::fprintf(stderr, "usage: %s keygen <secret-file> | sign <secret-file> <key-id> <products> <licence-id> <major> [machine] | "
-                         "verify <public-hex> <key-id> <licence-file> <product> <major> [machine] | machine\n", argv[0]);
+                         "verify <public-hex> <key-id> <licence-file> <product> <major> [machine] | pkcs8 <secret-file> | machine\n", argv[0]);
     return 2;
 }

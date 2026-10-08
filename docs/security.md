@@ -6,9 +6,9 @@
 
 | # | やること | 状態 |
 | --- | --- | --- |
-| 1 | **GitHub リポジトリを非公開にする**（いまは公開。製品の全ソースを誰でもビルドできるので、ライセンス認証を入れても外して配れる） | **要判断**（リポジトリ設定の変更なので依頼者の承認後に実行） |
+| 1 | **GitHub リポジトリを非公開にする**（いまは公開。製品の全ソースを誰でもビルドできるので、ライセンス認証を入れても外して配れる） | **あとで**（依頼者 2026-10-09「あとでやる」。販売開始の前に必要） |
 | 2 | **コード署名と公証**：macOS は Developer ID 署名＋公証（Apple の規則で、ダウンロードしたプラグインは公証がないとホストに読み込まれない）。Windows は OV のコード署名証明書 | 未着手（アカウントと証明書の取得が要る） |
-| 3 | **ライセンス認証**（**買い切り**：依頼者の決定 2026-10-09）：署名付きライセンスファイル（Ed25519）をオフラインで検証。有効化の台数はサーバー側で数える。ネットがなくても動く | **検証の部分は実装済み**（`core/src/license.cpp`・署名の道具・テスト）。発行サーバーとプラグインへの組み込みは、決済サービスと未認証時の動作が決まってから |
+| 3 | **ライセンス認証**（**買い切り**・決済は **Stripe**・ライセンスがなければ**無音を挟む**：いずれも依頼者の決定 2026-10-09）：署名付きライセンスファイル（Ed25519）をオフラインで検証。有効化の台数はサーバー側で数える。ネットがなくても動く | **実装済み**：検証（`core/src/license.cpp`）、全プラグインへの組み込みと無音（`sw/demo_gate.hpp`）、発行サーバー（`server/license/`、Stripe Webhook・有効化）、署名の道具、テスト。**残り**：本番の鍵、サーバーの設置（Cloudflare・Stripe のアカウント作業）、画面での有効化 |
 | 4 | **配布と更新の経路**：HTTPS、インストーラーも署名・公証、SHA-256 の公開、更新情報は署名を確かめる | 未着手 |
 | 5 | **プラグイン自体の守り**：共有されるファイル（プリセット・プロジェクトの保存データ）を「信用しない入力」として読む | **実装済み**（下の 6 章。テストと ASan で確認） |
 
@@ -27,6 +27,11 @@
 | 依存ソフト・CI の乗っ取り | ビルドに不正なコードが混ざる | 5 章 |
 
 ## 2. コード署名と公証
+
+**名義：SEVENTHWELL**（依頼者の決定 2026-10-09）。プラグインの発行元（CLAP の vendor、AU の製造元、インストーラー、Web、Stripe の公開事業者名）は SEVENTHWELL にできる。ただし**署名に出る名前は法人かどうかで変わる**：
+- Apple：組織（Organization）として登録できるのは契約主体になれる法人だけで、「DBA・架空の事業名・屋号・支店は受け付けない」。個人事業主は個人として登録し、**本人の氏名**が開発者名（Developer ID 証明書と Gatekeeper の表示）になる（Apple「Enrollment」）。
+- Windows：OV 証明書は登録された事業体が必要。個人事業主向けは本人の氏名が載る IV／EV（例：SSL.com の個人事業主向け EV は「認証済みの氏名が記載」、年 359 USD〜）。屋号の登記（商号登記）で OV が取れるかは認証局ごとに要確認。
+- したがって、SEVENTHWELL が法人でない（個人事業の屋号）なら、署名の発行元は氏名になる。署名の名前も SEVENTHWELL にしたいなら法人化（合同会社など）が要る。製品名・発行元表示・販売ページは屋号のままでよい。
 
 **macOS**（出典：Apple「Notarizing macOS software before distribution」）
 - 必要なもの：Apple Developer Program（年 99 USD、Apple の日本語ページの表示は米ドル）、Developer ID Application 証明書（バンドルの署名）と Developer ID Installer 証明書（pkg の署名）。
@@ -56,11 +61,11 @@
 **売り方：買い切り**（依頼者の決定、2026-10-09「かいきり」）。ライセンスに期限はない。1 本のライセンスは、買った時点のメジャー版（1.x）のすべての更新に使える（ファイルの `major=`）。次のメジャー版（2.0）を有償のアップグレードにするかは、2.0 を出すときに決める（仕組みはどちらにも対応）。台数上限は推奨の 3 台のまま（設計値。発行サーバーの設定で変えられる）。
 
 **推奨の仕組み**
-1. 決済は Merchant of Record（販売者として消費税・海外の VAT などを代行する決済サービス。どこにするかは要判断。例：Paddle、Lemon Squeezy、FastSpring）。Paddle Billing はライセンスキーの発行をやめているので（Paddle の移行文書）、どこを選んでもライセンスは自前で発行する前提にする。
+1. 決済は **Stripe**（依頼者の決定 2026-10-09）。**推奨：Stripe の Managed Payments**（Stripe が Merchant of Record＝販売者になり、80 か国以上の消費税・VAT・GST を計算・徴収・申告・納付する。対象の事業者の所在地に日本（JP）があり、ダウンロード型ソフト（税コード `txcd_10202000`）は対象商品。手数料は通常の決済手数料（日本 3.6 %）に加えて 3.5 %。使えるのは Stripe Checkout と Payment Link だけ。購入者の明細は「LINK.COM* ＋事業者の表記」、領収書は Link から届く。2026-10-09 の Stripe の文書）。使わない場合は SEVENTHWELL が販売者で、海外の個人への販売では各国の VAT 登録が要ることがある（EU は域外事業者の電子サービスに金額の下限なし）。Stripe Tax は税額の計算と徴収はするが、登録と申告は自分。どちらにするかは要判断（7 章）。
 2. 決済完了の通知（Webhook、署名を検証）を小さな発行サーバー（例：Cloudflare Workers＋D1）が受け、購入者・製品・有効化の台数を記録する。
 3. 有効化：プラグイン（または小さなアプリ）がキーと端末の識別値（ハッシュしたもの）を送る → サーバーが台数上限（例 3 台）を確かめ、**Ed25519 で署名したライセンスファイル**（製品 ID・購入 ID・端末のハッシュ・発行日）を返す。ネットのない端末用に、別の端末でファイルを受け取って持ち込む手順も用意する。
 4. プラグインは埋め込んだ公開鍵で署名を確かめるだけ（オフライン）。秘密鍵はサーバーの鍵管理（KMS）かオフラインに置き、**リポジトリと CI には置かない**。
-5. 未認証のとき：機能を落とすか、一定間隔で無音を挟むか（要判断）。どちらでも、保存データとプリセットは壊さない・音声スレッドで重い処理をしない。
+5. 未認証のとき：**一定間隔で無音を挟む**（依頼者の決定 2026-10-09）。設計値：起動（有効化）から 30 秒後に始め、60 秒ごとに 3 秒の無音、前後 10 ms のフェード（クリックなし）。最初の 30 秒は普通に聴けて、1 分以内に必ず気づく間隔。保存データ・プリセット・パラメータには触らない。無音の外は 1 ビットも変えない。
 6. ライセンスの検証は共通の層（`sw::Shell` と楽器のアダプター）に 1 か所で入れる。テストと validator 用の動作モードを用意する（CI が通るように）。
 7. 難読化に時間をかけすぎない：クラックされても、更新・サポート・新しいプリセットは正規の購入者だけが受け取れる形のほうが効く。
 
@@ -70,7 +75,10 @@
 - 端末の識別：OS の機械 ID（Windows は MachineGuid、macOS は IOPlatformUUID、Linux は /etc/machine-id）に固定の文字列を混ぜた BLAKE2b-256 のハッシュだけを使う（元の ID はサーバーに送らない）。
 - 道具 `tools/sw_license.cpp`（CMake の `sw-license-tool`）：鍵の作成（OS の安全な乱数、所有者だけが読めるファイル、上書き拒否）、署名（出力前に検証）、検証、この端末のハッシュの表示。**本番の鍵はまだ作っていない**：作るのは所有者の PC か発行サーバーの鍵管理で、秘密鍵はリポジトリにも CI にも置かない。
 - テスト（`tests/test_license.cpp`）：OpenSSL の署名の検証、往復、署名部分のどの 1 バイトを変えても不合格、別の鍵・知らない鍵 ID、製品違い、メジャー版、端末違い、改行の違い、壊したファイル 3,000 件（落ちない。通るのは末尾の改行・空白と CR の挿入だけ）。
-- まだのこと：発行サーバー（決済サービスが決まってから）、プラグインへの組み込み（ライセンスファイルの置き場所、画面での入力、未認証時の動作が決まってから。validator と CI 用の動作モードも一緒に）。
+- プラグインへの組み込み（2026-10-09）：全製品（エフェクトの共通層と楽器の層）が、有効化のたびにライセンスフォルダー（Windows `%APPDATA%\SEVENTHWELL\Licenses`、macOS `~/Library/Application Support/SEVENTHWELL/Licenses`、Linux `~/.local/share/SEVENTHWELL/Licenses`）の `*.swlicense` を確かめる（`core/src/license_state.cpp`）。製品は自分の製品コード、ライン（`studio`／`live`。LV の 30 本が LIVE、残りが STUDIO。IN07 は STUDIO）、`all` のどれかのライセンスで使える。なければ出力の最後に無音を挟む（`sw/demo_gate.hpp`）。**開発版は無音を挟まない**：検査は CMake の `SW_LICENSE_ENFORCE=ON` と本番の公開鍵（`builtInKeys()`）がそろったときだけ（validator と CI はそのまま通る）。環境変数 `SW_LICENSE_TEST_DEMO=1` はどのビルドでも無音を挟ませる（テスト用。外から無音を消す方法はない）。
+- 確認：無音の時刻・フェード・ブロック長に依らないこと（`tests/test_demo_gate.cpp`）、フォルダーの判定（`tests/test_license_state.cpp`：製品・ライン・all・他の鍵・壊れたファイル・端末・メジャー版）、実際のプラグインで 30.5〜32.5 秒が無音・その前は鳴る・開発版は鳴る（IN07 は `tools/clap_note_host.cpp`、エフェクトは `tools/clap_fx_demo_check.cpp`。CI の Linux で実行）。
+- 発行サーバー（`server/license/`、Cloudflare Workers＋D1）：Stripe Webhook（署名を検証、支払い済みのセッションだけ、2 回来ても 1 本）、商品のメタデータ `sku` から対象製品、サンクスページでライセンスキー（セッションから作り、保存しない）、有効化（その PC に縛ったファイル、3 台まで、同じ PC は数えない、解除で 1 台空く）、全額返金で新しい有効化を止める。氏名・メール・キーは保存しない。テストは `node --test`（Stripe と D1 は偽物、暗号は本物）で、発行したファイルをプラグイン側の C++ でも検証する（CI）。立ち上げの手順は `server/license/README.md`。
+- まだのこと：本番の鍵（所有者の PC で `sw-license-tool keygen`）とサーバーの設置、画面での有効化（「この PC のコード」の表示・キーの入力）、キーのメール送付（送信サービスを決めてから）。
 
 ## 4. 配布と更新
 
@@ -111,11 +119,11 @@
 
 ## 7. 決めてほしいこと（推奨つき）
 
-1. **リポジトリの非公開化**：推奨は販売前に非公開。ただし過去に公開していた分は回収できない。非公開にすると GitHub Actions が有料になる（無料枠は月 2,000 分。超過は macOS 0.062 USD／分、Windows 0.010 USD／分、Linux 2 コア 0.006 USD／分：GitHub Docs）。直近の CI 1 回（d76f432）は macOS 計 約 42 分、Windows 約 36 分、Linux 約 17 分で、枠を超えた分は 1 回あたり約 3 USD の試算（無料枠の macOS の数え方は要確認）。対策：macOS と Windows はタグと手動実行のときだけにする。
+1. **リポジトリの非公開化**：**あとで**（依頼者 2026-10-09）。推奨は販売前に非公開。ただし過去に公開していた分は回収できない。非公開にすると GitHub Actions が有料になる（無料枠は月 2,000 分。超過は macOS 0.062 USD／分、Windows 0.010 USD／分、Linux 2 コア 0.006 USD／分：GitHub Docs）。直近の CI 1 回（d76f432）は macOS 計 約 42 分、Windows 約 36 分、Linux 約 17 分で、枠を超えた分は 1 回あたり約 3 USD の試算（無料枠の macOS の数え方は要確認）。対策：macOS と Windows はタグと手動実行のときだけにする。
 2. ~~売り方~~：**買い切りに決定**（2026-10-09）。台数上限は推奨の 3 台（設計値）。次のメジャー版を有償にするかは 2.0 のときに決める。
-3. **決済サービス（Merchant of Record）**：どこにするか。手数料と日本からの出金条件を比べて決める。
-4. **未認証のときの動作**：機能制限か、一定間隔の無音か。
-5. **名義**：個人か法人か（Apple の開発者登録名、コード署名証明書の名義、決済サービスの契約に出る）。
+3. ~~決済サービス~~：**Stripe に決定**（2026-10-09）。残り：**Managed Payments（Stripe が販売者・税の代行、＋3.5 %）を使うか**（推奨：使う。海外の VAT 登録と申告を自分でしなくてよい）。
+4. ~~未認証のときの動作~~：**無音を挟むに決定**（2026-10-09）。30 秒後から 60 秒ごとに 3 秒（設計値）。
+5. ~~名義~~：**SEVENTHWELL に決定**（2026-10-09）。製品・販売ページの発行元は SEVENTHWELL。署名（Apple の Developer ID、Windows のコード署名）に SEVENTHWELL と出すには法人であることが要る（2 章）。個人事業のままなら署名は氏名で出る。法人化するかは要判断。
 
 ## 範囲外（セキュリティ以外で販売前に要るもの）
 
@@ -136,3 +144,11 @@
 - GitHub Docs: GitHub Actions の課金 — https://docs.github.com/en/billing/concepts/product-billing/github-actions
 - Steinberg: VST 3.8 を MIT ライセンスに（2025-10-29）— https://ocl-steinberg-live.steinberg.net/_storage/asset/819253/storage/master/Press%20Release%20-%202025-10-29%20-%20VST%203.8%20-%20EN.pdf
 - Steinberg: VST usage guidelines — https://steinbergmedia.github.io/vst3_dev_portal/pages/VST+3+Licensing/Usage+guidelines.html
+- Apple: Enrollment（個人・組織の登録条件）— https://developer.apple.com/programs/enroll/
+- SSL.com: 個人事業主向け EV コード署名 — https://www.ssl.com/ja/products/software-integrity/code-signing/ev-sole-proprietor/
+- Stripe: Managed Payments — https://docs.stripe.com/payments/managed-payments
+- Stripe: Managed Payments の対象（事業者の所在地・商品）— https://docs.stripe.com/payments/managed-payments/eligibility
+- Stripe: Managed Payments の仕組み — https://docs.stripe.com/payments/managed-payments/how-it-works
+- Stripe: 料金（日本）— https://stripe.com/jp/pricing
+- Stripe: Payment Link の完了後（`{CHECKOUT_SESSION_ID}`）— https://docs.stripe.com/payment-links/post-payment
+- Cloudflare: Workers の Web Crypto（Ed25519）— https://developers.cloudflare.com/workers/runtime-apis/web-crypto/

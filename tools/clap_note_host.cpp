@@ -3,6 +3,7 @@
 // changing anything), and, when the plug-in has them, browses and loads presets as a host's preset browser does (preset-discovery
 // factory, preset-load: the factory presets and the user folder, a damaged preset file refused). Linux / macOS (dlopen).
 // The user folder is redirected (XDG_DATA_HOME) to a temporary folder, so the user's own presets are not touched.
+// The demo silence (no licence) is checked with SW_LICENSE_TEST_DEMO=1; a development build must play without it.
 //   g++ -std=c++17 -O2 -Ibuild-cmake/_deps/clap-src/include tools/clap_note_host.cpp -ldl -o build/clap_note_host
 //   build/clap_note_host "build-cmake/plugins/SW IN07 SWINGBY.clap"
 #include <clap/clap.h>
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -301,6 +303,38 @@ int main(int argc, char** argv) {
             prov->destroy(prov);
         }
         fs::remove_all(tmp);
+    }
+    {   // without a licence (forced here with SW_LICENSE_TEST_DEMO=1): 3 s of silence every 60 s from 30 s; a development build plays clean
+        auto heldRms = [&](const clap_plugin_t* q, double a, double b) {
+            q->activate(q, fs, 1, B); q->start_processing(q);
+            const size_t n = static_cast<size_t>(34.0 * fs);
+            double sum = 0; size_t cnt = 0; bool sounding = true;
+            for (size_t off = 0; off < n; off += B) {
+                InEvents ie;
+                if (off == 0) ie.push(note(CLAP_EVENT_NOTE_ON, 0, 60, 0.9, 11));
+                clap_input_events_t in{&ie, InEvents::size, InEvents::get};
+                OutEvents oe; clap_output_events_t o{&oe, OutEvents::tryPush};
+                clap_process_t pr{}; pr.steady_time = -1; pr.frames_count = B; pr.audio_outputs = &out; pr.audio_outputs_count = 1; pr.in_events = &in; pr.out_events = &o;
+                q->process(q, &pr);
+                for (uint32_t i = 0; i < B; ++i) {
+                    const double t = (off + i) / fs;
+                    if (t >= a && t < b) { sum += L[i] * L[i] + R[i] * R[i]; cnt += 2; }
+                    if (t >= 25.0 && t < 29.0 && L[i] == 0.0f && R[i] == 0.0f && i > 0 && L[i - 1] == 0.0f) sounding = false;   // two zero samples in a row
+                }
+            }
+            q->stop_processing(q); q->deactivate(q);
+            return std::make_pair(10 * std::log10(sum / std::max<size_t>(cnt, 1) + 1e-30), sounding);
+        };
+        setenv("SW_LICENSE_TEST_DEMO", "1", 1);
+        const clap_plugin_t* q = fac->create_plugin(fac, &kHost, d->id);
+        q->init(q);
+        const auto gap = heldRms(q, 30.5, 32.5), before = heldRms(q, 25.0, 29.0);
+        unsetenv("SW_LICENSE_TEST_DEMO");
+        const auto clean = heldRms(q, 30.5, 32.5);
+        q->destroy(q);
+        std::printf("      demo: a held note 25..29 s %.1f dBFS, 30.5..32.5 s %.1f dBFS; without the switch 30.5..32.5 s %.1f dBFS\n", before.first, gap.first, clean.first);
+        check(before.first > -60.0 && before.second && gap.first < -200.0, "without a licence the sound stops for 3 s at 30 s (and plays before it)");
+        check(clean.first > -60.0, "a development build plays without the silence");
     }
     p->stop_processing(p); p->deactivate(p); p->destroy(p); entry->deinit();
     std::printf(fails ? "%d FAILED\n" : "all passed\n", fails);

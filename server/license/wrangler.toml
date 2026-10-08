@@ -1,0 +1,15 @@
+# SW AUDIO licence server — Cloudflare Workers. Secrets are not here: set them with `npx wrangler secret put <NAME>`
+# (STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY, LICENSE_KEY_SECRET, LICENSE_PRIVATE_KEY). See README.md.
+name = "sw-audio-licences"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+LICENSE_KEY_ID = "1"      # the id of the public key built into the plug-ins (core/src/license_state.cpp)
+LICENSE_MAJOR = "1"       # the major version a new licence covers (perpetual: every 1.x)
+MAX_ACTIVATIONS = "3"     # computers per licence
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sw-licences"
+database_id = "REPLACE_WITH_THE_ID_FROM_wrangler_d1_create"

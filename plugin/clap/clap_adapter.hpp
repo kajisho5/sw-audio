@@ -15,7 +15,9 @@
 #ifdef SW_SKIN_HEADER
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
 #endif
+#include "sw/demo_gate.hpp"
 #include "sw/denormal.hpp"
+#include "sw/license_state.hpp"
 #include "sw/param.hpp"
 #include "sw/shell.hpp"
 #include "sw/text.hpp"
@@ -26,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <type_traits>
@@ -240,6 +243,10 @@ private:
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
         s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr;
+        // the licence (main thread: reads the user's licence folder); without one, the demo silence (sw/demo_gate.hpp)
+        const auto lv = sw::license::productState(gui::codeOf(P::descriptor()->id), std::atoi(P::descriptor()->version));
+        s->demo_ = !lv.licensed || sw::license::forcedDemo();
+        s->gate_.prepare(sr);
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -314,6 +321,7 @@ private:
             if constexpr (HasParamWrite<typename P::Core>::value) s->emitParamWrite(pr->out_events, next - 1);
             pos = next;
         }
+        if (s->demo_) s->gate_.process(ob.data32, static_cast<int>(nch), static_cast<int>(frames));   // unlicensed: the demo silence
         s->measure(ob.data32, nch, frames, 2);
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
@@ -499,6 +507,8 @@ private:
     std::atomic<bool> snap_pending_{true};
     std::atomic<bool> restart_requested_{false};
     bool active_ = false;
+    sw::DemoGate gate_;   // the demo silence without a licence
+    bool demo_ = false;
     // plug-in window
     struct GuiOp { uint8_t kind = 0; int id = 0; };
     static constexpr size_t kCallQueue = 64;

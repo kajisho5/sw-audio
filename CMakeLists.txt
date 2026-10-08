@@ -34,8 +34,14 @@ add_library(sw-core INTERFACE)
 target_include_directories(sw-core INTERFACE core/include)
 
 # licence files (core/src/license.cpp): Ed25519 checks with the vendored Monocypher 4.0.3 (core/third_party/monocypher, BSD-2 / CC0)
-add_library(sw-license STATIC core/src/license.cpp core/third_party/monocypher/monocypher.c core/third_party/monocypher/monocypher-ed25519.c)
+add_library(sw-license STATIC core/src/license.cpp core/src/license_state.cpp core/third_party/monocypher/monocypher.c core/third_party/monocypher/monocypher-ed25519.c)
 target_include_directories(sw-license PUBLIC core/include)
+# release builds only: check licences (also needs a production public key in core/src/license_state.cpp); off = development build, never in demo
+option(SW_LICENSE_ENFORCE "Check licences (release builds)" OFF)
+if (SW_LICENSE_ENFORCE)
+    target_compile_definitions(sw-license PRIVATE SW_LICENSE_ENFORCE=1)
+endif()
+target_link_libraries(sw-core INTERFACE sw-license)   # every product (and so every plug-in) gets the licence check and the demo gate
 if (APPLE)
     target_link_libraries(sw-license PRIVATE "-framework IOKit" "-framework CoreFoundation")   # the machine id (IOPlatformUUID)
 endif()

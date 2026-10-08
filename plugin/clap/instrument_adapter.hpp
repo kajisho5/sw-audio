@@ -21,7 +21,9 @@
 // CC 120 all sound off, CC 123 all notes off, channel pressure; CLAP pressure expressions act as the aftertouch. Events are sample accurate: the block is split at each event. Every note that ends is reported (CLAP note end).
 // No plug-in window yet (the screen comes later): hosts show their generic controls. The instruments have no Auto gain, Delta, In or Mix.
 #pragma once
+#include "sw/demo_gate.hpp"
 #include "sw/denormal.hpp"
+#include "sw/license_state.hpp"
 #include "sw/param.hpp"
 #include "sw/text.hpp"
 #include "user_presets.hpp"
@@ -31,6 +33,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -196,6 +199,11 @@ private:
         Plugin* s = self(p);
         if constexpr (HasWarmUp<P>::value) P::warmUp();
         s->core_.prepare(sr, static_cast<int>(std::max<uint32_t>(1, maxFrames)));
+        // the licence (main thread: reads the user's licence folder); without one, the demo silence (sw/demo_gate.hpp)
+        const std::string pid = P::descriptor()->id;
+        const auto lv = sw::license::productState(pid.substr(pid.rfind('.') + 1), std::atoi(P::descriptor()->version));
+        s->demo_ = !lv.licensed || sw::license::forcedDemo();
+        s->gate_.prepare(sr);
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->applyPending();
         s->active_ = true;
@@ -234,6 +242,7 @@ private:
             pos = next;
         }
         while (ev < nev) { s->handleEvent(pr->in_events->get(pr->in_events, ev)); ++ev; }   // events at or after the end (frames 0)
+        if (s->demo_) s->gate_.process(ob.data32, static_cast<int>(std::min<uint32_t>(nch, 2)), static_cast<int>(frames));   // unlicensed: the demo silence
         for (uint32_t c = 2; c < nch; ++c) if (ob.data32[c]) std::memset(ob.data32[c], 0, frames * sizeof(float));
         s->emitChanged(pr->out_events, 0);
         s->emitNoteEnds(pr->out_events, frames > 0 ? frames - 1 : 0);
@@ -417,6 +426,8 @@ private:
     std::vector<uint8_t> changed_;   // values a program load changed, not yet reported to the host
     bool anyChanged_ = false;
     bool active_ = false;
+    sw::DemoGate gate_;   // the demo silence without a licence
+    bool demo_ = false;
 };
 
 template <class P>

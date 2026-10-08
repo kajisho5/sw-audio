@@ -1,0 +1,12 @@
+{
+  "name": "sw-audio-licence-server",
+  "private": true,
+  "type": "module",
+  "description": "SW AUDIO licence server: Stripe Checkout webhooks, licence keys, activation (Cloudflare Workers + D1)",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

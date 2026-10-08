@@ -105,11 +105,27 @@ jobs:
             "cv/$CV" validate -x "$X" "$CLAP" || exit 1
           done
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4.4.0, pinned to its commit
+        if: runner.os == 'Linux'
+        with:
+          node-version: 22
+
+      - name: Licence server tests (with the plug-ins' C++ licence check)
+        if: runner.os == 'Linux'
+        run: |
+          T="$(find "$PWD/build" -maxdepth 3 -type f -name sw-license-tool | head -1)"
+          [ -x "$T" ] || { echo "sw-license-tool was not built"; exit 1; }
+          cd server/license
+          SW_LICENSE_TOOL="$T" node --test test/*.test.js
+
       - name: Instrument host checks (notes, states, preset browser)
         if: runner.os == 'Linux'
         run: |
           g++ -std=c++17 -O2 -Ibuild/_deps/clap-src/include tools/clap_note_host.cpp -ldl -o note_host
           ./note_host "$(find build -maxdepth 3 -name 'SW IN07 SWINGBY.clap' | head -1)"
+          # the demo silence of an effect (the shared effect adapter)
+          g++ -std=c++17 -O2 -Ibuild/_deps/clap-src/include tools/clap_fx_demo_check.cpp -ldl -o fx_demo_check
+          ./fx_demo_check "$(find build -maxdepth 3 -name 'SW UT01 Gain.clap' | head -1)"
 
       - name: Build Steinberg VST3 validator
         run: |
