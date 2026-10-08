@@ -277,8 +277,11 @@
       skinBox.parentNode.append(st2, strip);
     } else { bar.append(el('span', 'evo', 'EVO'), evoT, el('span', 'sp'), el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu); box.append(bar); }
     const lvl = db => Math.max(0, Math.min(1, (db + 60) / 60)) * 100 + '%';
+    // the design's own graphs, drawn from the parameters and the measured levels (ui/displays.js)
+    const disp = skinBox && global.SWDISP ? global.SWDISP.attach(prod.code, skinBox, { value: name => { const h = host.find(x => x.p.name === name); return h ? vals[h.i] : undefined; } }) : null;
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
+      if (disp) disp.update(inf);
       if (skinBox) { /* the design has no latency chip */ } else if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
       const mt = inf.meters; if (mt) { [mi.bars[0], mi.bars[1], mo.bars[0], mo.bars[1]].forEach((b, k) => { b.style.width = lvl(mt[k]); b.classList.toggle('hot', mt[k] > -1); }); }
       cpu.textContent = inf.cpu !== undefined ? 'CPU ' + inf.cpu.toFixed(1) + ' %' : '';

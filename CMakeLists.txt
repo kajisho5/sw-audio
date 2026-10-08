@@ -53,7 +53,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(SW_GUI_ASSETS ${CMAKE_BINARY_DIR}/gen/gui_assets.hpp)
 add_custom_command(OUTPUT ${SW_GUI_ASSETS}
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${SW_GUI_ASSETS}
-    DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${CMAKE_SOURCE_DIR}/ui/sw-ui.css ${CMAKE_SOURCE_DIR}/ui/sw-ui.js ${CMAKE_SOURCE_DIR}/ui/host.js ${CMAKE_SOURCE_DIR}/ui/products.json
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${CMAKE_SOURCE_DIR}/ui/sw-ui.css ${CMAKE_SOURCE_DIR}/ui/sw-ui.js ${CMAKE_SOURCE_DIR}/ui/displays.js ${CMAKE_SOURCE_DIR}/ui/host.js ${CMAKE_SOURCE_DIR}/ui/products.json
     COMMENT "Embedding the plug-in screen")
 add_custom_target(sw-gui-assets DEPENDS ${SW_GUI_ASSETS})
 
