@@ -1,6 +1,8 @@
 """SW AUDIO — Blender renders for the IN07 Orbital screen (Blender 4.0.2, Cycles, CPU).
   blender -b -P tools/blender/in07_orbital.py -- core  <out.png> [samples]   the sound core (planet), 640 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- moon  <out.png> [samples]   a layer body / moon, 192 px, transparent
+  blender -b -P tools/blender/in07_orbital.py -- coreday <out.png> [samples] the core for light screens: real alpha (the mist absorbs and
+      scatters, lit from the top left, instead of only glowing), glass reflecting a bright sky; 640 px, transparent
   blender -b -P tools/blender/in07_orbital.py -- hero  <out.png> [samples]   the whole system for the sales material, 1920 x 1080
   blender -b -P tools/blender/in07_orbital.py -- body <kind> <out-prefix> [samples] [frames]
       one orbiting body, spinning on its own axis: <out-prefix>_00.png .. one frame per 360/frames degrees (default 96), transparent,
@@ -86,6 +88,39 @@ def glow_volume(strength, radius, power=3.0):
     mul = nt.nodes.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'; mul.inputs[1].default_value = strength
     nt.links.new(pw.outputs['Value'], mul.inputs[0]); nt.links.new(mul.outputs['Value'], vol.inputs['Strength'])
     nt.links.new(vol.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
+    return m
+
+
+def mist_material(radius, density, emission):
+    """the sound inside, for light screens: a teal mist that absorbs and scatters (so it has alpha and is lit by the key)
+    and still glows a little; noise x radial falloff like the nebula"""
+    m = bpy.data.materials.new('mist'); m.use_nodes = True; nt = m.node_tree
+    for n in list(nt.nodes):
+        if n.type != 'OUTPUT_MATERIAL':
+            nt.nodes.remove(n)
+    pv = nt.nodes.new('ShaderNodeVolumePrincipled')
+    pv.inputs['Color'].default_value = (0.22, 0.70, 0.52, 1)
+    pv.inputs['Absorption Color'].default_value = (0.02, 0.30, 0.20, 1)
+    pv.inputs['Emission Color'].default_value = (*TEAL_HI, 1)
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    noise = node(nt, 'ShaderNodeTexNoise', Scale=2.6, Detail=8.0, Roughness=0.62, Distortion=0.9)
+    nt.links.new(tc.outputs['Object'], noise.inputs['Vector'])
+    ln = nt.nodes.new('ShaderNodeVectorMath'); ln.operation = 'LENGTH'
+    nt.links.new(tc.outputs['Object'], ln.inputs[0])
+    fall = nt.nodes.new('ShaderNodeMapRange'); fall.inputs['From Max'].default_value = radius
+    fall.inputs['To Min'].default_value = 1.0; fall.inputs['To Max'].default_value = 0.0
+    nt.links.new(ln.outputs['Value'], fall.inputs['Value'])
+    ramp = nt.nodes.new('ShaderNodeValToRGB'); cr = ramp.color_ramp
+    cr.elements[0].position = 0.42; cr.elements[0].color = (0.04, 0.04, 0.04, 1)
+    cr.elements[1].position = 0.80; cr.elements[1].color = (1, 1, 1, 1)
+    nt.links.new(noise.outputs['Fac'], ramp.inputs['Fac'])
+    mul = nt.nodes.new('ShaderNodeMath'); mul.operation = 'MULTIPLY'
+    nt.links.new(ramp.outputs['Color'], mul.inputs[0]); nt.links.new(fall.outputs['Result'], mul.inputs[1])
+    dens = nt.nodes.new('ShaderNodeMath'); dens.operation = 'MULTIPLY'; dens.inputs[1].default_value = density
+    nt.links.new(mul.outputs['Value'], dens.inputs[0]); nt.links.new(dens.outputs['Value'], pv.inputs['Density'])
+    em = nt.nodes.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; em.inputs[1].default_value = emission
+    nt.links.new(mul.outputs['Value'], em.inputs[0]); nt.links.new(em.outputs['Value'], pv.inputs['Emission Strength'])
+    nt.links.new(pv.outputs[0], nt.nodes['Material Output'].inputs['Volume'])
     return m
 
 
@@ -345,6 +380,19 @@ if mode == 'body':
         bpy.ops.render.render(write_still=True)
     sys.exit(0)
 
+if mode == 'coreday':
+    scene.render.film_transparent = True
+    scene.cycles.film_transparent_glass = True
+    scene.cycles.volume_step_rate = 0.5
+    # a bright sky for the reflections (the screen is light); the camera still sees nothing (transparent film)
+    wramp.color_ramp.elements[0].color = (0.32, 0.38, 0.36, 1); wramp.color_ramp.elements[1].color = (0.92, 0.97, 0.95, 1)
+    shell(1.0, (0, 0, 0), glass_material())
+    sphere(0.95, (0, 0, 0), mist_material(0.95, 9.0, 1.6), 96)
+    sphere(0.45, (0, 0, 0), glow_volume(8.0, 0.45, 2.5), 64)
+    ortho_camera(2.3)
+    scene.render.resolution_x = scene.render.resolution_y = 640
+    studio_lights()
+
 if mode in ('core', 'moon'):
     scene.render.film_transparent = True
     scene.cycles.film_transparent_glass = True
@@ -362,7 +410,7 @@ if mode in ('core', 'moon'):
         ortho_camera(2.4)
     scene.render.resolution_x = scene.render.resolution_y = res
     studio_lights()
-else:
+elif mode == 'hero':
     # the whole system: perspective, bloom, for the sales material
     scene.render.film_transparent = False
     scene.render.resolution_x, scene.render.resolution_y = 1920, 1080
