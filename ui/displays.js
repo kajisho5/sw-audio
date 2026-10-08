@@ -60,17 +60,20 @@
   // ---- VU meters: the needle of the design's own face, moved by the measured level.
   // The face (viewBox 214 x 124, pivot 107,140) is the same in every design: the needle angle follows its printed scale.
   const VU_SCALE = [[-20, -50], [-10, -34], [-7, -22], [-5, -13], [-3, -3], [-1, 10], [0, 22], [1, 30], [2, 40], [3, 50]];   // VU -> degrees
-  function vuAngle(vu) {
-    if (vu <= VU_SCALE[0][0]) return VU_SCALE[0][1];
-    for (let k = 1; k < VU_SCALE.length; k++) if (vu <= VU_SCALE[k][0]) { const a = VU_SCALE[k - 1], b = VU_SCALE[k]; return a[1] + (b[1] - a[1]) * (vu - a[0]) / (b[0] - a[0]); }
-    return VU_SCALE[VU_SCALE.length - 1][1];
+  // gain-reduction face (DY03): 0 dB at the right end, 20 dB at the left; GR (dB, positive) -> degrees (the printed ticks 0, 2, 4, 6, 10, 20)
+  const GR_SCALE = [[0, 50], [2, 30], [4, 10], [6, -10], [10, -30], [20, -50]];
+  function vuAngle(vu, scale) {
+    scale = scale || VU_SCALE;
+    if (vu <= scale[0][0]) return scale[0][1];
+    for (let k = 1; k < scale.length; k++) if (vu <= scale[k][0]) { const a = scale[k - 1], b = scale[k]; return a[1] + (b[1] - a[1]) * (vu - a[0]) / (b[0] - a[0]); }
+    return scale[scale.length - 1][1];
   }
   // modes: 'gr' (needle falls from 0 with gain reduction), 'out' (output level, 0 VU = -15 dBFS peak), 'outLR' (one needle per channel)
   function vuDisplay(box, ctx, mode) {
     const needles = [...box.querySelectorAll('svg line[transform^="rotate("]')].filter(l => l.getAttribute('x1') === '107' && l.getAttribute('y1') === '140');
     if (!needles.length) return null;
     needles.forEach(n => { n.removeAttribute('transform'); n.style.transformOrigin = '107px 140px'; n.style.transition = 'transform 70ms linear'; });
-    const cur = needles.map(() => -50);
+    const cur = needles.map(() => (mode === 'gr3' ? 50 : -50));
     const seg = box.querySelector('[data-seg]');
     // the design's own meter buttons (DY01: GR, +8, +4, Off): they choose what the needle shows; a setting of the screen only
     const mb = seg ? [] : [...box.querySelectorAll('button')].filter(b => ['GR', '+4', '+8', '+10', 'OFF'].includes(b.textContent.trim().toUpperCase()));
@@ -84,6 +87,10 @@
       update(info) {
         const m = info && info.meters; if (!m) return;
         const sel = seg ? +(seg.dataset.sel || 0) : (mode === 'gr' ? 0 : 1);       // DY02's own switch: GR, +4, +10
+        if (mode === 'gr3') {                                                                       // DY03: its own face, GR only (peak in minus peak out)
+          needles.forEach((n, k) => { const target = vuAngle(Math.min(20, Math.max(0, peakDb(m) + (ctx.value('Makeup') || 0) - outDb(m))), GR_SCALE); cur[k] += (target - cur[k]) * (target < cur[k] ? 0.45 : 0.22); n.style.transform = 'rotate(' + cur[k].toFixed(1) + 'deg)'; });
+          return;
+        }
         needles.forEach((n, k) => {
           let vu;
           if (label === 'OFF') vu = -20;
@@ -305,6 +312,7 @@
     SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
     DY01: (box, ctx) => vuDisplay(box, ctx, 'gr'),
     DY02: (box, ctx) => vuDisplay(box, ctx, 'meter'),
+    DY03: (box, ctx) => vuDisplay(box, ctx, 'gr3'),
     DY06: (box, ctx) => vuDisplay(box, ctx, 'gr'),
     MT05: (box, ctx) => vuDisplay(box, ctx, 'outLR'),
     DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' })
