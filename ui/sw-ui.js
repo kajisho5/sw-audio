@@ -285,7 +285,10 @@
     } else { bar.append(el('span', 'evo', 'EVO'), evoT, el('span', 'sp'), el('span', 'ml', 'IN'), mi.m, el('span', 'ml', 'OUT'), mo.m, cpu); box.append(bar); }
     const lvl = db => Math.max(0, Math.min(1, (db + 60) / 60)) * 100 + '%';
     // the design's own graphs, drawn from the parameters and the measured levels (ui/displays.js)
-    const disp = skinBox && global.SWDISP ? global.SWDISP.attach(prod.code, skinBox, { value: name => { const h = host.find(x => x.p.name === name); return h ? vals[h.i] : undefined; } }) : null;
+    const disp = skinBox && global.SWDISP ? global.SWDISP.attach(prod.code, skinBox, {
+      value: name => { const h = host.find(x => x.p.name === name); return h ? vals[h.i] : undefined; },
+      params: host.map(h => ({ name: h.p.name, i: h.i, p: h.p, c: h.c })), get: i => vals[i], set: (i, v) => setValue(i, v, false), begin: i => bridge.begin(i), end: i => bridge.end(i),
+      selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); } }) : null;
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
       if (disp) disp.update(inf);

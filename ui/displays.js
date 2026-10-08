@@ -142,7 +142,96 @@
     return { update() {}, destroy() { alive = false; } };
   }
 
+  // ---- parametric EQ curve (EQ02, EQ07, EQ08): the response of the bands, drawn on the design's own graph; the band dots can be dragged
+  const FS = 48000;
+  function biquadMag(type, f0, gainDb, q, f) {                        // RBJ cookbook, magnitude in dB at f
+    const w0 = 2 * Math.PI * Math.min(f0, FS * 0.45) / FS, c = Math.cos(w0), sn = Math.sin(w0), A = Math.pow(10, gainDb / 40), al = sn / (2 * Math.max(0.05, q));
+    let b0, b1, b2, a0, a1, a2;
+    if (type === 'bell') { b0 = 1 + al * A; b1 = -2 * c; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * c; a2 = 1 - al / A; }
+    else if (type === 'notch') { b0 = 1; b1 = -2 * c; b2 = 1; a0 = 1 + al; a1 = -2 * c; a2 = 1 - al; }
+    else if (type === 'lowshelf') { const t = 2 * Math.sqrt(A) * al; b0 = A * ((A + 1) - (A - 1) * c + t); b1 = 2 * A * ((A - 1) - (A + 1) * c); b2 = A * ((A + 1) - (A - 1) * c - t); a0 = (A + 1) + (A - 1) * c + t; a1 = -2 * ((A - 1) + (A + 1) * c); a2 = (A + 1) + (A - 1) * c - t; }
+    else if (type === 'highshelf') { const t = 2 * Math.sqrt(A) * al; b0 = A * ((A + 1) + (A - 1) * c + t); b1 = -2 * A * ((A - 1) + (A + 1) * c); b2 = A * ((A + 1) + (A - 1) * c - t); a0 = (A + 1) - (A - 1) * c + t; a1 = 2 * ((A - 1) - (A + 1) * c); a2 = (A + 1) - (A - 1) * c - t; }
+    else if (type === 'lowcut') { b0 = (1 + c) / 2; b1 = -(1 + c); b2 = (1 + c) / 2; a0 = 1 + al; a1 = -2 * c; a2 = 1 - al; }
+    else { b0 = (1 - c) / 2; b1 = 1 - c; b2 = (1 - c) / 2; a0 = 1 + al; a1 = -2 * c; a2 = 1 - al; }   // highcut
+    const w = 2 * Math.PI * f / FS, cw = Math.cos(w), sw = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+    const nr = b0 + b1 * cw + b2 * c2, ni = -(b1 * sw + b2 * s2), dr = a0 + a1 * cw + a2 * c2, di = -(a1 * sw + a2 * s2);
+    return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di));
+  }
+  function eqDisplay(box, ctx) {
+    const disp = box.querySelector('.disp'); const svg = disp && disp.querySelector('svg');
+    if (!svg || !svg.getAttribute('viewBox') && !svg.getAttribute('viewbox')) return null;
+    const vb = (svg.getAttribute('viewBox') || svg.getAttribute('viewbox')).split(/\s+/).map(Number), W = vb[2], H = vb[3];
+    // the curve: the accent-coloured paths (area, glow, line); the design's example bands and notes after them are removed
+    const kids = [...svg.children], isAxis = e => e.tagName === 'g' && /^(#6b6d72|#5b6470)$/i.test(e.getAttribute('fill') || '');
+    const accent = (kids.filter(e => e.tagName === 'path' && e.getAttribute('fill') === 'none' && !/^#fff/i.test(e.getAttribute('stroke') || '')).pop() || {}).getAttribute && kids.filter(e => e.tagName === 'path' && e.getAttribute('fill') === 'none' && !/^#fff/i.test(e.getAttribute('stroke') || '')).pop().getAttribute('stroke');
+    if (!accent) return null;
+    const curve = kids.filter(e => e.tagName === 'path' && (e.getAttribute('stroke') === accent || e.getAttribute('fill') === accent));
+    const area = curve.find(e => e.getAttribute('fill') === accent), line = curve.find(e => e.getAttribute('fill') === 'none' && +e.getAttribute('stroke-width') < 4), glow = curve.find(e => e.getAttribute('fill') === 'none' && +e.getAttribute('stroke-width') >= 4) || line;
+    if (!area || !line) return null;
+    for (let n = curve[curve.length - 1].nextElementSibling; n && !isAxis(n);) { const nx = n.nextElementSibling; n.remove(); n = nx; }
+    // the bands: every 'On' starts one; Type, Freq, Gain, Q follow
+    const bands = []; let cur = null;
+    ctx.params.forEach(q => {
+      if (q.name === 'On') { cur = { on: q.i }; bands.push(cur); }
+      else if (cur && /^(Type|Freq|Gain|Q|Slope)$/.test(q.name) && cur[q.name] === undefined) cur[q.name] = q.i;
+    });
+    if (bands.length < 2) return null;
+    // the axes: from the printed labels when the design has them (50 ... 10k, +12 ... -12), otherwise the whole graph (20 Hz - 20 kHz, +-18 dB)
+    const lab = {}; svg.querySelectorAll(':scope > g text').forEach(t => { lab[t.textContent.trim()] = t; });
+    const FMIN = 20, FMAX = 20000; let X0 = 10, X1 = W - 10, YC = H / 2, DB = 18, YS = (H / 2 - 12) / DB;
+    if (lab['50'] && lab['10k']) { const xa = +lab['50'].getAttribute('x'), xb = +lab['10k'].getAttribute('x'), k = Math.log(10000 / 50); const per = (xb - xa) / k; X0 = xa - per * Math.log(50 / FMIN); X1 = xb + per * Math.log(FMAX / 10000); }
+    if (lab['+12'] && lab['-12']) { const ya = +lab['+12'].getAttribute('y') - 3, yb = +lab['-12'].getAttribute('y') - 3; YC = (ya + yb) / 2; DB = 12; YS = (yb - ya) / 24; }
+    const fx = f => X0 + Math.log(f / FMIN) / Math.log(FMAX / FMIN) * (X1 - X0), xf = x => FMIN * Math.pow(FMAX / FMIN, (x - X0) / (X1 - X0));
+    const gy = g => YC - g * YS, yg = y => (YC - y) / YS;
+    const typeOf = b => {
+      const lab = (ctx.params.find(q => q.i === b.Type).p.labels || [])[Math.round(ctx.get(b.Type))] || 'Bell', l = lab.toLowerCase(), f = ctx.get(b.Freq);
+      if (l.includes('notch')) return 'notch';
+      if (l.includes('cut')) return l.includes('lo') ? 'lowcut' : l.includes('hi') ? 'highcut' : (f < 1000 ? 'lowcut' : 'highcut');
+      if (l.includes('shelf')) return l.includes('lo') ? 'lowshelf' : l.includes('hi') ? 'highshelf' : (f < 1000 ? 'lowshelf' : 'highshelf');
+      return 'bell';
+    };
+    const NS_ = 'http://www.w3.org/2000/svg', acc = line.getAttribute('stroke') || '#5f9bff';
+    const dots = bands.map((b, k) => {
+      const c = document.createElementNS(NS_, 'circle'), t = document.createElementNS(NS_, 'text');
+      c.setAttribute('r', '7'); c.setAttribute('fill', acc); c.setAttribute('stroke', '#0a0b0c'); c.setAttribute('stroke-width', '2'); c.style.cursor = 'grab';
+      t.setAttribute('fill', '#0a0b0c'); t.setAttribute('font-size', '10'); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-family', 'Barlow Condensed, sans-serif'); t.style.pointerEvents = 'none'; t.textContent = String(k + 1);
+      svg.append(c, t); return { c, t };
+    });
+    const pt = e => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+    const norm = (i, v) => { const q = ctx.params.find(x => x.i === i); return q.c.value(q.c.norm(v)); };
+    dots.forEach((d, k) => {
+      const b = bands[k]; let drag = false;
+      d.c.addEventListener('pointerdown', e => { e.stopPropagation(); d.c.setPointerCapture(e.pointerId); drag = true; ctx.selectBand(k); [b.Freq, b.Gain].forEach(i => ctx.begin(i)); });
+      d.c.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = pt(e); ctx.set(b.Freq, norm(b.Freq, xf(x))); ctx.set(b.Gain, norm(b.Gain, yg(y))); });
+      const end = () => { if (!drag) return; drag = false; [b.Freq, b.Gain].forEach(i => ctx.end(i)); };
+      d.c.addEventListener('pointerup', end); d.c.addEventListener('pointercancel', end);
+      d.c.addEventListener('dblclick', e => { e.stopPropagation(); ctx.begin(b.on); ctx.set(b.on, 0); ctx.end(b.on); });
+      d.c.addEventListener('wheel', e => { e.preventDefault(); const q = ctx.params.find(x => x.i === b.Q); ctx.begin(b.Q); ctx.set(b.Q, q.c.value(Math.min(1, Math.max(0, q.c.norm(ctx.get(b.Q)) - Math.sign(e.deltaY) * 0.03)))); ctx.end(b.Q); }, { passive: false });
+    });
+    svg.addEventListener('dblclick', e => {                               // a double click on an empty place turns on the next free band there
+      const free = bands.find(b => ctx.get(b.on) < 0.5); if (!free) return; const [x, y] = pt(e);
+      [free.on, free.Freq, free.Gain].forEach(i => ctx.begin(i)); ctx.set(free.on, 1); ctx.set(free.Freq, norm(free.Freq, xf(x))); ctx.set(free.Gain, norm(free.Gain, yg(y))); [free.on, free.Freq, free.Gain].forEach(i => ctx.end(i));
+    });
+    let last = null;
+    return {
+      update() {
+        const act = bands.filter(b => ctx.get(b.on) > 0.5).map(b => ({ type: typeOf(b), f: ctx.get(b.Freq), g: ctx.get(b.Gain), q: ctx.get(b.Q) || 1, slope: b.Slope !== undefined ? ctx.get(b.Slope) : 12 }));
+        const key = act.map(a => a.type + a.f + a.g + a.q + a.slope).join('|'); if (key === last) { return; } last = key;
+        let d = '';
+        for (let i = 0; i <= 200; i++) {
+          const f = xf(X0 + (X1 - X0) * i / 200); let db = 0;
+          act.forEach(a => { const stages = (a.type === 'lowcut' || a.type === 'highcut') ? Math.max(1, Math.round((a.slope || 12) / 12)) : 1; for (let s = 0; s < stages; s++) db += biquadMag(a.type, a.f, a.g, a.type === 'lowcut' || a.type === 'highcut' ? 0.707 : a.q, f); });
+          d += (i ? ' L' : 'M') + (X0 + (X1 - X0) * i / 200).toFixed(1) + ' ' + gy(Math.max(-DB * 1.3, Math.min(DB * 1.3, db))).toFixed(1);
+        }
+        line.setAttribute('d', d); glow.setAttribute('d', d); area.setAttribute('d', d + ' L' + X1 + ' ' + YC + ' L' + X0 + ' ' + YC + ' Z');
+        bands.forEach((b, k) => { const on = ctx.get(b.on) > 0.5, x = fx(Math.min(FMAX, Math.max(FMIN, ctx.get(b.Freq)))), y = gy(Math.max(-DB, Math.min(DB, ctx.get(b.Gain)))); const ds = dots[k];
+          ds.c.style.display = ds.t.style.display = on ? '' : 'none'; ds.c.setAttribute('cx', x.toFixed(1)); ds.c.setAttribute('cy', y.toFixed(1)); ds.t.setAttribute('x', x.toFixed(1)); ds.t.setAttribute('y', (y + 3.5).toFixed(1)); });
+      }
+    };
+  }
+
   const registry = {
+    EQ02: eqDisplay, EQ07: eqDisplay, EQ08: eqDisplay,
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL02: (box, ctx) => reelDisplay(box, ctx, null),
     SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
