@@ -15,14 +15,16 @@ button{font-family:inherit;color:inherit;cursor:pointer;margin:0}
 a{text-decoration:none}
 </style>
 </helmet>
-<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: #e8e8e8; background: radial-gradient(ellipse 45% 60% at 25% 50%, #0e1516 0, #070a0b 50%, #030405 100%);">
-  <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 92%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 47% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 66%, rgba(255,255,255,.35), rgba(0,0,0,0));"></div>
+<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{c.text}}; background: {{c.bg}};">
+  <sc-if value="{{c.stars}}" hint-placeholder-val="{{true}}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 92%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 47% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 66%, rgba(255,255,255,.35), rgba(0,0,0,0));"></div>
+  </sc-if>
 
   <header style="position: absolute; left: 24px; right: 24px; top: 0; height: 56px; display: flex; align-items: center; justify-content: space-between;">
     <div style="display: flex; align-items: center; gap: 10px; width: 300px;">
-      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: #3fd1a0;"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
+      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: {{c.cat}};"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
       <span style="font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; line-height: 14px; padding: 2px 6px; border-radius: 3px; background: #22a87c; color: #0c0c0d;">IN07</span>
-      <img src="/_blob/eea73410a66867fa6abf11bd1a56eee6" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
+      <img src="{{c.logo}}" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
     </div>
     <nav aria-label="Screens" style="display: flex; align-items: center; gap: 4px;">
       <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="5">
@@ -31,33 +33,33 @@ a{text-decoration:none}
     </nav>
     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 300px;">
       <div role="radiogroup" aria-label="Motion" style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 11px; letter-spacing: .26em; color: #8e8e8e;">MOTION</span>
-        <div style="display: flex; border: 1px solid rgba(141,224,195,.35); border-radius: 13px; overflow: hidden;">
+        <span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">MOTION</span>
+        <div style="display: flex; border: 1px solid {{c.line2}}; border-radius: 13px; overflow: hidden;">
           <sc-for list="{{motionOpts}}" as="m" hint-placeholder-count="3">
             <button type="button" role="radio" aria-checked="{{m.on}}" title="{{m.title}}" onClick="{{m.pick}}" style="height: 26px; min-width: 40px; padding: 0 9px; border: none; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .06em; {{m.look}}">{{m.label}}</button>
           </sc-for>
         </div>
       </div>
-      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: #8e8e8e;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
+      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: {{c.sub}};"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
     </div>
   </header>
 
   <div style="position: absolute; left: 20px; top: 84px; width: 590px; height: 533px; overflow: hidden;">
-    <dc-import name="Orbit" values="{{ov}}" view="arp" arp-on="{{arp.on}}" gate-on="{{gate.on}}" arp-steps="{{arpSteps}}" gate-steps="{{gateSteps}}" theme="dark" motion="{{motion}}" scale="0.72" hint-size="590px,533px"></dc-import>
+    <dc-import name="Orbit" values="{{ov}}" view="arp" arp-on="{{arp.on}}" gate-on="{{gate.on}}" arp-steps="{{arpSteps}}" gate-steps="{{gateSteps}}" theme="{{theme}}" motion="{{motion}}" scale="0.72" hint-size="590px,533px"></dc-import>
   </div>
   <div style="position: absolute; left: 40px; top: 640px; width: 550px; display: flex; flex-direction: column; gap: 6px;">
-    <span style="font-family: Michroma, sans-serif; font-size: 22px; color: #f2f2f2;">138<span style="font-size: 12px; color: #a8a8a8; margin-left: 8px;">BPM · HOST</span></span>
-    <span style="font-size: 13px; color: #8e8e8e;">Outer ring: the arpeggiator, one tick a step, length = velocity. Inner ring: the trance gate. The bright mark is the step playing now.</span>
+    <span style="font-family: Michroma, sans-serif; font-size: 22px; color: {{c.strong}};">138<span style="font-size: 12px; color: {{c.label}}; margin-left: 8px;">BPM · HOST</span></span>
+    <span style="font-size: 13px; color: {{c.sub}};">Outer ring: the arpeggiator, one tick a step, length = velocity. Inner ring: the trance gate. The bright mark is the step playing now.</span>
   </div>
 
-  <section aria-label="Arpeggiator" style="position: absolute; left: 630px; top: 72px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid rgba(141,224,195,.14); background: linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45);">
+  <section aria-label="Arpeggiator" style="position: absolute; left: 630px; top: 72px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">ARPEGGIATOR</span>
+      <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">ARPEGGIATOR</span>
       <button type="button" aria-pressed="{{arp.pressed}}" onClick="{{arp.toggle}}" style="width: 96px; height: 32px; border: 1px solid; border-radius: 16px; font-size: 12px; letter-spacing: .24em; {{arp.look}}">{{arp.label}}</button>
     </div>
     <sc-for list="{{arpSegs}}" as="sg" hint-placeholder-count="3">
       <div role="radiogroup" aria-label="{{sg.label}}" style="display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: center; gap: 10px;">
-        <span style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{sg.label}}</span>
+        <span style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{sg.label}}</span>
         <div style="display: flex; gap: 2px;">
           <sc-for list="{{sg.opts}}" as="op" hint-placeholder-count="4">
             <button type="button" role="radio" aria-checked="{{op.on}}" onClick="{{op.pick}}" style="flex: 1; height: 30px; border: none; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 10px; {{op.look}}">{{op.label}}</button>
@@ -67,21 +69,21 @@ a{text-decoration:none}
     </sc-for>
     <sc-for list="{{arpRows}}" as="r" hint-placeholder-count="2">
       <div style="display: grid; grid-template-columns: 84px minmax(0, 1fr) 60px; align-items: center; gap: 10px;">
-        <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{r.label}}</label>
-        <input id="{{r.id}}" type="range" min="0" max="100" step="1" value="{{r.v}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
-        <span style="font-family: Michroma, sans-serif; font-size: 12px; color: #f2f2f2; text-align: right;">{{r.text}}</span>
+        <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{r.label}}</label>
+        <input id="{{r.id}}" type="range" min="0" max="100" step="1" value="{{r.v}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
+        <span style="font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}}; text-align: right;">{{r.text}}</span>
       </div>
     </sc-for>
     <div style="display: flex; flex-direction: column; gap: 4px;">
-      <span style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">VELOCITY · press a step to change it</span>
+      <span style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">VELOCITY · press a step to change it</span>
       <div style="display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px;">
         <sc-for list="{{velCells}}" as="c" hint-placeholder-count="16">
-          <button type="button" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="position: relative; height: 72px; padding: 0; border: 1px solid rgba(141,224,195,.16); border-radius: 6px; background: rgba(255,255,255,.03); overflow: hidden;"><span style="position: absolute; left: 3px; right: 3px; bottom: 3px; height: {{c.h}}%; border-radius: 3px; background: {{c.ink}};"></span></button>
+          <button type="button" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="position: relative; height: 72px; padding: 0; border: 1px solid {{c.cellLine}}; border-radius: 6px; background: {{c.cell}}; overflow: hidden;"><span style="position: absolute; left: 3px; right: 3px; bottom: 3px; height: {{c.h}}%; border-radius: 3px; background: {{c.ink}};"></span></button>
         </sc-for>
       </div>
       <div style="display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px;">
         <sc-for list="{{pitchCells}}" as="c" hint-placeholder-count="16">
-          <button type="button" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="height: 30px; padding: 0; border: 1px solid rgba(141,224,195,.16); border-radius: 6px; background: {{c.bg}}; font-family: 'Space Mono', monospace; font-size: 9px; color: {{c.ink}};">{{c.text}}</button>
+          <button type="button" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="height: 30px; padding: 0; border: 1px solid {{c.cellLine}}; border-radius: 6px; background: {{c.bg}}; font-family: 'Space Mono', monospace; font-size: 9px; color: {{c.ink}};">{{c.text}}</button>
         </sc-for>
       </div>
       <div style="display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px;">
@@ -89,13 +91,13 @@ a{text-decoration:none}
           <span style="text-align: center; font-family: 'Space Mono', monospace; font-size: 9px; color: {{n.ink}};">{{n.t}}</span>
         </sc-for>
       </div>
-      <span style="font-size: 12px; color: #8e8e8e;">Pitch row: 0, +12, +7, −12 semitones. A step with no velocity is a rest.</span>
+      <span style="font-size: 12px; color: {{c.sub}};">Pitch row: 0, +12, +7, −12 semitones. A step with no velocity is a rest.</span>
     </div>
   </section>
 
-  <section aria-label="Trance gate" style="position: absolute; left: 630px; top: 610px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid rgba(141,224,195,.14); background: linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45);">
+  <section aria-label="Trance gate" style="position: absolute; left: 630px; top: 610px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
     <div style="display: flex; justify-content: space-between; align-items: center;">
-      <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">TRANCE GATE</span>
+      <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">TRANCE GATE</span>
       <div role="radiogroup" aria-label="Gate rate" style="display: flex; gap: 2px;">
         <sc-for list="{{gateRates}}" as="op" hint-placeholder-count="3">
           <button type="button" role="radio" aria-checked="{{op.on}}" onClick="{{op.pick}}" style="width: 52px; height: 30px; border: none; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 10px; {{op.look}}">{{op.label}}</button>
@@ -105,18 +107,18 @@ a{text-decoration:none}
     </div>
     <div style="display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px;">
       <sc-for list="{{gateCells}}" as="c" hint-placeholder-count="16">
-        <button type="button" aria-pressed="{{c.on}}" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="height: 44px; padding: 0; border: 1px solid rgba(141,224,195,.16); border-radius: 6px; background: {{c.bg}};"></button>
+        <button type="button" aria-pressed="{{c.on}}" onClick="{{c.pick}}" aria-label="{{c.aria}}" style="height: 44px; padding: 0; border: 1px solid {{c.cellLine}}; border-radius: 6px; background: {{c.bg}};"></button>
       </sc-for>
     </div>
     <div style="display: grid; grid-template-columns: 84px minmax(0, 1fr) 60px; align-items: center; gap: 10px;">
-      <label for="gate-depth" style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">DEPTH</label>
-      <input id="gate-depth" type="range" min="0" max="100" step="1" value="{{gate.depth}}" onChange="{{gate.setDepth}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
-      <span style="font-family: Michroma, sans-serif; font-size: 12px; color: #f2f2f2; text-align: right;">{{gate.depth}} %</span>
+      <label for="gate-depth" style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">DEPTH</label>
+      <input id="gate-depth" type="range" min="0" max="100" step="1" value="{{gate.depth}}" onChange="{{gate.setDepth}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
+      <span style="font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}}; text-align: right;">{{gate.depth}} %</span>
     </div>
   </section>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"$preview":{"width":1280,"height":860}}'>
 class Component extends DCLogic {
   componentDidMount() {
     var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -124,7 +126,24 @@ class Component extends DCLogic {
   }
   renderVals() {
     var self = this, s = this.state || {};
-    var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;', off = 'background: rgba(255,255,255,.05); color: #cacaca;';
+    var theme = this.props.theme === 'light' ? 'light' : 'dark', light = theme === 'light';
+    // the palette (as SW_Main): the dark one is the night sky, the light one the daylight screen
+    var c = light ? {
+      bg: 'linear-gradient(180deg, #f1f6f4 0, #e2ece8 55%, #d4e1dc 100%)', stars: false, text: '#1b2622', strong: '#101614', sub: '#4c5f58', label: '#3a4a44', label2: '#2e3b36',
+      acc: '#0b5a41', cat: '#178a64', line: 'rgba(11,90,65,.14)', line2: 'rgba(11,90,65,.35)', track: 'rgba(11,90,65,.16)', cell: 'rgba(255,255,255,.55)', cellLine: 'rgba(11,90,65,.18)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.52) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.9), 8px 14px 30px rgba(40,70,60,.14)',
+      sel: 'rgba(23,138,100,.12)', selLine: 'rgba(11,90,65,.45)', logo: '/_blob/702f4b752a177d6e1601ccac384e7886', accent: '#178a64', field: '#ffffff',
+      off: 'background: rgba(11,90,65,.07); color: #2e3b36;', offBtn: 'border-color: rgba(11,90,65,.3); background: none; color: #2e3b36;',
+      hi: '#0b5a41', dim: '#8a9a94', velHi: '#0b5a41', velLo: '#22a87c', trail: '#22a87c', probe: '#0b5a41', core: '/_blob/68aab30db9e061801ca79d72df3ac6e2'
+    } : {
+      bg: 'radial-gradient(ellipse 45% 60% at 25% 50%, #0e1516 0, #070a0b 50%, #030405 100%)', stars: true, text: '#e8e8e8', strong: '#f2f2f2', sub: '#8e8e8e', label: '#a8a8a8', label2: '#cacaca',
+      acc: '#8de0c3', cat: '#3fd1a0', line: 'rgba(141,224,195,.14)', line2: 'rgba(141,224,195,.35)', track: 'rgba(255,255,255,.12)', cell: 'rgba(255,255,255,.03)', cellLine: 'rgba(141,224,195,.16)',
+      panel: 'linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45)',
+      sel: 'rgba(63,209,160,.10)', selLine: 'rgba(141,224,195,.45)', logo: '/_blob/eea73410a66867fa6abf11bd1a56eee6', accent: '#3fd1a0', field: '#0d1314',
+      off: 'background: rgba(255,255,255,.05); color: #cacaca;', offBtn: 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;',
+      hi: '#e8fff6', dim: '#5c6460', velHi: '#8de0c3', velLo: '#3fd1a0', trail: '#bff3df', probe: '#e8fff6', core: '/_blob/90121e1a7bee5f359e51e024081e48ca'
+    };
+    var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;', off = c.off;
     var motion = s.motion || '60';
     var vel = s.vel || [1, .4, .7, .4, 1, 0, .7, .4, 1, .4, .7, 0, 1, .4, .7, .4];
     var pitch = s.pitch || [0, 0, 12, 0, 0, 0, 7, 0, 0, 0, 12, 0, -12, 0, 7, 0];
@@ -138,27 +157,28 @@ class Component extends DCLogic {
     };
     var VCYCLE = [0, 0.4, 0.7, 1], PCYCLE = [0, 12, 7, -12];
     var velCells = vel.map(function (v, i) {
-      return { h: Math.round(v * 100), ink: i % 4 === 0 ? '#8de0c3' : '#3fd1a0', aria: 'Step ' + (i + 1) + ' velocity ' + Math.round(v * 100) + ' %',
+      return { h: Math.round(v * 100), ink: i % 4 === 0 ? c.velHi : c.velLo, aria: 'Step ' + (i + 1) + ' velocity ' + Math.round(v * 100) + ' %',
         pick: function () { var k = VCYCLE.indexOf(v), nv = vel.slice(); nv[i] = VCYCLE[(k + 1) % 4]; self.setState({ vel: nv }); } };
     });
     var pitchCells = pitch.map(function (p, i) {
-      return { text: p === 0 ? '0' : (p > 0 ? '+' + p : String(p)).replace('-', '−'), bg: p === 0 ? 'rgba(255,255,255,.03)' : 'rgba(63,209,160,.14)', ink: p === 0 ? '#8e8e8e' : '#e8fff6',
+      return { text: p === 0 ? '0' : (p > 0 ? '+' + p : String(p)).replace('-', '−'), bg: p === 0 ? c.cell : 'rgba(63,209,160,.14)', ink: p === 0 ? c.sub : c.hi,
         aria: 'Step ' + (i + 1) + ' pitch ' + p + ' semitones', pick: function () { var k = PCYCLE.indexOf(p), np = pitch.slice(); np[i] = PCYCLE[(k + 1) % 4]; self.setState({ pitch: np }); } };
     });
     var gateCells = gate.map(function (g, i) {
-      return { on: g ? 'true' : 'false', bg: g ? 'linear-gradient(180deg, rgba(141,224,195,.85), rgba(34,168,124,.75))' : 'rgba(255,255,255,.03)', aria: 'Gate step ' + (i + 1) + (g ? ' open' : ' closed'),
+      return { on: g ? 'true' : 'false', bg: g ? 'linear-gradient(180deg, rgba(141,224,195,.85), rgba(34,168,124,.75))' : c.cell, aria: 'Gate step ' + (i + 1) + (g ? ' open' : ' closed'),
         pick: function () { var ng = gate.slice(); ng[i] = g ? 0 : 1; self.setState({ gate: ng }); } };
     });
-    var stepNos = vel.map(function (v, i) { return { t: String(i + 1), ink: i % 4 === 0 ? '#a8a8a8' : '#5c6460' }; });
+    var stepNos = vel.map(function (v, i) { return { t: String(i + 1), ink: i % 4 === 0 ? c.label : c.dim }; });
     var tabs = [['PLAY', 'SW_Main.dc.html'], ['LAYER', 'SW_Layer.dc.html'], ['ARP', 'SW_Arp.dc.html'], ['MOD', 'SW_Mod.dc.html'], ['FX', 'SW_FX.dc.html']].map(function (x, i) {
-      return { label: x[0], href: x[1], current: i === 2 ? 'page' : 'false', look: i === 2 ? 'color: #f2f2f2; box-shadow: inset 0 -2px 0 #3fd1a0;' : 'color: #8e8e8e;' };
+      return { label: x[0], href: x[1], current: i === 2 ? 'page' : 'false', look: i === 2 ? 'color: ' + c.strong + '; box-shadow: inset 0 -2px 0 ' + c.cat + ';' : 'color: ' + c.sub + ';' };
     });
     var motionOpts = [['60', '60', 'Full motion: every display frame'], ['30', '30', 'Lighter: 30 frames a second'], ['off', 'OFF', 'No motion: a still picture (values still update it)']].map(function (x) {
       var sel = motion === x[0];
-      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: #8e8e8e;', pick: function () { self.setState({ motion: x[0] }); } };
+      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: ' + c.sub + ';', pick: function () { self.setState({ motion: x[0] }); } };
     });
-    var toggleLook = function (b) { return b ? 'border-color: #0b5a41; ' + on : 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;'; };
+    var toggleLook = function (b) { return b ? 'border-color: #0b5a41; ' + on : c.offBtn; };
     return {
+      theme: theme, c: c,
       tabs: tabs, motionOpts: motionOpts, motion: motion,
       ov: { cutoff: 2400, res: 30, unison: 8, detune: 22, lfoRate: 0.8, lfoDepth: 35, drive: 18, release: 420, bpm: 138, spb: SPB[rate], gateSpb: SPB[grate] },
       arpSteps: vel.map(function (v) { return { v: v }; }), gateSteps: gate,

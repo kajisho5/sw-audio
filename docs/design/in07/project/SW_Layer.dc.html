@@ -15,14 +15,16 @@ button{font-family:inherit;color:inherit;cursor:pointer;margin:0}
 a{text-decoration:none}
 </style>
 </helmet>
-<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: #e8e8e8; background: radial-gradient(ellipse 50% 60% at 42% 40%, #0e1516 0, #070a0b 50%, #030405 100%);">
-  <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 82%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 37% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 52% 62%, rgba(255,255,255,.35), rgba(0,0,0,0)), radial-gradient(1.2px 1.2px at 24% 46%, rgba(255,255,255,.5), rgba(0,0,0,0));"></div>
+<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{c.text}}; background: {{c.bg}};">
+  <sc-if value="{{c.stars}}" hint-placeholder-val="{{true}}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 82%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 37% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 52% 62%, rgba(255,255,255,.35), rgba(0,0,0,0)), radial-gradient(1.2px 1.2px at 24% 46%, rgba(255,255,255,.5), rgba(0,0,0,0));"></div>
+  </sc-if>
 
   <header style="position: absolute; left: 24px; right: 24px; top: 0; height: 56px; display: flex; align-items: center; justify-content: space-between;">
     <div style="display: flex; align-items: center; gap: 10px; width: 300px;">
-      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: #3fd1a0;"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
+      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: {{c.cat}};"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
       <span style="font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; line-height: 14px; padding: 2px 6px; border-radius: 3px; background: #22a87c; color: #0c0c0d;">IN07</span>
-      <img src="/_blob/eea73410a66867fa6abf11bd1a56eee6" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
+      <img src="{{c.logo}}" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
     </div>
     <nav aria-label="Screens" style="display: flex; align-items: center; gap: 4px;">
       <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="5">
@@ -31,27 +33,27 @@ a{text-decoration:none}
     </nav>
     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 300px;">
       <div role="radiogroup" aria-label="Motion" style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 11px; letter-spacing: .26em; color: #8e8e8e;">MOTION</span>
-        <div style="display: flex; border: 1px solid rgba(141,224,195,.35); border-radius: 13px; overflow: hidden;">
+        <span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">MOTION</span>
+        <div style="display: flex; border: 1px solid {{c.line2}}; border-radius: 13px; overflow: hidden;">
           <sc-for list="{{motionOpts}}" as="m" hint-placeholder-count="3">
             <button type="button" role="radio" aria-checked="{{m.on}}" title="{{m.title}}" onClick="{{m.pick}}" style="height: 26px; min-width: 40px; padding: 0 9px; border: none; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .06em; {{m.look}}">{{m.label}}</button>
           </sc-for>
         </div>
       </div>
-      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: #8e8e8e;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
+      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: {{c.sub}};"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
     </div>
   </header>
 
   <aside aria-label="Layers" style="position: absolute; left: 24px; top: 72px; width: 228px; display: flex; flex-direction: column; gap: 8px;">
-    <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8; padding-left: 4px;">LAYERS · ANTHEM SUPERSAW</span>
+    <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}}; padding-left: 4px;">LAYERS · ANTHEM SUPERSAW</span>
     <div role="radiogroup" aria-label="Layer" style="display: flex; flex-direction: column; gap: 8px;">
       <sc-for list="{{cards}}" as="h" hint-placeholder-count="4">
         <button type="button" role="radio" aria-checked="{{h.on}}" onClick="{{h.pick}}" style="height: 88px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-radius: 14px; text-align: left; {{h.look}}">
           <span style="position: relative; width: {{h.th.s}}px; height: {{h.th.s}}px; overflow: hidden; flex-shrink: 0; margin: {{h.th.m}}px; opacity: {{h.op}};"><img src="{{h.th.src}}" alt="" style="display: block; max-width: none; width: {{h.th.bw}}px; height: {{h.th.bh}}px;"></span>
           <span style="flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0;">
-            <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: #8de0c3;">{{h.no}} · {{h.type}}</span>
-            <span style="font-size: 16px; letter-spacing: .05em; color: #f2f2f2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{h.name}}</span>
-            <span style="position: relative; height: 2px; background: rgba(255,255,255,.12);"><span style="position: absolute; left: 0; top: 0; height: 2px; width: {{h.lvl}}%; background: #8de0c3;"></span></span>
+            <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.acc}};">{{h.no}} · {{h.type}}</span>
+            <span style="font-size: 16px; letter-spacing: .05em; color: {{c.strong}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{h.name}}</span>
+            <span style="position: relative; height: 2px; background: {{c.track}};"><span style="position: absolute; left: 0; top: 0; height: 2px; width: {{h.lvl}}%; background: {{c.acc}};"></span></span>
           </span>
         </button>
       </sc-for>
@@ -62,24 +64,24 @@ a{text-decoration:none}
   </aside>
 
   <div style="position: absolute; left: 268px; top: 60px; width: 521px; height: 470px; overflow: hidden;">
-    <dc-import name="Orbit" values="{{ov}}" layers="{{olayers}}" focus="{{focus}}" view="close" theme="dark" motion="{{motion}}" note-key="{{noteKey}}" scale="0.635" hint-size="521px,470px"></dc-import>
+    <dc-import name="Orbit" values="{{ov}}" layers="{{olayers}}" focus="{{focus}}" view="close" theme="{{theme}}" motion="{{motion}}" note-key="{{noteKey}}" scale="0.635" hint-size="521px,470px"></dc-import>
   </div>
-  <button type="button" onClick="{{play}}" style="position: absolute; left: 448px; top: 522px; width: 160px; height: 40px; border: 1px solid rgba(141,224,195,.45); border-radius: 20px; background: rgba(63,209,160,.08); font-size: 12px; letter-spacing: .26em; color: #f2f2f2;">PLAY NOTE</button>
+  <button type="button" onClick="{{play}}" style="position: absolute; left: 448px; top: 522px; width: 160px; height: 40px; border: 1px solid {{c.selLine}}; border-radius: 20px; background: {{c.sel}}; font-size: 12px; letter-spacing: .26em; color: {{c.strong}};">PLAY NOTE</button>
 
-  <section aria-label="Envelope and LFO" style="position: absolute; left: 268px; top: 580px; width: 521px; height: 262px; box-sizing: border-box; padding: 14px 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; border-radius: 16px; border: 1px solid rgba(141,224,195,.14); background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45);">
+  <section aria-label="Envelope and LFO" style="position: absolute; left: 268px; top: 580px; width: 521px; height: 262px; box-sizing: border-box; padding: 14px 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 22px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
     <div style="display: flex; flex-direction: column; gap: 6px;">
-      <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">AMP ENVELOPE</span>
-      <svg viewBox="0 0 220 56" width="220" height="56" role="img" aria-label="{{envAria}}" style="display: block;"><path d="M2 54H218" stroke="rgba(255,255,255,.12)" stroke-width="1"></path><path d="{{envPath}}" fill="none" stroke="#8de0c3" stroke-width="1.4" stroke-linejoin="round"></path></svg>
+      <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">AMP ENVELOPE</span>
+      <svg viewBox="0 0 220 56" width="220" height="56" role="img" aria-label="{{envAria}}" style="display: block;"><path d="M2 54H218" stroke="{{c.track}}" stroke-width="1"></path><path d="{{envPath}}" fill="none" stroke="{{c.acc}}" stroke-width="1.4" stroke-linejoin="round"></path></svg>
       <sc-for list="{{envRows}}" as="r" hint-placeholder-count="4">
         <div style="display: grid; grid-template-columns: 58px minmax(0, 1fr) 62px; align-items: center; gap: 8px;">
-          <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{r.label}}</label>
-          <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
-          <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: #f2f2f2; text-align: right;">{{r.text}}</span>
+          <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{r.label}}</label>
+          <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
+          <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.strong}}; text-align: right;">{{r.text}}</span>
         </div>
       </sc-for>
     </div>
     <div style="display: flex; flex-direction: column; gap: 8px;">
-      <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">LFO · THE LFO MOON</span>
+      <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">LFO · THE LFO MOON</span>
       <div role="radiogroup" aria-label="LFO shape" style="display: flex; gap: 2px;">
         <sc-for list="{{lfoShapes}}" as="k" hint-placeholder-count="5">
           <button type="button" role="radio" aria-checked="{{k.on}}" onClick="{{k.pick}}" style="flex: 1; height: 32px; border: none; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 10px; {{k.look}}">{{k.label}}</button>
@@ -87,24 +89,24 @@ a{text-decoration:none}
       </div>
       <sc-for list="{{lfoRows}}" as="r" hint-placeholder-count="2">
         <div style="display: flex; flex-direction: column; gap: 2px;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline;"><label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{r.label}}</label><span style="font-family: Michroma, sans-serif; font-size: 13px; color: #f2f2f2;">{{r.text}}</span></div>
-          <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;"><label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{r.label}}</label><span style="font-family: Michroma, sans-serif; font-size: 13px; color: {{c.strong}};">{{r.text}}</span></div>
+          <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
         </div>
       </sc-for>
-      <span style="font-size: 12px; color: #8e8e8e;">The moon's speed is the rate; its stretched orbit is the depth.</span>
+      <span style="font-size: 12px; color: {{c.sub}};">The moon's speed is the rate; its stretched orbit is the depth.</span>
     </div>
   </section>
 
-  <aside aria-label="Layer parameters" style="position: absolute; right: 24px; top: 72px; width: 452px; height: 770px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid rgba(141,224,195,.14); background: linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45);">
+  <aside aria-label="Layer parameters" style="position: absolute; right: 24px; top: 72px; width: 452px; height: 770px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
     <sc-for list="{{sections}}" as="sec" hint-placeholder-count="2">
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">{{sec.title}}</span>
-          <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: #8de0c3;">{{sec.note}}</span>
+          <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">{{sec.title}}</span>
+          <span style="font-family: 'Space Mono', monospace; font-size: 10px; color: {{c.acc}};">{{sec.note}}</span>
         </div>
         <sc-for list="{{sec.segs}}" as="sg" hint-placeholder-count="2">
           <div role="radiogroup" aria-label="{{sg.aria}}" style="display: grid; grid-template-columns: 74px minmax(0, 1fr); align-items: center; gap: 10px;">
-            <span style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{sg.label}}</span>
+            <span style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{sg.label}}</span>
             <div style="display: flex; gap: 2px;">
               <sc-for list="{{sg.opts}}" as="op" hint-placeholder-count="4">
                 <button type="button" role="radio" aria-checked="{{op.on}}" onClick="{{op.pick}}" style="flex: 1; height: 30px; border: none; border-radius: 8px; font-family: 'Space Mono', monospace; font-size: 10px; {{op.look}}">{{op.label}}</button>
@@ -114,19 +116,19 @@ a{text-decoration:none}
         </sc-for>
         <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="4">
           <div style="display: grid; grid-template-columns: 74px minmax(0, 1fr) 70px; align-items: center; gap: 10px;">
-            <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: #cacaca;">{{r.label}}</label>
-            <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
-            <span style="font-family: Michroma, sans-serif; font-size: 12px; color: #f2f2f2; text-align: right;">{{r.text}}</span>
+            <label for="{{r.id}}" style="font-size: 11px; letter-spacing: .22em; color: {{c.label2}};">{{r.label}}</label>
+            <input id="{{r.id}}" type="range" min="0" max="1000" step="1" value="{{r.pos}}" onChange="{{r.change}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
+            <span style="font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}}; text-align: right;">{{r.text}}</span>
           </div>
         </sc-for>
-        <div style="height: 1px; background: rgba(141,224,195,.12); margin-top: 4px;"></div>
+        <div style="height: 1px; background: {{c.line}}; margin-top: 4px;"></div>
       </div>
     </sc-for>
-    <span style="font-size: 12px; color: #8e8e8e;">The world in the middle follows the layer: its type picks the world, Unison its moonlets, Detune how they drift apart, Cutoff the halo, Resonance its ring, Drive the sparks.</span>
+    <span style="font-size: 12px; color: {{c.sub}};">The world in the middle follows the layer: its type picks the world, Unison its moonlets, Detune how they drift apart, Cutoff the halo, Resonance its ring, Drive the sparks.</span>
   </aside>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"$preview":{"width":1280,"height":860}}'>
 class Component extends DCLogic {
   componentDidMount() {
     var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -134,7 +136,24 @@ class Component extends DCLogic {
   }
   renderVals() {
     var self = this, s = this.state || {};
-    var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;', off = 'background: rgba(255,255,255,.05); color: #cacaca;';
+    var theme = this.props.theme === 'light' ? 'light' : 'dark', light = theme === 'light';
+    // the palette (as SW_Main): the dark one is the night sky, the light one the daylight screen
+    var c = light ? {
+      bg: 'linear-gradient(180deg, #f1f6f4 0, #e2ece8 55%, #d4e1dc 100%)', stars: false, text: '#1b2622', strong: '#101614', sub: '#4c5f58', label: '#3a4a44', label2: '#2e3b36',
+      acc: '#0b5a41', cat: '#178a64', line: 'rgba(11,90,65,.14)', line2: 'rgba(11,90,65,.35)', track: 'rgba(11,90,65,.16)', cell: 'rgba(255,255,255,.55)', cellLine: 'rgba(11,90,65,.18)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.52) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.9), 8px 14px 30px rgba(40,70,60,.14)',
+      sel: 'rgba(23,138,100,.12)', selLine: 'rgba(11,90,65,.45)', logo: '/_blob/702f4b752a177d6e1601ccac384e7886', accent: '#178a64', field: '#ffffff',
+      off: 'background: rgba(11,90,65,.07); color: #2e3b36;', offBtn: 'border-color: rgba(11,90,65,.3); background: none; color: #2e3b36;',
+      hi: '#0b5a41', dim: '#8a9a94', velHi: '#0b5a41', velLo: '#22a87c', trail: '#22a87c', probe: '#0b5a41', core: '/_blob/68aab30db9e061801ca79d72df3ac6e2'
+    } : {
+      bg: 'radial-gradient(ellipse 50% 60% at 42% 40%, #0e1516 0, #070a0b 50%, #030405 100%)', stars: true, text: '#e8e8e8', strong: '#f2f2f2', sub: '#8e8e8e', label: '#a8a8a8', label2: '#cacaca',
+      acc: '#8de0c3', cat: '#3fd1a0', line: 'rgba(141,224,195,.14)', line2: 'rgba(141,224,195,.35)', track: 'rgba(255,255,255,.12)', cell: 'rgba(255,255,255,.03)', cellLine: 'rgba(141,224,195,.16)',
+      panel: 'linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45)',
+      sel: 'rgba(63,209,160,.10)', selLine: 'rgba(141,224,195,.45)', logo: '/_blob/eea73410a66867fa6abf11bd1a56eee6', accent: '#3fd1a0', field: '#0d1314',
+      off: 'background: rgba(255,255,255,.05); color: #cacaca;', offBtn: 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;',
+      hi: '#e8fff6', dim: '#5c6460', velHi: '#8de0c3', velLo: '#3fd1a0', trail: '#bff3df', probe: '#e8fff6', core: '/_blob/90121e1a7bee5f359e51e024081e48ca'
+    };
+    var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;', off = c.off;
     var KIND = { WT: 'ring', VA: 'pearl', SMP: 'crater', FM: 'crystal' };
     var NOTE = { WT: 'WAVETABLE', VA: 'ANALOG', SMP: 'SAMPLE', FM: 'FM' };
     var SHEETS = { ring: '/_blob/e6ee8b6569e63ef27cedfc1666d39d47', pearl: '/_blob/7709cc70a363f53b1b2d78aa4da28c56', crater: '/_blob/8c95e5bce1ae22c9f1954ef07f849f45', crystal: '/_blob/af099d0a5b96dfa72328a1af6c2cb648' };
@@ -185,23 +204,24 @@ class Component extends DCLogic {
       var sel = i === focus, kind = KIND[x.type], sz = kind === 'ring' ? 64 : 46;
       return { no: 'L' + (i + 1), name: x.name, type: x.type, lvl: x.level, on: sel ? 'true' : 'false', op: x.on ? 1 : 0.35,
         th: { src: SHEETS[kind], s: sz, m: kind === 'ring' ? -9 : 0, bw: sz * 12, bh: sz * 8 },
-        look: sel ? 'border: 1px solid rgba(141,224,195,.45); background: rgba(63,209,160,.10);' : 'border: 1px solid rgba(141,224,195,.12); background: rgba(255,255,255,.03);',
+        look: sel ? 'border: 1px solid ' + c.selLine + '; background: ' + c.sel + ';' : 'border: 1px solid ' + c.line + '; background: ' + c.cell + ';',
         pick: function () { self.setState({ focus: i }); } };
     });
     var tabs = [['PLAY', 'SW_Main.dc.html'], ['LAYER', 'SW_Layer.dc.html'], ['ARP', 'SW_Arp.dc.html'], ['MOD', 'SW_Mod.dc.html'], ['FX', 'SW_FX.dc.html']].map(function (x, i) {
-      return { label: x[0], href: x[1], current: i === 1 ? 'page' : 'false', look: i === 1 ? 'color: #f2f2f2; box-shadow: inset 0 -2px 0 #3fd1a0;' : 'color: #8e8e8e;' };
+      return { label: x[0], href: x[1], current: i === 1 ? 'page' : 'false', look: i === 1 ? 'color: ' + c.strong + '; box-shadow: inset 0 -2px 0 ' + c.cat + ';' : 'color: ' + c.sub + ';' };
     });
     var motionOpts = [['60', '60', 'Full motion: every display frame'], ['30', '30', 'Lighter: 30 frames a second'], ['off', 'OFF', 'No motion: a still picture (values still update it)']].map(function (x) {
       var sel = motion === x[0];
-      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: #8e8e8e;', pick: function () { self.setState({ motion: x[0] }); } };
+      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: ' + c.sub + ';', pick: function () { self.setState({ motion: x[0] }); } };
     });
     return {
+      theme: theme, c: c,
       tabs: tabs, motionOpts: motionOpts, motion: motion, noteKey: noteKey, focus: focus, cards: cards, sections: sections,
       envRows: envRows, lfoRows: lfoRows, lfoShapes: lfoShapes, envPath: envPath,
       envAria: 'Attack ' + fmtT(cur.A) + ', decay ' + fmtT(cur.Dc) + ', sustain ' + cur.S + ' %, release ' + fmtT(cur.R),
       ov: { cutoff: cur.cutoff, res: cur.res, unison: cur.unison, detune: cur.detune, lfoRate: cur.lfoRate, lfoDepth: cur.lfoDepth, drive: cur.drive, release: cur.R },
       olayers: L.map(function (x, i) { return { name: 'L' + (i + 1) + ' ' + x.name, kind: KIND[x.type], lvl: x.level / 100, on: x.on }; }),
-      layerOn: { on: cur.on ? 'true' : 'false', label: cur.on ? 'LAYER ON' : 'LAYER OFF', look: cur.on ? 'border-color: #0b5a41; ' + on : 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;', toggle: function () { set('on', !cur.on); } },
+      layerOn: { on: cur.on ? 'true' : 'false', label: cur.on ? 'LAYER ON' : 'LAYER OFF', look: cur.on ? 'border-color: #0b5a41; ' + on : c.offBtn, toggle: function () { set('on', !cur.on); } },
       play: function () { self.setState({ noteKey: noteKey + 1 }); }
     };
   }

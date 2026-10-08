@@ -7,12 +7,14 @@
 | --- | --- | --- |
 | `Orbit.dc.html` | 共通部品 | 動く星系ビュー（820×740）。props：`values`（cutoff・res・unison・detune・lfoRate・lfoDepth・drive・release・bpm・spb・gateSpb）、`layers`、`focus`、`view`（system／close／arp／mod）、`mods`、`arpSteps`、`gateSteps`、`arpOn`、`gateOn`、`noteKey`、`motion`（60／30／off）、`theme`（dark／light）、`scale`。自前の描画ループを持つ |
 | `SW_Main.dc.html` | PLAY（ダーク） | プリセット（カテゴリ・一覧・EVO Similar）、星系ビュー、選んだレイヤー（Cutoff・Res・Drive・Unison・Detune・アンプのエンベロープ）、マクロ 8、リボン（押すと発音）、ARP |
-| `SW_Main_Light.dc.html` | PLAY（ライト） | `SW_Main` を `theme="light"` で読み込む |
+| `SW_Main_Light.dc.html` | PLAY（ライト） | `SW_Main` を `theme="light"` で読み込む。LAYER・ARP・MOD・FX も同じ形で `*_Light.dc.html` がある（2026-10-08、依頼者「ダークとライト全部見せて」） |
 | `SW_Layer.dc.html` | LAYER | レイヤー 4 枚の切り替え、選んだレイヤーの天体の大写し（`view="close"`）、OSC（種類で天体が替わる）・FILTER・AMP エンベロープ・LFO |
 | `SW_Arp.dc.html` | ARP | アルペジエーター（モード・レート・オクターブ・長さ・スイング、16 ステップのベロシティと音程）とトランスゲート（16 ステップ・レート・深さ）。外周の輪と内側の輪が拍で光る |
 | `SW_Mod.dc.html` | MOD | 変調 8 スロット（ソース → 行き先・量・On）。星系ビューに「重力線」として描く（太さ＝量、流れる向き＝正負） |
 | `SW_FX.dc.html` | FX | 6 スロット（Drive・Chorus・Delay・Reverb・EQ・Limit）の順番入れ替え・On/Off・パラメータ。音の通り道をスイングバイの軌道として描き、光の点が流れる。駅はエフェクトごとに別の天体（Blender、自転のコマ送り）。Off の駅は色と明るさを落とす |
 
+- 5 画面とも `theme` プロパティ（dark／light）を持ち、色はパレットの名前（`c.text`・`c.panel`・`c.acc` など）で引く。ライトは PLAY と同じ「昼の空」のパレット（白いガラスのパネル、濃いティールの線と文字、中心は磁器の星 `daycore.webp`）。色の置き換えの対応は `tools/design/themeize.py`。
+- 画面の写真：`screens/`（各画面のダーク・ライト、`overview.webp` は 10 枚の一覧）。`tools/design/dc_shot.py` で、キャンバスの書式を Chromium（Playwright）で展開して撮った静止画（動きの最初の 1 コマ）。キャンバスの実行環境そのものではないが、`{{穴}}`・`sc-for`・`sc-if`・`dc-import` と画像の対応は同じ。
 - 全画面の右上に動きの設定 MOTION 60／30／OFF（依頼者の希望）。OS の「視差効果を減らす」なら OFF で始まる。
 - 数値・プリセット名・FX の既定値は画面の見本用の設計値（エンジンにまだ無い機能を含む）。エンジンの既定値（README「IN07 の設計」）と揃えてあるのは L1 の値（Cutoff 2.4 kHz・Res 30・Drive 18・Detune 22・A 5 ms／D 320 ms／S 70 %／R 420 ms）。
 - 文字は SVG の `<text>` ではなく HTML の要素で置く（キャンバスでは `{{穴}}` 入りの SVG 文字が表示されなかったため。FX の駅名がこれで消えていた）。

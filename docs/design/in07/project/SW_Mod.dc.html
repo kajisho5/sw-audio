@@ -15,14 +15,16 @@ button,select{font-family:inherit;color:inherit;cursor:pointer;margin:0}
 a{text-decoration:none}
 </style>
 </helmet>
-<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: #e8e8e8; background: radial-gradient(ellipse 45% 60% at 25% 50%, #0e1516 0, #070a0b 50%, #030405 100%);">
-  <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 92%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 47% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 66%, rgba(255,255,255,.35), rgba(0,0,0,0));"></div>
+<div style="position: relative; width: 1280px; height: 860px; overflow: hidden; font-family: 'Barlow Condensed', sans-serif; color: {{c.text}}; background: {{c.bg}};">
+  <sc-if value="{{c.stars}}" hint-placeholder-val="{{true}}">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 33% 92%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 47% 9%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 66%, rgba(255,255,255,.35), rgba(0,0,0,0));"></div>
+  </sc-if>
 
   <header style="position: absolute; left: 24px; right: 24px; top: 0; height: 56px; display: flex; align-items: center; justify-content: space-between;">
     <div style="display: flex; align-items: center; gap: 10px; width: 300px;">
-      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: #3fd1a0;"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
+      <svg viewBox="58 8 140 240" width="11" height="19" aria-hidden="true" style="display: block; color: {{c.cat}};"><path fill="currentColor" fill-rule="evenodd" d="M82 8H174A24 24 0 0 1 198 32V224A24 24 0 0 1 174 248H82A24 24 0 0 1 58 224V32A24 24 0 0 1 82 8ZM110 34H146A18 18 0 0 1 146 70H110A18 18 0 0 1 110 34ZM110 186H146A18 18 0 0 1 146 222H110A18 18 0 0 1 110 186Z"></path></svg>
       <span style="font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; line-height: 14px; padding: 2px 6px; border-radius: 3px; background: #22a87c; color: #0c0c0d;">IN07</span>
-      <img src="/_blob/eea73410a66867fa6abf11bd1a56eee6" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
+      <img src="{{c.logo}}" alt="SWINGBY" style="display: block; height: 11px; width: 87px;">
     </div>
     <nav aria-label="Screens" style="display: flex; align-items: center; gap: 4px;">
       <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="5">
@@ -31,58 +33,58 @@ a{text-decoration:none}
     </nav>
     <div style="display: flex; align-items: center; justify-content: flex-end; gap: 16px; width: 300px;">
       <div role="radiogroup" aria-label="Motion" style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 11px; letter-spacing: .26em; color: #8e8e8e;">MOTION</span>
-        <div style="display: flex; border: 1px solid rgba(141,224,195,.35); border-radius: 13px; overflow: hidden;">
+        <span style="font-size: 11px; letter-spacing: .26em; color: {{c.sub}};">MOTION</span>
+        <div style="display: flex; border: 1px solid {{c.line2}}; border-radius: 13px; overflow: hidden;">
           <sc-for list="{{motionOpts}}" as="m" hint-placeholder-count="3">
             <button type="button" role="radio" aria-checked="{{m.on}}" title="{{m.title}}" onClick="{{m.pick}}" style="height: 26px; min-width: 40px; padding: 0 9px; border: none; font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700; letter-spacing: .06em; {{m.look}}">{{m.label}}</button>
           </sc-for>
         </div>
       </div>
-      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: #8e8e8e;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
+      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 11px; letter-spacing: .22em; color: {{c.sub}};"><span style="width: 6px; height: 6px; border-radius: 50%; background: #2bd14a;"></span>SW LINK</span>
     </div>
   </header>
 
   <div style="position: absolute; left: 20px; top: 84px; width: 590px; height: 533px; overflow: hidden;">
-    <dc-import name="Orbit" values="{{ov}}" view="mod" mods="{{mods}}" arp-on="{{false}}" theme="dark" motion="{{motion}}" scale="0.72" hint-size="590px,533px"></dc-import>
+    <dc-import name="Orbit" values="{{ov}}" view="mod" mods="{{mods}}" arp-on="{{false}}" theme="{{theme}}" motion="{{motion}}" scale="0.72" hint-size="590px,533px"></dc-import>
   </div>
   <div style="position: absolute; left: 40px; top: 640px; width: 550px; display: flex; flex-direction: column; gap: 8px;">
-    <span style="font-size: 11px; letter-spacing: .34em; color: #a8a8a8;">GRAVITY LINES</span>
-    <span style="font-size: 13px; line-height: 1.45; color: #8e8e8e;">Each slot is a line from its source to what it moves. The line is thicker for more amount and flows from source to target; a negative amount flows back as dots. Sources along the bottom: velocity, mod wheel, aftertouch and the eight macros; the LFO moon and the envelope at the core reach out from where they are.</span>
+    <span style="font-size: 11px; letter-spacing: .34em; color: {{c.label}};">GRAVITY LINES</span>
+    <span style="font-size: 13px; line-height: 1.45; color: {{c.sub}};">Each slot is a line from its source to what it moves. The line is thicker for more amount and flows from source to target; a negative amount flows back as dots. Sources along the bottom: velocity, mod wheel, aftertouch and the eight macros; the LFO moon and the envelope at the core reach out from where they are.</span>
   </div>
 
-  <section aria-label="Modulation matrix" style="position: absolute; left: 630px; top: 72px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; border-radius: 16px; border: 1px solid rgba(141,224,195,.14); background: linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%); box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45);">
+  <section aria-label="Modulation matrix" style="position: absolute; left: 630px; top: 72px; width: 626px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; border-radius: 16px; border: 1px solid {{c.line}}; background: {{c.panel}}; box-shadow: {{c.shadow}};">
     <div style="display: grid; grid-template-columns: 30px 56px minmax(0, 1fr) 16px minmax(0, 1fr) 150px 48px; align-items: center; gap: 8px; padding-bottom: 4px;">
-      <span style="font-size: 10px; letter-spacing: .2em; color: #8e8e8e;">#</span>
-      <span style="font-size: 10px; letter-spacing: .2em; color: #8e8e8e;">ON</span>
-      <span style="font-size: 10px; letter-spacing: .2em; color: #8e8e8e;">SOURCE</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">#</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">ON</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">SOURCE</span>
       <span></span>
-      <span style="font-size: 10px; letter-spacing: .2em; color: #8e8e8e;">TARGET</span>
-      <span style="font-size: 10px; letter-spacing: .2em; color: #8e8e8e;">AMOUNT</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">TARGET</span>
+      <span style="font-size: 10px; letter-spacing: .2em; color: {{c.sub}};">AMOUNT</span>
       <span></span>
     </div>
     <sc-for list="{{slots}}" as="r" hint-placeholder-count="8">
-      <div style="display: grid; grid-template-columns: 30px 56px minmax(0, 1fr) 16px minmax(0, 1fr) 150px 48px; align-items: center; gap: 8px; min-height: 52px; border-top: 1px solid rgba(141,224,195,.08); opacity: {{r.op}};">
-        <span style="font-family: 'Space Mono', monospace; font-size: 11px; color: #a8a8a8;">{{r.no}}</span>
+      <div style="display: grid; grid-template-columns: 30px 56px minmax(0, 1fr) 16px minmax(0, 1fr) 150px 48px; align-items: center; gap: 8px; min-height: 52px; border-top: 1px solid {{c.line}}; opacity: {{r.op}};">
+        <span style="font-family: 'Space Mono', monospace; font-size: 11px; color: {{c.label}};">{{r.no}}</span>
         <button type="button" aria-pressed="{{r.pressed}}" aria-label="{{r.onAria}}" onClick="{{r.toggle}}" style="width: 48px; height: 28px; border: 1px solid; border-radius: 14px; font-family: 'Space Mono', monospace; font-size: 9px; {{r.onLook}}">{{r.onLabel}}</button>
-        <select aria-label="{{r.srcAria}}" value="{{r.from}}" onChange="{{r.setSrc}}" style="height: 36px; padding: 0 8px; border: 1px solid rgba(141,224,195,.22); border-radius: 8px; background: #0d1314; font-size: 14px; letter-spacing: .06em; color: #f2f2f2;">
+        <select aria-label="{{r.srcAria}}" value="{{r.from}}" onChange="{{r.setSrc}}" style="height: 36px; padding: 0 8px; border: 1px solid {{c.cellLine}}; border-radius: 8px; background: {{c.field}}; font-size: 14px; letter-spacing: .06em; color: {{c.strong}};">
           <sc-for list="{{r.srcOpts}}" as="o" hint-placeholder-count="13">
             <option value="{{o.v}}">{{o.label}}</option>
           </sc-for>
         </select>
-        <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"><path d="M1 6h13M10 2l4 4-4 4" fill="none" stroke="#8de0c3" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-        <select aria-label="{{r.dstAria}}" value="{{r.to}}" onChange="{{r.setDst}}" style="height: 36px; padding: 0 8px; border: 1px solid rgba(141,224,195,.22); border-radius: 8px; background: #0d1314; font-size: 14px; letter-spacing: .06em; color: #f2f2f2;">
+        <svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"><path d="M1 6h13M10 2l4 4-4 4" fill="none" stroke="{{c.acc}}" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <select aria-label="{{r.dstAria}}" value="{{r.to}}" onChange="{{r.setDst}}" style="height: 36px; padding: 0 8px; border: 1px solid {{c.cellLine}}; border-radius: 8px; background: {{c.field}}; font-size: 14px; letter-spacing: .06em; color: {{c.strong}};">
           <sc-for list="{{r.dstOpts}}" as="o" hint-placeholder-count="10">
             <option value="{{o.v}}">{{o.label}}</option>
           </sc-for>
         </select>
-        <input type="range" min="-100" max="100" step="1" value="{{r.amt}}" onChange="{{r.setAmt}}" aria-label="{{r.amtAria}}" style="width: 100%; margin: 0; accent-color: #3fd1a0;">
-        <span style="font-family: Michroma, sans-serif; font-size: 12px; color: #f2f2f2; text-align: right;">{{r.amtText}}</span>
+        <input type="range" min="-100" max="100" step="1" value="{{r.amt}}" onChange="{{r.setAmt}}" aria-label="{{r.amtAria}}" style="width: 100%; margin: 0; accent-color: {{c.accent}};">
+        <span style="font-family: Michroma, sans-serif; font-size: 12px; color: {{c.strong}}; text-align: right;">{{r.amtText}}</span>
       </div>
     </sc-for>
   </section>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":860}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","default":"dark","options":["dark","light"]},"$preview":{"width":1280,"height":860}}'>
 class Component extends DCLogic {
   componentDidMount() {
     var reduce = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -90,6 +92,23 @@ class Component extends DCLogic {
   }
   renderVals() {
     var self = this, s = this.state || {};
+    var theme = this.props.theme === 'light' ? 'light' : 'dark', light = theme === 'light';
+    // the palette (as SW_Main): the dark one is the night sky, the light one the daylight screen
+    var c = light ? {
+      bg: 'linear-gradient(180deg, #f1f6f4 0, #e2ece8 55%, #d4e1dc 100%)', stars: false, text: '#1b2622', strong: '#101614', sub: '#4c5f58', label: '#3a4a44', label2: '#2e3b36',
+      acc: '#0b5a41', cat: '#178a64', line: 'rgba(11,90,65,.14)', line2: 'rgba(11,90,65,.35)', track: 'rgba(11,90,65,.16)', cell: 'rgba(255,255,255,.55)', cellLine: 'rgba(11,90,65,.18)',
+      panel: 'linear-gradient(160deg, rgba(255,255,255,.78), rgba(255,255,255,.52) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.9), 8px 14px 30px rgba(40,70,60,.14)',
+      sel: 'rgba(23,138,100,.12)', selLine: 'rgba(11,90,65,.45)', logo: '/_blob/702f4b752a177d6e1601ccac384e7886', accent: '#178a64', field: '#ffffff',
+      off: 'background: rgba(11,90,65,.07); color: #2e3b36;', offBtn: 'border-color: rgba(11,90,65,.3); background: none; color: #2e3b36;',
+      hi: '#0b5a41', dim: '#8a9a94', velHi: '#0b5a41', velLo: '#22a87c', trail: '#22a87c', probe: '#0b5a41', core: '/_blob/68aab30db9e061801ca79d72df3ac6e2'
+    } : {
+      bg: 'radial-gradient(ellipse 45% 60% at 25% 50%, #0e1516 0, #070a0b 50%, #030405 100%)', stars: true, text: '#e8e8e8', strong: '#f2f2f2', sub: '#8e8e8e', label: '#a8a8a8', label2: '#cacaca',
+      acc: '#8de0c3', cat: '#3fd1a0', line: 'rgba(141,224,195,.14)', line2: 'rgba(141,224,195,.35)', track: 'rgba(255,255,255,.12)', cell: 'rgba(255,255,255,.03)', cellLine: 'rgba(141,224,195,.16)',
+      panel: 'linear-gradient(200deg, rgba(255,255,255,.06), rgba(255,255,255,.015) 60%)', shadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 20px 50px rgba(0,0,0,.45)',
+      sel: 'rgba(63,209,160,.10)', selLine: 'rgba(141,224,195,.45)', logo: '/_blob/eea73410a66867fa6abf11bd1a56eee6', accent: '#3fd1a0', field: '#0d1314',
+      off: 'background: rgba(255,255,255,.05); color: #cacaca;', offBtn: 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;',
+      hi: '#e8fff6', dim: '#5c6460', velHi: '#8de0c3', velLo: '#3fd1a0', trail: '#bff3df', probe: '#e8fff6', core: '/_blob/90121e1a7bee5f359e51e024081e48ca'
+    };
     var on = 'background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: #0c0c0d;';
     var motion = s.motion || '60';
     var SRC = [['lfo', 'LFO'], ['env', 'ENV 2'], ['vel', 'VELOCITY'], ['mw', 'MOD WHEEL'], ['at', 'AFTERTOUCH'], ['m1', 'M1 BRIGHT'], ['m2', 'M2 RESO'], ['m3', 'M3 ATTACK'], ['m4', 'M4 RELEASE'], ['m5', 'M5 DRIVE'], ['m6', 'M6 WIDTH'], ['m7', 'M7 DELAY'], ['m8', 'M8 REVERB']];
@@ -104,7 +123,7 @@ class Component extends DCLogic {
     var rows = slots.map(function (x, i) {
       return {
         no: String(i + 1), from: x.from, to: x.to, op: x.on ? 1 : 0.55, pressed: x.on ? 'true' : 'false', onLabel: x.on ? 'ON' : 'OFF', onAria: 'Slot ' + (i + 1) + (x.on ? ' on' : ' off'),
-        onLook: x.on ? 'border-color: #0b5a41; ' + on : 'border-color: rgba(255,255,255,.2); background: none; color: #cacaca;',
+        onLook: x.on ? 'border-color: #0b5a41; ' + on : c.offBtn,
         toggle: function () { upd(i, 'on', !x.on); },
         srcAria: 'Slot ' + (i + 1) + ' source', dstAria: 'Slot ' + (i + 1) + ' target', amtAria: 'Slot ' + (i + 1) + ' amount, ' + x.amt + ' %',
         srcOpts: SRC.map(function (o) { return { v: o[0], label: o[1], sel: o[0] === x.from }; }),
@@ -115,13 +134,14 @@ class Component extends DCLogic {
       };
     });
     var tabs = [['PLAY', 'SW_Main.dc.html'], ['LAYER', 'SW_Layer.dc.html'], ['ARP', 'SW_Arp.dc.html'], ['MOD', 'SW_Mod.dc.html'], ['FX', 'SW_FX.dc.html']].map(function (x, i) {
-      return { label: x[0], href: x[1], current: i === 3 ? 'page' : 'false', look: i === 3 ? 'color: #f2f2f2; box-shadow: inset 0 -2px 0 #3fd1a0;' : 'color: #8e8e8e;' };
+      return { label: x[0], href: x[1], current: i === 3 ? 'page' : 'false', look: i === 3 ? 'color: ' + c.strong + '; box-shadow: inset 0 -2px 0 ' + c.cat + ';' : 'color: ' + c.sub + ';' };
     });
     var motionOpts = [['60', '60', 'Full motion: every display frame'], ['30', '30', 'Lighter: 30 frames a second'], ['off', 'OFF', 'No motion: a still picture (values still update it)']].map(function (x) {
       var sel = motion === x[0];
-      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: #8e8e8e;', pick: function () { self.setState({ motion: x[0] }); } };
+      return { label: x[1], title: x[2], on: sel ? 'true' : 'false', look: sel ? on : 'background: none; color: ' + c.sub + ';', pick: function () { self.setState({ motion: x[0] }); } };
     });
     return {
+      theme: theme, c: c,
       tabs: tabs, motionOpts: motionOpts, motion: motion, slots: rows,
       ov: { cutoff: 2400, res: 30, unison: 8, detune: 22, lfoRate: 0.8, lfoDepth: 35, drive: 18, release: 420, bpm: 138 },
       mods: slots.map(function (x) { return { from: x.from, to: x.to, amt: x.amt / 100, on: x.on && x.amt !== 0 }; })
