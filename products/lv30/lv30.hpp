@@ -37,6 +37,7 @@ public:
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
     void setFolder(const std::string& path) { std::lock_guard<std::mutex> l(m_); folder_ = path; }
+    static bool acceptableFolder(const std::string& path);   // what loadExtra takes from a project (absolute, no "..", no control characters)
     std::string folder() const { std::lock_guard<std::mutex> l(m_); return folder_; }
     bool start();                 // false: no folder / already running / not prepared
     void stop();                  // writes the last data, the cue points and the final header

@@ -154,6 +154,22 @@ void Processor::writer() {
 }
 
 void Processor::saveExtra(std::vector<uint8_t>& out) const { const std::string f = folder(); const size_t len = std::min<size_t>(1000, f.size()); out.push_back(static_cast<uint8_t>(len & 0xFF)); out.push_back(static_cast<uint8_t>(len >> 8)); out.insert(out.end(), f.begin(), f.begin() + static_cast<long>(len)); }
-void Processor::loadExtra(const uint8_t* d, size_t size) { if (size < 2) return; const size_t len = static_cast<size_t>(d[0]) | (static_cast<size_t>(d[1]) << 8); if (2 + len > size || len > 1000) return; setFolder(std::string(reinterpret_cast<const char*>(d + 2), len)); }
+// the folder comes from a project file, which may come from someone else: only an absolute path without ".." pieces or control characters
+// is taken (a relative path would land wherever the host happens to run; ".." could step out of a folder the person recognises)
+bool Processor::acceptableFolder(const std::string& s) {
+    if (s.empty() || s.size() > 1000) return false;
+    for (unsigned char c : s) if (c < 0x20 || c == 0x7F) return false;
+    const fs::path p = fs::u8path(s);
+    if (!p.is_absolute()) return false;
+    for (const auto& part : p) if (part == "..") return false;
+    return true;
+}
+void Processor::loadExtra(const uint8_t* d, size_t size) {
+    if (size < 2) return;
+    const size_t len = static_cast<size_t>(d[0]) | (static_cast<size_t>(d[1]) << 8);
+    if (2 + len > size || len > 1000) return;
+    std::string f(reinterpret_cast<const char*>(d + 2), len);
+    if (acceptableFolder(f)) setFolder(f);
+}
 
 }  // namespace sw::lv30

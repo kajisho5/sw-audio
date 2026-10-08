@@ -50,7 +50,7 @@ void Processor::saveExtra(std::vector<uint8_t>& out) const {
 }
 void Processor::loadExtra(const uint8_t* d, size_t size) {
     if (size < static_cast<size_t>(kKinds) * 5) return;
-    for (int k = 0; k < kKinds; ++k) { has_[static_cast<size_t>(k)] = d[k * 5] != 0; float f; std::memcpy(&f, d + k * 5 + 1, 4); kept_[static_cast<size_t>(k)] = std::clamp(static_cast<double>(f), -24.0, 24.0); }
+    for (int k = 0; k < kKinds; ++k) { has_[static_cast<size_t>(k)] = d[k * 5] != 0; float f; std::memcpy(&f, d + k * 5 + 1, 4); kept_[static_cast<size_t>(k)] = std::isfinite(f) ? std::clamp(static_cast<double>(f), -24.0, 24.0) : 0.0; if (!std::isfinite(f)) has_[static_cast<size_t>(k)] = false; }
 }
 
 void Processor::process(float** ch, int numCh, int n) {

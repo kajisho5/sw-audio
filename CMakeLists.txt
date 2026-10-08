@@ -26,7 +26,8 @@ include(FetchContent)
 # Pinned third-party sources (all permissive: CLAP MIT, clap-wrapper MIT, VST3 SDK MIT, doctest MIT)
 FetchContent_Declare(clap GIT_REPOSITORY https://github.com/free-audio/clap.git GIT_TAG 1.2.10 GIT_SHALLOW TRUE)
 FetchContent_Declare(clap-wrapper GIT_REPOSITORY https://github.com/free-audio/clap-wrapper.git GIT_TAG v0.16.0 GIT_SHALLOW TRUE)
-FetchContent_Declare(doctest URL https://raw.githubusercontent.com/doctest/doctest/v2.4.11/doctest/doctest.h DOWNLOAD_NO_EXTRACT TRUE)
+FetchContent_Declare(doctest URL https://raw.githubusercontent.com/doctest/doctest/v2.4.11/doctest/doctest.h
+    URL_HASH SHA256=44faa038e9c3f9728efbda143748d01124ea0a27f4bf78f35a15d8fab2e039fb DOWNLOAD_NO_EXTRACT TRUE)   # downloads are checked against the file that was reviewed
 
 # ---- DSP core (framework independent)
 add_library(sw-core INTERFACE)
@@ -103,7 +104,8 @@ if (APPLE)
     target_link_libraries(sw-gui-view PUBLIC "-framework Cocoa" "-framework WebKit")
 elseif (WIN32)
     # the WebView2 SDK (headers and the static loader) comes as a NuGet package, which is a zip
-    FetchContent_Declare(webview2 URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2420.47 DOWNLOAD_NAME webview2.zip)
+    FetchContent_Declare(webview2 URL https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2420.47 DOWNLOAD_NAME webview2.zip
+        URL_HASH SHA256=8e5a7307d71507edbbe02cac27215d71058bbd82cd256cef60f06b945907610a)
     FetchContent_MakeAvailable(webview2)
     target_sources(sw-gui-view PRIVATE plugin/clap/gui_win.cpp)
     target_include_directories(sw-gui-view PRIVATE ${webview2_SOURCE_DIR}/build/native/include)

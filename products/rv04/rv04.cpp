@@ -249,7 +249,10 @@ void Processor::transformChunk() {
 void Processor::loadIr(const float* data, size_t frames, int channels, double sourceRate) {
     channels = std::clamp(channels, 1, 2);
     custom_.assign(data, data + frames * static_cast<size_t>(channels));
-    customCh_ = channels; customRate_ = sourceRate > 0.0 ? sourceRate : 48000.0;
+    // an IR from a shared project or a file: values that are not numbers are silence, the rest at most +24 dBFS; a rate outside
+    // 1 kHz .. 768 kHz (not a number, zero, negative) is taken as 48 kHz (a tiny rate would ask for an impossible length)
+    for (float& v : custom_) v = std::isfinite(v) ? std::clamp(v, -16.0f, 16.0f) : 0.0f;
+    customCh_ = channels; customRate_ = std::isfinite(sourceRate) && sourceRate >= 1000.0 && sourceRate <= 768000.0 ? sourceRate : 48000.0;
     if (prepared_ && categoryOf() == Custom) markSynth();
 }
 

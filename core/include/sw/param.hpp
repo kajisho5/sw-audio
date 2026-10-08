@@ -26,7 +26,9 @@ struct ParamSpec {
 
     int numSteps() const { return curve == Curve::Step ? static_cast<int>(steps.size()) : 0; }
 
+    // a value that is not a number (a damaged session or preset, a host error) reads as the default, never as NaN
     double toValue(double x) const {
+        if (!(x == x)) x = toNorm(def);
         x = std::clamp(x, 0.0, 1.0);
         if (reversed && curve != Curve::Step) x = 1.0 - x;
         switch (curve) {
@@ -55,8 +57,11 @@ struct ParamSpec {
     }
 
     double toNorm(double v) const {
-        if (reversed && curve != Curve::Step) return 1.0 - baseNorm(v);
-        return baseNorm(v);
+        if (!(v == v)) v = def;
+        double n = baseNorm(v);
+        if (!(n == n)) n = 0.0;   // e.g. a value below the range of a log curve (log of a negative number)
+        if (reversed && curve != Curve::Step) return 1.0 - n;
+        return n;
     }
     double baseNorm(double v) const {
         switch (curve) {

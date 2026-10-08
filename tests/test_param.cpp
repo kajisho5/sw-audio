@@ -34,6 +34,26 @@ TEST_CASE("normalized input outside 0..1 is clamped") {
     CHECK(p.toValue(-0.2) == doctest::Approx(-15.0));
     CHECK(p.toValue(1.5) == doctest::Approx(15.0));
 }
+TEST_CASE("a value that is not a number reads as the default; a value below a log range reads as its minimum (a damaged session or preset)") {
+    const double nan = std::nan("");
+    const ParamSpec lin{"g", "Gain", -15.0, 15.0, 3.0, Curve::Lin};
+    CHECK(lin.toValue(nan) == doctest::Approx(3.0));
+    CHECK(lin.toNorm(nan) == doctest::Approx(lin.toNorm(3.0)));
+    const ParamSpec lg{"f", "Freq", 20.0, 20000.0, 1000.0, Curve::Log};
+    CHECK(lg.toValue(nan) == doctest::Approx(1000.0));
+    CHECK(lg.toNorm(-5.0) == 0.0);              // log of a negative number: no NaN
+    CHECK(lg.toNorm(0.0) == 0.0);
+    CHECK(lg.toValue(lg.toNorm(-5.0)) == doctest::Approx(20.0));
+    const ParamSpec rev{"w", "Width", 0.4, 2.0, 1.0, Curve::Lin, 1.0, {}, "", {}, nullptr, nullptr, 1.0, true, true};
+    CHECK(rev.toValue(nan) == doctest::Approx(1.0));
+    const ParamSpec st{"h", "HPF", 0.0, 200.0, 40.0, Curve::Step, 1.0, {0, 40, 80}};
+    CHECK(st.toValue(nan) == 40.0);
+    CHECK(st.toNorm(nan) == doctest::Approx(0.5));
+    const ParamSpec sk{"a", "Attack", 0.1, 200.0, 10.0, Curve::Skew, 3.0};
+    CHECK(std::isfinite(sk.toValue(sk.toNorm(nan))));
+    CHECK(std::isfinite(lin.toValue(INFINITY)));
+    CHECK(std::isfinite(lg.toNorm(INFINITY)));
+}
 TEST_CASE("linear smoother reaches the target exactly after the ramp time") {
     LinearSmoother s;
     s.reset(48000.0, 20.0, 0.0);

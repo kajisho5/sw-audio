@@ -222,3 +222,17 @@
 - [x] 画面：MD05 の回転スピーカー（ホーン・ドラムを Blender で描き、Speed・Accel の物理モデルどおりに回す。Hz 表示も連動）
 - [x] 画面：パラメトリック EQ の周波数特性図（EQ02・EQ07・EQ08）。バンドのフィルタ応答から曲線を描き、ドットのドラッグで周波数・ゲイン、ホイールで Q、空きの場所を 2 回クリックでバンド追加、ドットを 2 回クリックで削除
 - [x] 画面：LV12 の 31 バンドのフェーダーを操作できるように（Left／Right／Both に従って書き込み、ダブルクリックで 0 dB）
+
+## 有料配布のセキュリティ（`docs/security.md`、2026-10-09）
+
+- [x] プラグインが読むデータを「信用しない入力」に：パラメータの NaN、ホストの値と保存データの検査（全製品）、ユーザープリセットの読み込み、RV04・UT01・LV30 の追加データ
+- [ ] リポジトリの非公開化（依頼者の判断待ち。CI の費用の扱いも一緒に決める）
+- [ ] 売り方・決済サービス（Merchant of Record）・未認証時の動作・名義を決める（依頼者）
+- [ ] ライセンス認証（Ed25519 の署名付きライセンスファイル、有効化サーバー、共通層への組み込み、validator 用のモード）
+- [ ] macOS：Developer ID 署名・Hardened Runtime・公証・staple を CI へ（Apple Developer Program の登録が要る）
+- [ ] Windows：OV コード署名証明書（クラウド署名）と signtool を CI へ
+- [ ] 配布：インストーラー（pkg・exe）の署名、SHA-256 の公開、署名付きの更新情報
+- [x] CI：action を SHA で固定、`permissions: contents: read`、clap-validator の zip と doctest・WebView2 の取得をハッシュで検証
+- [ ] CI：署名用の別ワークフロー（タグと承認付き Environment）、CLAP と clap-wrapper の GIT_TAG をコミット SHA に
+- [ ] 画面：WebView のページ外移動の禁止・CSP・外部の文字列は textContent、LV30 の共有プロジェクトでの自動録音の確認
+
