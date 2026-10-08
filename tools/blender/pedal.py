@@ -159,10 +159,10 @@ for kx, ky, ks in T['knobs']:      # a tick scale around every knob, 270 degrees
     tick_arc(kx, ky, ks / 200.0 + 0.06, ks / 200.0 + 0.09, 11 if ks > 30 else 7, -135, 135)
 
 if kind == 'comp':             # a meter window with five dark lenses
-    x, y = pos(70, 124)
+    x, y = pos(70, 118)
     box(x, y, 0.62, 0.15, 0.012, TOP - 0.004, dark, 0.01)
     for i in range(5):
-        px_, py_ = pos(46 + i * 12, 124)
+        px_, py_ = pos(46 + i * 12, 118)
         bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.025, depth=0.014, location=(px_, py_, TOP + 0.003)); o = bpy.context.active_object
         o.data.materials.append(glass); bpy.ops.object.shade_smooth()
 elif kind == 'drive':          # corner screws and a double line under the big knob
