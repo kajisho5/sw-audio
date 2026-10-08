@@ -246,7 +246,7 @@
       // switches without a parameter (DY02 meter mode): a setting of the screen only, until the live meters are wired
       skinBox.querySelectorAll('[data-seg]').forEach(seg => {
         const bs = [...seg.querySelectorAll('button')], acc = 'var(--acc)';
-        const show = k => bs.forEach((b, j) => { const on = j === k; b.style.background = on ? acc : '#161617'; b.style.color = on ? '#0c0c0d' : '#cfcfcf'; b.style.borderColor = on ? acc : '#3a3a3d'; });
+        const show = k => { seg.dataset.sel = k; bs.forEach((b, j) => { const on = j === k; b.style.background = on ? acc : '#161617'; b.style.color = on ? '#0c0c0d' : '#cfcfcf'; b.style.borderColor = on ? acc : '#3a3a3d'; }); };
         bs.forEach((b, k) => b.addEventListener('click', () => show(k))); show(Math.max(0, bs.findIndex(b => b.dataset.on)));
       });
       // a stomp box: its type (None, Comp ... Reverb) sets the shell and the name; a click on the name steps to the next type

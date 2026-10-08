@@ -36,3 +36,5 @@ SW AUDIO の画面・販売素材で使っている Blender 描画（Blender 4.0
 
 描画スクリプトは `tools/blender/`（`pedal.py`・`stomp.py`・`knob.py`、後処理 `post.py`）。Blender 4.0.2（apt）、Cycles、CPU。この Blender には OIDN がないため、高サンプルで描いて OpenCV でノイズ除去している（元の素材と同じ事情）。
 照明は元の素材と同じ構成（左上キー＋右下フィル＋リム）。元の素材の描画スクリプト（handover の zip）は無いので、形状・材質は新しく作ったもの。
+
+| `parts/vu-bezel-frame.webp` | VU メーターの枠（900×546、中は透明で枠の影だけ）。`tools/blender/vu_bezel.py`。border-image（slice 30）で全サイズに使う |

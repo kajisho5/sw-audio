@@ -57,7 +57,54 @@
     };
   }
 
+  // ---- VU meters: the needle of the design's own face, moved by the measured level.
+  // The face (viewBox 214 x 124, pivot 107,140) is the same in every design: the needle angle follows its printed scale.
+  const VU_SCALE = [[-20, -50], [-10, -34], [-7, -22], [-5, -13], [-3, -3], [-1, 10], [0, 22], [1, 30], [2, 40], [3, 50]];   // VU -> degrees
+  function vuAngle(vu) {
+    if (vu <= VU_SCALE[0][0]) return VU_SCALE[0][1];
+    for (let k = 1; k < VU_SCALE.length; k++) if (vu <= VU_SCALE[k][0]) { const a = VU_SCALE[k - 1], b = VU_SCALE[k]; return a[1] + (b[1] - a[1]) * (vu - a[0]) / (b[0] - a[0]); }
+    return VU_SCALE[VU_SCALE.length - 1][1];
+  }
+  // modes: 'gr' (needle falls from 0 with gain reduction), 'out' (output level, 0 VU = -15 dBFS peak), 'outLR' (one needle per channel)
+  function vuDisplay(box, ctx, mode) {
+    const needles = [...box.querySelectorAll('svg line[transform^="rotate("]')].filter(l => l.getAttribute('x1') === '107' && l.getAttribute('y1') === '140');
+    if (!needles.length) return null;
+    needles.forEach(n => { n.removeAttribute('transform'); n.style.transformOrigin = '107px 140px'; n.style.transition = 'transform 70ms linear'; });
+    const cur = needles.map(() => -50);
+    const seg = box.querySelector('[data-seg]');
+    // the design's own meter buttons (DY01: GR, +8, +4, Off): they choose what the needle shows; a setting of the screen only
+    const mb = seg ? [] : [...box.querySelectorAll('button')].filter(b => ['GR', '+4', '+8', '+10', 'OFF'].includes(b.textContent.trim().toUpperCase()));
+    let label = null;
+    if (mb.length >= 3) {
+      const on = mb.find(b => b.classList.contains('on')); label = on ? on.textContent.trim().toUpperCase() : 'GR';
+      mb.forEach(b => b.addEventListener('click', () => { mb.forEach(x => x.classList.toggle('on', x === b)); label = b.textContent.trim().toUpperCase(); }));
+    }
+    const REF = { '+4': 15, '+8': 11, '+10': 9 };
+    return {
+      update(info) {
+        const m = info && info.meters; if (!m) return;
+        const sel = seg ? +(seg.dataset.sel || 0) : (mode === 'gr' ? 0 : 1);       // DY02's own switch: GR, +4, +10
+        needles.forEach((n, k) => {
+          let vu;
+          if (label === 'OFF') vu = -20;
+          else if (label && label !== 'GR') vu = outDb(m) + REF[label];
+          else if (label === 'GR') vu = -Math.max(0, peakDb(m) - outDb(m));
+          else if (mode === 'outLR') vu = (m[2 + (k % 2)] > -99 ? m[2 + (k % 2)] : -100) + 15;
+          else if (sel === 0 && mode !== 'out') vu = -Math.max(0, peakDb(m) - outDb(m));           // gain reduction
+          else vu = outDb(m) + (sel === 2 ? 9 : 15);                                                // +4 and +10 reference
+          const target = vuAngle(Math.max(-20, Math.min(3, vu)));
+          cur[k] += (target - cur[k]) * (target > cur[k] ? 0.45 : 0.22);                            // 300 ms ballistics at the 60 ms update
+          n.style.transform = 'rotate(' + cur[k].toFixed(1) + 'deg)';
+        });
+      }
+    };
+  }
+
   const registry = {
+    DY01: (box, ctx) => vuDisplay(box, ctx, 'gr'),
+    DY02: (box, ctx) => vuDisplay(box, ctx, 'meter'),
+    DY06: (box, ctx) => vuDisplay(box, ctx, 'gr'),
+    MT05: (box, ctx) => vuDisplay(box, ctx, 'outLR'),
     DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' })
   };
 

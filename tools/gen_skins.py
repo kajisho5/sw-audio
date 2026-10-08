@@ -206,6 +206,23 @@ def gt03_pedals(root, params):
     return css
 
 
+def vu_frames(root, params):
+    """The VU meters (DY01, DY02, DY03, DY06, MT05): the black box around each face becomes the Blender-rendered bezel (tools/blender/vu_bezel.py),
+    stretched with border-image so that every size uses the same file. The needle is moved by ui/displays.js."""
+    n = 0
+    for sv in root.find_all('svg'):
+        if sv.get('viewbox') != '0 0 214 124':
+            continue
+        box = sv.parent
+        st = box.get('style', '')
+        m = re.search(r'padding:(\d+)px', st)
+        pad = int(m.group(1)) if m else 8
+        st = re.sub(r'(background|padding|box-shadow):[^;]*;?', '', st)
+        box['style'] = st + ';border:%dpx solid transparent;border-image:url(@@VUFRAME@@) 30 stretch' % pad
+        n += 1
+    return '' if not n else 'x'
+
+
 HOOKS = {'GT03': gt03_pedals}
 
 
@@ -220,6 +237,9 @@ def build(code, report):
     alias = json.loads(json.dumps(ALIASES.get(code, {})))   # a copy: lists are consumed
     apply_edits(root, alias)
     extra_css = HOOKS[code](root, params) if code in HOOKS else ''
+    if vu_frames(root, params):
+        extra_css += ''
+        root_html_vu = True
     nb = nk = nbt = nbb = 0
     # knobs: .ctl with a .dk / .knob, label in .lbl
     for ctl in root.select('.ctl'):
@@ -332,7 +352,8 @@ def build(code, report):
     for part in (style, str(root)):
         if re.search(r'</script', part, re.I):
             raise SystemExit(code + ': the design contains a closing script tag')
-    return {'css': style, 'html': str(root), 'w': width, 'h': height, 'knobs': [nb, nk], 'buttons': [nbb, nbt]}
+    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp')))
+    return {'css': style, 'html': html, 'w': width, 'h': height, 'knobs': [nb, nk], 'buttons': [nbb, nbt]}
 
 
 def arr(name, data):
