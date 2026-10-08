@@ -9,7 +9,8 @@ cmake --build "$B" -j2 > /tmp/sw_build.log 2>&1 || { echo "BUILD FAILED"; grep -
 grep -E "ERROR" /tmp/sw_tests.log | head -5
 for c in "$B"/plugins/*.clap; do
   n=$(basename "$c" .clap)
-  cr=$(NO_COLOR=1 clap-validator validate "$c" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep "tests run" | sed 's/ tests run,/ run/')
+  # preset-discovery-crawl/-load: left out (clap-validator deadlocks at a container's second preset; tools/clap_note_host.cpp covers them)
+  cr=$(NO_COLOR=1 clap-validator validate -x "preset-discovery-(crawl|load)" "$c" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep "tests run" | sed 's/ tests run,/ run/')
   vr=$(vst3-validator "$B/plugins/$n.vst3" 2>&1 | grep "Result:" | tail -1 | sed 's/Result: //')
   printf "%-28s CLAP: %-55s VST3: %s\n" "$n" "$cr" "$vr"
 done

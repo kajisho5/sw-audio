@@ -9,7 +9,14 @@
 //   no allocation); static void warmUp() (activate: build tables). Needs Core::param(id) (plain values) to read the loaded values back.
 //   When the host changes the selector, the preset is loaded and every value it changed is reported to the host (CLAP param value events);
 //   a restored state sets the selector without loading (the session keeps its own values).
+//   optional, preset files (CLAP preset-load and the preset-discovery factory: a host's browser lists the factory presets and the user's
+//   files, and loads them): kPresetVendor / kPresetProduct (the user folder, plugin/clap/user_presets.hpp), factoryPresetCount(),
+//   factoryPresetName(i), factoryPresetCategory(i), factoryPresetValues(i, plain), userPresetValues(text, plain, meta, error).
+//   A preset is loaded on the main thread into the host values (as a restored state is) and reported with a parameter rescan; a factory
+//   preset also moves the selector to it. A file is read as untrusted input (size limit, strict parsing: sw/preset_file.hpp).
 // Host-facing values as the effects (spec 共通章 2): continuous = normalized 0..1, stepped = step index. State: "SWA1" + count + values.
+// Values from the host or a saved state are sanitized (not finite -> the default, then clamped into range); a state is read whole before
+// anything changes, so a cut or damaged state changes nothing.
 // Notes: one note port, CLAP and MIDI dialects (CLAP preferred). MIDI: note on / off, pitch bend, CC 1 mod wheel, CC 64 sustain,
 // CC 120 all sound off, CC 123 all notes off, channel pressure; CLAP pressure expressions act as the aftertouch. Events are sample accurate: the block is split at each event. Every note that ends is reported (CLAP note end).
 // No plug-in window yet (the screen comes later): hosts show their generic controls. The instruments have no Auto gain, Delta, In or Mix.
@@ -17,12 +24,16 @@
 #include "sw/denormal.hpp"
 #include "sw/param.hpp"
 #include "sw/text.hpp"
+#include "user_presets.hpp"
 #include <clap/clap.h>
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -41,6 +52,18 @@ template <class T, class = void> struct HasProgram : std::false_type {};
 template <class T> struct HasProgram<T, std::void_t<decltype(T::kProgramParam), decltype(T::loadProgram(std::declval<typename T::Core&>(), 0))>> : std::true_type {};
 template <class T, class = void> struct HasWarmUp : std::false_type {};
 template <class T> struct HasWarmUp<T, std::void_t<decltype(T::warmUp())>> : std::true_type {};
+template <class T, class = void> struct HasPresetFiles : std::false_type {};
+template <class T> struct HasPresetFiles<T, std::void_t<decltype(T::kPresetVendor), decltype(T::kPresetProduct), decltype(T::factoryPresetCount()),
+    decltype(T::factoryPresetName(0)), decltype(T::factoryPresetCategory(0)), decltype(T::factoryPresetValues(0, std::declval<std::vector<double>&>())),
+    decltype(T::userPresetValues(std::string_view{}, std::declval<std::vector<double>&>(), std::declval<sw::presetfile::Meta&>(), std::declval<std::string&>()))>>
+    : std::true_type {};
+
+// a factory preset by its name (the load key the discovery provider gives), or -1
+template <class P> int findFactoryPreset(const char* name) {
+    if (!name) return -1;
+    for (int i = 0; i < P::factoryPresetCount(); ++i) if (P::factoryPresetName(i) == name) return i;
+    return -1;
+}
 
 template <class P>
 class Plugin {
@@ -56,6 +79,12 @@ public:
     static double plainToHost(int id, double v) {
         const auto& s = spec(id);
         return stepped(id) ? static_cast<double>(std::lround(s.toNorm(v) * (s.numSteps() - 1))) : s.toNorm(v);
+    }
+    // a host value as it may arrive from a host or a saved session: a number that is not finite reads as the default, anything else is
+    // clamped into the parameter's host range (0..1, or 0..steps-1; hostToPlain rounds to a step)
+    static double sanitizeHost(int id, double h) {
+        if (!std::isfinite(h)) return plainToHost(id, spec(id).def);
+        return std::clamp(h, 0.0, stepped(id) ? static_cast<double>(std::max(0, spec(id).numSteps() - 1)) : 1.0);
     }
 
     explicit Plugin(const clap_host_t* host) : host_(host), host_values_(static_cast<size_t>(numParams())), dirty_(static_cast<size_t>(numParams())), changed_(static_cast<size_t>(numParams()), 0) {
@@ -78,10 +107,11 @@ private:
                 const auto* ev = reinterpret_cast<const clap_event_param_value_t*>(h);
                 if (ev->param_id >= static_cast<clap_id>(numParams())) return;
                 const int id = static_cast<int>(ev->param_id);
-                host_values_[static_cast<size_t>(id)].store(ev->value);
-                core_.setParam(id, hostToPlain(id, ev->value));
+                const double v = sanitizeHost(id, ev->value);
+                host_values_[static_cast<size_t>(id)].store(v);
+                core_.setParam(id, hostToPlain(id, v));
                 if constexpr (HasProgram<P>::value)
-                    if (id == P::kProgramParam) { P::loadProgram(core_, static_cast<int>(std::lround(ev->value))); syncFromCore(); }
+                    if (id == P::kProgramParam) { P::loadProgram(core_, static_cast<int>(std::lround(v))); syncFromCore(); }
                 return;
             }
             case CLAP_EVENT_NOTE_ON: {
@@ -215,6 +245,9 @@ private:
         static const clap_plugin_note_ports_t notePorts = {notePortsCount, notePortsGet};
         static const clap_plugin_params_t params = {paramsCount, paramsInfo, paramsValue, paramsToText, paramsFromText, paramsFlush};
         static const clap_plugin_state_t state = {stateSave, stateLoad};
+        static const clap_plugin_preset_load_t presetLoad = {presetFromLocation};
+        if constexpr (HasPresetFiles<P>::value)
+            if (!std::strcmp(id, CLAP_EXT_PRESET_LOAD) || !std::strcmp(id, CLAP_EXT_PRESET_LOAD_COMPAT)) return &presetLoad;
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS)) return &notePorts;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
@@ -289,12 +322,63 @@ private:
         s->emitChanged(out, 0);
     }
 
+    // ---- presets from the host's browser (preset-load): the values go in as a restored state's do (main thread -> host values -> the audio
+    // thread applies them at its next block); a factory preset also moves the selector (without loading it twice: only an event loads)
+    void loadValuesFromMainThread(const std::vector<double>& plain, int program) {
+        for (int i = 0; i < numParams(); ++i) {
+            if constexpr (HasProgram<P>::value)
+                if (i == P::kProgramParam) {
+                    if (program >= 0) { host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, program)); dirty_[static_cast<size_t>(i)].store(true); }
+                    continue;
+                }
+            host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, plainToHost(i, plain[static_cast<size_t>(i)])));
+            dirty_[static_cast<size_t>(i)].store(true);
+        }
+        if (!active_) applyPending();
+        if (host_) {
+            const auto* hp = static_cast<const clap_host_params_t*>(host_->get_extension(host_, CLAP_EXT_PARAMS));
+            if (hp && hp->rescan) hp->rescan(host_, CLAP_PARAM_RESCAN_VALUES);
+        }
+    }
+    static bool presetFromLocation(const clap_plugin_t* p, uint32_t kind, const char* location, const char* key) {
+        if constexpr (HasPresetFiles<P>::value) {
+            Plugin* s = self(p);
+            std::vector<double> plain;
+            std::string err;
+            int program = -1;
+            if (kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN) {
+                const int i = findFactoryPreset<P>(key);
+                if (i < 0) err = "no such factory preset";
+                else { P::factoryPresetValues(i, plain); program = i + 1; }
+            } else if (kind == CLAP_PRESET_DISCOVERY_LOCATION_FILE && location) {
+                std::string text;
+                sw::presetfile::Meta meta;
+                if (sw::presetfile::readFile(location, text, err) && !P::userPresetValues(text, plain, meta, err)) plain.clear();
+            } else {
+                err = "unknown preset location";
+            }
+            const auto* hl = s->host_ ? static_cast<const clap_host_preset_load_t*>(s->host_->get_extension(s->host_, CLAP_EXT_PRESET_LOAD)) : nullptr;
+            if (!hl && s->host_) hl = static_cast<const clap_host_preset_load_t*>(s->host_->get_extension(s->host_, CLAP_EXT_PRESET_LOAD_COMPAT));
+            if (plain.size() != static_cast<size_t>(numParams())) {
+                if (err.empty()) err = "the preset could not be read";
+                if (hl && hl->on_error) hl->on_error(s->host_, kind, location, key, 0, err.c_str());
+                return false;
+            }
+            s->loadValuesFromMainThread(plain, program);
+            if (hl && hl->loaded) hl->loaded(s->host_, kind, location, kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN ? key : nullptr);
+            return true;
+        }
+        (void)p; (void)kind; (void)location; (void)key;
+        return false;
+    }
+
     // ---- state: "SWA1" + count + host values (count-based, so appended params load old states)
     static bool writeAll(const clap_ostream_t* s, const void* d, uint64_t n) {
         const char* c = static_cast<const char*>(d);
         while (n > 0) { const int64_t w = s->write(s, c, n); if (w <= 0) return false; c += w; n -= static_cast<uint64_t>(w); }
         return true;
     }
+    static constexpr uint32_t kMaxStateParams = 65536;
     static bool readAll(const clap_istream_t* s, void* d, uint64_t n) {
         char* c = static_cast<char*>(d);
         while (n > 0) { const int64_t r = s->read(s, c, n); if (r <= 0) return false; c += r; n -= static_cast<uint64_t>(r); }
@@ -310,10 +394,12 @@ private:
     static bool stateLoad(const clap_plugin_t* p, const clap_istream_t* s) {
         char magic[4]; uint32_t count = 0;
         if (!readAll(s, magic, 4) || std::memcmp(magic, "SWA1", 4) != 0 || !readAll(s, &count, 4)) return false;
+        if (count > kMaxStateParams) return false;   // no product has that many: a damaged or foreign state
+        std::vector<double> vals(count);              // read whole before anything changes: a cut state changes nothing
+        for (uint32_t i = 0; i < count; ++i) if (!readAll(s, &vals[i], 8)) return false;
         Plugin* pl = self(p);
-        for (uint32_t i = 0; i < count; ++i) {
-            double v; if (!readAll(s, &v, 8)) return false;
-            if (i < static_cast<uint32_t>(numParams())) { pl->host_values_[i].store(v); pl->dirty_[i].store(true); }
+        for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
+            pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
         }
         if (!pl->active_) pl->applyPending();
         if (pl->host_) {  // CLAP: values changed -> tell the host (main thread)
@@ -347,11 +433,106 @@ struct Factory {
     }
 };
 
+// ---- the preset-discovery factory: one provider; locations = the factory presets (inside the plug-in) and the user folder (files)
+template <class P>
+struct PresetDiscovery {
+    struct Provider {
+        clap_preset_discovery_provider_t clap;
+        const clap_preset_discovery_indexer_t* indexer;
+    };
+    static const clap_preset_discovery_provider_descriptor_t* descriptor() {
+        static const std::string id = std::string(P::descriptor()->id) + ".presets";
+        static const std::string name = std::string(P::kPresetProduct) + " presets";
+        static const clap_preset_discovery_provider_descriptor_t d = {CLAP_VERSION_INIT, id.c_str(), name.c_str(), P::descriptor()->vendor};
+        return &d;
+    }
+    static std::string feature(const std::string& category) {   // LEAD -> lead; SEQ -> sequence (free-form features: the host maps them)
+        if (category == "SEQ") return "sequence";
+        std::string f = category;
+        for (auto& c : f) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return f;
+    }
+    static bool init(const clap_preset_discovery_provider_t* pr) {
+        const Provider* s = static_cast<const Provider*>(pr->provider_data);
+        const auto* ix = s->indexer;
+        static const std::string typeName = std::string(P::kPresetProduct) + " preset";
+        const clap_preset_discovery_filetype_t ft = {typeName.c_str(), "", sw::presetfile::kExtension};
+        if (!ix->declare_filetype(ix, &ft)) return false;
+        static const std::string factoryName = std::string(P::kPresetProduct) + " factory";
+        const clap_preset_discovery_location_t fac = {CLAP_PRESET_DISCOVERY_IS_FACTORY_CONTENT, factoryName.c_str(), CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr};
+        if (!ix->declare_location(ix, &fac)) return false;
+        // the user folder: made here (empty) so a host that keeps the declaration finds the first preset the user saves
+        const std::string dir = sw::userpresets::folder(P::kPresetVendor, P::kPresetProduct);
+        std::error_code ec;
+        if (!dir.empty()) std::filesystem::create_directories(sw::presetfile::pathOf(dir), ec);
+        if (!dir.empty() && std::filesystem::is_directory(sw::presetfile::pathOf(dir), ec)) {
+            static const std::string userName = std::string(P::kPresetProduct) + " user";
+            const clap_preset_discovery_location_t usr = {CLAP_PRESET_DISCOVERY_IS_USER_CONTENT, userName.c_str(), CLAP_PRESET_DISCOVERY_LOCATION_FILE, dir.c_str()};
+            ix->declare_location(ix, &usr);
+        }
+        return true;
+    }
+    static void destroy(const clap_preset_discovery_provider_t* pr) { delete static_cast<const Provider*>(pr->provider_data); }
+    static bool getMetadata(const clap_preset_discovery_provider_t*, uint32_t kind, const char* location, const clap_preset_discovery_metadata_receiver_t* r) {
+        const clap_universal_plugin_id_t pid = {"clap", P::descriptor()->id};
+        if (kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN) {
+            for (int i = 0; i < P::factoryPresetCount(); ++i) {
+                const std::string& name = P::factoryPresetName(i);
+                if (!r->begin_preset(r, name.c_str(), name.c_str())) break;
+                r->add_plugin_id(r, &pid);
+                r->add_creator(r, P::descriptor()->vendor);
+                r->add_feature(r, CLAP_PLUGIN_FEATURE_INSTRUMENT);
+                r->add_feature(r, feature(P::factoryPresetCategory(i)).c_str());
+            }
+            return true;
+        }
+        if (kind != CLAP_PRESET_DISCOVERY_LOCATION_FILE || !location) return false;
+        std::string text, err;
+        std::vector<double> plain;
+        sw::presetfile::Meta meta;
+        if (!sw::presetfile::readFile(location, text, err) || !P::userPresetValues(text, plain, meta, err)) {
+            r->on_error(r, 0, err.c_str());
+            return false;
+        }
+        std::string name = meta.name;
+        if (name.empty()) name = sw::presetfile::cleanText(sw::presetfile::pathOf(location).stem().u8string(), sw::presetfile::kMaxNameChars);
+        if (!r->begin_preset(r, name.c_str(), nullptr)) return true;
+        r->add_plugin_id(r, &pid);
+        if (!meta.author.empty()) r->add_creator(r, meta.author.c_str());
+        if (!meta.comment.empty()) r->set_description(r, meta.comment.c_str());
+        r->add_feature(r, CLAP_PLUGIN_FEATURE_INSTRUMENT);
+        if (!meta.category.empty()) r->add_feature(r, feature(meta.category).c_str());
+        return true;
+    }
+    static const void* getExtension(const clap_preset_discovery_provider_t*, const char*) { return nullptr; }
+
+    static uint32_t count(const clap_preset_discovery_factory_t*) { return 1; }
+    static const clap_preset_discovery_provider_descriptor_t* getDescriptor(const clap_preset_discovery_factory_t*, uint32_t i) { return i == 0 ? descriptor() : nullptr; }
+    static const clap_preset_discovery_provider_t* create(const clap_preset_discovery_factory_t*, const clap_preset_discovery_indexer_t* ix, const char* id) {
+        if (!ix || !id || std::strcmp(id, descriptor()->id) != 0) return nullptr;
+        Provider* s = new Provider{};
+        s->indexer = ix;
+        s->clap = {descriptor(), s, init, destroy, getMetadata, getExtension};
+        return &s->clap;
+    }
+    static const clap_preset_discovery_factory_t* get() {
+        static const clap_preset_discovery_factory_t f = {count, getDescriptor, create};
+        return &f;
+    }
+};
+
+template <class P>
+const void* getFactory(const char* id) {
+    if (!id) return nullptr;
+    if (!std::strcmp(id, CLAP_PLUGIN_FACTORY_ID)) return Factory<P>::get();
+    if constexpr (HasPresetFiles<P>::value)
+        if (!std::strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID) || !std::strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID_COMPAT)) return PresetDiscovery<P>::get();
+    return nullptr;
+}
+
 }  // namespace sw::clapinst
 
 #define SW_CLAP_INSTRUMENT_ENTRY(code, Traits)                                                    \
     bool sw_##code##_entry_init(const char*) { return true; }                                     \
     void sw_##code##_entry_deinit() {}                                                            \
-    const void* sw_##code##_entry_get_factory(const char* id) {                                   \
-        return !std::strcmp(id, CLAP_PLUGIN_FACTORY_ID) ? sw::clapinst::Factory<Traits>::get() : nullptr; \
-    }
+    const void* sw_##code##_entry_get_factory(const char* id) { return sw::clapinst::getFactory<Traits>(id); }

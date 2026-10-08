@@ -10,6 +10,7 @@
 //   tests/test_in07_presets.cpp checks the result (and the categories' conventions) on every build.
 #pragma once
 #include "in07/in07.hpp"
+#include "sw/preset_file.hpp"
 #include <cmath>
 #include <string>
 #include <utility>
@@ -44,5 +45,19 @@ struct PresetMeasure {
 // lv = null: the preset's own levels. preFx: every effect off and Level 0 dB (the voices' sum, for the staging)
 PresetMeasure measurePreset(int index, double fs = 48000.0, const PresetLevels* lv = nullptr, bool preFx = false);
 void applyPreset(Processor& p, int index, const PresetLevels& lv);                 // with other levels (the levelling tool)
+
+// the same as plain values for every parameter (index = host id; the selector at 0): what applyPreset sets, for the plug-in layer,
+// which loads a preset on the main thread through its host values. An index out of range gives Init.
+void presetValues(int index, std::vector<double>& plain);
+void presetValues(int index, const PresetLevels& lv, std::vector<double>& plain);
+
+// user presets (sw/preset_file.hpp, product "in07"): every parameter but the selector; the category is one of the factory categories or
+// empty. Reading starts from Init and applies the file's values; a file that is not an IN07 preset changes nothing.
+constexpr const char* kPresetProduct = "in07";
+bool isPresetCategory(std::string_view c);
+std::string userPresetText(const std::vector<double>& plain, const presetfile::Meta& meta);
+std::string userPresetText(const Processor& p, const presetfile::Meta& meta);
+bool userPresetValues(std::string_view text, std::vector<double>& plain, presetfile::Meta& meta, std::string& error);
+bool loadUserPreset(Processor& p, std::string_view text, presetfile::Meta& meta, std::string& error);
 
 }  // namespace sw::in07

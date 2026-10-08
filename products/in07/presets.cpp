@@ -351,22 +351,73 @@ void applyInit(Processor& p) {
 }
 const std::vector<std::string>& presetErrors() { return built().errors; }
 
-void applyPreset(Processor& p, int index, const PresetLevels& lv) {
+void presetValues(int index, const PresetLevels& lv, std::vector<double>& plain) {
+    const auto& s = specs();
+    plain.assign(static_cast<size_t>(kNumParams), 0.0);
+    for (int i = 0; i < kNumParams; ++i) plain[static_cast<size_t>(i)] = s[static_cast<size_t>(i)].def;
     const auto& P = factoryPresets();
     if (index < 0 || index >= static_cast<int>(P.size())) return;
-    applyInit(p);
     const Preset& pr = P[static_cast<size_t>(index)];
-    for (const auto& v : pr.values) p.setParam(v.first, v.second);
-    p.setParam(Level, std::clamp(lv.level, -40.0, 0.0));
-    p.setParam(FxLimitGain, std::clamp(p.param(FxLimitGain) + std::max(0.0, lv.boost), 0.0, 12.0));
+    auto at = [&](int id) -> double& { return plain[static_cast<size_t>(id)]; };
+    for (const auto& v : pr.values) at(v.first) = v.second;
+    at(Level) = std::clamp(lv.level, -40.0, 0.0);
+    at(FxLimitGain) = std::clamp(at(FxLimitGain) + std::max(0.0, lv.boost), 0.0, 12.0);
     for (int l = 0; l < kLayers; ++l)
-        if (p.param(lp(l, On)) > 0.5) p.setParam(lp(l, LayerLevel), std::clamp(p.param(lp(l, LayerLevel)) + lv.trim, -60.0, 6.0));
+        if (at(lp(l, On)) > 0.5) at(lp(l, LayerLevel)) = std::clamp(at(lp(l, LayerLevel)) + lv.trim, -60.0, 6.0);
+    at(PresetSelect) = s[static_cast<size_t>(PresetSelect)].def;
+}
+void presetValues(int index, std::vector<double>& plain) {
+    PresetLevels lv;
+    if (index >= 0 && index < static_cast<int>(factoryPresets().size())) {
+        const Preset& pr = factoryPresets()[static_cast<size_t>(index)];
+        lv = PresetLevels{pr.trim, pr.level, pr.boost};
+    }
+    presetValues(index, lv, plain);
+}
+
+void applyPreset(Processor& p, int index, const PresetLevels& lv) {
+    if (index < 0 || index >= static_cast<int>(factoryPresets().size())) return;
+    std::vector<double> plain;
+    presetValues(index, lv, plain);
+    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
 }
 
 void applyPreset(Processor& p, int index) {
     if (index < 0 || index >= static_cast<int>(factoryPresets().size())) return;
     const Preset& pr = factoryPresets()[static_cast<size_t>(index)];
     applyPreset(p, index, PresetLevels{pr.trim, pr.level, pr.boost});
+}
+
+// ---- user presets
+bool isPresetCategory(std::string_view c) {
+    for (const char* k : {"LEAD", "PAD", "BASS", "PLUCK", "KEYS", "SEQ", "FX"}) if (c == k) return true;
+    return false;
+}
+std::string userPresetText(const std::vector<double>& plain, const presetfile::Meta& meta) {
+    presetfile::Meta m = meta;
+    m.category = presetfile::cleanText(m.category, presetfile::kMaxTextChars);
+    if (!isPresetCategory(m.category)) m.category.clear();
+    return presetfile::write(kPresetProduct, m, specs(), plain, PresetSelect);
+}
+std::string userPresetText(const Processor& p, const presetfile::Meta& meta) {
+    std::vector<double> plain(static_cast<size_t>(kNumParams));
+    for (int i = 0; i < kNumParams; ++i) plain[static_cast<size_t>(i)] = p.param(i);
+    return userPresetText(plain, meta);
+}
+bool userPresetValues(std::string_view text, std::vector<double>& plain, presetfile::Meta& meta, std::string& error) {
+    presetfile::Parsed parsed;
+    if (!presetfile::read(text, kPresetProduct, specs(), parsed, error, PresetSelect)) return false;
+    presetValues(-1, plain);   // Init
+    for (const auto& v : parsed.values) plain[static_cast<size_t>(v.first)] = v.second;
+    meta = parsed.meta;
+    if (!isPresetCategory(meta.category)) meta.category.clear();
+    return true;
+}
+bool loadUserPreset(Processor& p, std::string_view text, presetfile::Meta& meta, std::string& error) {
+    std::vector<double> plain;
+    if (!userPresetValues(text, plain, meta, error)) return false;
+    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
+    return true;
 }
 
 std::vector<AuditionNote> audition(const std::string& c, double& total) {

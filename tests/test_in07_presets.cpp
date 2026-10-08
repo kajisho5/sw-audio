@@ -145,3 +145,70 @@ TEST_CASE("IN07 PRESETS: the preset selector (the last parameter; the plug-in la
     for (int i = 0; i < kNumParams; ++i)
         if (i != PresetSelect) CHECK(p.param(i) == doctest::Approx(s[static_cast<size_t>(i)].def).epsilon(1e-9));
 }
+
+TEST_CASE("IN07 PRESETS: a factory preset as plain values (for the plug-in layer's main thread) is what applyPreset sets") {
+    const auto& s = specs();
+    for (int i = 0; i < static_cast<int>(factoryPresets().size()); i += 7) {
+        Processor p; applyPreset(p, i);
+        std::vector<double> v;
+        presetValues(i, v);
+        REQUIRE(v.size() == static_cast<size_t>(kNumParams));
+        CHECK(v[static_cast<size_t>(PresetSelect)] == 0.0);
+        for (int j = 0; j < kNumParams; ++j) {
+            if (j == PresetSelect) continue;
+            CHECK_MESSAGE(v[static_cast<size_t>(j)] == doctest::Approx(p.param(j)).epsilon(1e-9).scale(1.0), factoryPresets()[static_cast<size_t>(i)].name << " " << s[static_cast<size_t>(j)].id);
+        }
+    }
+    std::vector<double> v;
+    presetValues(-1, v);   // out of range: Init
+    REQUIRE(v.size() == static_cast<size_t>(kNumParams));
+    for (int j = 0; j < kNumParams; ++j) CHECK(v[static_cast<size_t>(j)] == s[static_cast<size_t>(j)].def);
+}
+
+TEST_CASE("IN07 USER PRESETS: a sound saved from the engine loads back the same in another engine; the selector is not part of it") {
+    Processor a; a.prepare(48000, 256);
+    applyPreset(a, 17);
+    a.setParam(lp(0, Position), 37.5);   // a few hand edits
+    a.setParam(FxReverbMix, 33.0);
+    a.setParam(Mode, Legato);
+    a.setParam(PresetSelect, 18);
+    sw::presetfile::Meta meta{"My \tLead\n", "LEAD", "me", ""};
+    const std::string text = userPresetText(a, meta);
+    CHECK(text.find("product=in07") != std::string::npos);
+    CHECK(text.find("name=My Lead\n") != std::string::npos);   // the name is cleaned when it is written
+    CHECK(text.find("in07.preset") == std::string::npos);
+    Processor b; b.prepare(48000, 256);
+    applyPreset(b, 3);
+    b.setParam(PresetSelect, 4);
+    sw::presetfile::Meta got; std::string err;
+    REQUIRE(loadUserPreset(b, text, got, err));
+    CHECK(got.name == "My Lead");
+    CHECK(got.category == "LEAD");
+    CHECK(b.param(PresetSelect) == 4.0);
+    const auto& s = specs();
+    for (int j = 0; j < kNumParams; ++j)
+        if (j != PresetSelect) CHECK_MESSAGE(b.param(j) == doctest::Approx(a.param(j)).epsilon(1e-12).scale(1.0), s[static_cast<size_t>(j)].id);
+    // the plain-value path (the plug-in layer works on its host values): the same text from a vector
+    std::vector<double> plain(static_cast<size_t>(kNumParams));
+    for (int j = 0; j < kNumParams; ++j) plain[static_cast<size_t>(j)] = a.param(j);
+    CHECK(userPresetText(plain, meta) == text);
+}
+
+TEST_CASE("IN07 USER PRESETS: a file that names only some parameters starts from Init; an unknown category is dropped; a damaged file changes nothing") {
+    Processor p; p.prepare(48000, 256);
+    applyPreset(p, 0);
+    sw::presetfile::Meta m; std::string err;
+    REQUIRE(loadUserPreset(p, "SW-PRESET 1\nproduct=in07\nname=Tiny\ncategory=WOBBLE\nin07.l1.flt.cutoff=500\nin07.mode=Mono\n", m, err));
+    CHECK(m.category.empty());
+    const auto& s = specs();
+    for (int j = 0; j < kNumParams; ++j) {
+        if (j == PresetSelect) continue;
+        const double want = j == lp(0, Cutoff) ? 500.0 : j == Mode ? static_cast<double>(Mono) : s[static_cast<size_t>(j)].def;
+        CHECK_MESSAGE(p.param(j) == doctest::Approx(want).epsilon(1e-9), s[static_cast<size_t>(j)].id);
+    }
+    std::vector<double> before(static_cast<size_t>(kNumParams));
+    for (int j = 0; j < kNumParams; ++j) before[static_cast<size_t>(j)] = p.param(j);
+    CHECK_FALSE(loadUserPreset(p, "SW-PRESET 1\nproduct=dy01\nin07.level=-3\n", m, err));
+    CHECK_FALSE(loadUserPreset(p, std::string("\x00\x01\x02", 3), m, err));
+    for (int j = 0; j < kNumParams; ++j) CHECK(p.param(j) == before[static_cast<size_t>(j)]);
+}

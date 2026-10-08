@@ -977,6 +977,8 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 | VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 69：成功） |
 | AU：auval | — | macOS で実行（run 69：成功） |
 
+**2026-10-09（ブランチ in07-engine、133 本＝132 本＋IN07）**：単体テスト 1403 件 全合格（Linux。AddressSanitizer・UBSan 付きでも全合格）、clap-validator は全製品 0 不合格（effects 33 合格・9 対象外。preset-discovery-crawl／-load は除外したので検査数が 44 → 42。「極小値で遅い」の警告が 11 製品で 1 回ずつ出たが、再実行で消える同じ種類の警告）、VST3 validator は全製品 47 合格・0 不合格。自作ホスト `tools/clap_note_host.cpp`（IN07）全合格。
+
 v0.11.0（23本）の時点では Windows を MinGW でクロスビルドして Wine 上で検証していた（CS04 以外の 22 本で不合格 0）。現在の Windows の根拠は上の GitHub Actions（MSVC）で、Wine での再検証はしていない。
 
 `tools/validate_all.sh` で、ビルド・単体テスト・全プラグインの両検証を一括で実行できる（Linux）。
@@ -1037,7 +1039,7 @@ cmake/             MinGW 用ツールチェーン
 
 **決定（依頼者、2026-10-08）**：Nexus 系の「プリセット先行」の操作感を持つシンセを新しく作る。軽量路線（巨大サンプルは持たず、音は合成主体）、外観はダーク／ライト切替。IN01〜IN06 を作らない決定はそのまま。**名前は SWINGBY（スイングバイ）**（依頼者の決定、2026-10-08。惑星の重力で探査機を加速する軌道の名前で、頭の「SW」がブランド名と重なる）。型番・パラメータ ID は IN07 のまま（`in07.*`）。商標の調査はまだ（使い始める前に J-PlatPat・USPTO・EUIPO の第9類を確認する）。ロゴタイプは `docs/design/design-system/project/assets/product-logos/`（SW AUDIO のワードマークの字形で組み、SW だけカテゴリ色）。仕様書 v1.0 に節がないため、値はすべて設計値（下）。方針の全体はプロジェクト資料 `claude/IN07_synth_plan.md`、画面案はデザインキャンバス「SW IN07 Synth UI」。
 
-**いまできているもの**（2026-10-08）：4 レイヤー・最大 32 音のエンジン、発振器 4 種（Analog・Wavetable・FM・Sample）、後段の FX 6 スロット（順番入れ替え可）、LFO 2・変調マトリクス 8・マクロ 8、惑星型ならではの 3 機能（楕円軌道 LFO・フライバイ・重力）、ファクトリープリセット 128 種（ラウドネスを実測でそろえたもの）（`products/in07/`、テスト `tests/test_in07.cpp`・`tests/test_in07_presets.cpp` 計 61 件）と、楽器のプラグイン層 `plugin/clap/instrument_adapter.hpp`（CLAP、clap-wrapper で VST3／AU（aumu））。プラグイン「SW IN07 SWINGBY」は Linux で clap-validator（35 合格・0 不合格・9 対象外）・Steinberg VST3 validator（47 合格・0 不合格）とも通り、自作の簡易ホスト `tools/clap_note_host.cpp` で CLAP と MIDI の音符・サステインペダル・ノート終了の通知・FX の余韻と休止・状態の保存と読み込み・プリセットの選択（値がホストへ届くこと、保存した演奏が手直しを保つこと）を確認した。画面はまだない（ホストの汎用パラメータ表示で操作する）。デザインキャンバスの画面がないので `SW_PRODUCTS`（画面の生成対象）ではなく `SW_ENGINES` に置き、`sw_add_plugin(in07 … aumu)` でプラグインにしている。
+**いまできているもの**（2026-10-08）：4 レイヤー・最大 32 音のエンジン、発振器 4 種（Analog・Wavetable・FM・Sample）、後段の FX 6 スロット（順番入れ替え可）、LFO 2・変調マトリクス 8・マクロ 8、惑星型ならではの 3 機能（楕円軌道 LFO・フライバイ・重力）、ファクトリープリセット 128 種（ラウドネスを実測でそろえたもの）、ユーザープリセットの保存・読み込みとホストのプリセットブラウザ対応（`products/in07/`、テスト `tests/test_in07.cpp`・`tests/test_in07_presets.cpp` 計 64 件、ユーザープリセットは `tests/test_preset_file.cpp`・`tests/test_user_presets.cpp`）と、楽器のプラグイン層 `plugin/clap/instrument_adapter.hpp`（CLAP、clap-wrapper で VST3／AU（aumu））。プラグイン「SW IN07 SWINGBY」は Linux で clap-validator（36 合格・0 不合格・6 対象外。preset-discovery-crawl／-load は検証ツール側の不具合で除外：下の「IN07 のユーザープリセット」）・Steinberg VST3 validator（47 合格・0 不合格）とも通り、自作の簡易ホスト `tools/clap_note_host.cpp` で CLAP と MIDI の音符・サステインペダル・ノート終了の通知・FX の余韻と休止・状態の保存と読み込み・プリセットの選択（値がホストへ届くこと、保存した演奏が手直しを保つこと）を確認した。画面はまだない（ホストの汎用パラメータ表示で操作する）。デザインキャンバスの画面がないので `SW_PRODUCTS`（画面の生成対象）ではなく `SW_ENGINES` に置き、`sw_add_plugin(in07 … aumu)` でプラグインにしている。
 
 **画面一式（A 案、2026-10-08）**：PLAY（ダーク／ライト）・LAYER・ARP／ゲート・MOD・FX の 6 画面と共通の星系ビュー部品をデザインキャンバスに作った。ソースと画像の対応は `docs/design/in07/`（README）。FX 画面の 6 つの駅も、エフェクトごとに別の天体を Blender で描いた（Drive＝ひびから光が漏れる岩、Chorus＝真珠と 2 つの月、Delay＝外へ薄れる 3 重の輪、Reverb＝霧に包まれた縞の惑星、EQ＝3 本の帯の球、Limit＝リベット留めの帯で締めた球。各 96 コマの自転、Off の駅は色と明るさを落とす。依頼者の希望 2026-10-08）。あわせて、ノイズ除去で輪郭の薄い画素が状態色の緑側へずれる不具合を直した（`tools/blender/denoise.py`。数値は素材の README）。星系ビューでは、中心の球の後ろに回った天体の名前を隠す（球の上に名前だけが重なっていたため）。
 
@@ -1194,13 +1196,24 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 - 試聴用 WAV は `build/in07_presets products/in07/preset_levels.inc <フォルダー>` で書き出せる（リポジトリには入れていない）。
 - **プラグインでの選択**：最後のパラメータ `in07.preset`（Init とプリセット名の一覧、オートメーション不可）。ホストがこれを変えると、プラグイン層（`instrument_adapter.hpp` の「プログラム選択」：製品が `kProgramParam`・`loadProgram`・`warmUp` を持てば有効）がプリセットを読み込み、変わった値をすべて CLAP のパラメータ値イベントでホストへ返す（Polar Bass で 50 個。ホストの表示とオートメーションがずれない。flush（音を止めている間）でも同じ）。エンジンは値を持つだけ。保存した演奏を開いたときは選択の値だけを戻して読み込みはしない（手直しが残る）。プリセットの表は activate で作る（音声スレッドで確保しない）。Init は全パラメータを既定値に戻す。
 
+### IN07 のユーザープリセット（`core/include/sw/preset_file.hpp`・`plugin/clap/user_presets.hpp`）
+
+依頼者「自分でプリセット作って保存する機能もね」（2026-10-09）。保存のボタンは画面ができてから付ける。いまできているのは、保存と読み込みの中身、保存場所、ホストのプリセットブラウザへの対応。
+
+- **ファイル形式 `.swpreset`**（全製品で使える共通の形）：UTF-8 のテキスト。1 行目 `SW-PRESET 1`（形式の版）、`product=in07`、`name=`・`category=`・`author=`・`comment=`、続いて 1 行に 1 パラメータ（`in07.l1.flt.cutoff=2400`、段階のパラメータは名前で `in07.mode=Legato`）。プリセット選択（`in07.preset`）は書かない。数値はロケールに依らずドット、読み戻して同じ値になる最短の桁（15〜17 桁）。パラメータは全部書く（後の版で既定値を変えても、保存した音が変わらない）。読むときは Init から始めて書いてある値を入れるので、一部だけ書いたファイルは Init の変形、後の版で足したパラメータは既定値になる。カテゴリはファクトリーの 7 つか空。
+- **人からもらったファイルを安全に読む**（設計値）：256 KiB・1 行 1,024 バイト・8,192 行まで。NUL を含む・`=` のない行がある・他の製品の・新しい形式のファイルは拒否（理由を返す）。数値は厳密（16 進・inf・nan・単位付きは拒否）で、範囲外は範囲に丸め、ない段階・知らない ID は飛ばして数える。名前は正しい UTF-8 だけ・制御文字なし・64 文字まで（作者・コメントは 256 文字）。ランダムに壊したファイル 4,000 件で落ちず、受け付けた値はすべて範囲内（`tests/test_preset_file.cpp`、ASan／UBSan）。
+- **保存場所**（設計値）：Windows は「ドキュメント」の `SEVENTHWELL\SWINGBY\Presets`（ドキュメントを OneDrive などへ移していても、その場所を OS に聞く）、macOS は `~/Library/Audio/Presets/SEVENTHWELL/SWINGBY`（macOS のオーディオプラグインのプリセットの置き場）、Linux は `$XDG_DATA_HOME`（なければ `~/.local/share`）の `SEVENTHWELL/SWINGBY/Presets`。サブフォルダー 1 段まで探す。
+- **保存**：名前からファイル名を作るとき、パス区切り・`:*?"<>|`・`..`・先頭の `.`・末尾の `.` と空白・Windows の予約名（CON・COM1 など）を取り除く（`Deep/../Night: Bass` → `Deep_Night_Bass.swpreset`。フォルダーの外には出ない）。書き込みは一時ファイルに書いてから名前を変える（途中で落ちても半端なファイルが残らない）。同じ名前があれば、上書きを指定しない限り拒否（画面で確認を出す）。
+- **ホストのプリセットブラウザ**（CLAP の preset-discovery と preset-load）：プロバイダーが「SWINGBY factory」（プラグインの中の 128 種、名前・作者・カテゴリの特徴語つき）と「SWINGBY user」（上のフォルダー、`.swpreset`）を宣言する。ユーザーフォルダーは索引作りのときに作る（空のまま。保存した最初のプリセットがすぐブラウザに出るように）。ブラウザから読み込むと、値はメインスレッドでホスト側の値に入り（保存データの復元と同じ道）、パラメータの再読み込みをホストへ求める。ファクトリーは選択パラメータもそのプリセットへ動く。壊れたファイル・知らないプリセットは拒否し、ホストへ理由を返す（何も変わらない）。VST3・AU の側のプリセット一覧（clap-wrapper が橋渡ししない）は画面のブラウザで扱う。
+- **clap-validator の preset-discovery-crawl／-load は除外した**：clap-validator（0.4.1 と master）は、1 つのファイル（ここではプラグイン）に 2 つ以上のプリセットがあると、2 つ目の `begin_preset` で自分のロックを二重に取って止まる（このコンテナで止まったときのスタック：`MetadataReceiver::begin_preset` → `flush_preset` → `Mutex::lock_contended`。ソースでも `begin_preset` が結果のロックを持ったまま `flush_preset` が同じロックを取る）。代わりに自作ホスト `tools/clap_note_host.cpp` が索引と読み込みを確かめる（128 種の一覧・ユーザーフォルダーの正常・他製品・壊れたファイル・ファクトリーとファイルからの読み込みと発音・拒否で何も変わらないこと）。CI では Linux でこのホストを回す。preset-discovery-descriptor-consistency は通常どおり実行して合格。
+
 ### まだのこと（IN07）
 
 - アルペジエーター・トランスゲート（画面案あり）。惑星型の案の残り（惑星直列アルペジオ・蝕ゲート・衛星ユニゾン・ロッシュ限界）は未着手
 - FX と和音の CPU：既定の FX 一式で 1 サンプルあたり約 360 ns（このコンテナの実測）。リバーブを半分のレートで回すなどはまだ
 - LAYER 画面の発振器の選択肢を、エンジンの表とサンプルの名前（Classic〜Glass、Air〜Click）に合わせる
 - 生成したサンプル・表・プリセットの聴感の確認（数値とスペクトログラムの検査だけで、耳での確認はしていない）
-- ユーザープリセットの保存形式とブラウザ（ファクトリーと選択は済）、CLAP の preset-discovery／VST3 のプログラム一覧への対応（今は選択用のパラメータだけ）、画面、EVO「Similar」（ML 系なので後期）
+- 画面のプリセットブラウザと保存ボタン（ファイル形式・保存場所・CLAP のブラウザ対応は済）、画面、EVO「Similar」（ML 系なので後期）
 - 三角波の帯域制限を minBLAMP にするか（現在 −51 dB）
 
 ## まだやっていないこと

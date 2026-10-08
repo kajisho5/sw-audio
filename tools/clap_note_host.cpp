@@ -1,12 +1,18 @@
 // A minimal CLAP host for instruments: loads a .clap, plays notes (CLAP dialect and MIDI dialect), and checks that sound comes out,
-// stops after the release, and that every note reports its end. Also saves and loads the state. Linux / macOS (dlopen).
+// stops after the release, and that every note reports its end. Also saves and loads the state (and refuses damaged states without
+// changing anything), and, when the plug-in has them, browses and loads presets as a host's preset browser does (preset-discovery
+// factory, preset-load: the factory presets and the user folder, a damaged preset file refused). Linux / macOS (dlopen).
+// The user folder is redirected (XDG_DATA_HOME) to a temporary folder, so the user's own presets are not touched.
 //   g++ -std=c++17 -O2 -Ibuild-cmake/_deps/clap-src/include tools/clap_note_host.cpp -ldl -o build/clap_note_host
 //   build/clap_note_host "build-cmake/plugins/SW IN07 SWINGBY.clap"
 #include <clap/clap.h>
 #include <dlfcn.h>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -27,7 +33,40 @@ struct OutEvents {
         return true;
     }
 };
-const void* hostExt(const clap_host_t*, const char*) { return nullptr; }
+struct PresetLoadLog { int loaded = 0, errors = 0; std::string lastError; } gPresetLog;
+void onPresetError(const clap_host_t*, uint32_t, const char*, const char*, int32_t, const char* msg) { ++gPresetLog.errors; gPresetLog.lastError = msg ? msg : ""; }
+void onPresetLoaded(const clap_host_t*, uint32_t, const char*, const char*) { ++gPresetLog.loaded; }
+const clap_host_preset_load_t kHostPresetLoad = {onPresetError, onPresetLoaded};
+const void* hostExt(const clap_host_t*, const char* id) { return !std::strcmp(id, CLAP_EXT_PRESET_LOAD) ? &kHostPresetLoad : nullptr; }
+
+// a host's preset index: what the provider declares and what it says about each preset
+struct Index {
+    std::vector<std::string> fileExts;
+    struct Loc { uint32_t flags, kind; std::string name, location; };
+    std::vector<Loc> locs;
+    static bool declareFiletype(const clap_preset_discovery_indexer_t* ix, const clap_preset_discovery_filetype_t* f) { static_cast<Index*>(ix->indexer_data)->fileExts.push_back(f->file_extension ? f->file_extension : ""); return true; }
+    static bool declareLocation(const clap_preset_discovery_indexer_t* ix, const clap_preset_discovery_location_t* l) {
+        static_cast<Index*>(ix->indexer_data)->locs.push_back({l->flags, l->kind, l->name ? l->name : "", l->location ? l->location : ""}); return true;
+    }
+    static bool declareSoundpack(const clap_preset_discovery_indexer_t*, const clap_preset_discovery_soundpack_t*) { return true; }
+    static const void* ext(const clap_preset_discovery_indexer_t*, const char*) { return nullptr; }
+};
+struct Receiver {
+    struct Item { std::string name, key; std::vector<std::string> features, creators; int ids = 0; };
+    std::vector<Item> items; int errors = 0;
+    static Receiver* me(const clap_preset_discovery_metadata_receiver_t* r) { return static_cast<Receiver*>(r->receiver_data); }
+    static void onError(const clap_preset_discovery_metadata_receiver_t* r, int32_t, const char*) { ++me(r)->errors; }
+    static bool begin(const clap_preset_discovery_metadata_receiver_t* r, const char* name, const char* key) { me(r)->items.push_back({name ? name : "", key ? key : "", {}, {}, 0}); return true; }
+    static void addId(const clap_preset_discovery_metadata_receiver_t* r, const clap_universal_plugin_id_t*) { if (!me(r)->items.empty()) ++me(r)->items.back().ids; }
+    static void soundpack(const clap_preset_discovery_metadata_receiver_t*, const char*) {}
+    static void flags(const clap_preset_discovery_metadata_receiver_t*, uint32_t) {}
+    static void creator(const clap_preset_discovery_metadata_receiver_t* r, const char* c) { if (!me(r)->items.empty()) me(r)->items.back().creators.push_back(c); }
+    static void description(const clap_preset_discovery_metadata_receiver_t*, const char*) {}
+    static void timestamps(const clap_preset_discovery_metadata_receiver_t*, clap_timestamp, clap_timestamp) {}
+    static void feature(const clap_preset_discovery_metadata_receiver_t* r, const char* f) { if (!me(r)->items.empty()) me(r)->items.back().features.push_back(f); }
+    static void extra(const clap_preset_discovery_metadata_receiver_t*, const char*, const char*) {}
+    clap_preset_discovery_metadata_receiver_t clap() { return {this, onError, begin, addId, soundpack, flags, creator, description, timestamps, feature, extra}; }
+};
 void hostNop(const clap_host_t*) {}
 const clap_host_t kHost = {CLAP_VERSION_INIT, nullptr, "sw-note-host", "SEVENTHWELL", "", "0.1", hostExt, hostNop, hostNop, hostNop};
 
@@ -174,6 +213,94 @@ int main(int argc, char** argv) {
                 check(!std::strcmp(t4, "2.4 kHz") && !fo.values.empty(), "Init through flush restores the defaults and reports them");
             }
         }
+    }
+    {   // damaged states: refused, nothing changes (a cut state, an impossible count); values that are not numbers read as defaults
+        const auto* params = static_cast<const clap_plugin_params_t*>(p->get_extension(p, CLAP_EXT_PARAMS));
+        const auto* state = static_cast<const clap_plugin_state_t*>(p->get_extension(p, CLAP_EXT_STATE));
+        Mem good; clap_ostream_t os{&good, wr}; state->save(p, &os);
+        const uint32_t n = params->count(p);
+        std::vector<double> before(n); for (uint32_t i = 0; i < n; ++i) params->get_value(p, i, &before[i]);
+        Mem cut = good; cut.d.resize(cut.d.size() / 2);
+        clap_istream_t isc{&cut, rd};
+        const bool cutOk = state->load(p, &isc);
+        Mem huge; huge.d = {'S', 'W', 'A', '1', 0xFF, 0xFF, 0xFF, 0xFF}; huge.d.resize(64, 0);
+        clap_istream_t ish{&huge, rd};
+        const bool hugeOk = state->load(p, &ish);
+        bool same = true; for (uint32_t i = 0; i < n; ++i) { double v = 0; params->get_value(p, i, &v); same = same && v == before[i]; }
+        check(!cutOk && !hugeOk && same, "a cut state and an impossible count are refused and change nothing");
+        Mem nan = good; const double q = std::nan(""), big = 1e300;
+        for (uint32_t i = 0; i < n; ++i) std::memcpy(nan.d.data() + 8 + 8 * i, (i % 2) ? &q : &big, 8);
+        clap_istream_t isn{&nan, rd};
+        const bool nanOk = state->load(p, &isn);
+        bool finite = true; for (uint32_t i = 0; i < n; ++i) { double v = 0; params->get_value(p, i, &v); finite = finite && std::isfinite(v); }
+        OutEvents oe;
+        const double lvl = run(0.6, {{0.01, bytes(note(CLAP_EVENT_NOTE_ON, 0, 60, 0.9, 7))}, {0.5, bytes(note(CLAP_EVENT_NOTE_OFF, 0, 60, 0, 7))}}, 0.0, 0.6, oe);
+        std::printf("      a state of NaN and 1e300 values: loaded %d, values finite %d, a note then plays at %.1f dBFS RMS\n", nanOk, finite, lvl);
+        check(nanOk && finite && std::isfinite(lvl), "values that are not numbers or out of range become defaults or limits (no NaN reaches the sound)");
+        clap_istream_t isg{&good, rd}; state->load(p, &isg);
+    }
+    const auto* pdf = static_cast<const clap_preset_discovery_factory_t*>(entry->get_factory(CLAP_PRESET_DISCOVERY_FACTORY_ID));
+    const auto* pload = static_cast<const clap_plugin_preset_load_t*>(p->get_extension(p, CLAP_EXT_PRESET_LOAD));
+    if (pdf && pload) {   // a host's preset browser: index the provider's locations, then load a factory preset and the user's files
+        namespace fs = std::filesystem;
+        const fs::path tmp = fs::temp_directory_path() / ("sw_note_host_" + std::to_string(static_cast<long>(std::rand())));
+        setenv("XDG_DATA_HOME", tmp.c_str(), 1);   // the provider's user folder lands in the temporary folder
+        Index ix;
+        clap_preset_discovery_indexer_t indexer = {CLAP_VERSION_INIT, "sw-note-host", "SEVENTHWELL", "", "0.1", &ix, Index::declareFiletype, Index::declareLocation, Index::declareSoundpack, Index::ext};
+        check(pdf->count(pdf) == 1, "one preset provider");
+        const clap_preset_discovery_provider_descriptor_t* pd = pdf->get_descriptor(pdf, 0);
+        const clap_preset_discovery_provider_t* prov = pd ? pdf->create(pdf, &indexer, pd->id) : nullptr;
+        check(prov && prov->init(prov), "the provider initialises");
+        if (prov) {
+            std::string userDir; bool factoryLoc = false;
+            for (const auto& l : ix.locs) {
+                if (l.kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN && (l.flags & CLAP_PRESET_DISCOVERY_IS_FACTORY_CONTENT)) factoryLoc = true;
+                if (l.kind == CLAP_PRESET_DISCOVERY_LOCATION_FILE && (l.flags & CLAP_PRESET_DISCOVERY_IS_USER_CONTENT)) userDir = l.location;
+            }
+            check(ix.fileExts.size() == 1 && ix.fileExts[0] == "swpreset" && factoryLoc && userDir.rfind(tmp.string(), 0) == 0,
+                  "it declares the .swpreset type, the factory presets and the user folder (under XDG_DATA_HOME)");
+            Receiver fr; auto frc = fr.clap();
+            const bool fok = prov->get_metadata(prov, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, &frc);
+            bool named = !fr.items.empty();
+            for (const auto& it : fr.items) named = named && !it.name.empty() && it.key == it.name && it.ids == 1 && it.features.size() == 2;
+            std::printf("      factory location: %zu presets (first \"%s\", features %s / %s)\n", fr.items.size(), fr.items.empty() ? "" : fr.items[0].name.c_str(),
+                        fr.items.empty() ? "" : fr.items[0].features[0].c_str(), fr.items.empty() || fr.items[0].features.size() < 2 ? "" : fr.items[0].features[1].c_str());
+            check(fok && fr.items.size() > 100 && named, "the factory presets are listed by name, with the plug-in id and a category feature");
+            // the user folder: one good file, one from another product, one damaged
+            const fs::path ud = fs::u8path(userDir);
+            { std::ofstream f(ud / "Soft Pad.swpreset"); f << "SW-PRESET 1\nproduct=in07\nname=Soft Pad\ncategory=PAD\nauthor=tester\nin07.l1.flt.cutoff=600\nin07.mode=Mono\n"; }
+            { std::ofstream f(ud / "Other.swpreset"); f << "SW-PRESET 1\nproduct=dy01\nname=Other\n"; }
+            { std::ofstream f(ud / "Broken.swpreset", std::ios::binary); f << std::string("\x00\x01garbage", 9); }
+            int ok = 0, bad = 0; Receiver ur; auto urc = ur.clap();
+            for (const char* f : {"Soft Pad.swpreset", "Other.swpreset", "Broken.swpreset"}) (prov->get_metadata(prov, CLAP_PRESET_DISCOVERY_LOCATION_FILE, (ud / f).c_str(), &urc) ? ok : bad)++;
+            check(ok == 1 && bad == 2 && ur.errors == 2 && ur.items.size() == 1 && ur.items[0].name == "Soft Pad" && ur.items[0].creators.size() == 1,
+                  "the user folder: the good file is listed (name, author), the other product's and the damaged one are refused with an error");
+            // loading: a factory preset by its key, then the user file, then the damaged file (refused, nothing changes)
+            const auto* params = static_cast<const clap_plugin_params_t*>(p->get_extension(p, CLAP_EXT_PARAMS));
+            clap_id cutoff = CLAP_INVALID_ID, mode = CLAP_INVALID_ID, sel = CLAP_INVALID_ID;
+            for (uint32_t i = 0; i < params->count(p); ++i) {
+                clap_param_info_t inf; params->get_info(p, i, &inf);
+                if (!std::strcmp(inf.module, "in07.l1.flt.cutoff")) cutoff = inf.id;
+                if (!std::strcmp(inf.module, "in07.mode")) mode = inf.id;
+                if (!std::strcmp(inf.module, "in07.preset")) sel = inf.id;
+            }
+            auto text = [&](clap_id id) { double v = 0; params->get_value(p, id, &v); static char t[64]; params->value_to_text(p, id, v, t, sizeof(t)); return std::string(t); };
+            gPresetLog = {};
+            const bool l1 = pload->from_location(p, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "Polar Bass");
+            OutEvents oe; run(0.02, {}, 0, 0, oe);
+            std::printf("      loaded \"Polar Bass\" from the browser: L1 cutoff %s, mode %s, selector %s\n", text(cutoff).c_str(), text(mode).c_str(), text(sel).c_str());
+            check(l1 && text(cutoff) == "300 Hz" && text(mode) == "Mono" && text(sel) == "Polar Bass" && gPresetLog.loaded == 1, "a factory preset loads from the browser (and moves the selector)");
+            const bool l2 = pload->from_location(p, CLAP_PRESET_DISCOVERY_LOCATION_FILE, (ud / "Soft Pad.swpreset").c_str(), nullptr);
+            const double lvl = run(0.6, {{0.01, bytes(note(CLAP_EVENT_NOTE_ON, 0, 60, 0.9, 9))}, {0.5, bytes(note(CLAP_EVENT_NOTE_OFF, 0, 60, 0, 9))}}, 0.1, 0.5, oe);
+            std::printf("      loaded the user file: L1 cutoff %s, mode %s, a note at %.1f dBFS RMS\n", text(cutoff).c_str(), text(mode).c_str(), lvl);
+            check(l2 && text(cutoff) == "600 Hz" && text(mode) == "Mono" && lvl > -60.0 && gPresetLog.loaded == 2, "a user preset file loads from the browser and plays");
+            const std::string c0 = text(cutoff);
+            const bool l3 = pload->from_location(p, CLAP_PRESET_DISCOVERY_LOCATION_FILE, (ud / "Broken.swpreset").c_str(), nullptr);
+            const bool l4 = pload->from_location(p, CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN, nullptr, "No Such Preset");
+            check(!l3 && !l4 && gPresetLog.errors == 2 && text(cutoff) == c0, "a damaged file and an unknown key are refused (the host is told why) and change nothing");
+            prov->destroy(prov);
+        }
+        fs::remove_all(tmp);
     }
     p->stop_processing(p); p->deactivate(p); p->destroy(p); entry->deinit();
     std::printf(fails ? "%d FAILED\n" : "all passed\n", fails);

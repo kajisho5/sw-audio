@@ -96,8 +96,17 @@ jobs:
           cd ..
           find build -maxdepth 4 -name "*.clap" -not -path "*/cpm/*" -print0 | while IFS= read -r -d '' CLAP; do
             echo "== validating $CLAP"
-            "cv/$CV" validate "$CLAP" || exit 1
+            # preset-discovery-crawl/-load are left out: clap-validator (0.4.1 and its master) deadlocks in its own metadata receiver at the
+            # second preset of a container (begin_preset holds the result lock while flush_preset takes it again; see README "IN07 のユーザープリセット").
+            # tools/clap_note_host.cpp indexes and loads the presets instead.
+            "cv/$CV" validate -x "preset-discovery-(crawl|load)" "$CLAP" || exit 1
           done
+
+      - name: Instrument host checks (notes, states, preset browser)
+        if: runner.os == 'Linux'
+        run: |
+          g++ -std=c++17 -O2 -Ibuild/_deps/clap-src/include tools/clap_note_host.cpp -ldl -o note_host
+          ./note_host "$(find build -maxdepth 3 -name 'SW IN07 SWINGBY.clap' | head -1)"
 
       - name: Build Steinberg VST3 validator
         run: |
