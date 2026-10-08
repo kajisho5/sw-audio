@@ -249,6 +249,13 @@
         const show = k => bs.forEach((b, j) => { const on = j === k; b.style.background = on ? acc : '#161617'; b.style.color = on ? '#0c0c0d' : '#cfcfcf'; b.style.borderColor = on ? acc : '#3a3a3d'; });
         bs.forEach((b, k) => b.addEventListener('click', () => show(k))); show(Math.max(0, bs.findIndex(b => b.dataset.on)));
       });
+      // a stomp box: its type (None, Comp ... Reverb) sets the shell and the name; a click on the name steps to the next type
+      skinBox.querySelectorAll('[data-typep]').forEach(el => {
+        const i = +el.dataset.typep, names = JSON.parse(el.dataset.names), nm = el.querySelector('.pname'), h = hostOf(i);
+        const draw = () => { const v = Math.round(h.c.norm(vals[i]) * (names.length - 1)); el.className = 'pedal t' + v; nm.textContent = v ? names[v] : 'Empty'; };
+        nm.addEventListener('click', () => { const v = (Math.round(h.c.norm(vals[i]) * (names.length - 1)) + 1) % names.length; bridge.begin(i); setValue(i, h.p.steps[v]); bridge.end(i); });
+        draw(); const prev = widgets.get(i); widgets.set(i, v => { if (prev) prev(v); draw(); });
+      });
       const draws = new Map();                  // host index -> [draw functions]
       const reg = (i, f) => { (draws.get(i) || draws.set(i, []).get(i)).push(f); };
       const list = o => JSON.parse(o.dataset.pb);

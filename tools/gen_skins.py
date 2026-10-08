@@ -150,6 +150,57 @@ def apply_edits(root, alias):
                 d.decompose()
 
 
+RENDERS = os.path.join(ROOT, 'docs/design/design-system/project/assets/renders')
+
+
+def data_uri(path):
+    import base64
+    return 'data:image/webp;base64,' + base64.b64encode(open(path, 'rb').read()).decode()
+
+
+def gt03_pedals(root, params):
+    """GT03: the six flat cards become Blender-rendered stomp boxes (tools/blender/pedal.py, stomp.py) whose knobs, foot switch, LED
+    and type are the parameters of the slot (Pedal k Type / On / A / B / C). Returns the css it needs."""
+    first = None
+    for t in root.find_all(string=lambda x: x and x.strip() == 'Comp'):
+        first = t.parent.parent.parent; break
+    if first is None:
+        return ''
+    holder = first.parent
+    for c in list(holder.children):
+        if getattr(c, 'decompose', None):
+            c.decompose()
+    holder['style'] = 'display:flex;justify-content:space-around;align-items:center;height:100%;padding:0 12px'
+    labels = next(p['labels'] for p in params if p['name'] == 'Pedal 1 Type')
+    idx = {p['name']: p['i'] for p in params}
+    for k in range(1, 7):
+        t, on, a, b, c = (idx['Pedal %d %s' % (k, n)] for n in ('Type', 'On', 'A', 'B', 'C'))
+        knobs = ''.join(
+            '<div class="ctl" data-p="%d" title="%s" style="position:absolute;left:%dpx;top:25px;width:30px;height:30px"><div class="pk" data-dial="1">'
+            '<div class="pcap"></div><div class="ptr"><i></i></div></div></div>' % (i, nm, x) for i, nm, x in ((a, 'A', 13), (b, 'B', 55), (c, 'C', 97)))
+        html = ('<div class="pedal" data-typep="%d" data-names=\'%s\' style="position:relative;width:140px;height:226px;flex:none">'
+                '<div class="pshell"></div><span class="pname" title="Type">Comp</span>%s'
+                '<button class="pled" data-p="%d" data-toggle="1"></button><button class="pstomp" data-p="%d" data-toggle="1"></button></div>') % (t, json.dumps(labels), knobs, on, on)
+        holder.append(BeautifulSoup(html, 'html.parser'))
+    css = ('.pedal .ctl{background:none;border:0;padding:0;margin:0;display:block;box-shadow:none}.pk{position:relative;width:30px;height:30px;cursor:ns-resize}.pk .pcap{position:absolute;inset:0;background:url(@@KNOB@@) center/100% 100% no-repeat;filter:drop-shadow(0 2px 2px rgba(0,0,0,.45));pointer-events:none}'
+           '.pk .ptr{position:absolute;inset:0;pointer-events:none}.pk .ptr i{position:absolute;left:50%;top:4px;width:2px;height:7px;margin-left:-1px;border-radius:1px;background:#e8e8ea}'
+           '.pedal .pshell{position:absolute;left:-14px;top:-14px;width:168px;height:254px;background-size:100% 100%;pointer-events:none}'
+           '.pedal .pname{position:absolute;left:0;right:0;top:84px;text-align:center;font:700 14px "Barlow Condensed",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#111;cursor:pointer;user-select:none}'
+           '.pedal .pled{position:absolute;left:65px;top:128px;width:10px;height:10px;padding:0;border-radius:50%;background:#2b1d1d;border:1px solid #000;cursor:pointer}'
+           '.pedal .pled.on{background:#2bd14a;box-shadow:0 0 8px #2bd14a}'
+           '.pedal .pstomp{position:absolute;left:41px;top:165px;width:58px;height:58px;padding:0;border:0;background:transparent center/100% 100% no-repeat;cursor:pointer}'
+           '.pedal .pstomp:active{transform:translateY(1px)}'
+           '.pedal.t0 .pshell{left:0;top:0;width:140px;height:226px;border:1px dashed #44464b;border-radius:10px;background:none}'
+           '.pedal.t0 .ctl,.pedal.t0 .pled,.pedal.t0 .pstomp{display:none}.pedal.t0 .pname{color:#6b6d72}'
+           '.pedal .pstomp{background-image:url(@@STOMP@@)}').replace('@@STOMP@@', data_uri(os.path.join(RENDERS, 'pedals/stomp.webp'))).replace('@@KNOB@@', data_uri(os.path.join(RENDERS, 'pedals/knob-small.webp')))
+    for n, name in enumerate(('comp', 'drive', 'fuzz', 'chorus', 'delay', 'reverb'), 1):
+        css += '.pedal.t' + str(n) + ' .pshell{background-image:url(' + data_uri(os.path.join(RENDERS, 'pedals/%s.webp' % name)) + ')}'
+    return css
+
+
+HOOKS = {'GT03': gt03_pedals}
+
+
 def build(code, report):
     src = open(os.path.join(CANVAS, code + '.dc.html'), encoding='utf-8').read()
     soup = BeautifulSoup(src, 'html.parser')
@@ -160,6 +211,7 @@ def build(code, report):
     params = host_params(code)
     alias = json.loads(json.dumps(ALIASES.get(code, {})))   # a copy: lists are consumed
     apply_edits(root, alias)
+    extra_css = HOOKS[code](root, params) if code in HOOKS else ''
     nb = nk = nbt = nbb = 0
     # knobs: .ctl with a .dk / .knob, label in .lbl
     for ctl in root.select('.ctl'):
@@ -257,7 +309,7 @@ def build(code, report):
                 make_static(ctl, st)    # no parameter: it is not drawn as a knob any more
                 continue
             report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl').get_text())
-    style = re.sub(r'@import[^;]*;', '', style)
+    style = re.sub(r'@import[^;]*;', '', style) + extra_css
     m = re.match(r'<div[^>]*style="([^"]*)"', str(root))
     st = m.group(1) if m else ''
     mw, mh = re.search(r'(?:^|;)\s*width:(\d+)px', st), re.search(r'(?:^|;)\s*height:(\d+)px', st)

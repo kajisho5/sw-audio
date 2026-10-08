@@ -27,3 +27,12 @@ SW AUDIO の画面・販売素材で使っている Blender 描画（Blender 4.0
 ## ないもの
 
 - 描画の元（.blend、`gen/` `blender/` の生成スクリプト一式 = `sw-audio-handover.zip`）は入っていない。このため部品の描き直し、カタログの残り約 125 本、1200×900 のカタログ原寸は作れない。必要になったら依頼者に handover の zip を頼む。
+
+## 追加分（2026-10-08、Claude Code で描画）
+
+| フォルダ | 内容 |
+| --- | --- |
+| `pedals/` | GT03 のペダル本体 6 色（comp・drive・fuzz・chorus・delay・reverb、各 168×254 の透明 WebP）、フットスイッチのクローム・キャップ `stomp.webp`（58×58）、小ノブ `knob-small.webp`（180×180、影なし） |
+
+描画スクリプトは `tools/blender/`（`pedal.py`・`stomp.py`・`knob.py`、後処理 `post.py`）。Blender 4.0.2（apt）、Cycles、CPU。この Blender には OIDN がないため、高サンプルで描いて OpenCV でノイズ除去している（元の素材と同じ事情）。
+照明は元の素材と同じ構成（左上キー＋右下フィル＋リム）。元の素材の描画スクリプト（handover の zip）は無いので、形状・材質は新しく作ったもの。
