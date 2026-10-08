@@ -218,7 +218,11 @@ def vu_frames(root, params):
         m = re.search(r'padding:(\d+)px', st)
         pad = int(m.group(1)) if m else 8
         st = re.sub(r'(background|padding|box-shadow):[^;]*;?', '', st)
-        box['style'] = st + ';border:%dpx solid transparent;border-image:url(@@VUFRAME@@) 30 stretch' % pad
+        box['style'] = st + ';position:relative;border:%dpx solid transparent;border-image:url(@@VUFRAME@@) 30 stretch' % pad
+        for pth in sv.find_all('path'):                    # the design's flat white reflection is replaced by the rendered glass
+            if pth.get('fill') == '#ffffff' and pth.get('fill-opacity') in ('0.12', '0.1', '0.14'):
+                pth.decompose()
+        box.append(BeautifulSoup('<div class="vuglass" style="position:absolute;inset:0;background:url(@@VUGLASS@@) center/100%% 100%% no-repeat;pointer-events:none"></div>'.replace('%%', '%'), 'html.parser'))
         n += 1
     return '' if not n else 'x'
 
@@ -394,7 +398,7 @@ def build(code, report):
     for part in (style, str(root)):
         if re.search(r'</script', part, re.I):
             raise SystemExit(code + ': the design contains a closing script tag')
-    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp'))).replace('@@REEL@@', data_uri(os.path.join(RENDERS, 'parts/reel.webp'))).replace('@@ROTOR_HORN@@', data_uri(os.path.join(RENDERS, 'parts/rotor-horn.webp'))).replace('@@ROTOR_DRUM@@', data_uri(os.path.join(RENDERS, 'parts/rotor-drum.webp')))
+    html = str(root).replace('@@VUFRAME@@', data_uri(os.path.join(RENDERS, 'parts/vu-bezel-frame.webp'))).replace('@@VUGLASS@@', data_uri(os.path.join(RENDERS, 'parts/vu-glass.webp'))).replace('@@REEL@@', data_uri(os.path.join(RENDERS, 'parts/reel.webp'))).replace('@@ROTOR_HORN@@', data_uri(os.path.join(RENDERS, 'parts/rotor-horn.webp'))).replace('@@ROTOR_DRUM@@', data_uri(os.path.join(RENDERS, 'parts/rotor-drum.webp')))
     return {'css': style, 'html': html, 'w': width, 'h': height, 'knobs': [nb, nk], 'buttons': [nbb, nbt]}
 
 
