@@ -1,4 +1,4 @@
-// SW IN07 [name TBD] — lightweight preset synth, engine prototype (added 2026-10-08 at the client's request; IN01..IN06 stay unbuilt).
+// SWINGBY (SW IN07) — lightweight preset synth, engine prototype (added 2026-10-08 at the client's request; IN01..IN06 stay unbuilt).
 //   No section in spec v1.0: every value here is a design value (README「IN07 の設計」). The plan: claude/IN07_synth_plan.md in the project docs.
 //   One voice = oscillator (1..8 unison copies) -> drive -> filter -> amp, with an amp envelope and a filter envelope. The voice is written so the
 //   coming voice allocator can run N of them; Processor here is a monophonic shell (last-note priority) for tests and listening.
