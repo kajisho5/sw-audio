@@ -41,3 +41,4 @@ SW AUDIO の画面・販売素材で使っている Blender 描画（Blender 4.0
 | `parts/reel.webp` | テープのリール（288×288、透明）。リム・3 本のスポーク・ハブ。`tools/blender/reel.py`。画面で回す（光が回らないよう、柔らかい上からの光だけ）。DL02・SA01 |
 | `parts/rotor-horn.webp`・`rotor-drum.webp` | 回転スピーカー MD05 のホーン（2 つのベル）とドラム（スリット付きの胴）を上から見た図（240×240、透明）。`tools/blender/rotor.py`。画面で回す |
 | `parts/vu-glass.webp` | VU メーターのガラスの反射（840×486、反射だけの白い透明画像）。`tools/blender/vu_glass.py`（少し膨らんだガラスに柔らかい光源を映す）＋ `post_glass.py`。デザイン側の平らな白い反射の代わりに、針の上に重ねる |
+| `in07/core.webp`・`moon.webp`・`hero.webp` | SW IN07（名称未定）A 案「Orbital」。中心の球（ガラスの殻＋光る星雲、640×640、**黒背景**：発光の霧は透明度を持たないので画面では `mix-blend-mode: screen` で重ねる）、衛星（真珠色の球、192×192、透明）、全景（1920×1080、ブルーム付き。コンセプト用で販売素材ではない）。`tools/blender/in07_orbital.py`。リムは左上の後ろ、フィルはガラスに映さない（映り込みを左上に揃えるため）。衛星は画面で軌道に沿って動かすが回さない |
