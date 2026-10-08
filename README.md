@@ -1043,3 +1043,16 @@ cmake/             MinGW 用ツールチェーン
 ## 手早いテスト（開発中）
 
 `./build_tests.sh` は CMake を使わずに単体テストだけを作る。`third_party/doctest.h`（doctest 2.4.11 の単一ヘッダー）を置いてから使う。正式な手順は上の CMake。
+
+### 画面の項目を仕様に合わせた箇所（デザインキャンバスとのずれ）
+
+画面は `docs/design/canvas` のデザインをそのまま使うが（`tools/gen_skins.py`）、デザインの項目名・個数が仕様書／04 と合わない箇所は、**仕様と DSP を変えず、画面側を仕様に合わせた**（`ui/skin_aliases.json` の `_edit`）。
+
+| 製品 | デザインの項目 | 画面での扱い |
+| --- | --- | --- |
+| EQ01 | Low の Freq・Boost・Atten／High の Freq・Boost・Width／High atten の Freq・Atten／Level | 仕様どおり Low（Freq・Gain・Contour）・Air（Freq・Gain・Width）・Drive・Output の 8 つに組み替え。High atten の Freq は削除、Mode（LR/MS）はデザインにないため画面なし |
+| EQ05 | Gain・Freq・Q が同名で 4 バンド分 | ページ上の目盛り（1.5k–16k／.6–7k／.2–2.5k／30–450）から HF・HMF・LMF・LF の順と判断して結び付け。HF Shape・LF Shape はデザインにないため画面なし |
+| DY01 | Attack・Release | 仕様は Speed 1 つ（アタックとリリースを連動）と Bite のため、Speed・Bite に名前を替えて結び付け。**要確認**：デザインの意図が個別の Attack／Release なら、仕様の見直しが必要 |
+| DY10・MS03・ST01 | Crossover 1 つ | 仕様の Crossover 1〜3 に合わせて 3 つに複製 |
+| MS06 | Mix（Comp の画面） | Comp mix に結び付け |
+| DY02 Meter／GT03 Tuner／VO05 Music | パラメータにない表示・切り替え | 結び付けなし（見た目のみ）。VO05 の Music は対応するパラメータがない |

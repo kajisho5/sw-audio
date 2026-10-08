@@ -77,6 +77,56 @@ def band_groups(params, alias):
     return groups
 
 
+def apply_edits(root, alias):
+    """Pattern B: the design is brought in line with the specification (see the README, 画面の項目を仕様に合わせた箇所).
+    alias['_edit']: '<label>' or '<label>#<n>' (n-th control with that label, from 1) -> {label, p, rng, pos, remove, dup}
+    alias['_sections']: section heading -> new heading;  alias['_drop_text']: texts of static decorations to delete."""
+    edits = alias.get('_edit', {})
+    seen = {}
+    for ctl in list(root.select('.ctl')):
+        lab = ctl.select_one('.lbl')
+        if not lab or not ctl.select_one('.dk, .knob'):
+            continue
+        n = norm(lab.get_text())
+        seen[n] = seen.get(n, 0) + 1
+        e = edits.get('%s#%d' % (n, seen[n])) or edits.get(n)
+        if not e:
+            continue
+        if e.get('remove'):
+            ctl.decompose(); continue
+        if e.get('dup'):                 # one knob becomes several (Crossover 1..3), each with its own parameter
+            clones = []
+            for k in range(len(e['dup'])):
+                c = BeautifulSoup(str(ctl), 'html.parser').find()
+                clones.append(c)
+            for k, c in enumerate(clones):
+                c.select_one('.lbl').string = e['labels'][k]
+                c['data-p'] = str(e['dup'][k]); c.select_one('.dk, .knob')['data-dial'] = '1'
+                ctl.insert_before(c)
+            ctl.decompose(); continue
+        if 'label' in e:
+            lab.string = e['label']
+        if 'p' in e:
+            ctl['data-p'] = str(e['p']); ctl.select_one('.dk, .knob')['data-dial'] = '1'
+        if 'rng' in e and ctl.select_one('.rng'):
+            for sp, t in zip(ctl.select_one('.rng').find_all('span'), e['rng']):
+                sp.string = t
+        if 'pos' in e and ctl.select_one('.pos'):
+            pos = ctl.select_one('.pos')
+            for sp in pos.find_all('span'):
+                sp.decompose()
+            for t in e['pos']:
+                sp = BeautifulSoup('<span></span>', 'html.parser').find(); sp.string = t; pos.append(sp)
+    for h in root.select('.sechd'):
+        t = h.get_text().strip()
+        if t in alias.get('_sections', {}):
+            h.string = alias['_sections'][t]
+    for text in alias.get('_drop_text', []):
+        for d in root.find_all(True):
+            if d.get_text().strip() == text and not d.find(True):
+                d.decompose()
+
+
 def build(code, report):
     src = open(os.path.join(CANVAS, code + '.dc.html'), encoding='utf-8').read()
     soup = BeautifulSoup(src, 'html.parser')
@@ -86,6 +136,7 @@ def build(code, report):
         return None
     params = host_params(code)
     alias = json.loads(json.dumps(ALIASES.get(code, {})))   # a copy: lists are consumed
+    apply_edits(root, alias)
     nb = nk = nbt = nbb = 0
     # knobs: .ctl with a .dk / .knob, label in .lbl
     for ctl in root.select('.ctl'):

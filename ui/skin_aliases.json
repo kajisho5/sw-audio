@@ -1,6 +1,24 @@
 {
  "DY01": {
-  "input": 0
+  "input": 0,
+  "_edit": {
+   "attack": {
+    "label": "Speed",
+    "p": 2,
+    "rng": [
+     "Slow",
+     "Fast"
+    ]
+   },
+   "release": {
+    "label": "Bite",
+    "p": 3,
+    "rng": [
+     "0",
+     "100"
+    ]
+   }
+  }
  },
  "DY02": {
   "peak reduction": 1
@@ -54,6 +72,20 @@
   },
   "_alias": {
    "bypass band": "bypass"
+  },
+  "_edit": {
+   "crossover": {
+    "dup": [
+     32,
+     33,
+     34
+    ],
+    "labels": [
+     "Crossover 1",
+     "Crossover 2",
+     "Crossover 3"
+    ]
+   }
   }
  },
  "MS03": {
@@ -68,6 +100,119 @@
   "_alias": {
    "band gain": "gain",
    "band ceiling": "ceiling"
+  },
+  "_edit": {
+   "crossover": {
+    "dup": [
+     12,
+     13,
+     14
+    ],
+    "labels": [
+     "Crossover 1",
+     "Crossover 2",
+     "Crossover 3"
+    ]
+   }
+  }
+ },
+ "EQ05": {
+  "gain": [
+   0,
+   3,
+   6,
+   9
+  ],
+  "freq": [
+   1,
+   4,
+   7,
+   10
+  ],
+  "q": [
+   5,
+   8
+  ]
+ },
+ "EQ01": {
+  "_edit": {
+   "freq hz": {
+    "label": "Freq",
+    "p": 0,
+    "pos": [
+     "20",
+     "60",
+     "150",
+     "400"
+    ]
+   },
+   "boost#1": {
+    "label": "Gain",
+    "p": 1,
+    "rng": [
+     "-12",
+     "+12"
+    ]
+   },
+   "atten#1": {
+    "label": "Contour",
+    "p": 2
+   },
+   "freq khz#1": {
+    "label": "Freq",
+    "p": 3,
+    "pos": [
+     "2k",
+     "5k",
+     "10k",
+     "20k"
+    ]
+   },
+   "boost#2": {
+    "label": "Gain",
+    "p": 4,
+    "rng": [
+     "-12",
+     "+12"
+    ]
+   },
+   "freq khz#2": {
+    "remove": true
+   },
+   "atten#2": {
+    "label": "Drive",
+    "p": 6
+   },
+   "level": {
+    "p": 7
+   }
+  },
+  "_sections": {
+   "Low frequency": "Low",
+   "High frequency": "Air",
+   "High atten": "Drive"
+  },
+  "_drop_text": [
+   "+5.0 dB"
+  ]
+ },
+ "MS06": {
+  "mix": 11
+ },
+ "ST01": {
+  "_edit": {
+   "crossover": {
+    "dup": [
+     4,
+     5,
+     6
+    ],
+    "labels": [
+     "Crossover 1",
+     "Crossover 2",
+     "Crossover 3"
+    ]
+   }
   }
  }
 }
