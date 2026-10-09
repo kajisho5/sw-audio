@@ -641,7 +641,31 @@
     } };
   }
 
+
+  // ---- gain rider (MS05, VO05): readouts = ride (dB) [, music listening]. Orange = the ride over the last 12 s (the grey area is the measured output peak), the line is 0 dB
+  const NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  function riderDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')], txt = svg.querySelector(':scope > text'); if (ps.length < 3) return null;
+    const music = box.querySelector('[data-readout] span');
+    const N = 120, W = 732, ride = Ring(N, 0), lvl = Ring(N, -90); let last = 0;
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r) return;
+      if (music && r.length >= 2) music.textContent = r[1] > 0.5 ? 'Listening' : 'Not listening';
+      const now = Date.now(); if (now - last < 100) return; last = now; ride.push(r[0]); lvl.push(m ? outDb(m) : -90);
+      const R = Math.max(6, ctx.value('Range') || 6), y = v => 100 - clamp(v / R, -1, 1) * 80; let d = '', up = 'M0 100';
+      for (let k = 0; k < N; k++) { const x = (k / (N - 1) * W).toFixed(1); d += (k ? ' L' : 'M') + x + ' ' + y(ride.a[k]).toFixed(1); up += ' L' + x + ' ' + (100 - clamp((lvl.a[k] + 60) / 60, 0, 1) * 60).toFixed(1); }
+      ps[0].setAttribute('d', up + ' L' + W + ' 100 Z'); ps[1].setAttribute('d', d); ps[2].setAttribute('d', d); if (txt) txt.textContent = 'Gain ride, +' + R + ' to -' + R + ' dB';
+    } };
+  }
+  // the guitar tuner read-out of GT03 (the design's part has no parameter): readouts = Hz, MIDI note, cents
+  function tunerReadout(box, ctx) {
+    const el = box.querySelector('[data-readout] span'); if (!el) return null;
+    return { update(info) { const r = info && info.readouts; if (!r) return; el.textContent = r[0] > 20 ? NOTE[((Math.round(r[1]) % 12) + 12) % 12] + (Math.floor(Math.round(r[1]) / 12) - 1) + ' ' + (r[2] >= 0 ? '+' : '') + r[2].toFixed(0) + '¢ ' + r[0].toFixed(1) + ' Hz' : '—'; } };
+  }
+
   const registry = {
+    MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
