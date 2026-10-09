@@ -9,6 +9,13 @@
    "call": "clear"
   }
  ],
+ "EQ02": [
+  {
+   "label": "Assist",
+   "call": "assist",
+   "toggle": true
+  }
+ ],
  "EQ07": [
   {
    "label": "Auto thresh",

@@ -228,6 +228,7 @@
     });
     let last = null;
     return {
+      fx, bands, svg,   // for what is drawn over the graph (EQ02's resonance marks)
       update() {
         const act = bands.filter(isOn).map(b => ({ type: typeOf(b), f: ctx.get(b.Freq), g: ctx.get(b.Gain), q: ctx.get(b.Q) || 1, slope: b.Slope !== undefined ? ctx.get(b.Slope) : 12 }));
         const key = act.map(a => a.type + a.f + a.g + a.q + a.slope).join('|'); if (key === last) { return; } last = key;
@@ -526,6 +527,28 @@
   function learnButton(box, ctx) {
     const btn = box.querySelector('button[data-call="learn"]'); if (!btn) return null; const label = btn.textContent.trim();
     return { update(info) { const r = info && info.readouts; if (!r || r.length < 2) return; const t = r[0] > 0.5 ? 'Listening ' + Math.round(r[1] * 100) + ' %' : label; if (btn.textContent !== t) btn.textContent = t; btn.classList.toggle('on', r[0] > 0.5); } };
+  }
+
+  // ---- EQ02 "Assist" (core: setAssist, resonances; readouts = assist on, then 6 x [Hz, dB it sticks out]): the button switches the listening; the resonances are marked on the EQ graph (small triangles
+  // with their frequency); pressing a mark puts a narrow Bell there on the first band that is off, cutting a part of what sticks out (Q 6, -0.7 x the excess, at most -12 dB)
+  function assistMarks(box, ctx, eq) {
+    const btn = box.querySelector('button[data-call="assist"]'); if (btn) btn.classList.remove('on');   // the design shows it lit: the core starts with it off
+    if (!eq || !eq.svg) return btn ? { update(info) { const r = info && info.readouts; if (r && r.length >= 13) btn.classList.toggle('on', r[0] > 0.5); } } : null;
+    const g = mkEl('g', {}); eq.svg.append(g); let marks = [], key = '';
+    const place = k => {
+      const m = marks[k], free = eq.bands.find(b => b.on >= 0 && ctx.get(b.on) < 0.5); if (!m || !free) return;
+      const q = i => ctx.params.find(x => x.i === i), v = (i, x) => { const p = q(i); return p.c.value(p.c.norm(x)); };
+      const ids = [free.on, free.Type, free.Freq, free.Gain, free.Q]; ids.forEach(i => ctx.begin(i));
+      ctx.set(free.on, 1); ctx.set(free.Type, 0); ctx.set(free.Freq, v(free.Freq, m.hz)); ctx.set(free.Gain, v(free.Gain, -clamp(m.db * 0.7, 3, 12))); ctx.set(free.Q, v(free.Q, 6)); ids.forEach(i => ctx.end(i));
+      ctx.selectBand(eq.bands.indexOf(free));
+    };
+    g.addEventListener('pointerdown', e => { const t = e.target.closest ? e.target.closest('[data-k]') : null; if (t) { e.stopPropagation(); place(+t.dataset.k); } });
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 13) return; const on = r[0] > 0.5; if (btn) btn.classList.toggle('on', on);
+      marks = []; if (on) for (let i = 0; i < 6; i++) { const hz = r[1 + 2 * i], db = r[2 + 2 * i]; if (hz > 0) marks.push({ hz, db }); }
+      const k = marks.map(m => m.hz.toFixed(0) + ':' + m.db.toFixed(1)).join('|'); if (k === key) return; key = k;
+      g.innerHTML = marks.map((m, i) => { const x = eq.fx(m.hz); return '<path data-k="' + i + '" d="M' + (x - 6).toFixed(1) + ' 6 L' + (x + 6).toFixed(1) + ' 6 L' + x.toFixed(1) + ' 18 Z" fill="#f0ad3d" style="cursor:pointer"><title>Resonance ' + (m.hz >= 1000 ? (m.hz / 1000).toFixed(2) + ' kHz' : m.hz.toFixed(0) + ' Hz') + ', ' + m.db.toFixed(0) + ' dB: press to cut it</title></path><text x="' + x.toFixed(1) + '" y="30" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-size="10" fill="#f0ad3d" style="pointer-events:none">' + (m.hz >= 1000 ? (m.hz / 1000).toFixed(2) + 'k' : m.hz.toFixed(0)) + '</text>'; }).join('');
+    } };
   }
 
   // 31 third-octave bars with peak holds (LV20)
@@ -1871,7 +1894,7 @@
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     MS03: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     LV12: faderBank,
-    EQ02: eqDisplay, EQ07: (box, ctx) => combine(eqDisplay(box, ctx), learnButton(box, ctx)),
+    EQ02: (box, ctx) => { const e = eqDisplay(box, ctx); return combine(e, assistMarks(box, ctx, e)); }, EQ07: (box, ctx) => combine(eqDisplay(box, ctx), learnButton(box, ctx)),
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL01: echoLcdDisplay,
     DL02: (box, ctx) => reelDisplay(box, ctx, null),

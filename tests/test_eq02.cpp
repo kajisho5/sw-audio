@@ -4,6 +4,7 @@
 #include "sw/svf.hpp"
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <vector>
 using namespace sw;
 using namespace sw::eq02;
@@ -116,4 +117,17 @@ TEST_CASE("Natural: same magnitude as Zero latency, phase closer to the analog p
 TEST_CASE("EQ02 Length follows EQ08 (Linear mode only)") {
     CHECK(std::string(specs()[Length].id) == "eq02.length"); CHECK(specs()[Length].def == 2048);
     Processor p; p.setParam(PhaseMode, 2); p.setParam(Length, 4096); p.prepare(kFs, 256); CHECK(p.latencySamples() == 2048 + 128);
+}
+
+TEST_CASE("EQ02 Assist: the resonances of the input are listed while it is on; the sound is not changed by listening") {
+    auto mk = [] { Processor p; p.setParam(bp(1, On), 1); p.setParam(bp(1, Gain), 3); p.setParam(bp(1, Freq), 800); p.prepare(kFs, 256); p.snapToTargets(); return p; };
+    const size_t n = static_cast<size_t>(10 * kFs); std::vector<float> x(n); uint32_t s = 12345;
+    for (size_t i = 0; i < n; ++i) { s = s * 1664525u + 1013904223u; const double noise = (static_cast<double>(s >> 8) / 16777216.0 - 0.5) * 0.06; x[i] = static_cast<float>(noise + 0.05 * std::sin(2 * kPi * 2500.0 * static_cast<double>(i) / kFs)); }
+    auto runIt = [&](Processor& p) { std::vector<float> l = x, r = x; for (size_t off = 0; off < n; off += 256) { float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, static_cast<int>(std::min<size_t>(256, n - off))); } return l; };
+    ResonanceFinder::Mark m[ResonanceFinder::kMarks];
+    Processor off = mk(); const auto yOff = runIt(off); CHECK_FALSE(off.assist()); CHECK(off.resonances(m) == 0);
+    Processor on = mk(); on.setAssist(true); CHECK(on.assist()); const auto yOn = runIt(on);
+    const int k = on.resonances(m); REQUIRE(k >= 1); CHECK(m[0].hz == doctest::Approx(2500).epsilon(0.03)); CHECK(m[0].db > 6.0);
+    for (size_t i = 0; i < n; i += 97) REQUIRE(yOn[i] == yOff[i]);   // listening changes nothing
+    on.setAssist(false); CHECK(on.resonances(m) == 0); on.setAssist(true); CHECK(on.resonances(m) == 0);   // switching it on starts afresh
 }

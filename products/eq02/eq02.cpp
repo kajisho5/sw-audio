@@ -79,6 +79,7 @@ void Processor::prepare(double sampleRate, int) {
     mode_ = static_cast<int>(target_[PhaseMode]);
     L_ = kernelLengthFor(fs_, target_[Length]);
     fadeLen_ = static_cast<int>(std::lround(0.020 * fs_));
+    res_.setup(fs_);
     for (auto& c : conv_) { c.prepare(L_, 128, 1); c.setFadeSamples(fadeLen_); }
     for (auto& b : band_) { for (auto& f : b.f) f.reset(); for (auto& d : b.det) d.reset(); b.env = {}; b.offset = {}; }
     for (int p = 0; p < 2; ++p) { nat_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); nat_[static_cast<size_t>(p)][kNatDelay] = 1.0; natHist_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); }
@@ -161,6 +162,7 @@ void Processor::snapToTargets() {
 
 void Processor::process(float** ch, int numCh, int n) {
     const int nch = std::min(numCh, 2);
+    if (assist_) res_.process(ch, nch, n);   // the input, before anything touches it
     const bool ms = target_[Ms] > 0.5 && nch == 2;
     if (mode_ == Linear) {  // static part: convolution (kernel rebuilt at most once per 20 ms crossfade)
         sinceKernel_ += n;

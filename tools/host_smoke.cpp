@@ -236,6 +236,15 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c learn");
         const auto a = readouts(2);
         if (a.size() < 2 || a[0] != 1.0 || a[1] <= 0.0) fail("EQ07: Auto thresh did not start listening after the screen's button call");
+    } else if (code == "EQ02") {   // Assist: the toggle reaches the audio thread and shows in the read-outs (the marks themselves are checked in the unit tests)
+        const auto base = readouts(2);
+        if (base.size() < 13 || base[0] != 0.0) { fail("EQ02 read-outs missing or Assist already on"); return; }
+        m->send(p, "c assist 1");
+        const auto a = readouts(2);
+        if (a.size() < 13 || a[0] != 1.0) fail("EQ02: Assist did not turn on after the screen's button call");
+        m->send(p, "c assist 0");
+        const auto b = readouts(2);
+        if (b.size() < 13 || b[0] != 0.0) fail("EQ02: Assist did not turn off");
     } else if (code == "RV04") {
         const auto base = readouts(2);
         if (base.size() < 3) { fail("RV04 read-outs missing"); return; }

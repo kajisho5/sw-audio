@@ -3,12 +3,13 @@
 // Natural: Zero latency + a 65-tap phase-only FIR that moves the phase toward the analog prototype (latency 32).
 // Linear: FIR from the target magnitude on the shared engine (same as EQ08), latency L/2 + 128.
 // Per band: dynamic range / threshold (band-limited detector), Stereo / Mid / Side placement when Mid/side is on.
-// Assist / Unmask (analysis, EVO B) come with the UI.
+// Assist (EVO B): setAssist(true) listens to the input (before the EQ) and resonances() gives the steady peaks that stick out of their surroundings (sw/resonance.hpp). Unmask needs SW Link.
 #pragma once
 #include "sw/bandfilter.hpp"
 #include "sw/convolver.hpp"
 #include "sw/fir_design.hpp"
 #include "sw/param.hpp"
+#include "sw/resonance.hpp"
 #include <array>
 #include <vector>
 
@@ -29,6 +30,10 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     int latencySamples() const;
+    // Assist: the resonances of the input, strongest first: Hz and how many dB they stick out (averaged over seconds). Audio thread (the screen's button is queued to it); the analysis only runs while it is on.
+    void setAssist(bool on) { if (on && !assist_) res_.reset(); assist_ = on; }
+    bool assist() const { return assist_; }
+    int resonances(ResonanceFinder::Mark* out) const { return assist_ ? res_.marks(out) : 0; }
 
 private:
     static constexpr int kNatDelay = 32, kNatTaps = 2 * kNatDelay + 1, kControl = 16;
@@ -43,7 +48,8 @@ private:
     static int kernelLengthFor(double fs, double base);
     double fs_ = 48000.0;
     int mode_ = ZeroLatency, L_ = 2048, sinceKernel_ = 0, fadeLen_ = 960, natPos_ = 0;
-    bool prepared_ = false, dirty_ = true, kernelDirty_ = true;
+    bool prepared_ = false, dirty_ = true, kernelDirty_ = true, assist_ = false;
+    ResonanceFinder res_;
     std::array<double, kNumParams> target_{};
     struct Band {
         std::array<BandFilter, 2> f{};      // per path: the band (Zero latency / Natural) or its dynamic part (Linear)
