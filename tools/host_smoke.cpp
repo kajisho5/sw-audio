@@ -19,6 +19,7 @@
 #include <clap/ext/track-info.h>
 
 #include <dlfcn.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
@@ -565,6 +566,41 @@ bool unitChecks(const std::vector<fs::path>& files) {
     if (ok && tested) std::printf("ok    Unit A / B / C: %d plug-ins: each channel's level moves by the tolerance that sw::Unit gives it (B and C, against A)\n", tested);
     return ok;
 }
+// ---- soak: a long run of the real plug-in (--soak=SECONDS of audio per plug-in, faster than real time): noise, a tone, near-silence, and a random parameter every second.
+// What it looks for: memory that keeps growing (the process's resident set after the first tenth of the run against the end), the time a block takes creeping up (the first tenth against the last tenth), NaN / Inf / runaway output.
+double residentMB() { long pages = 0, rss = 0; std::FILE* f = std::fopen("/proc/self/statm", "r"); if (!f) return 0.0; if (std::fscanf(f, "%ld %ld", &pages, &rss) != 2) rss = 0; std::fclose(f); return static_cast<double>(rss) * static_cast<double>(sysconf(_SC_PAGESIZE)) / 1048576.0; }
+bool soakOne(const fs::path& f, double secs, std::string& line) {
+    Loaded a; std::string why; if (!a.open(f, why)) { line = "FAIL  " + f.stem().string() + ": " + why; return false; }
+    const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+    std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
+    Rng rng(0xC0FFEEull ^ info.size() * 7919u);
+    const int chunks = std::max(10, static_cast<int>(secs)), blocksPerChunk = static_cast<int>(std::ceil(kSr / kBlock));
+    std::vector<double> cpu(static_cast<size_t>(chunks)); double rss0 = 0, rssEnd = 0, rssMax = 0;
+    for (int c = 0; c < chunks; ++c) {
+        EventList ev;
+        if (!info.empty()) {   // one random parameter per second (the stepped ones to a step)
+            const uint32_t i = static_cast<uint32_t>((rng.next() * 0.5f + 0.5f) * static_cast<float>(info.size())) % static_cast<uint32_t>(info.size());
+            if (!(info[i].flags & CLAP_PARAM_IS_READONLY)) { double v = info[i].min_value + (rng.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v); ev.set(info[i].id, v); }
+        }
+        a.run.toneHz = (c % 4 == 2) ? 440.0 : 0.0;                                       // every fourth second a tone
+        a.run.impulse = (c % 5 == 4) ? static_cast<int64_t>(a.run.toneN) + 100 : -1;      // every fifth second silence (one impulse)
+        const double s0 = a.run.seconds, a0 = a.run.audioSeconds;
+        a.run.process(blocksPerChunk, 1000u + static_cast<uint64_t>(c), ev);
+        cpu[static_cast<size_t>(c)] = (a.run.seconds - s0) / std::max(1e-9, a.run.audioSeconds - a0);
+        a.run.clearLogs();
+        const double rss = residentMB(); if (c == chunks / 10) rss0 = rss; rssEnd = rss; rssMax = std::max(rssMax, rss);
+    }
+    const int k = std::max(1, chunks / 10); double first = 0, last = 0;
+    for (int i = 0; i < k; ++i) { first += cpu[static_cast<size_t>(i + k)]; last += cpu[static_cast<size_t>(chunks - 1 - i)]; }   // the very first tenth is warm-up: take the second one
+    first /= k; last /= k;
+    char buf[256]; std::snprintf(buf, sizeof buf, "%-26s cpu %5.2f%% -> %5.2f%%   memory %.1f -> %.1f MB", f.stem().string().c_str(), first * 100.0, last * 100.0, rss0, rssEnd);
+    line = buf; bool ok = true;
+    if (a.run.bad) { line += "   FAIL: NaN / Inf or a process() error"; ok = false; }
+    if (a.run.peak > 1e4) { line += "   FAIL: output peak " + std::to_string(a.run.peak); ok = false; }
+    if (rssEnd - rss0 > 16.0) { line += "   FAIL: memory grows by " + std::to_string(rssEnd - rss0) + " MB"; ok = false; }
+    if (last > first * 1.6 && last > 0.005) { line += "   FAIL: the time per block grows (" + std::to_string(last / first) + "x)"; ok = false; }
+    a.close(); return ok;
+}
 bool linkChecks(const std::vector<fs::path>& files) {
     auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
     const fs::path fa = find("DY08"), fb = find("EQ02"), fc = find("EQ07");
@@ -768,13 +804,14 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files;
+    std::vector<fs::path> files; double soakSeconds = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
             kSr = std::atof(opt.c_str() + 7); if (kSr < 8000.0 || kSr > 384000.0) { std::fprintf(stderr, "bad rate\n"); return 2; }
             kPhaseBlocks = static_cast<int>(std::lround(563.0 * kSr / 48000.0)); kMeasureBlocks = static_cast<int>(std::lround(188.0 * kSr / 48000.0)); continue;
         }
+        if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
             for (auto& e : fs::directory_iterator(a))
@@ -786,6 +823,12 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (soakSeconds > 0) {   // --soak=SECONDS: only the long run
+        int bad = 0; double worstGrowth = 0;
+        for (const auto& f : files) { std::string line; const bool ok = soakOne(f, soakSeconds, line); std::printf("%s %s\n", ok ? "ok  " : "FAIL", line.c_str()); std::fflush(stdout); if (!ok) ++bad; }
+        std::printf("soak: %zu plug-ins x %.0f s of audio: %d FAIL\n", files.size(), soakSeconds, bad); (void)worstGrowth;
+        return bad ? 1 : 0;
+    }
     int fails = 0, warns = 0, pass = 0, outTested = 0, bypassTested = 0, mixTested = 0, inTested = 0;
     std::vector<std::string> passNames;
     double worstCpu = 0; std::string worstCpuName;
