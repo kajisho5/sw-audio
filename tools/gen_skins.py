@@ -401,10 +401,10 @@ def bind_actions(root, code, report):
 
 
 def mark_inert(root):
-    """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
+    """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
-    inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'compare a', 'snapshot', 'repair'}
-    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap')
+    inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair'}
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -412,6 +412,8 @@ def mark_inert(root):
         t = b.get_text().strip().lower()
         if t.startswith(('auto align', 'low cpu')):   # tiles for features the product does not have (LV14 Auto align, LV24 Low CPU)
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'; b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1; continue
+        if t == 'compare a' and root.select_one('.disp svg'):   # MT02: keep the current spectrum as the reference curve (the page does it: ui/displays.js compareReference)
+            b['data-compare'] = '1'; b['title'] = 'Keep the current spectrum as the reference curve; press again to clear it'; continue
         if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown
             b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
         in_evo = b.find_parent(class_='evob') is not None
@@ -419,7 +421,7 @@ def mark_inert(root):
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'
             b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1
         elif b.find_parent(class_='tb') is not None and b.select_one('svg') and t and not b.get('aria-label'):
-            b['title'] = 'Presets are not available yet'
+            b['data-preset'] = '1'   # the preset menu (sw-ui.js: the person's saved settings)
     # a dial that no parameter drives (EQ02's "Range off"): dimmed, not left looking live
     for c in root.select('.ctl, .rc'):
         if c.get('data-p') or c.get('data-pb') or c.get('data-static') or not c.select_one('.dk, .knob, .rk') or c.find_parent(attrs={'data-p': True}):

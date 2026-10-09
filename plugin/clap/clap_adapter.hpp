@@ -11,6 +11,7 @@
 // Host parameter ids: product params 0..N-1, then common params (Auto gain, Delta, Bypass) appended, so ids stay stable. Bypass (CLAP_PARAM_IS_BYPASS, the host's bypass) is the panel's "In" toggle: products with their own In parameter (kInParam >= 0) do not get it.
 #pragma once
 #include "gui_bridge.hpp"
+#include "sw_message.h"
 #include "gui_view.hpp"
 #ifdef SW_SKIN_HEADER
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
@@ -181,9 +182,9 @@ private:
     void guiCall(const std::string& name, const std::string& arg) {
         if constexpr (HasGuiCallGui<P>::value) { if (P::guiOnGui(name.c_str())) { P::guiCallGui(shell_.core(), name.c_str(), arg.c_str()); return; } }
         if constexpr (HasGuiCall<P>::value) {
-            if (name.size() >= sizeof(CallOp::name) || arg.size() >= sizeof(CallOp::arg)) return;
-            if constexpr (GuiCallOnGuiThread<P>::value) { P::guiCall(shell_.core(), name.c_str(), arg.c_str()); }
+            if constexpr (GuiCallOnGuiThread<P>::value) { P::guiCall(shell_.core(), name.c_str(), arg.c_str()); }   // any length (a piece of a file)
             else {
+                if (name.size() >= sizeof(CallOp::name) || arg.size() >= sizeof(CallOp::arg)) return;   // the queue to the audio thread holds short calls only
                 const size_t h = call_head_.load(std::memory_order_relaxed), t = call_tail_.load(std::memory_order_acquire);
                 if (h - t >= kCallQueue) return;
                 CallOp& op = call_ops_[h % kCallQueue]; std::memset(&op, 0, sizeof(op));
@@ -233,9 +234,21 @@ private:
         s->guiDestroyView();
         std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
         const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, kHasBypass, init, f.latencyMs(), skin());
-        s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_);
+        s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); const char* home = std::getenv("HOME"); if (!home) home = std::getenv("USERPROFILE");
+        const std::string code = gui::codeOf(P::descriptor()->id);
+        s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_, gui::presets::dirFor(code, home ? home : ""), code);
         s->view_ = gui::createView(html, [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
         return s->view_ != nullptr;
+    }
+    // the window's page messages without a window (sw_message.h): the same facade and session
+    static const char* guiMessage(const clap_plugin_t* p, const char* msg) {
+        static thread_local std::string reply;
+        Plugin* s = self(p); GuiFacade f{*s};
+        const char* home = std::getenv("HOME"); if (!home) home = std::getenv("USERPROFILE");
+        const std::string code = gui::codeOf(P::descriptor()->id);
+        gui::Session<GuiFacade> session(f, gui::presets::dirFor(code, home ? home : ""), code);
+        reply = session.onMessage(msg ? msg : "");
+        return reply.c_str();
     }
     void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); }
     static void guiDestroy(const clap_plugin_t* p) { self(p)->guiDestroyView(); }
@@ -365,11 +378,13 @@ private:
         static const clap_plugin_params_t params = {paramsCount, paramsInfo, paramsValue, paramsToText, paramsFromText, paramsFlush};
         static const clap_plugin_state_t state = {stateSave, stateLoad};
         static const clap_plugin_latency_t latency = {latencyGet};
+        static const sw_plugin_message_t message = {guiMessage};
         static const clap_plugin_gui_t gui = {guiIsApiSupported, guiPreferredApi, guiCreate, guiDestroy, guiSetScale, guiGetSize, guiCanResize, guiResizeHints, guiAdjustSize, guiSetSize, guiSetParent, guiSetTransient, guiSuggestTitle, guiShow, guiHide};
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
+        if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
         if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
     }

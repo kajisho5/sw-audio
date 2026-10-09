@@ -130,6 +130,7 @@ if (SW_BUILD_PLUGINS)
     # (Output gain, Bypass, NaN at the defaults); run: build/sw-host-smoke build/plugins   (tools/host_smoke.cpp)
     if (UNIX AND NOT APPLE)
         add_executable(sw-host-smoke tools/host_smoke.cpp)
+        target_include_directories(sw-host-smoke PRIVATE plugin/clap)
         target_link_libraries(sw-host-smoke PRIVATE clap ${CMAKE_DL_LIBS})
     endif()
 

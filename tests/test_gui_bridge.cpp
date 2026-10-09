@@ -1,5 +1,7 @@
 #include "doctest.h"
 #include "gui_bridge.hpp"
+#include <chrono>
+#include <filesystem>
 #include "dy08/dy08.hpp"
 #include "lv12/lv12.hpp"
 #include <cmath>
@@ -109,6 +111,24 @@ TEST_CASE("GUI messages: a button call may be large (a piece of a reference file
     CHECK_FALSE(gui::parseMessage("c refdata " + std::string(2000000, 'A'), m));    // over the limit
     CHECK_FALSE(gui::parseMessage("s 1 " + std::string(5000, '1'), m));            // other messages stay short
     CHECK(gui::parseMessage("c tap", m)); CHECK(gui::parseMessage("s 3 0.5", m));
+}
+
+TEST_CASE("GUI presets: the page's preset menu (list, save, load, delete) through the session; other calls still go to the plug-in") {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / ("sw_session_presets_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())); fs::remove_all(dir);
+    Fake f; f.v = {1.0}; gui::Session<Fake> s(f, dir.string(), "DY08");
+    CHECK(s.onMessage("c presetlist") == "SWHOST.presets([],\"\");");
+    CHECK(s.onMessage("c presetsave Vocal%20bus dy08.ratio=4;dy08.thresh=-18.5") == "SWHOST.presets([\"Vocal bus\"],\"Vocal bus\");");
+    CHECK(s.onMessage("c presetsave %E3%83%9C%E3%83%BC%E3%82%AB%E3%83%AB dy08.ratio=2") == "SWHOST.presets([\"Vocal bus\",\"\xE3\x83\x9C\xE3\x83\xBC\xE3\x82\xAB\xE3\x83\xAB\"],\"\xE3\x83\x9C\xE3\x83\xBC\xE3\x82\xAB\xE3\x83\xAB\");");
+    CHECK(s.onMessage("c presetload Vocal%20bus") == "SWHOST.presetLoaded(\"Vocal bus\",\"dy08.ratio=4;dy08.thresh=-18.5\");");
+    CHECK(s.onMessage("c presetload nothing").rfind("SWHOST.presetError(", 0) == 0);
+    CHECK(s.onMessage("c presetsave bad dy08.ratio=<b>").rfind("SWHOST.presetError(", 0) == 0);    // a body that is not ids and numbers
+    CHECK(s.onMessage("c presetsave only-a-name").rfind("SWHOST.presetError(", 0) == 0);            // no body
+    CHECK(s.onMessage("c presetdelete Vocal%20bus") == "SWHOST.presets([\"\xE3\x83\x9C\xE3\x83\xBC\xE3\x82\xAB\xE3\x83\xAB\"],\"\");");
+    CHECK(f.log.empty());                                            // none of this reached the plug-in
+    CHECK(s.onMessage("c tap").empty()); CHECK(f.log.size() == 1); CHECK(f.log[0] == "c:tap:");   // a button call does
+    gui::Session<Fake> n(f, "", "DY08"); CHECK(n.onMessage("c presetlist").rfind("SWHOST.presetError(", 0) == 0);   // no folder: the page is told
+    fs::remove_all(dir);
 }
 
 TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independent signals; the points are the recent samples") {

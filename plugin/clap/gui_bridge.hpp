@@ -2,6 +2,7 @@
 // and the script the native side evaluates to bring the page up to date. The platform views (gui_mac.mm, gui_win.cpp) only create a web view, load page() and pass messages to onMessage().
 #pragma once
 #include "gui_assets.hpp"
+#include "gui_presets.hpp"
 #include "gui_spectrum.hpp"
 #include "sw/param.hpp"
 #include <algorithm>
@@ -133,7 +134,8 @@ inline bool parseMessage(const std::string& m, Message& out) {
 template <class F>
 class Session {
 public:
-    explicit Session(F& f) : f_(f) {}
+    // presetDir: where the person's presets of this product are kept ("" = no presets: the page's preset menu says so); code = the product code for the file header
+    explicit Session(F& f, std::string presetDir = "", std::string code = "") : f_(f), presetDir_(std::move(presetDir)), code_(std::move(code)) {}
     std::string onMessage(const std::string& m) {
         Message x; if (!parseMessage(m, x)) return "";
         const int n = f_.numParams();
@@ -141,7 +143,7 @@ public:
             case 'b': if (x.index < n) f_.begin(x.index); break;
             case 'e': if (x.index < n) f_.end(x.index); break;
             case 's': if (x.index < n) f_.set(x.index, x.value); break;
-            case 'c': f_.call(x.name, x.args); break;
+            case 'c': if (x.name.rfind("preset", 0) == 0) return presetCall(x.name, x.args); f_.call(x.name, x.args); break;
             case 'p': case 'r': return snapshot();
             default: break;
         }
@@ -149,7 +151,26 @@ public:
     }
     std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[kMaxReadouts] = {}; const int nro = std::min(kMaxReadouts, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); double st[1 + 2 * kGonioPts]; f_.stereo(st); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro, st); }
 private:
+    // the preset menu of the page: presetlist, presetsave <percent-encoded name> <body>, presetload <name>, presetdelete <name>. The page writes and reads the body (id=value pairs); this stores it.
+    // Replies (scripts for the page): SWHOST.presets([names], selected), SWHOST.presetLoaded(name, body), SWHOST.presetError(text)
+    std::string listScript(const std::string& selected) const {
+        std::string s = "SWHOST.presets(["; const auto l = presets::list(presetDir_);
+        for (size_t i = 0; i < l.size(); ++i) s += (i ? "," : "") + jsonString(l[i]);
+        return s + "]," + jsonString(selected) + ");";
+    }
+    static std::string errorScript(const std::string& t) { return "SWHOST.presetError(" + jsonString(t) + ");"; }
+    std::string presetCall(const std::string& name, const std::string& args) {
+        if (presetDir_.empty()) return errorScript("No folder for presets (no home folder)");
+        if (name == "presetlist") return listScript("");
+        const size_t sp = args.find(' ');
+        const std::string n = presets::percentDecode(sp == std::string::npos ? args : args.substr(0, sp)), body = sp == std::string::npos ? "" : args.substr(sp + 1);
+        if (name == "presetsave") return presets::save(presetDir_, n, code_, body) ? listScript(presets::cleanName(n)) : errorScript("Could not save the preset");
+        if (name == "presetload") { std::string b; return presets::load(presetDir_, n, b) ? "SWHOST.presetLoaded(" + jsonString(presets::cleanName(n)) + "," + jsonString(b) + ");" : errorScript("Could not read the preset"); }
+        if (name == "presetdelete") { presets::remove(presetDir_, n); return listScript(""); }
+        return "";
+    }
     F& f_;
+    std::string presetDir_, code_;
 };
 
 }  // namespace sw::gui

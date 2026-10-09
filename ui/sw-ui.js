@@ -160,6 +160,67 @@
       hit.addEventListener('pointerup', end); hit.addEventListener('pointercancel', end);
     }
 
+    // ---- presets (the design's preset menu): the person's own settings, saved as files by the plug-in (bridge.call presetlist / presetsave / presetload / presetdelete; replies through bridge.onPreset)
+    // A preset is the product's own parameters as "id=value" pairs; one that lacks a parameter leaves it as it is. The label shows the preset last loaded or saved ("*" once something moved),
+    // "Init" while every parameter is at its default, otherwise "Custom".
+    let presetDraw = null;
+    const presetBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-preset]');
+    if (presetBtn) {
+      const own = host.filter(h => !h.extra), idx = new Map(own.map(h => [h.p.id, h.i]));
+      let names = [], current = null, snap = null, menu = null, note = '';
+      const labelEl = (() => { const w = document.createTreeWalker(presetBtn, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (n.nodeValue.trim()) return n; return null; })();
+      const same = (a, b) => own.every(h => Math.abs(a[h.i] - b[h.i]) < 1e-9);
+      const draw = () => {
+        const isDef = own.every(h => Math.abs(vals[h.i] - h.p.def) < 1e-9);
+        const t = current ? current + (snap && !same(vals, snap) ? ' *' : '') : (isDef ? 'Init' : 'Custom');
+        if (labelEl) labelEl.nodeValue = t; else presetBtn.textContent = t;
+        presetBtn.title = 'Presets';
+      };
+      const applyBody = (name, body) => {
+        const next = vals.slice();
+        body.split(';').forEach(kv => { const e = kv.indexOf('='); if (e < 1) return; const i = idx.get(kv.slice(0, e)), v = parseFloat(kv.slice(e + 1)); if (i !== undefined && isFinite(v)) { const h = host[i]; next[i] = h.p.curve === 'step' ? h.c.value(h.c.norm(v)) : clamp(v, Math.min(h.p.min, h.p.max), Math.max(h.p.min, h.p.max)); } });
+        morphed = false; applyAll(next); current = name; snap = vals.slice(); draw();
+      };
+      const closeMenu = () => { if (menu) { menu.remove(); menu = null; document.removeEventListener('pointerdown', outside, true); } };
+      const outside = e => { if (menu && e.composedPath && (e.composedPath().includes(menu) || e.composedPath().includes(presetBtn))) return; closeMenu(); };
+      const row = (text, onClick, cur) => { const d = el('div', cur ? 'cur' : '', text); d.style.cssText = 'padding:5px 12px;cursor:pointer;white-space:nowrap;font-size:13px;letter-spacing:.04em;border-radius:3px' + (cur ? ';color:var(--acc)' : ''); d.onmouseenter = () => { d.style.background = 'var(--acc)'; d.style.color = '#0c0c0d'; }; d.onmouseleave = () => { d.style.background = ''; d.style.color = cur ? 'var(--acc)' : ''; }; d.onclick = onClick; return d; };
+      const buildMenu = () => {
+        if (!menu) return; menu.innerHTML = '';
+        menu.append(row('Init (default settings)', () => { morphed = false; applyAll(vals.map((v, i) => (host[i] && !host[i].extra ? host[i].p.def : v))); current = null; snap = null; draw(); closeMenu(); }));
+        if (names.length) {
+          const sep = el('div'); sep.style.cssText = 'height:1px;background:#3f4045;margin:4px 0;padding:0'; menu.append(sep);
+          names.forEach(n => {
+            const r = row(n, () => { bridge.call('presetload', encodeURIComponent(n)); closeMenu(); }, n === current);
+            const x = el('span', '', '×'); x.title = 'Delete'; x.style.cssText = 'float:right;margin-left:14px;opacity:.55'; let armed = 0;
+            x.onclick = e => { e.stopPropagation(); if (armed) { bridge.call('presetdelete', encodeURIComponent(n)); return; } armed = 1; x.textContent = 'Delete?'; x.style.opacity = '1'; setTimeout(() => { armed = 0; x.textContent = '×'; x.style.opacity = '.55'; }, 2500); };
+            r.append(x); menu.append(r);
+          });
+        } else { const e = el('div', '', 'No saved presets yet'); e.style.cssText = 'padding:5px 12px;font-size:12px;opacity:.55'; menu.append(e); }
+        const sep2 = el('div'); sep2.style.cssText = 'height:1px;background:#3f4045;margin:4px 0;padding:0'; menu.append(sep2);
+        const sv = el('div'); sv.style.cssText = 'display:flex;gap:6px;padding:4px 8px;align-items:center';
+        const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Preset name'; inp.maxLength = 60; inp.value = current || '';
+        inp.style.cssText = 'flex:1;min-width:110px;background:#0c0c0d;color:#e6e6e6;border:1px solid #3f4045;border-radius:3px;padding:4px 6px;font:12px "Space Mono",monospace;outline:none';
+        const sb = el('button', '', 'Save'); sb.style.cssText = 'background:#17181b;color:#e6e6e6;border:1px solid #3f4045;border-radius:3px;padding:4px 10px;font:600 11px "Space Mono",monospace;cursor:pointer';
+        const save = () => { const nm = inp.value.trim(); if (!nm) { inp.focus(); return; } bridge.call('presetsave', encodeURIComponent(nm), own.map(h => h.p.id + '=' + vals[h.i]).join(';')); };
+        sb.onclick = save; inp.addEventListener('keydown', e => { if (e.key === 'Enter') save(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+        sv.append(inp, sb); menu.append(sv);
+        if (note) { const n = el('div', '', note); n.style.cssText = 'padding:4px 12px;font-size:12px;color:#e8a05a'; menu.append(n); }
+        const f = el('div', '', 'Saved in Documents/SW AUDIO/Presets'); f.style.cssText = 'padding:4px 12px 2px;font-size:11px;opacity:.45'; menu.append(f);
+      };
+      bridge.onPreset((kind, a, b) => {
+        if (kind === 'list') { names = a || []; note = ''; if (b && names.includes(b)) { current = b; snap = vals.slice(); draw(); } buildMenu(); }
+        else if (kind === 'loaded') { note = ''; applyBody(a, b); buildMenu(); }
+        else if (kind === 'error') { note = a || 'Presets are not available'; buildMenu(); }
+      });
+      presetBtn.addEventListener('click', e => {
+        e.stopPropagation(); if (menu) { closeMenu(); return; }
+        menu = el('div', 'menu'); menu.style.cssText = 'position:absolute;z-index:50;background:#17181b;border:1px solid #3f4045;border-radius:5px;box-shadow:0 8px 20px rgba(0,0,0,.7);padding:4px;max-height:360px;overflow:auto;min-width:220px;color:#e6e6e6;font-family:"Barlow Condensed",sans-serif';
+        const r = presetBtn.getBoundingClientRect(), rr = skinBox.getBoundingClientRect(); menu.style.left = Math.max(0, r.right - rr.left - 230) + 'px'; menu.style.top = (r.bottom - rr.top + 2) + 'px'; skinBox.append(menu);
+        buildMenu(); setTimeout(() => document.addEventListener('pointerdown', outside, true), 0); bridge.call('presetlist', '');
+      });
+      presetBtn.style.cursor = 'pointer'; presetBtn.style.opacity = ''; presetBtn.removeAttribute('data-inert');
+      presetDraw = draw; draw();   // redrawn with the screen's timer (the "*" once a value moved)
+    }
     // ---- body
     const body = el('div', 'body'); if (!skinBox) box.appendChild(body);
     const sections = skinBox ? [] : groupParams(host.filter(h => !h.extra));
@@ -409,6 +470,7 @@
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
       if (disp) disp.update(inf);
+      if (presetDraw) presetDraw();
       if (skinBox) {   // the LIVE designs' own chip ("LIVE 0.0 ms", with the CPU in LV03's) and the CPU text of their bar show the real latency and CPU
         const lc = skinBox.querySelector('.live'), ev = [...skinBox.querySelectorAll('.evr')].find(e => /^CPU/.test(e.textContent.trim())), cp = inf.cpu !== undefined ? inf.cpu.toFixed(1) + '%' : null;
         if (lc && lc.lastChild && lc.lastChild.nodeType === 3) lc.lastChild.textContent = 'LIVE ' + lat.toFixed(1) + ' ms' + (/CPU/.test(lc.textContent) && cp ? '  CPU ' + cp : '');

@@ -7,13 +7,18 @@
 //   - a Mix parameter at 0 % that is not the (latency-matched) input              -> FAIL
 //   - a panel "In" switch that does not return the input level when Off           -> FAIL
 //   - a plug-in that is a bit-exact pass-through at its defaults                  -> WARN (meters / analysers are expected)
+//   - the plug-in window's page messages (sw_message.h, no window needed): the first poll is a well-formed update, presets save / load / delete in a temporary HOME,
+//     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs) -> FAIL
 //   - processing time per second of audio                                         -> printed only (CI runners are noisy)
 // Usage: sw-host-smoke <dir-or-.clap> [...]      (Linux; exit code 1 when any product FAILs)
+#include "sw_message.h"
+
 #include <clap/clap.h>
 
 #include <dlfcn.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -156,6 +161,87 @@ bool outputStep(const clap_plugin_params_t* pe, const clap_plugin_t* p, clap_id 
         return true;
     }
     return false;
+}
+
+
+// ---- the page's messages (sw_message.h)
+// the arrays of an update script SWHOST.update([values],lat,cpu,[meters],[spectrum],[readouts],[stereo]): each top-level [...] as numbers
+std::vector<std::vector<double>> updateArrays(const std::string& s) {
+    std::vector<std::vector<double>> out;
+    size_t i = 0;
+    while ((i = s.find('[', i)) != std::string::npos) {
+        const size_t e = s.find(']', i); if (e == std::string::npos) break;
+        std::vector<double> v; const std::string body = s.substr(i + 1, e - i - 1); size_t k = 0;
+        while (k < body.size()) { char* end = nullptr; const double x = std::strtod(body.c_str() + k, &end); if (end == body.c_str() + k) break; v.push_back(x); k = static_cast<size_t>(end - body.c_str()); if (k < body.size() && body[k] == ',') ++k; }
+        out.push_back(v); i = e + 1;
+    }
+    return out;
+}
+std::string b64(const std::vector<uint8_t>& v, size_t a, size_t n) {
+    static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; std::string o;
+    for (size_t i = a; i < a + n; i += 3) { const uint32_t x = (uint32_t(v[i]) << 16) | (i + 1 < a + n ? uint32_t(v[i + 1]) << 8 : 0) | (i + 2 < a + n ? v[i + 2] : 0); o += T[x >> 18]; o += T[(x >> 12) & 63]; o += i + 1 < a + n ? T[(x >> 6) & 63] : '='; o += i + 2 < a + n ? T[x & 63] : '='; }
+    return o;
+}
+// what the page sends of a file: pieces of 3 x 65536 bytes
+void sendPieces(const sw_plugin_message_t* m, const clap_plugin_t* p, const char* name, const std::vector<uint8_t>& bytes) {
+    const size_t piece = 3 * 65536;
+    for (size_t off = 0; off < bytes.size(); off += piece) m->send(p, (std::string("c ") + name + " " + b64(bytes, off, std::min(piece, bytes.size() - off))).c_str());
+}
+std::vector<uint8_t> wav16Noise(double seconds, double rate) {   // 16 bit stereo WAV of a 440 Hz tone
+    const size_t n = static_cast<size_t>(seconds * rate); std::vector<uint8_t> f;
+    auto p32 = [&](uint32_t x) { for (int i = 0; i < 4; ++i) f.push_back(static_cast<uint8_t>(x >> (8 * i))); }; auto p16 = [&](uint16_t x) { f.push_back(static_cast<uint8_t>(x)); f.push_back(static_cast<uint8_t>(x >> 8)); };
+    auto tag = [&](const char* t) { for (int i = 0; i < 4; ++i) f.push_back(static_cast<uint8_t>(t[i])); };
+    tag("RIFF"); p32(static_cast<uint32_t>(36 + n * 4)); tag("WAVE"); tag("fmt "); p32(16); p16(1); p16(2); p32(static_cast<uint32_t>(rate)); p32(static_cast<uint32_t>(rate * 4)); p16(4); p16(16); tag("data"); p32(static_cast<uint32_t>(n * 4));
+    for (size_t i = 0; i < n; ++i) { const int16_t v = static_cast<int16_t>(8000.0 * std::sin(6.283185307 * 440.0 * static_cast<double>(i) / rate)); p16(static_cast<uint16_t>(v)); p16(static_cast<uint16_t>(v)); }
+    return f;
+}
+std::string codeOfId(const char* id) { std::string s = id; s = s.substr(s.rfind('.') + 1); for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return s; }
+void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, EventList& ev, Result& r) {
+    const auto* m = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE));
+    auto fail = [&](const std::string& t) { r.notes.push_back("FAIL page messages: " + t); r.fail = true; };
+    if (!m) { fail("the plug-in has no message hook"); return; }
+    // the first poll: a well-formed update with the right number of values
+    const std::string up = m->send(p, "p");
+    if (up.rfind("SWHOST.update([", 0) != 0 || up.size() < 4 || up.substr(up.size() - 2) != ");") fail("the poll is not an update script");
+    if (up.find("nan") != std::string::npos || up.find("inf") != std::string::npos) fail("the update script has nan / inf");
+    if (std::string(m->send(p, "garbage")).size() || std::string(m->send(p, "c")).size()) fail("a malformed message got a reply");
+    // presets: save, list, load, delete in a temporary HOME (the same folder rules as the window)
+    const std::string pre = std::string("c presetsave smoke%20test a.b=1;c_d=-2.5e-3;e=0");
+    const std::string sv = m->send(p, pre.c_str());
+    if (sv != "SWHOST.presets([\"smoke test\"],\"smoke test\");") fail("presetsave replied: " + sv);
+    const std::string ld = m->send(p, "c presetload smoke%20test");
+    if (ld != "SWHOST.presetLoaded(\"smoke test\",\"a.b=1;c_d=-2.5e-3;e=0\");") fail("presetload replied: " + ld);
+    if (std::string(m->send(p, "c presetlist")) != "SWHOST.presets([\"smoke test\"],\"\");") fail("presetlist");
+    if (std::string(m->send(p, "c presetsave bad a=<b>")).rfind("SWHOST.presetError(", 0) != 0) fail("a bad preset body was accepted");
+    if (std::string(m->send(p, "c presetdelete smoke%20test")) != "SWHOST.presets([],\"\");") fail("presetdelete");
+    // UT03: a reference file in pieces; RV04: an IR in pieces
+    auto readouts = [&](int blocks) { run.process(blocks, 99, ev); const auto a = updateArrays(m->send(p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
+    if (code == "UT03") {
+        const auto base = readouts(2);
+        if (base.size() < 12) { fail("UT03 read-outs missing"); return; }
+        const auto wav = wav16Noise(2.0, 48000.0);
+        m->send(p, "c refbegin 1"); sendPieces(m, p, "refdata", wav); m->send(p, "c refend");
+        const auto a = readouts(2);
+        if (a.size() < 12 || std::fabs(a[4] - 2.0) > 0.01 || a[10] != base[10] + 1 || a[11] != base[11]) fail("UT03: the reference sent in pieces did not arrive (length " + std::to_string(a.size() > 4 ? a[4] : -1) + ")");
+        m->send(p, "c looprange 0.25 1.25");
+        m->send(p, "c refbegin 2"); m->send(p, "c refdata AAAA"); m->send(p, "c refend");   // not a file
+        const auto b = readouts(2);
+        if (b.size() < 12 || b[11] != a[11] + 1 || b[7] != 0.0) fail("UT03: a file that is not audio was not refused");
+        m->send(p, "c refclear 1");
+        const auto c = readouts(2);
+        if (c.size() < 12 || c[4] != 0.0) fail("UT03: refclear left the reference");
+    } else if (code == "RV04") {
+        const auto base = readouts(2);
+        if (base.size() < 3) { fail("RV04 read-outs missing"); return; }
+        std::vector<float> ir(4800, 0.0f); ir[10] = 1.0f; ir[2400] = 0.4f;
+        std::vector<uint8_t> by(ir.size() * 4); std::memcpy(by.data(), ir.data(), by.size());
+        m->send(p, "c irbegin 1 48000"); sendPieces(m, p, "irdata", by); m->send(p, "c irend");
+        const auto a = readouts(3);
+        if (a.size() < 3 || a[0] != base[0] + 1 || a[1] != base[1] || a[2] != 1.0) fail("RV04: the IR sent in pieces did not arrive");
+        m->send(p, "c irbegin 1 48000"); m->send(p, "c irdata AAAA"); m->send(p, "c irend");   // 3 bytes: not whole samples
+        const auto b = readouts(1);
+        if (b.size() < 3 || b[1] != a[1] + 1) fail("RV04: damaged IR data was not refused");
+    }
 }
 
 Result testOne(const fs::path& path) {
@@ -317,6 +403,8 @@ Result testOne(const fs::path& path) {
     if (r.passThrough) r.notes.push_back("NOTE bit-exact pass-through at the defaults");
     (void)inDb;
 
+    messageChecks(p, codeOfId(d->id), run, ev, r);
+
     p->stop_processing(p); p->deactivate(p); p->destroy(p);
     entry->deinit();
     dlclose(lib);
@@ -326,6 +414,9 @@ Result testOne(const fs::path& path) {
 }   // namespace
 
 int main(int argc, char** argv) {
+    // the preset checks write into the person's home folder: a temporary one
+    const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
     std::vector<fs::path> files;
     for (int i = 1; i < argc; ++i) {
         const fs::path a = argv[i];
@@ -363,5 +454,6 @@ int main(int argc, char** argv) {
     std::printf("bit-exact pass-through at the defaults (%zu):", passNames.size());
     for (const auto& n : passNames) std::printf(" [%s]", n.c_str());
     std::printf("\n");
+    std::error_code ec; fs::remove_all(tmpHome, ec);
     return fails ? 1 : 0;
 }

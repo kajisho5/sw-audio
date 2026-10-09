@@ -485,6 +485,16 @@
     } };
   }
 
+  // ---- "Compare A" of MT02: the first press keeps the long-term average (about 3 s) of the measured spectrum as the reference curve (a dashed line); the shading goes on showing the signal now. Press again to clear.
+  // (The core has captureReference() / compareDb() over its own FFT bins; the screen's spectrum is the 64 bands every product has, so the reference is kept here.)
+  function compareReference(box, ctx) {
+    const svg = svgOf(box), btn = box.querySelector('button[data-compare]'); if (!svg || !btn) return null;
+    const [, , W, H] = vbOf(svg), TOP = H * 0.06, slow = new Array(64).fill(-120), line = mkEl('path', { fill: 'none', stroke: '#ffffff', 'stroke-opacity': 0.85, 'stroke-width': 1.4, 'stroke-dasharray': '5 4' }); svg.append(line);
+    let ref = null, seen = false;
+    btn.addEventListener('click', () => { if (ref) { ref = null; line.setAttribute('d', ''); btn.classList.remove('on'); return; } if (!seen) return; ref = slow.slice(); btn.classList.add('on'); let d = ''; for (let b = 0; b < 64; b++) d += (b ? ' L' : 'M') + ((b + 0.5) / 64 * W).toFixed(1) + ' ' + (H - specDb(ref[b], -90) * (H - TOP)).toFixed(1); line.setAttribute('d', d); });
+    return { update(info) { const sp = info && info.spectrum; if (!sp) return; seen = true; for (let b = 0; b < 64; b++) { const v = sp[b] === undefined ? -120 : sp[b]; slow[b] += (v - slow[b]) * 0.02; } } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1787,7 +1797,7 @@
     ST03: (box, ctx) => combine(phaseAlignDisplay(box, ctx), measureFlow(box, ctx, { call: 'autoalign', state: 0, hint: 'Put this plug-in on the earlier microphone and send the other microphone to the second (sidechain) input, then press: 4 s of both are compared and Delay, Phase and Polarity are set' })),
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
-    MT02: spectrumPath, MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
+    MT02: (box, ctx) => combine(spectrumPath(box, ctx), compareReference(box, ctx)), MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, RS07: spectrumCells,

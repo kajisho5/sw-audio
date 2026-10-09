@@ -4,15 +4,19 @@
    Poll answer (native -> page): SWHOST.update([plain values], latencyMs, cpu, [inL, inR, outL, outR in dBFS], [64 band levels of the output in dB, log-spaced 20 Hz - 20 kHz], [the values the core measures: PLUGIN readouts trait, only for products that have one], [stereo: correlation, then L R of 160 recent samples]). A poll is sent every 50 ms while the page is visible. */
 (function () {
   const post = m => { try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sw) window.webkit.messageHandlers.sw.postMessage(m); else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(m); } catch (e) {} };
-  let vals = SWBOOT.values.slice(), info = { latencyMs: SWBOOT.latencyMs || 0 }; const listeners = []; const pending = new Set();
+  let vals = SWBOOT.values.slice(), info = { latencyMs: SWBOOT.latencyMs || 0 }; const listeners = [], presetListeners = []; const pending = new Set();
   const bridge = {
     values: () => vals,
     set: (i, v) => { vals[i] = v; pending.add(i); post('s ' + i + ' ' + v); },
     begin: i => post('b ' + i), end: i => { post('e ' + i); },
     call: (name, ...a) => post(['c', name, ...a].join(' ')),
-    onChange: cb => listeners.push(cb), info: () => info
+    onChange: cb => listeners.push(cb), info: () => info,
+    onPreset: cb => presetListeners.push(cb)   // cb('list', [names], selected) | cb('loaded', name, body) | cb('error', text)
   };
   window.SWHOST = {
+    presets(l, sel) { presetListeners.forEach(cb => cb('list', l, sel)); },
+    presetLoaded(n, body) { presetListeners.forEach(cb => cb('loaded', n, body)); },
+    presetError(t) { presetListeners.forEach(cb => cb('error', t)); },
     update(v, lat, cpu, m, sp, ro, st) {
       info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m, spectrum: sp, readouts: ro, stereo: st };
       v.forEach((x, i) => { if (!pending.has(i) && vals[i] !== x) { vals[i] = x; listeners.forEach(cb => cb(i, x)); } });
