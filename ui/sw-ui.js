@@ -106,13 +106,26 @@
       else { undo.push({ items, label, fine }); if (undo.length > kUndo) undo.shift(); }
       lastRec = now; redo.length = 0; refreshTb();
     }
+    // an action that makes the core write parameters (data-undo on its button: their ids; ui/actions.json "undo": DY10 Auto): what the core writes in answer is ONE undo step. The writes come back as changes from
+    // the host; when they have stopped for 0.4 s the step is recorded. A gesture of the user's own on one of those parameters, or two minutes without a change, ends the wait.
+    let armed = null;
+    function armUndo(ids, label) {
+      if (armed) clearTimeout(armed.timer);
+      const idx = ids.map(id => host.findIndex(h => h.p.id === id)).filter(i => i >= 0);
+      armed = idx.length ? { idx, before: idx.map(i => vals[i]), label, at: Date.now(), timer: 0 } : null;
+    }
+    function commitUndo() {
+      const a = armed; armed = null; if (!a || Date.now() - a.at > 120000) return;
+      const items = []; a.idx.forEach((i, k) => { if (vals[i] !== a.before[k]) items.push({ i, from: a.before[k], to: vals[i] }); });
+      if (items.length) record(items, a.label);
+    }
     function flushPending() { pendScheduled = false; const items = pend; pend = []; if (items.length) record(items); }
     function endGesture(i) {
       const from = gest.get(i), fine = (gsets.get(i) || 0) <= 1; gest.delete(i); gsets.delete(i);
       if (from === undefined || vals[i] === from) return;
       pend.push({ i, from, to: vals[i], fine }); if (!pendScheduled) { pendScheduled = true; Promise.resolve().then(flushPending); }   // the ends of one drag (an EQ dot: frequency and gain) arrive together
     }
-    const bridge = Object.assign({}, rawBridge, { begin: i => { gest.set(i, vals[i]); gsets.set(i, 0); rawBridge.begin(i); }, set: (i, v) => { if (gsets.has(i)) gsets.set(i, gsets.get(i) + 1); rawBridge.set(i, v); }, end: i => { rawBridge.end(i); endGesture(i); } });
+    const bridge = Object.assign({}, rawBridge, { begin: i => { if (armed && armed.idx.includes(i)) { clearTimeout(armed.timer); armed = null; } gest.set(i, vals[i]); gsets.set(i, 0); rawBridge.begin(i); }, set: (i, v) => { if (gsets.has(i)) gsets.set(i, gsets.get(i) + 1); rawBridge.set(i, v); }, end: i => { rawBridge.end(i); endGesture(i); } });
     const widgets = new Map();       // host index -> update(plain)
     const addWidget = (i, f) => { const prev = widgets.get(i); widgets.set(i, prev ? v => { prev(v); f(v); } : f); };   // several widgets may show one parameter (the design's control and the all-parameters drawer)
     let ab = 'A'; const slots = { A: null, B: null };
@@ -509,8 +522,11 @@
       });
       // buttons that call a method of the core (ui/actions.json): Randomize, Ring out, Learn noise, Reset, Tap ...
       skinBox.querySelectorAll('button[data-call]').forEach(b => {
-        const name = b.dataset.call, arg = b.dataset.arg === undefined ? '' : b.dataset.arg, tog = !!b.dataset.calltoggle; let on = false;
-        b.addEventListener('click', () => { if (tog) { on = !on; b.classList.toggle('on', on); bridge.call(name, on ? '1' : '0'); } else { bridge.call(name, arg); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 150); } });
+        const name = b.dataset.call, arg = b.dataset.arg === undefined ? '' : b.dataset.arg, tog = !!b.dataset.calltoggle, undoIds = b.dataset.undo ? b.dataset.undo.split(',') : null; let on = false;
+        b.addEventListener('click', () => {
+          if (undoIds) armUndo(undoIds, b.textContent.trim());
+          if (tog) { on = !on; b.classList.toggle('on', on); bridge.call(name, on ? '1' : '0'); } else { bridge.call(name, arg); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 150); }
+        });
       });
       // GT03 "Add pedal": the first empty slot becomes a Comp pedal and is scrolled into view
       skinBox.querySelectorAll('button[data-addslot]').forEach(b => b.addEventListener('click', () => {
@@ -584,7 +600,7 @@
       cpu.textContent = inf.cpu !== undefined ? 'CPU ' + inf.cpu.toFixed(1) + ' %' : '';
     }
     refreshInfo(); const timer = setInterval(refreshInfo, 60);
-    bridge.onChange((i, v) => { if (i < host.length) { vals[i] = v; const w = widgets.get(i); if (w) w(v); } });
+    bridge.onChange((i, v) => { if (i < host.length) { vals[i] = v; const w = widgets.get(i); if (w) w(v); if (armed && armed.idx.includes(i)) { clearTimeout(armed.timer); armed.timer = setTimeout(commitUndo, 400); } } });
     // ---- all parameters: a drawer with a generic control for every parameter. The designs show a part of the parameters; the rest (a band's slope or placement, the FFT length, the order of modules ...)
     // could only be reached from the host's parameter list. The button sits at the right end of the EVO bar; the search box filters by name.
     if (skinBox) {

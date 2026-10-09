@@ -27,6 +27,18 @@
    "call": "learn"
   }
  ],
+ "DY10": [
+  {
+   "label": "Auto",
+   "call": "learn",
+   "exact": true,
+   "undo": [
+    "dy10.x1.freq",
+    "dy10.x2.freq",
+    "dy10.x3.freq"
+   ]
+  }
+ ],
  "EQ02": [
   {
    "label": "Assist",

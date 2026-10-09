@@ -3,6 +3,7 @@
 // feed-forward RMS (10 ms) detector linked over both channels, soft knee 6 dB, Ranged gain reduction, Attack / Release, Gain, Solo, Bypass.
 // Crossovers keep an octave apart: from the lowest up, x(n+1) is at least 2 x(n) (the mover is pushed back); the top is capped at 20 kHz.
 #pragma once
+#include "sw/crossover_finder.hpp"
 #include "sw/dynamics.hpp"
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
@@ -27,6 +28,13 @@ public:
     int latencySamples() const { return 0; }
     double gainReductionDb(int band) const { return gr_[static_cast<size_t>(band)]; }
     double crossoverHz(int i) const { return eff_[static_cast<size_t>(i)]; }   // effective (after the octave rule)
+    // Auto (EVO, class B): learn() starts listening to the input (both channels' mean); after 10 s of playing it sets the three crossovers (sw::CrossoverFinder) and writes them to the host
+    // (takeParamWrite: bit 0 begin, 1 value, 2 end); while it listens, learn() cancels. Audio thread.
+    void learn();
+    bool learning() const { return finder_.listening(); }
+    double learnProgress() const { return finder_.progress(); }
+    bool learnedOk() const { return learnedOk_; }
+    int takeParamWrite(int& id, double& plain);
 
 private:
     struct Lr4 {
@@ -47,6 +55,11 @@ private:
     std::array<GainComputer, 4> comp_{};
     std::array<Ballistics, 4> ball_{};
     std::array<double, 4> gr_{};
+    void applyLearned();
+    CrossoverFinder finder_;
+    std::array<std::pair<int, double>, 3> writes_{};
+    int nWrites_ = 0, writeAt_ = 0;
+    bool wasLearning_ = false, learnedOk_ = false;
 };
 
 }  // namespace sw::dy10

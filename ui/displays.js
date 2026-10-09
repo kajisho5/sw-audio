@@ -1953,7 +1953,7 @@
     LV16: gateDisplay,
     MS04: clipperDisplay,
     MS01: maximizerDisplay,
-    DY10: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
+    DY10: (box, ctx) => combine(multibandDisplay(box, ctx, 'xover'), learnButton(box, ctx)),
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     MS03: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     LV12: faderBank,

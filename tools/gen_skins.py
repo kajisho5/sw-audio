@@ -435,12 +435,14 @@ def bind_actions(root, code, report):
             continue
         for a in acts:
             la = norm(a['label'])
-            if n == la or n.startswith(la + ' '):
+            if n == la or (n.startswith(la + ' ') and not a.get('exact')):   # ("exact": DY10 Auto is not the toolbar's "Auto gain")
                 b['data-call'] = a['call']
                 if 'arg' in a:
                     b['data-arg'] = str(a['arg'])
                 if a.get('toggle'):
                     b['data-calltoggle'] = '1'
+                if a.get('undo'):   # the parameters the core writes in answer: the page makes them one undo step (ui/sw-ui.js)
+                    b['data-undo'] = ','.join(a['undo'])
                 done.add(a['label']); break
     for a in acts:
         if a['label'] not in done:

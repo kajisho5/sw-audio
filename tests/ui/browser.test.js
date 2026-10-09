@@ -4,7 +4,7 @@
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
 //   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
-//   7. DY04's, CS02's and RV08's Learn button and CS03's Set input button (put in the EVO bar: the design only has the text): a click starts the listening, the label shows the hits heard, a second click ends it.
+//   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step).
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -129,8 +129,22 @@ async function open(code, query = '') {
   eq(await lrn4.count(), 1, 'RV08 has the Learn button in the EVO bar'); eq((await lrn4.textContent()).trim(), 'Learn', 'RV08 idle: it says Learn');
   await lrn4.click(); await pg.waitForFunction(() => /Listening: \d+ hits/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'RV08: while listening the button shows the hits heard'));
   await lrn4.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent.trim() === 'Learn', null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'RV08: a second click ends the listening'));
+  // DY10 Auto: the design's own button; what the core writes in answer (three crossovers, as changes from the host) is one undo step
+  await open('DY10'); const aut = pg.locator('button[data-call="learn"]');
+  eq(await aut.count(), 1, 'DY10 has the Auto button (the toolbar\'s Auto gain is not it)'); eq((await aut.textContent()).trim(), 'Auto', 'DY10 idle: it says Auto');
+  const x0 = (await pg.evaluate(() => window.simValues())).slice(32, 35);
+  await aut.click(); await pg.waitForFunction(() => /Listening \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('button[data-call="learn"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'DY10: while listening the button shows how far it is'));
+  await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('button[data-call="learn"]').textContent.trim() === 'Auto', null, { timeout: 15000 }).then(() => ok(true), () => ok(false, 'DY10: after the listening it is back to Auto'));
+  await pg.waitForTimeout(700);   // the writes have stopped
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(32, 35)), '[600,1800,5200]', 'the crossovers the core wrote');
+  await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(250);
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(32, 35)), JSON.stringify(x0), 'one Undo takes all three back (the Auto step)');
+  await pg.locator('[data-act="redo"]').click(); await pg.waitForTimeout(250);
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(32, 35)), '[600,1800,5200]', 'and Redo brings them again');
+  await aut.click(); await pg.waitForTimeout(300); await aut.click(); await pg.waitForTimeout(300);   // started, then cancelled: back to Auto, nothing written
+  eq((await aut.textContent()).trim(), 'Auto', 'a second press while it listens cancels');
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn and CS03 Set input: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input and DY10 Auto: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

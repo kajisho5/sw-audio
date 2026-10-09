@@ -39,6 +39,7 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
+    finder_.prepare(fs_); wasLearning_ = false; learnedOk_ = false; nWrites_ = writeAt_ = 0;
     for (auto& ch : det_) for (auto& d : ch) { d.set(fs_, LevelDetector::Mode::Rms); d.reset(); }
     gr_ = {};
     for (auto& b : ball_) b.reset(0.0);
@@ -80,6 +81,7 @@ void Processor::process(float** ch, int numCh, int n) {
     for (int b = 0; b < 4; ++b) anySolo = anySolo || target_[static_cast<size_t>(band(b, BSolo))] > 0.5;
     const double out = std::pow(10.0, target_[Output] / 20.0);
     for (int i = 0; i < n; ++i) {
+        if (finder_.listening()) { const float m = static_cast<float>(nch > 1 ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i]); finder_.process(&m, 1); }   // the input as it comes in (Auto listens)
         double bands[2][4], lvl[4] = {-200, -200, -200, -200};
         for (int c = 0; c < nch; ++c) {
             Xover& x = xo_[static_cast<size_t>(c)];
@@ -112,6 +114,25 @@ void Processor::process(float** ch, int numCh, int n) {
             ch[c][i] = static_cast<float>(y);
         }
     }
+    if (wasLearning_ && !finder_.listening()) { wasLearning_ = false; applyLearned(); }   // it heard 10 s of playing (or gave up)
+}
+
+void Processor::learn() {
+    if (finder_.listening()) { finder_.cancel(); wasLearning_ = false; }   // pressed while it listens: cancelled, nothing is written
+    else { finder_.start(); wasLearning_ = true; nWrites_ = writeAt_ = 0; }
+}
+
+// the result of an Auto: the three crossovers go into the core at once and to the host through takeParamWrite
+void Processor::applyLearned() {
+    if (!finder_.done()) return;
+    learnedOk_ = true; nWrites_ = writeAt_ = 0;
+    for (int j = 0; j < 3; ++j) { setParam(X1 + j, finder_.result().hz[j]); writes_[static_cast<size_t>(nWrites_++)] = {X1 + j, target_[static_cast<size_t>(X1 + j)]}; }
+}
+
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (writeAt_ >= nWrites_) { nWrites_ = writeAt_ = 0; return 0; }
+    id = writes_[static_cast<size_t>(writeAt_)].first; plain = writes_[static_cast<size_t>(writeAt_)].second; ++writeAt_;
+    return 7;
 }
 
 }  // namespace sw::dy10
