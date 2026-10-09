@@ -1325,6 +1325,24 @@
   }
 
 
+  // ---- LV14 align: the two arrivals (the main system, and this speaker after the Delay set on the plug-in) and the bracket between them labelled with the Delay. The spacing is on a log scale
+  // (0 - 500 ms) so a few ms and a few hundred ms are both visible; with Delay 0 the two peaks sit on top of each other. The design's "12.4 ms" was an example.
+  function alignGraphDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const paths = [...svg.querySelectorAll(':scope > path')], texts = [...svg.querySelectorAll(':scope > text')], lines = [...svg.querySelectorAll(':scope > line')];
+    if (paths.length < 3 || texts.length < 3 || lines.length < 2) return null;
+    const [, glow, line] = paths, tSecond = texts.find(t => /speaker/i.test(t.textContent)), tMain = texts.find(t => /PA/i.test(t.textContent)), tMs = texts.find(t => /ms$/.test(t.textContent)), br = lines[lines.length - 1];
+    const X0 = +br.getAttribute('x1'), CX2 = tSecond ? +tSecond.getAttribute('x') : X0, SPAN = 548; let last = null;   // CX2: where the design drew the second arrival
+    return { update() {
+      const d = ctx.value('Delay'); if (!Number.isFinite(d) || d === last) return; last = d;
+      const dx = SPAN * Math.log10(1 + d) / Math.log10(501), tr = 'translate(' + (X0 + dx - CX2).toFixed(1) + ' 0)';
+      glow.setAttribute('transform', tr); line.setAttribute('transform', tr); if (tSecond) tSecond.setAttribute('transform', tr);
+      br.setAttribute('x2', (X0 + dx).toFixed(1)); if (tMs) { tMs.setAttribute('x', (X0 + dx / 2).toFixed(1)); tMs.textContent = (d < 10 ? d.toFixed(2) : d < 100 ? d.toFixed(1) : String(Math.round(d))) + ' ms'; }
+      br.style.display = d > 0.005 ? '' : 'none'; if (tMs) tMs.style.display = d > 0.005 ? '' : 'none';
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1355,7 +1373,7 @@
     LV17: grHistoryDisplay,
     LV10: xyPadDisplay, VO06: xyPadDisplay,
     RV01: reverbDisplay,
-    LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'),
+    LV14: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), alignGraphDisplay(box, ctx)),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
