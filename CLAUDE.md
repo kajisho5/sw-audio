@@ -73,3 +73,10 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 `docs/tasks.md` の UI の項目（画面の実装、ホストのトラック名・MIDI・SW Link・OBS 連携など、コアに口だけある部分）と、RS02。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
+
+## 画面（UI）の作業（v0.13.0 以降）
+
+- 画面は `docs/design/canvas/project/<コード>.dc.html` のデザインをそのまま使う（`tools/gen_skins.py`。結び付けは `ui/skin_aliases.json`）。部品の種類は **`.ctl`（`.dk`／`.knob`）、LIVE の `.rc`（`.rk`／`.kn`／`.rl`／`.rv`）、`.tile`、`.tog`（立体トグル）、`.morph`、ボタン**。新しい種類の部品を見つけたら、`python3 tools/gen_skins.py --report` の「結び付かなかった」一覧と、`ui/sw-ui.js` の `bindSkin` を見る（動かない絵を残さない。仕様にないものは非表示か読み取り表示にして README に書く）。
+- 中央の表示は `ui/displays.js`（レジストリ `registry`）。値の出どころは 3 つ：パラメータ、アダプタが測るもの（入出力ピーク、スペクトラム 64 バンド、ステレオの L/R 点と相関）、**コアが測った値（traits の `kReadouts`／`readouts`、アダプタが 1 ブロックごとにアトミックへ写す）**。コアが値を持っているなら見積もりでなくそれを使う。
+- 確認：`ui/preview.html?p=コード&sim=1`（`python3 -m http.server` で `ui/` を配る。Playwright は `NODE_PATH=$(npm root -g)`）。**本物のページ**（`gui::page()` の出力）は `tools/gui_page_dump.cpp` で書き出して `tools/gui_page_check.js` で確認（ネットワークなし、橋渡しは仮、本物と同じ引数の `SWHOST.update`）。全製品のエラー掃引はプレビューで行える。WKWebView／WebView2 そのものでの確認は依頼者の実機待ち。
+- 連続 push は CI（同じブランチの古い run を打ち切る）を何度もやり直させる。push は区切りごと、CI が終わるまでは手元で commit して作業を続ける。
