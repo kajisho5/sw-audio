@@ -131,6 +131,18 @@ TEST_CASE("GUI presets: the page's preset menu (list, save, load, delete) throug
     fs::remove_all(dir);
 }
 
+TEST_CASE("GUI copy / paste of a product's settings: one text per product code, shared by its instances") {
+    Fake f; f.v = {1.0};
+    gui::Session<Fake> a(f, "", "LV03"), b(f, "", "LV03"), c(f, "", "LV04");
+    CHECK(a.onMessage("c presetpaste").rfind("SWHOST.presetError(", 0) == 0);              // nothing copied yet
+    CHECK(a.onMessage("c presetcopy lv03.in=-3;lv03.out=2.5").empty());
+    CHECK(b.onMessage("c presetpaste") == "SWHOST.presetPasted(\"lv03.in=-3;lv03.out=2.5\");");   // another window of the same product
+    CHECK(c.onMessage("c presetpaste").rfind("SWHOST.presetError(", 0) == 0);              // another product has its own
+    CHECK(a.onMessage("c presetcopy <b>").rfind("SWHOST.presetError(", 0) == 0);           // not ids and numbers
+    CHECK(b.onMessage("c presetpaste") == "SWHOST.presetPasted(\"lv03.in=-3;lv03.out=2.5\");");   // the earlier copy stays
+    CHECK(f.log.empty());
+}
+
 TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independent signals; the points are the recent samples") {
     gui::SpectrumTap tap; const int n = 6000; std::vector<float> l(n), r(n), r2(n);
     for (int i = 0; i < n; ++i) { l[i] = static_cast<float>(0.5 * std::sin(0.05 * i)); r[i] = l[i]; r2[i] = -l[i]; }

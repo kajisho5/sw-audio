@@ -16,6 +16,7 @@
   window.SWHOST = {
     presets(l, sel) { presetListeners.forEach(cb => cb('list', l, sel)); },
     presetLoaded(n, body) { presetListeners.forEach(cb => cb('loaded', n, body)); },
+    presetPasted(body) { presetListeners.forEach(cb => cb('pasted', body)); },
     presetError(t) { presetListeners.forEach(cb => cb('error', t)); },
     update(v, lat, cpu, m, sp, ro, st) {
       info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m, spectrum: sp, readouts: ro, stereo: st };

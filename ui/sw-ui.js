@@ -164,9 +164,23 @@
     // A preset is the product's own parameters as "id=value" pairs; one that lacks a parameter leaves it as it is. The label shows the preset last loaded or saved ("*" once something moved),
     // "Init" while every parameter is at its default, otherwise "Custom".
     let presetDraw = null;
+    const own = host.filter(h => !h.extra), idx = new Map(own.map(h => [h.p.id, h.i]));
+    const bodyOfValues = () => own.map(h => h.p.id + '=' + vals[h.i]).join(';');
+    const applyValues = body => {   // the pairs of a body onto the current values (a parameter the body lacks stays); what is not a number or an id of this product is ignored
+      const next = vals.slice();
+      body.split(';').forEach(kv => { const e = kv.indexOf('='); if (e < 1) return; const i = idx.get(kv.slice(0, e)), v = parseFloat(kv.slice(e + 1)); if (i !== undefined && isFinite(v)) { const h = host[i]; next[i] = h.p.curve === 'step' ? h.c.value(h.c.norm(v)) : clamp(v, Math.min(h.p.min, h.p.max), Math.max(h.p.min, h.p.max)); } });
+      morphed = false; applyAll(next);
+    };
     const presetBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-preset]');
+    // copy / paste (LV03): the settings of this product as a text kept by the plug-in for the next window of the same product
+    const copyBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-copy]'), pasteBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-paste]');
+    if (copyBtn || pasteBtn) {
+      const flash = (b, t) => { const x = b.textContent; b.textContent = t; setTimeout(() => { b.textContent = x; }, 1200); };
+      if (copyBtn) copyBtn.addEventListener('click', () => { bridge.call('presetcopy', bodyOfValues()); flash(copyBtn, 'Copied'); });
+      if (pasteBtn) pasteBtn.addEventListener('click', () => bridge.call('presetpaste', ''));
+      bridge.onPreset((kind, a) => { if (kind === 'pasted') { applyValues(a); if (pasteBtn) flash(pasteBtn, 'Pasted'); } else if (kind === 'error' && pasteBtn && /copied/i.test(a || '')) flash(pasteBtn, 'Nothing copied'); });
+    }
     if (presetBtn) {
-      const own = host.filter(h => !h.extra), idx = new Map(own.map(h => [h.p.id, h.i]));
       let names = [], current = null, snap = null, menu = null, note = '';
       const labelEl = (() => { const w = document.createTreeWalker(presetBtn, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (n.nodeValue.trim()) return n; return null; })();
       const same = (a, b) => own.every(h => Math.abs(a[h.i] - b[h.i]) < 1e-9);
@@ -176,11 +190,7 @@
         if (labelEl) labelEl.nodeValue = t; else presetBtn.textContent = t;
         presetBtn.title = 'Presets';
       };
-      const applyBody = (name, body) => {
-        const next = vals.slice();
-        body.split(';').forEach(kv => { const e = kv.indexOf('='); if (e < 1) return; const i = idx.get(kv.slice(0, e)), v = parseFloat(kv.slice(e + 1)); if (i !== undefined && isFinite(v)) { const h = host[i]; next[i] = h.p.curve === 'step' ? h.c.value(h.c.norm(v)) : clamp(v, Math.min(h.p.min, h.p.max), Math.max(h.p.min, h.p.max)); } });
-        morphed = false; applyAll(next); current = name; snap = vals.slice(); draw();
-      };
+      const applyBody = (name, body) => { applyValues(body); current = name; snap = vals.slice(); draw(); };
       const closeMenu = () => { if (menu) { menu.remove(); menu = null; document.removeEventListener('pointerdown', outside, true); } };
       const outside = e => { if (menu && e.composedPath && (e.composedPath().includes(menu) || e.composedPath().includes(presetBtn))) return; closeMenu(); };
       const row = (text, onClick, cur) => { const d = el('div', cur ? 'cur' : '', text); d.style.cssText = 'padding:5px 12px;cursor:pointer;white-space:nowrap;font-size:13px;letter-spacing:.04em;border-radius:3px' + (cur ? ';color:var(--acc)' : ''); d.onmouseenter = () => { d.style.background = 'var(--acc)'; d.style.color = '#0c0c0d'; }; d.onmouseleave = () => { d.style.background = ''; d.style.color = cur ? 'var(--acc)' : ''; }; d.onclick = onClick; return d; };
@@ -201,7 +211,7 @@
         const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Preset name'; inp.maxLength = 60; inp.value = current || '';
         inp.style.cssText = 'flex:1;min-width:110px;background:#0c0c0d;color:#e6e6e6;border:1px solid #3f4045;border-radius:3px;padding:4px 6px;font:12px "Space Mono",monospace;outline:none';
         const sb = el('button', '', 'Save'); sb.style.cssText = 'background:#17181b;color:#e6e6e6;border:1px solid #3f4045;border-radius:3px;padding:4px 10px;font:600 11px "Space Mono",monospace;cursor:pointer';
-        const save = () => { const nm = inp.value.trim(); if (!nm) { inp.focus(); return; } bridge.call('presetsave', encodeURIComponent(nm), own.map(h => h.p.id + '=' + vals[h.i]).join(';')); };
+        const save = () => { const nm = inp.value.trim(); if (!nm) { inp.focus(); return; } bridge.call('presetsave', encodeURIComponent(nm), bodyOfValues()); };
         sb.onclick = save; inp.addEventListener('keydown', e => { if (e.key === 'Enter') save(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
         sv.append(inp, sb); menu.append(sv);
         if (note) { const n = el('div', '', note); n.style.cssText = 'padding:4px 12px;font-size:12px;color:#e8a05a'; menu.append(n); }
@@ -219,6 +229,7 @@
         buildMenu(); setTimeout(() => document.addEventListener('pointerdown', outside, true), 0); bridge.call('presetlist', '');
       });
       presetBtn.style.cursor = 'pointer'; presetBtn.style.opacity = ''; presetBtn.removeAttribute('data-inert');
+      skinBox.querySelectorAll('button[data-presetsave]').forEach(b => b.addEventListener('click', () => { if (!menu) presetBtn.click(); setTimeout(() => { const i = menu && menu.querySelector('input'); if (i) { i.focus(); i.select(); } }, 30); }));   // CS04 "Save chain"
       presetDraw = draw; draw();   // redrawn with the screen's timer (the "*" once a value moved)
     }
     // ---- body

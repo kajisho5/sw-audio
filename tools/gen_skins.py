@@ -418,7 +418,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair'}
-    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer')
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -428,6 +428,12 @@ def mark_inert(root):
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'; b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1; continue
         if t == 'analyzer' and root.select_one('.disp svg'):   # EQ08: the measured spectrum behind the EQ curve (the page: ui/displays.js analyzerBackdrop)
             b['data-analyzer'] = '1'; b['title'] = 'Show the measured spectrum behind the curve'; continue
+        if t == 'save chain' and root.select_one('.tb button[data-preset]'):   # CS04: the chain's settings are the product's settings: the preset menu's Save
+            b['data-presetsave'] = '1'; b['title'] = 'Save the chain as a preset'; continue
+        if t == 'add module':   # the chain has the six modules of the specification: nothing to add
+            b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'; b['title'] = 'The chain has six modules (Gate, EQ, Comp, Saturate, De-ess, Limit)'; b['data-inert'] = '1'; continue
+        if t in ('copy', 'paste') and root.select_one('.live, .tb'):   # LV03: the settings of the strip, to the next window of the product (the page + the plug-in's clipboard)
+            b['data-' + t] = '1'; b['title'] = 'Copy these settings' if t == 'copy' else 'Paste the settings copied from another window of this product'; continue
         if t == 'compare a' and root.select_one('.disp svg'):   # MT02: keep the current spectrum as the reference curve (the page does it: ui/displays.js compareReference)
             b['data-compare'] = '1'; b['title'] = 'Keep the current spectrum as the reference curve; press again to clear it'; continue
         if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown

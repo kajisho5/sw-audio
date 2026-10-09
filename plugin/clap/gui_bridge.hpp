@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
 #include <locale>
 #include <sstream>
 #include <cstdio>
@@ -159,7 +160,11 @@ private:
         return s + "]," + jsonString(selected) + ");";
     }
     static std::string errorScript(const std::string& t) { return "SWHOST.presetError(" + jsonString(t) + ");"; }
+    // the copy / paste buttons (LV03): one text per product code, shared by every instance of the product in the host's process (the plug-in's own copy of this static)
+    static std::string& clipboard(const std::string& code) { static std::map<std::string, std::string> c; return c[code]; }
     std::string presetCall(const std::string& name, const std::string& args) {
+        if (name == "presetcopy") { if (!presets::validBody(args)) return errorScript("Could not copy"); clipboard(code_) = args; return ""; }
+        if (name == "presetpaste") { const std::string& b = clipboard(code_); return b.empty() ? errorScript("Nothing copied yet") : "SWHOST.presetPasted(" + jsonString(b) + ");"; }
         if (presetDir_.empty()) return errorScript("No folder for presets (no home folder)");
         if (name == "presetlist") return listScript("");
         const size_t sp = args.find(' ');
