@@ -1307,6 +1307,24 @@
   }
 
 
+  // ---- VO01 / VO03: the Key (and for VO03 Major / Minor) had no control in the designs, so the harmony and the correction could only be set to another key from the host's parameter list.
+  // A "Key C" chip is added to the scale chips (a click steps to the next key); VO03 also gets a Major / Minor chip. VO01's first chip prints the key ("D major"). The chips use the design's own chip class.
+  function keyChips(box, ctx, kind) {
+    const pk = ctx.params.find(q => q.name === 'Key'); if (!pk) return null;
+    const first = [...box.querySelectorAll('button.dbtn')].find(b => /^(MIDI|C major)$/i.test(b.textContent.trim()) || /major$/i.test(b.textContent.trim()) || b.dataset.p === '0' && kind === 'VO03'); if (!first) return null;
+    const grp = first.parentElement, mk = (t, title) => { const b = document.createElement('button'); b.className = 'dbtn'; b.textContent = t; b.title = title; grp.prepend(b); return b; };
+    const ps = kind === 'VO03' ? ctx.params.find(q => q.name === 'Scale') : null;
+    const sc = ps ? mk('Major', 'Scale: major or minor (click to switch)') : null, kb = mk('Key C', 'Key (click for the next one)'), majorChip = kind === 'VO01' ? [...grp.querySelectorAll('button')].find(b => /major$/i.test(b.textContent.trim())) : null;
+    kb.addEventListener('click', () => { const st = pk.p.steps, k = st.findIndex(v => Math.abs(v - ctx.get(pk.i)) < 1e-9); ctx.begin(pk.i); ctx.set(pk.i, st[(k + 1) % st.length]); ctx.end(pk.i); });
+    if (sc) sc.addEventListener('click', () => { const st = ps.p.steps, k = st.findIndex(v => Math.abs(v - ctx.get(ps.i)) < 1e-9); ctx.begin(ps.i); ctx.set(ps.i, st[(k + 1) % st.length]); ctx.end(ps.i); });
+    return { update() {
+      const k = Math.round(pk.c.norm(ctx.get(pk.i)) * (pk.p.steps.length - 1)), name = (pk.p.labels && pk.p.labels[k]) || '';
+      kb.textContent = 'Key ' + name; if (majorChip) majorChip.textContent = name + ' major';
+      if (sc) { const j = Math.round(ps.c.norm(ctx.get(ps.i)) * (ps.p.steps.length - 1)); sc.textContent = (ps.p.labels && ps.p.labels[j]) || ''; }
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1351,8 +1369,8 @@
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV04: convolutionDisplay,
-    VO01: pitchGraphDisplay,
-    VO03: harmonyGraphDisplay,
+    VO01: (box, ctx) => combine(pitchGraphDisplay(box, ctx), keyChips(box, ctx, 'VO01')),
+    VO03: (box, ctx) => combine(harmonyGraphDisplay(box, ctx), keyChips(box, ctx, 'VO03')),
     VO08: breathDisplay,
     CR01: filterResponseDisplay,
     CR02: stutterGridDisplay,
