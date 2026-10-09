@@ -807,7 +807,30 @@
     } };
   }
 
+
+  // ---- test-signal generator (LV21): the chosen signal (Sine, Pink, White, Sweep, Polarity pulses) at the Level, 4 cycles of the sine shown whatever the frequency
+  function generatorDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')]; if (ps.length < 2) return null;
+    const [, , W, H] = vbOf(svg), C = H / 2; let last = '', seed = 1; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296 - 0.5; };
+    return { update() {
+      const sg = Math.round(ctx.value('Signal') || 0), lv = ctx.value('Level'), key = sg + '|' + lv; if (key === last) return; last = key;
+      const A = clamp(Math.pow(10, (lv === undefined ? -18 : lv) / 20) * 1.0, 0.03, 1) * (C - 8); let d = '', lp = 0; seed = 7;
+      for (let i = 0; i <= 240; i++) {
+        const x = i / 240 * W, u = i / 240; let v;
+        if (sg === 0) v = Math.sin(2 * Math.PI * 4 * u);
+        else if (sg === 1) { lp = 0.82 * lp + 0.18 * rnd() * 2; v = clamp(lp * 3.2, -1, 1); }                         // pink-ish: low-passed noise
+        else if (sg === 2) v = clamp(rnd() * 2, -1, 1);
+        else if (sg === 3) v = Math.sin(2 * Math.PI * (2 * u + 14 * u * u));                                         // a sweep rising in pitch
+        else v = (i % 40 === 2) ? 1 : (i % 40 === 3 ? -0.3 : 0);                                                     // polarity: positive clicks
+        d += (i ? ' L' : 'M') + x.toFixed(1) + ' ' + (C - v * A).toFixed(1);
+      }
+      ps.forEach(p => p.setAttribute('d', d));
+    } };
+  }
+
   const registry = {
+    LV21: generatorDisplay,
     MS02: ceilingDisplay,
     LV17: grHistoryDisplay,
     LV10: xyPadDisplay, VO06: xyPadDisplay,

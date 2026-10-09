@@ -1091,6 +1091,7 @@ LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`�
 | LV10・VO06 | ピッチ／フォルマントのパッド | 点が Pitch（左右）と Formant（上下）。パッド上のドラッグで両方、ダブルクリックで既定値（画面だけで、コアの値は不要） |
 | LV17 | GR 履歴 | オレンジ＝コアの `gainReductionDb()`（今回コアに足した読み取り用の値。音は変えない）、灰色＝出力ピークの履歴（約 10 秒） |
 | MS02 | トゥルーピークリミッターの Ceiling とレベル | Ceiling の線と文字は Ceiling パラメータ、波形は出力ピークの履歴（鏡像）。デザインの「Inter-sample peaks caught」の印と数はコアが公開していないため外した |
+| LV21 | テスト信号の波形 | Signal（Sine は 4 周期、Pink／White は固定の乱数、Sweep は上がる掃引、Polarity は正のクリック）を Level の振幅で描く（周波数・掃引時間の長さは縮尺どおりではない）。Arm・Running の状態は未表示 |
 | DL04・LV25 | ディレイの繰り返しの棒 | DL04 は Tap 1〜6 の On・Time・Level、LV25 は Time の整数倍に Feedback の累乗の高さ。Clock が Tap／MIDI／BPM のときの実際の時間は反映しない（Time の値で描く） |
 | LV16 | ゲート／ダッカー | しきい値の線（上下ドラッグで Threshold）、入力ピークの履歴（同じ目盛り）、Open／Closed（Duck では Ducking／Idle）は入力ピークがしきい値を超えたかで判定。Key HPF 通過後の値ではない |
 | ST01 | バンドごとのステレオ幅 | 棒の幅が各バンドの Width（左右にドラッグ、ダブルクリックで既定値） |
