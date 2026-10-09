@@ -441,6 +441,20 @@
       vs.forEach((v, k) => { const m = q(idx[k]), w = Math.max(6, (v - m.p.min) / (m.p.max - m.p.min) * SPAN); rects[k].setAttribute('width', w.toFixed(1)); rects[k].setAttribute('x', (CX - w / 2).toFixed(1)); }); } };
   }
 
+  // ---- the chips of ST01: Low / Low mid / High mid / High highlight that band's bar (the others dim; press it again to show all); Correlation shows / hides the stereo scope
+  function st01Chips(box, ctx) {
+    const btns = [...box.querySelectorAll('button')], names = ['low', 'low mid', 'high mid', 'high'], chips = names.map(n => btns.find(b => !b.hasAttribute('data-p') && b.textContent.trim().toLowerCase() === n));
+    const svg = svgOf(box), rects = svg ? [...svg.querySelectorAll(':scope > rect')] : [];
+    if (chips.every(Boolean) && rects.length >= 4) {
+      let sel = chips.findIndex(c => c.classList.contains('on'));
+      const draw = () => { chips.forEach((c, k) => c.classList.toggle('on', k === sel)); rects.slice(0, 4).forEach((r, k) => { r.style.opacity = sel < 0 || k === sel ? '' : '0.4'; }); };
+      chips.forEach((c, k) => c.addEventListener('click', () => { sel = sel === k ? -1 : k; draw(); })); draw();
+    }
+    const corr = btns.find(b => b.textContent.trim() === 'Correlation'), sc = [...box.querySelectorAll('.disp svg')].find(v => v.querySelectorAll(':scope > circle').length >= 100), panel = sc && sc.closest('.disp');
+    if (corr && panel) { let on = corr.classList.contains('on'); corr.addEventListener('click', () => { on = !on; corr.classList.toggle('on', on); panel.style.visibility = on ? '' : 'hidden'; }); }
+    return null;
+  }
+
   // ---- clipper (MS04): the transfer curve and the clipped waveform from Drive, Ceiling, Knee — the same curve as products/ms04 (clipCurve), without the oversampler
   function clipCurve(u, k) {
     const soft = (v, h) => { const a = Math.abs(v), s = v < 0 ? -1 : 1; if (h <= 0) return clamp(v, -1, 1); if (a <= 1 - h) return v; if (a >= 1 + h) return s; const d = a - (1 - h); return s * (a - d * d / (4 * h)); };
@@ -1815,7 +1829,7 @@
     LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90))), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
-    MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
+    MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
     RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,

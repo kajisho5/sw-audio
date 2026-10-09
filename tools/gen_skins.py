@@ -336,6 +336,21 @@ def eq02_dynamic(root, params):
     return ''
 
 
+def lv05_key(root, params):
+    """LV05: the design's key picker ("LV01 Voice, MC mic", an instance chosen through SW Link) says what the key is: the plug-in's sidechain input (chosen in the host). The text is
+    replaced and the picker dimmed (nothing to choose here)."""
+    b = next((x for x in root.find_all('button') if 'LV01 Voice' in x.get_text()), None)
+    if b is None:
+        return ''
+    for node in list(b.descendants):
+        if isinstance(node, str) and 'LV01 Voice' in node:
+            node.replace_with('Sidechain input')
+    for svg in b.find_all('svg'):
+        svg.decompose()
+    b['style'] = (b.get('style') or '') + ';opacity:.7;cursor:default'; b['title'] = 'The key is the sidechain input of this plug-in: route the voice to it in the host'; b['data-inert'] = '1'
+    return ''
+
+
 def lv03_fader(root, params):
     """LV03's Out fader: the cap (the element drawn with the fader image) becomes a bound fader (data-fader = the Out parameter)."""
     out = next((p for p in params if p['id'] == 'lv03.out'), None)
@@ -345,7 +360,7 @@ def lv03_fader(root, params):
     return ''
 
 
-HOOKS = {'EQ02': eq02_dynamic, 'LV03': lv03_fader, 'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
+HOOKS = {'LV05': lv05_key, 'EQ02': eq02_dynamic, 'LV03': lv03_fader, 'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 
