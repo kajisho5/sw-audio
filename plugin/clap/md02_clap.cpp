@@ -9,6 +9,8 @@ struct Md02 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = sw::md02::Mix;
+    static constexpr int kReadouts = 2;   // sweep rate in use (Hz; from the note length with Sync), LFO phase (0 .. 1)
+    static void readouts(const Core& c, double* o) { o[0] = c.rateHz(); o[1] = c.lfoPhase(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_FLANGER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.md02", "SW MD02 Flanger", "SEVENTHWELL",

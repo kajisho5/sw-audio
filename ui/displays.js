@@ -694,7 +694,23 @@
     } };
   }
 
+
+  // ---- LFO wave (MD02 flanger, MD04 tremolo / auto pan): readouts = rate in use (Hz) [, LFO phase]. The window is 1.5 s with "now" at the right edge; amplitude = Depth; MD04 draws its Shape.
+  function lfoDisplay(box, ctx, kind) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')]; if (ps.length < 2) return null;
+    const W = 732, T = 1.5, shape = (p, k) => { const f = p - Math.floor(p); return k === 1 ? 1 - 4 * Math.abs(f - 0.5) : k === 2 ? (f < 0.5 ? 1 : -1) : k === 3 ? 2 * f - 1 : Math.sin(2 * Math.PI * p); };
+    let phase0 = 0, lastKey = '';
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return; const rate = r[0], ph = r.length > 1 ? r[1] : 0, dep = (ctx.value('Depth') || 0) / 100, sh = kind === 'shape' ? Math.round(ctx.value('Shape') || 0) : 0;
+      const key = [rate.toFixed(3), ph.toFixed(2), dep, sh].join('|'); if (key === lastKey) return; lastKey = key;
+      let d = ''; for (let i = 0; i <= 240; i++) { const x = i / 240 * W, p = ph - rate * T * (1 - i / 240); d += (i ? ' L' : 'M') + x.toFixed(1) + ' ' + (100 - dep * 85 * shape(p, sh)).toFixed(1); }
+      ps.forEach(p => p.setAttribute('d', d));
+    } };
+  }
+
   const registry = {
+    MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,

@@ -1050,7 +1050,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 
 ### コアが測った値を画面へ渡す口（`readouts`）
 
-製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
+製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29・MD02・MD04 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
 
 ### 画面の中央の表示（`ui/displays.js`）
 
@@ -1083,6 +1083,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 | GT03 | チューナーの読み取り表示 | コアの `tunerHz／tunerNote／tunerCents`（例 A2 +6¢ 110.4 Hz。音が無いと「—」） |
 | LV22 | 極性ゲージ | 針はコアの相関（−1〜+1、左端〜右端）、左上に r と遅れ（ms） |
 | LV05・LV29 | ダッキングのゲイン履歴とブロック | コアのゲイン（LV05 は BGM、LV29 は Floor）と、キーの有無（声／通訳の発話）を 30 秒分。デザインの見本の線・ブロックは置き換え |
+| MD02・MD04 | LFO の波形 | 直近 1.5 秒（右端が「いま」）。周期は実際に使われている Rate（Sync ではノート長から。コアの `rateHz()`）、振幅は Depth、MD04 は Shape（Sine／Triangle／Square／Ramp）、MD02 はコアの LFO 位相に同期して流れる。Through zero・Feedback の影響は描かない |
 | DY03 | GR メーターの針 | デザイン独自の目盛り（右が 0、左が 20 dB）に合わせる。GR は「入力ピーク＋Makeup−出力ピーク」から出す（コア内部の値ではない） |
 | DY01・DY02・DY06・MT05 | VU 針 | 目盛りの角度に合わせる。基準は 0 VU ＝ −15 dBFS（ピーク）の設計値、GR は入出力の差 |
 | DL02・SA01・MD05 | リール・ホーンとドラムの回転 | 音が通っている間（DL02・SA01）、Speed と Accel のモデル（MD05） |
