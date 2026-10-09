@@ -1207,6 +1207,16 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 - **ホストのプリセットブラウザ**（CLAP の preset-discovery と preset-load）：プロバイダーが「SWINGBY factory」（プラグインの中の 128 種、名前・作者・カテゴリの特徴語つき）と「SWINGBY user」（上のフォルダー、`.swpreset`）を宣言する。ユーザーフォルダーは索引作りのときに作る（空のまま。保存した最初のプリセットがすぐブラウザに出るように）。ブラウザから読み込むと、値はメインスレッドでホスト側の値に入り（保存データの復元と同じ道）、パラメータの再読み込みをホストへ求める。ファクトリーは選択パラメータもそのプリセットへ動く。壊れたファイル・知らないプリセットは拒否し、ホストへ理由を返す（何も変わらない）。VST3・AU の側のプリセット一覧（clap-wrapper が橋渡ししない）は画面のブラウザで扱う。
 - **clap-validator の preset-discovery-crawl／-load は除外した**：clap-validator（0.4.1 と master）は、1 つのファイル（ここではプラグイン）に 2 つ以上のプリセットがあると、2 つ目の `begin_preset` で自分のロックを二重に取って止まる（このコンテナで止まったときのスタック：`MetadataReceiver::begin_preset` → `flush_preset` → `Mutex::lock_contended`。ソースでも `begin_preset` が結果のロックを持ったまま `flush_preset` が同じロックを取る）。代わりに自作ホスト `tools/clap_note_host.cpp` が索引と読み込みを確かめる（128 種の一覧・ユーザーフォルダーの正常・他製品・壊れたファイル・ファクトリーとファイルからの読み込みと発音・拒否で何も変わらないこと）。CI では Linux でこのホストを回す。preset-discovery-descriptor-consistency は Linux・macOS で実行して合格。Windows では preset-discovery の検査を全部除外した：clap-validator はファイルの場所が「/」で始まることを求め（`'C:\Users\…\Presets' should be an absolute path, i.e. '/C:\Users\…'`。ソースでも `starts_with('/')` だけを見ている）、Windows の正しいパスを不合格にするため（CLAP の規定は「OS のファイル関数で使えるパス」）。なお、この CI の記録で、Windows のユーザーフォルダーが `C:\Users\runneradmin\Documents\SEVENTHWELL\SWINGBY\Presets`（ドキュメントの既知フォルダー）になっていることを確認できた。
 
+### IN07 の評価（2026-10-09、`tools/in07_eval.cpp`）
+
+CPU はこのコンテナ（Intel Xeon 2.8 GHz・1 コア、g++ -O2、48 kHz、256 サンプルずつ）での実測で、1 コアの実時間に対する割合。設計上の見積もりではない。依頼者の PC では変わる。
+
+- **全 128 種を 4 和音（C3・E3・G3・B3）で押さえたまま**：平均 3.5 %。重い順に Anthem Supersaw 18.4 %、Hoover Stab 13.2 %、Solar Wind 11.1 %、Glass Horizon 9.7 %、Radio Static 9.0 %。出力の非有限値 0。
+- **音数を増やしたとき**：Anthem Supersaw（3 レイヤー、1 音あたり発振器 22 本）は 8 音 34.4 %、16 音（既定の Voices）73.1 %。96 kHz の 4 和音は 37.9 %（48 kHz の約 2 倍）。Hoover Stab・Solar Wind は 8 音で約 20 %。
+- **重い所**（callgrind、Anthem Supersaw の 4 和音、起動時の表の生成を除いた処理の内訳）：発振器（`Voice::oscillate`・`BlepOsc::next`）約 30 %、レイヤーごとの Drive の 2× オーバーサンプリング約 20 %、`Voice::render` の残り約 10 %、SVF 約 8 %、リバーブ（FDN）約 5 %。
+- **サンプルレート**：全 128 種の試聴フレーズのラウドネスは、48 kHz に対して 44.1 kHz で最大 0.62 LU（Solar Wind）、96 kHz で最大 0.47 LU（Radio Static）の差。192 kHz は 7 種で最大 0.29 LU。ピークはどれも −0.5 dBFS 未満。
+- **音を押さえたままのプリセット切り替えで段差（クリック）が出る**：ランダムな 60 組のうち 21 組で、切り替え直後 5 ms の 2 階差分の最大が、前後のプリセット自身の音の 99.9 % 点の 4〜28 倍。波形でも切り替えの 0.1 ms 後に段差を確認した（Tine Piano → Wide Saw Lead、Jazz Organ → Bounce Seq）。原因：プリセットの読み込み（`loadProgram` → `applyPreset`）がフェードなしで全パラメータを入れ替える。また発振器の種類・ユニゾン数・サンプルは発音時に決まるので、押さえている音は次に弾くまで前のプリセットとの混ざった音になる。耳では確かめていない。
+
 ### まだのこと（IN07）
 
 - アルペジエーター・トランスゲート（画面案あり）。惑星型の案の残り（惑星直列アルペジオ・蝕ゲート・衛星ユニゾン・ロッシュ限界）は未着手
@@ -1215,6 +1225,10 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 - 生成したサンプル・表・プリセットの聴感の確認（数値とスペクトログラムの検査だけで、耳での確認はしていない）
 - 画面のプリセットブラウザと保存ボタン（ファイル形式・保存場所・CLAP のブラウザ対応は済）、画面、EVO「Similar」（ML 系なので後期）
 - 三角波の帯域制限を minBLAMP にするか（現在 −51 dB）
+- プリセット切り替えの段差（上の「IN07 の評価」）：短いフェードで下げてから入れ替える、など
+- 重いプリセットの CPU（Anthem Supersaw 16 音で 1 コアの 73 %＝このコンテナ）：発振器とオーバーサンプラーの SIMD 化、または重いプリセットの音数・ユニゾンを減らす
+- MIDI：Program Change でのプリセット選択、MIDI learn（CC → マクロ）、MPE／ノートごとの表現（ポリ AT・ノートごとのピッチ）、マイクロチューニング。LFO はいま全体で 1 つの位相（ボイスごとの LFO がない）
+- パラメータの module がパラメータ ID のまま（`in07.l1.flt.cutoff`）。ホストの汎用画面で階層に並ぶよう「Layer 1/Filter」の形に
 
 ## まだやっていないこと
 
