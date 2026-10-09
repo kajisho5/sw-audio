@@ -10,6 +10,8 @@
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
 #include <array>
+#include <cmath>
+#include <algorithm>
 #include <vector>
 
 namespace sw::lv01 {
@@ -33,6 +35,8 @@ public:
     int latencySamples() const { return 0; }
     StageValues stage() const;
     double noiseFloorDb(int band) const;
+    double compGainDb() const { return 20.0 * std::log10(std::max(cgain_, 1e-6)); }      // the compressor's gain right now (dB, <= 0 when it works)
+    double limiterGainDb() const { return 20.0 * std::log10(std::max(lgain_, 1e-6)); }   // the limiter's
 
 private:
     void updateStages();

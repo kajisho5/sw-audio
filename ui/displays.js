@@ -1261,6 +1261,52 @@
   }
 
 
+  // ---- LV01 voice strip: the four stage tiles (Noise, EQ, Comp, Limit) show what Use x Voice set (the core's stage values) and the compressor's live gain reduction; IN / GR / OUT bars follow the measured
+  // peaks and the core's compressor + limiter gain. readouts: [noise depth, low cut Hz, mud, presence, air, comp threshold, ratio, make-up, ceiling, compressor gain (dB), limiter gain (dB)].
+  // "Stream loudness -14.6 LUFS target -14" was an example: the strip does not measure loudness (LV06 does), so it shows a dash.
+  function voiceStripDisplay(box, ctx) {
+    const tiles = [...box.querySelectorAll('.tile')], tile = n => tiles.find(t => (t.querySelector('b') || {}).textContent.trim().toLowerCase() === n);
+    const part = t => t && { dot: t.querySelector('b > span'), val: [...t.children].find(c => c.tagName === 'SPAN') };
+    const nz = part(tile('noise')), eq = part(tile('eq')), cp = part(tile('comp')), li = part(tile('limit'));
+    const rows = [...box.querySelectorAll('.mb')], mv = rows.map(r => r.parentElement.querySelector('.mv')), ml = rows.map(r => (r.parentElement.querySelector('.ml') || {}).textContent);
+    const iIn = ml.findIndex(t => /^IN$/i.test(t || '')), iGr = ml.findIndex(t => /^GR$/i.test(t || '')), iOut = ml.findIndex(t => /^OUT$/i.test(t || ''));
+    const loud = [...box.querySelectorAll('span')].find(e => /LUFS/.test(e.textContent) && e.children.length === 1);
+    if (loud) { loud.firstElementChild.textContent = ''; loud.firstChild.textContent = '—'; }
+    const GRAD = 'linear-gradient(to right,#2bd14a 0 72%,#f0c93d 72% 88%,#e0443e 88%)';
+    const lv = (r, db) => { const p = clamp((db + 36) / 36, 0, 1) * 100; r.style.background = 'linear-gradient(to right,transparent 0 ' + p.toFixed(1) + '%,rgba(30,31,34,.92) ' + p.toFixed(1) + '%),' + GRAD; };   // the design's own overlay (8 % white) left the whole bar lit
+    const lamp = (p, on) => { if (p && p.dot) p.dot.className = on ? 'dot' : 'off'; };
+    return { update(info) {
+      const m = info && info.meters, r = info && info.readouts; if (!m || !r || r.length < 11) return;
+      if (iIn >= 0) { const v = Math.max(m[0], m[1]); lv(rows[iIn], v); if (mv[iIn]) mv[iIn].textContent = v > -99 ? v.toFixed(1) : '-∞'; }
+      if (iOut >= 0) { const v = Math.max(m[2], m[3]); lv(rows[iOut], v); if (mv[iOut]) mv[iOut].textContent = v > -99 ? v.toFixed(1) : '-∞'; }
+      const gr = Math.max(0, -(r[9] + r[10]));
+      if (iGr >= 0) { const p = clamp(gr / 15, 0, 1) * 100; rows[iGr].style.background = 'linear-gradient(to right,#bdbdbd 0 ' + p.toFixed(1) + '%,rgba(255,255,255,.08) ' + p.toFixed(1) + '%)'; if (mv[iGr]) mv[iGr].textContent = gr > 0.05 ? '-' + gr.toFixed(1) : '0.0'; }
+      const noiseOn = r[0] < -0.05, eqOn = Math.abs(r[2]) + Math.abs(r[3]) + Math.abs(r[4]) > 0.05 || r[1] > 20.5, compOn = r[6] > 1.001;
+      if (nz) { nz.val.textContent = noiseOn ? Math.round(r[0]) + ' dB' : 'Off'; lamp(nz, noiseOn); tile('noise').classList.toggle('on', noiseOn); }
+      if (eq) { eq.val.textContent = eqOn ? 'On' : 'Off'; lamp(eq, eqOn); tile('eq').classList.toggle('on', eqOn); }
+      if (cp) { cp.val.textContent = compOn ? 'GR ' + (r[9] < -0.05 ? Math.round(-r[9]) : '0') : 'Off'; lamp(cp, compOn); tile('comp').classList.toggle('on', compOn); }
+      if (li) { li.val.textContent = Math.round(r[8]) + ' dBFS'; lamp(li, true); tile('limit').classList.add('on'); }
+    } };
+  }
+
+
+  // ---- DL01 echo: the LCD shows the delay the core uses (Sync On with a host tempo: the note length; else Time), the host tempo (a dash without one), the note the Time knob picks (Sync On) and Ping-pong.
+  // readouts: [the delay in use (s), the host tempo (bpm, 0 = none)]. The design's "L 375  R 250" (two different times) is not what the plug-in does (both lines have the same time): it says Ping-pong or nothing.
+  const NOTE_LONG = ['1/64', '1/32 triplet', '1/32', '1/16 triplet', '1/32 dotted', '1/16', '1/8 triplet', '1/16 dotted', '1/8', '1/4 triplet', '1/8 dotted', '1/4', '1/2 triplet', '1/4 dotted', '1/2', '1/2 dotted', '1 bar', '2 bars'];
+  function echoLcdDisplay(box, ctx) {
+    const v = [...box.querySelectorAll('.vfd')]; const big = v.find(e => /font-size:\s*40px/.test(e.getAttribute('style') || '')), unit = big && big.nextElementSibling, bpm = v.find(e => /BPM$/.test(e.textContent.trim()));
+    const note = v.find(e => /^1\/|bar/.test(e.textContent.trim()) && e !== big), side = v.find(e => /^L \d+/.test(e.textContent.trim())); if (!big || !bpm) return null;
+    const pt = ctx.params.find(q => q.name === 'Time');
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 2) return; const ms = r[0] * 1000;
+      big.textContent = ms >= 1000 ? (ms / 1000).toFixed(2) : String(Math.round(ms)); if (unit) unit.textContent = ms >= 1000 ? 's' : 'ms';
+      bpm.textContent = r[1] > 0 ? Math.round(r[1]) + ' BPM' : '— BPM';
+      const sync = ctx.value('Sync') > 0.5; if (note) note.textContent = sync && pt ? NOTE_LONG[clamp(Math.round(pt.c.norm(ctx.value('Time')) * 17), 0, 17)] : 'Free';
+      if (side) side.textContent = ctx.value('Ping-pong') > 0.5 ? 'Ping-pong' : '';
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1274,7 +1320,7 @@
 
   const registry = {
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
-    LV01: (box, ctx) => textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^GR \d+(\.\d+)?$/, text: () => 'GR —' }]),
+    LV01: voiceStripDisplay,
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
     LV03: (box, ctx) => liveStripDisplay(box, ctx, 'LV03'),
     LV04: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }])),
@@ -1327,6 +1373,7 @@
     LV12: faderBank,
     EQ02: eqDisplay, EQ07: eqDisplay,
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
+    DL01: echoLcdDisplay,
     DL02: (box, ctx) => reelDisplay(box, ctx, null),
     SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
     DY01: (box, ctx) => vuDisplay(box, ctx, 'gr'),

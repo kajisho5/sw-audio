@@ -9,6 +9,8 @@ struct Dl01 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = sw::dl01::Mix;
+    static constexpr int kReadouts = 2;   // the delay in use (s; a note length when Sync is on and the host has a tempo), the host tempo (bpm, 0 = none)
+    static void readouts(const Core& c, double* o) { o[0] = c.timeSeconds(); o[1] = c.tempo(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DELAY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.dl01", "SW DL01 Echo", "SEVENTHWELL",

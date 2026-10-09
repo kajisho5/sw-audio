@@ -28,6 +28,7 @@ public:
     void setTempo(double bpm) { bpm_ = bpm; }
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    double tempo() const { return bpm_; }   // the host tempo (0 = none)
     double timeSeconds() const;   // the delay in use (a note length when Sync is on and the tempo is known)
 
 private:

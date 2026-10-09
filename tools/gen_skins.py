@@ -389,6 +389,11 @@ def mark_inert(root):
             b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1
         elif b.find_parent(class_='tb') is not None and b.select_one('svg') and t and not b.get('aria-label'):
             b['title'] = 'Presets are not available yet'
+    # a dial that no parameter drives (EQ02's "Range off"): dimmed, not left looking live
+    for c in root.select('.ctl, .rc'):
+        if c.get('data-p') or c.get('data-pb') or c.get('data-static') or not c.select_one('.dk, .knob, .rk') or c.find_parent(attrs={'data-p': True}):
+            continue
+        c['style'] = (c.get('style') or '') + ';opacity:.4;pointer-events:none'; c['title'] = 'Not available yet'; c['data-inert'] = '1'; n += 1
     return n
 
 
@@ -436,6 +441,12 @@ def build(code, report):
         return None
     params = host_params(code)
     alias = json.loads(json.dumps(ALIASES.get(code, {})))   # a copy: lists are consumed
+    # a dial group the design wrote without the .rc wrapper (the big Voice knob of LV01: .rk, .rl and .rv side by side) is made one
+    for g in root.select('div:has(> .rk)'):
+        cls = g.get('class') or []
+        if 'rc' in cls or 'ctl' in cls or not g.select_one(':scope > .rl') or not g.select_one(':scope > .rv'):
+            continue
+        g['class'] = cls + ['rc']
     apply_edits(root, alias)
     extra_css = HOOKS[code](root, params) if code in HOOKS else ''
     if vu_frames(root, params):
