@@ -9,6 +9,12 @@
    "call": "clear"
   }
  ],
+ "EQ07": [
+  {
+   "label": "Auto thresh",
+   "call": "learn"
+  }
+ ],
  "LV02": [
   {
    "label": "Ring out",
@@ -38,6 +44,12 @@
   {
    "label": "Flat",
    "call": "flat"
+  }
+ ],
+ "LV14": [
+  {
+   "label": "Measure",
+   "call": "measure"
   }
  ],
  "LV19": [
@@ -99,22 +111,16 @@
    "call": "reset"
   }
  ],
- "UT01": [
-  {
-   "label": "Remember gain",
-   "call": "remember"
-  }
- ],
- "LV14": [
-  {
-   "label": "Measure",
-   "call": "measure"
-  }
- ],
  "ST03": [
   {
    "label": "Auto align",
    "call": "autoalign"
+  }
+ ],
+ "UT01": [
+  {
+   "label": "Remember gain",
+   "call": "remember"
   }
  ]
 }

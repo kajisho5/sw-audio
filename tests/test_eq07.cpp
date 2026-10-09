@@ -100,3 +100,37 @@ TEST_CASE("Spectral with nothing to do is transparent apart from the latency") {
     double err = 0; for (size_t i = 2048; i < x.size(); ++i) err = std::max(err, (double)std::abs(y[i] - x[i - 1024]));
     CHECK(err < 1e-4);
 }
+
+namespace {
+// a tone whose level steps between two values every 100 ms: `hiShare` of the blocks at `hi` dB peak, the rest at `lo`
+std::vector<float> steppedTone(double f, double lo, double hi, double hiShare, double seconds) {
+    const int n = static_cast<int>(seconds * kFs), blk = static_cast<int>(0.1 * kFs); std::vector<float> x(static_cast<size_t>(n));
+    int k = 0; for (int i = 0; i < n; ++i) { if (i % blk == 0) ++k; const bool high = (k % 10) < static_cast<int>(std::lround(hiShare * 10)); x[static_cast<size_t>(i)] = static_cast<float>(std::pow(10.0, (high ? hi : lo) / 20.0) * std::sin(2 * kPi * f * i / kFs)); }
+    return x;
+}
+void feed(Processor& p, const std::vector<float>& x, size_t a, size_t b) { std::vector<float> l(x.begin() + static_cast<long>(a), x.begin() + static_cast<long>(b)), r = l; for (size_t off = 0; off < l.size(); off += 256) { float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, static_cast<int>(std::min<size_t>(256, l.size() - off))); } }
+}
+TEST_CASE("EQ07 Auto thresh: thresholds from the level distribution of each dynamic band (80th percentile for a negative Range, 20th for a positive one)") {
+    // band 1: 200 Hz, Range -6; band 2: 3 kHz, Range +6; both bells; the signal is the sum of a 200 Hz and a 3 kHz tone, each stepping between -30 and -10 dB
+    auto p = make({{bp(1, On), 1}, {bp(1, Freq), 200}, {bp(1, Range), -6}, {bp(1, Thresh), -50}, {bp(2, On), 1}, {bp(2, Freq), 3000}, {bp(2, Range), 6}, {bp(2, Thresh), -5},
+                   {bp(3, On), 1}, {bp(3, Freq), 1000}, {bp(3, Range), 0}, {bp(3, Thresh), -33}, {bp(4, On), 0}, {bp(4, Range), -6}, {bp(4, Thresh), -33},
+                   {bp(5, On), 1}, {bp(5, Type), 3}, {bp(5, Range), -6}, {bp(5, Thresh), -33}});   // 3 = a cut: no gain, so no dynamics
+    auto a = steppedTone(200, -30, -10, 0.3, 8.0), b = steppedTone(3000, -30, -10, 0.7, 8.0); std::vector<float> x(a.size()); for (size_t i = 0; i < x.size(); ++i) x[i] = a[i] + b[i];
+    CHECK_FALSE(p.learning()); int id = 0; double v = 0; CHECK(p.takeParamWrite(id, v) == 0);
+    feed(p, x, 0, 4800); p.learnThresholds(); CHECK(p.learning()); CHECK(p.learnProgress() < 0.05);
+    feed(p, x, 4800, 4800 + 120000); CHECK(p.learning()); CHECK(p.learnProgress() > 0.4); CHECK(p.learnProgress() < 0.6); CHECK(p.takeParamWrite(id, v) == 0);   // nothing is written while listening
+    feed(p, x, 4800 + 120000, 4800 + 240000 + 512);   // the rest (5 s in all)
+    CHECK_FALSE(p.learning());
+    // the writes: begin + value + end for each band that was learnt (1 and 2), in band order
+    std::vector<std::pair<int, double>> w; int f; while ((f = p.takeParamWrite(id, v)) != 0) { CHECK(f == 7); w.emplace_back(id, v); }
+    REQUIRE(w.size() == 2); CHECK(w[0].first == bp(1, Thresh)); CHECK(w[1].first == bp(2, Thresh));
+    CHECK(w[0].second > -18.0); CHECK(w[0].second < -4.0);    // 80th percentile of mostly-quiet band 1: the loud level (-10 dB peak = about -13 RMS)
+    CHECK(w[1].second < -22.0); CHECK(w[1].second > -40.0);   // 20th percentile of mostly-loud band 2: the quiet level
+    CHECK(p.takeParamWrite(id, v) == 0);
+}
+TEST_CASE("EQ07 Auto thresh: silence puts the thresholds at the bottom; nothing to learn without a dynamic band; extremes stay finite") {
+    auto p = make({{bp(1, On), 1}, {bp(1, Range), -6}, {bp(1, Thresh), -10}});
+    p.learnThresholds(); feed(p, std::vector<float>(static_cast<size_t>(5.2 * kFs), 0.0f), 0, static_cast<size_t>(5.2 * kFs)); CHECK_FALSE(p.learning());
+    int id = 0; double v = 0; REQUIRE(p.takeParamWrite(id, v) == 7); CHECK(id == bp(1, Thresh)); CHECK(v == -60.0); CHECK(p.takeParamWrite(id, v) == 0);
+    auto q = make({}); q.learnThresholds(); feed(q, steppedTone(500, -30, -10, 0.5, 5.5), 0, static_cast<size_t>(5.2 * kFs)); CHECK_FALSE(q.learning()); CHECK(q.takeParamWrite(id, v) == 0);   // no band is on in the default settings? (only if none is dynamic)
+}

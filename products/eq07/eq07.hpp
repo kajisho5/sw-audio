@@ -9,6 +9,8 @@
 #include "sw/param.hpp"
 #include <array>
 #include <complex>
+#include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace sw::eq07 {
@@ -28,6 +30,14 @@ public:
     void process(float** ch, int numCh, int n) { run(ch, numCh, n, nullptr, 0); }
     void processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh) { run(ch, numCh, n, sc, scCh); }
     int latencySamples() const { return target_[Spectral] > 0.5 ? kN : 0; }  // desired; applied at prepare
+    // Auto thresh (EVO): listens for kLearnSeconds, takes the distribution of every dynamic band's detector level, and puts each Threshold at the 80th percentile when the band's Range is
+    // negative (it cuts what is loud), at the 20th when positive (it lifts what is quiet). Bands that are off, have no gain (cut / notch) or Range 0 are left alone. The new values are handed to the
+    // host (takeParamWrite: bit 0 begin, 1 value, 2 end). Audio thread (the screen's button is queued to it).
+    static constexpr double kLearnSeconds = 5.0;
+    void learnThresholds();
+    bool learning() const { return learnLeft_ > 0; }
+    double learnProgress() const { return learnLeft_ > 0 && learnTotal_ > 0 ? 1.0 - static_cast<double>(learnLeft_) / learnTotal_ : 0.0; }
+    int takeParamWrite(int& id, double& plain);
 
 private:
     static constexpr int kN = 1024, kHop = 256, kControl = 16;
@@ -48,6 +58,12 @@ private:
         double amount = 0, applied = 0;
     };
     std::array<Band, kBands> band_{};
+    // Auto thresh: a histogram of the detector level (1 dB bins, -90 .. 0) per band, the values to hand to the host
+    void finishLearning();
+    static constexpr int kHistBins = 91;
+    int learnLeft_ = 0, learnTotal_ = 0, nWrites_ = 0, writeAt_ = 0;
+    std::array<std::array<uint32_t, kHistBins>, kBands> hist_{};
+    std::array<std::pair<int, double>, kBands> writes_{};
     // spectral
     Fft fft_{kN};
     std::vector<double> win_;

@@ -522,6 +522,12 @@
     } };
   }
 
+  // ---- "Auto thresh" of EQ07 (core: learnThresholds; readouts = listening, progress): while it listens the button says how far it is
+  function learnButton(box, ctx) {
+    const btn = box.querySelector('button[data-call="learn"]'); if (!btn) return null; const label = btn.textContent.trim();
+    return { update(info) { const r = info && info.readouts; if (!r || r.length < 2) return; const t = r[0] > 0.5 ? 'Listening ' + Math.round(r[1] * 100) + ' %' : label; if (btn.textContent !== t) btn.textContent = t; btn.classList.toggle('on', r[0] > 0.5); } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1865,7 +1871,7 @@
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     MS03: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     LV12: faderBank,
-    EQ02: eqDisplay, EQ07: eqDisplay,
+    EQ02: eqDisplay, EQ07: (box, ctx) => combine(eqDisplay(box, ctx), learnButton(box, ctx)),
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL01: echoLcdDisplay,
     DL02: (box, ctx) => reelDisplay(box, ctx, null),

@@ -8,7 +8,7 @@
 //   - a panel "In" switch that does not return the input level when Off           -> FAIL
 //   - a plug-in that is a bit-exact pass-through at its defaults                  -> WARN (meters / analysers are expected)
 //   - the plug-in window's page messages (sw_message.h, no window needed): the first poll is a well-formed update, presets save / load / delete in a temporary HOME,
-//     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs) -> FAIL
+//     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs), EQ07's Auto thresh button call reaches the audio thread -> FAIL
 //   - processing time per second of audio                                         -> printed only (CI runners are noisy)
 // Usage: sw-host-smoke <dir-or-.clap> [...]      (Linux; exit code 1 when any product FAILs)
 #include "sw_message.h"
@@ -230,6 +230,12 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c refclear 1");
         const auto c = readouts(2);
         if (c.size() < 12 || c[4] != 0.0) fail("UT03: refclear left the reference");
+    } else if (code == "EQ07") {   // a button call that runs on the audio thread (the queue): Auto thresh starts listening
+        const auto base = readouts(2);
+        if (base.size() < 2 || base[0] != 0.0) { fail("EQ07 read-outs missing or already listening"); return; }
+        m->send(p, "c learn");
+        const auto a = readouts(2);
+        if (a.size() < 2 || a[0] != 1.0 || a[1] <= 0.0) fail("EQ07: Auto thresh did not start listening after the screen's button call");
     } else if (code == "RV04") {
         const auto base = readouts(2);
         if (base.size() < 3) { fail("RV04 read-outs missing"); return; }

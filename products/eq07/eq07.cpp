@@ -129,6 +129,33 @@ void Processor::spectralFrame(int c) {
     for (int n = 0; n < kN; ++n) s.ola[static_cast<size_t>((s.r + n) % kN)] += 0.5 * buf_[static_cast<size_t>(n)].real() * win_[static_cast<size_t>(n)];  // Hann at 75 % overlap sums to 2
 }
 
+void Processor::learnThresholds() {
+    if (!prepared_) return;
+    learnTotal_ = learnLeft_ = std::max(1, static_cast<int>(kLearnSeconds * fs_)); nWrites_ = writeAt_ = 0;
+    for (auto& h : hist_) h.fill(0);
+}
+
+// every dynamic band (on, with a gain, Range not 0): the percentile of what it heard becomes its Threshold (the histogram is of 16-sample blocks, 1 dB bins)
+void Processor::finishLearning() {
+    nWrites_ = writeAt_ = 0;
+    for (int b = 0; b < kBands; ++b) {
+        if (!active(b) || !hasGain(b) || std::abs(t(b, Range)) < 1e-6) continue;
+        const auto& h = hist_[static_cast<size_t>(b)]; uint64_t total = 0; for (uint32_t v : h) total += v;
+        if (total == 0) continue;
+        const double p = t(b, Range) < 0.0 ? 0.80 : 0.20;
+        uint64_t acc = 0; int bin = kHistBins - 1;
+        for (int k = 0; k < kHistBins; ++k) { acc += h[static_cast<size_t>(k)]; if (static_cast<double>(acc) >= p * static_cast<double>(total)) { bin = k; break; } }
+        const double thr = std::clamp(static_cast<double>(bin - 90), -60.0, 0.0), id = b * kPerBand + Thresh;
+        target_[static_cast<size_t>(id)] = thr; writes_[static_cast<size_t>(nWrites_++)] = {static_cast<int>(id), thr};
+    }
+}
+
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (writeAt_ >= nWrites_) { nWrites_ = writeAt_ = 0; return 0; }
+    id = writes_[static_cast<size_t>(writeAt_)].first; plain = writes_[static_cast<size_t>(writeAt_)].second; ++writeAt_;
+    return 7;
+}
+
 void Processor::run(float** ch, int numCh, int n, const float* const* sc, int scCh) {
     const int nch = std::min(numCh, 2);
     const bool ext = target_[Sidechain] > 0.5 && sc != nullptr && scCh > 0;
@@ -141,8 +168,9 @@ void Processor::run(float** ch, int numCh, int n, const float* const* sc, int sc
             if (!active(b) || !hasGain(b) || std::abs(t(b, Range)) < 1e-6) { if (bd.amount != 0.0) { bd.amount = 0.0; moved = true; } continue; }
             const double atk = Ballistics::coef(fs_, t(b, Attack)), rel = Ballistics::coef(fs_, t(b, Release));
             const double range = std::abs(t(b, Range));
+            double level = 0;
             for (int i = start; i < start + len; ++i) {
-                double level = 0;
+                level = 0;
                 for (int c = 0; c < nch; ++c) {
                     const double key = ext ? sc[std::min(c, scCh - 1)][i] : ch[c][i];
                     level = std::max(level, bd.lvl[static_cast<size_t>(c)].process(bd.det[static_cast<size_t>(c)].process(key)));
@@ -152,7 +180,9 @@ void Processor::run(float** ch, int numCh, int n, const float* const* sc, int sc
                 bd.amount = want + (want > bd.amount ? atk : rel) * (bd.amount - want);
             }
             if (std::abs(bd.amount - bd.applied) * range > 0.01) moved = true;
+            if (learnLeft_ > 0) { const int bin = std::clamp(static_cast<int>(std::lround(20.0 * std::log10(std::max(level, 1e-9)))) + 90, 0, kHistBins - 1); ++hist_[static_cast<size_t>(b)][static_cast<size_t>(bin)]; }
         }
+        if (learnLeft_ > 0) { learnLeft_ -= len; if (learnLeft_ <= 0) { learnLeft_ = 0; finishLearning(); } }
         if (moved && !spectral_) configure(len);
         for (int i = start; i < start + len; ++i) {
             for (int c = 0; c < nch; ++c) {
