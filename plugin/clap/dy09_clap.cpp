@@ -12,7 +12,7 @@ struct Dy09 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_COMPRESSOR, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.dy09", "SW DY09 Transient", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.13.0", "Transient shaper", f};
+                                                   "https://seventh-well.com", "", "", "0.14.0", "Transient shaper", f};
         return &d;
     }
 };

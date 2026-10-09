@@ -140,11 +140,19 @@
 - [ ] IN04 Bass — Slides and ghost notes from MIDI velocity （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN05 Organ — Drawbar settings morph with an expression pedal （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN06 Sampler — Auto maps slices to keys by transient （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
-- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：エンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド、最大 32 音・Poly／Mono／Legato・3 ms のボイススチール・サステインペダル・ベンド、レイヤー 4）、FX 6 スロット（順番入れ替え・休止）、LFO 2（楕円軌道）・変調マトリクス 8・マクロ 8・フライバイ・重力とテスト、プラグイン層（CLAP の音符入力、VST3／AU）、発振器 4 種（Analog・Wavetable 8 表・FM 2 オペレーター・Sample 8 種、折り返しの実測つき）、ファクトリープリセット 128 種（BS.1770 で −16 LUFS にそろえる道具 `tools/in07_presets.cpp`、似すぎの数値検査、テスト）、プラグインでのプリセット選択（`in07.preset`、変わった値をホストへ返す）。ユーザープリセット（`.swpreset`、保存場所、CLAP の preset-discovery／preset-load、壊れたファイルの拒否）。ARP・トランスゲート（2026-10-09 済、README「IN07 のアルペジエーターとトランスゲート」）。残り：画面のプリセットブラウザと保存ボタン・画面の実装（デザインは `docs/design/in07/` の 6 画面＋星系ビュー部品で済み。名前・ロゴタイプ決定済み。動きの設定 MOTION 60／30／OFF を利用者の画面設定として保存）・商標の確認。README「開発中の楽器」
+- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：エンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド、最大 32 音・Poly／Mono／Legato・3 ms のボイススチール・サステインペダル・ベンド、レイヤー 4）、FX 6 スロット（順番入れ替え・休止）、LFO 2（楕円軌道）・変調マトリクス 8・マクロ 8・フライバイ・重力とテスト、プラグイン層（CLAP の音符入力、VST3／AU）、発振器 4 種（Analog・Wavetable 8 表・FM 2 オペレーター・Sample 8 種、折り返しの実測つき）、ファクトリープリセット 128 種（BS.1770 で −16 LUFS にそろえる道具 `tools/in07_presets.cpp`、似すぎの数値検査、テスト）、プラグインでのプリセット選択（`in07.preset`、変わった値をホストへ返す）。ユーザープリセット（`.swpreset`、保存場所、CLAP の preset-discovery／preset-load、壊れたファイルの拒否）。ARP・トランスゲート（2026-10-09 済、README「IN07 のアルペジエーターとトランスゲート」）。画面（2026-10-09 済：5 画面・プリセットブラウザと保存・ライセンス・画面の設定。README「IN07 の画面」）。残り：商標の確認。README「開発中の楽器」
   - [x] プリセット切り替えの段差（押さえたまま切り替えるとクリック。60 組中 21 組 → 8 ms のフェードと弾き直しで 0。README「IN07 の評価」）
   - [x] 重いプリセットの CPU（Anthem Supersaw：4 和音 18.9 → 10.2 %・16 音 73 → 36 %＝このコンテナ。ボイスの 2× を 8 係数に、左右を SIMD の 1 組に。README「IN07 の評価」）
-  - [ ] MIDI：Program Change、MIDI learn（CC → マクロ）、MPE／ノートごとの表現、マイクロチューニング、ボイスごとの LFO
-  - [ ] パラメータの module を階層（「Layer 1/Filter」）に
+  - [x] 画面（`ui/in07/`、WebView。ページ・値・ジェスチャー・画面の鍵盤・プリセット・保存・ライセンス・設定。テスト＋本物のページとプラグイン側の通しの確認 `tools/in07_window_check.py`）
+  - [x] FX の順番の入れ替えのクリック（4 ms で下げて入れ替え。README「IN07 の画面」）
+  - [ ] 画面の Windows（WebView2）・macOS（WKWebView）の実物の窓での確認
+  - [x] MIDI：Program Change（0〜127 → プリセット 1〜128）、MIDI ラーン（CC → マクロ、保存データに）
+  - [x] パラメータの module を階層（「Layer 1/Filter」）に
+  - [ ] MIDI：MPE／ノートごとの表現、マイクロチューニング、ボイスごとの LFO
+  - [x] 配布の形：`tools/package_in07.py`（プラグイン・日英マニュアル・同梱物のライセンス）、`.github/workflows/release-in07.yml`（Windows・macOS、販売用は鍵のないビルドを止める、macOS の署名・公証は secrets があるときだけ）
+  - [ ] macOS の署名・公証（Apple Developer Program の登録と Developer ID 証明書は依頼者。secrets を入れれば release-in07 が行う）
+  - [ ] 製品版の公開鍵を `core/src/license_state.cpp` に（依頼者の PC で `sw-license-tool keygen`。秘密鍵はリポジトリにも CI にも入れない）、ライセンスサーバーの公開と `In07::kActivationServer`
+  - [ ] 128 種の試聴ページ（LP 用）
   - [ ] 実際の DAW での確認（Live・Logic・Cubase・Studio One・FL Studio・Bitwig・Reaper）。いまは検証ツールと自作ホストだけ
   - [ ] 取扱説明書。AAX（Pro Tools）とスタンドアロンを出すか決める
 
@@ -233,6 +241,7 @@
 
 - [x] LP（Design キャンバス「SWINGBY LP」）と販売文の原稿 `docs/marketing/in07_swingby_copy.md`（日英。海外の製品ページの構成と書き方を参考に改稿、2026-10-09）
 - [ ] LP の空欄：価格、Stripe の購入リンク、体験版のリンク、対応する Windows の版、特定商取引法に基づく表記・プライバシーポリシー・利用規約・お問い合わせ
+- [x] 特定商取引法に基づく表記・プライバシーポリシー・使用許諾の下書き（`docs/legal/`、専門家の確認前。〔 〕は依頼者が埋める）
 - [ ] 英語版の LP（原稿の English から）
 
 ## 有料配布のセキュリティ（`docs/security.md`、2026-10-09）

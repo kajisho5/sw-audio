@@ -17,7 +17,7 @@ struct Lv23 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_MASTERING, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv23", "SW LV23 Loudness", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.13.0", "Broadcast loudness meter with log export", f};
+                                                   "https://seventh-well.com", "", "", "0.14.0", "Broadcast loudness meter with log export", f};
         return &d;
     }
 };

@@ -12,7 +12,7 @@ struct Ms05 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.ms05", "SW MS05 Leveler", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.13.0", "Leveler that writes its rides as automation", f};
+                                                   "https://seventh-well.com", "", "", "0.14.0", "Leveler that writes its rides as automation", f};
         return &d;
     }
 };

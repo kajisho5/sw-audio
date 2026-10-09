@@ -1,0 +1,144 @@
+# SWINGBY (SW IN07): the packages a customer downloads — Windows x64 (VST3, CLAP) and macOS universal (AU, VST3, CLAP) — with the
+# manuals and the licences (tools/package_in07.py). Run by hand: Actions -> release-in07 -> Run workflow.
+#   release = false (default): a test package (licences not checked: it never inserts the trial's silence). Not for sale.
+#   release = true: a package for sale. Built with SW_LICENSE_ENFORCE=ON and stopped when the build would not check licences (no
+#                   production public key in core/src/license_state.cpp yet).
+# macOS signing and notarization run only when their secrets are set (Settings -> Secrets and variables -> Actions):
+#   MACOS_CERT_P12_BASE64   the "Developer ID Application" certificate with its private key (.p12, base64)
+#   MACOS_CERT_PASSWORD     the .p12's password
+#   MACOS_SIGN_IDENTITY     e.g. "Developer ID Application: <name> (<team id>)"
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD   for notarytool (APPLE_APP_PASSWORD: an app-specific password of the Apple ID)
+# Without them the macOS package is unsigned: macOS blocks plug-ins downloaded from the internet until they are notarized, so an
+# unsigned package is for testing only. Windows: the zip needs no signature (SmartScreen checks programs that run, such as installers,
+# not plug-in files a host loads); code signing certificates now come on hardware or a cloud service, add that step when one is chosen.
+name: release-in07
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'A package for sale (licences checked; needs the production public key)'
+        type: boolean
+        default: false
+  # a test package whenever the packaging itself changes on the SWINGBY branch (a manual run needs this file on the default branch)
+  push:
+    branches: [in07-engine]
+    paths: ['.github/workflows/release-in07.yml', 'tools/package_in07.py', 'docs/dist/in07/**']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, plat: windows-x64}
+          - {os: macos-latest, plat: macos-universal}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    env:
+      HAVE_MAC_SIGNING: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.APPLE_ID != '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4.4.0, pinned to its commit
+
+      - name: Configure
+        run: |
+          E=OFF; if [ "${{ inputs.release }}" = "true" ]; then E=ON; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSW_LICENSE_ENFORCE=$E "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"
+          else
+            cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSW_LICENSE_ENFORCE=$E
+          fi
+          V=$(sed -n 's/^project(sw-audio VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          [ -n "$V" ] || { echo "no version in CMakeLists.txt"; exit 1; }
+          echo "SW_VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4 --target sw-in07-plugin_all sw-tests sw-license-tool
+
+      - name: Licences are checked (a package for sale)
+        if: inputs.release
+        run: |
+          T="$(find build -type f \( -name sw-license-tool -o -name sw-license-tool.exe \) | head -1)"
+          "$T" enforced
+
+      - name: Unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validate CLAP (clap-validator)
+        run: |
+          Z=windows.zip; want=d935c3af0a45c3911ea2e900f4aa5d6709dac82bb485f0c4ce28648ab2cd0c10
+          if [ "$RUNNER_OS" = "macOS" ]; then Z=macos-universal.zip; want=bbec8cd7d18274e549d5d8c12ece3cec54be966129388dd2e742b9957f2ba9f1; fi
+          curl -sL -o cv.zip "https://github.com/free-audio/clap-validator/releases/download/0.4.1/clap-validator-0.4.1-127-g152b982-$Z"
+          got=$( (sha256sum cv.zip 2>/dev/null || shasum -a 256 cv.zip) | cut -d' ' -f1)
+          [ "$got" = "$want" ] || { echo "clap-validator download does not match its pinned SHA-256 ($got)"; exit 1; }
+          mkdir cv && cd cv && unzip -q ../cv.zip
+          for t in *.tar.gz; do [ -f "$t" ] && tar xzf "$t"; done
+          CV=$(find . -type f \( -name clap-validator -o -name clap-validator.exe \) | head -1)
+          chmod +x "$CV"
+          cd ..
+          X="preset-discovery-(crawl|load)"; if [ "$RUNNER_OS" = "Windows" ]; then X="preset-discovery"; fi   # as in build.yml
+          "cv/$CV" validate -x "$X" "$(find build -maxdepth 3 -name 'SW IN07 SWINGBY.clap' -not -path '*/cpm/*' | head -1)"
+
+      - name: Sign and notarize (macOS, when the secrets are set)
+        if: runner.os == 'macOS' && env.HAVE_MAC_SIGNING == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/sign.keychain-db"; KP="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          P=build/plugins
+          for B in "$P/SW IN07 SWINGBY.component" "$P/SW IN07 SWINGBY.vst3" "$P/SW IN07 SWINGBY.clap"; do
+            codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$B"
+            codesign --verify --strict --verbose=2 "$B"
+            ditto -c -k --keepParent "$B" "$RUNNER_TEMP/notarize.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$B"
+            rm -f "$RUNNER_TEMP/notarize.zip"
+          done
+          security delete-keychain "$KC"
+
+      - name: Validate AU (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "build/plugins/SW IN07 SWINGBY.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -v aumu In07 SvWl
+
+      - name: Package
+        run: |
+          python3 -m pip install --quiet markdown==3.10.3 || python3 -m pip install --quiet --break-system-packages markdown==3.10.3
+          python3 tools/package_in07.py build dist "${{ matrix.plat }}" "$SW_VERSION"
+          N="SWINGBY-$SW_VERSION-${{ matrix.plat }}"
+          [ "${{ inputs.release }}" = "true" ] || N="$N-TEST"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ditto -c -k --keepParent "dist/SWINGBY-$SW_VERSION-${{ matrix.plat }}" "$N.zip"
+          else
+            (cd dist && 7z a -tzip "../$N.zip" "SWINGBY-$SW_VERSION-${{ matrix.plat }}" > /dev/null)
+          fi
+          ls -la "$N.zip"
+          echo "PKG=$N" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2, pinned to its commit
+        with:
+          name: ${{ env.PKG }}
+          path: ${{ env.PKG }}.zip

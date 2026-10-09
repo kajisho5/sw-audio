@@ -1,0 +1,204 @@
+<title>SWINGBY Preset Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=Michroma&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* layout: a night sky with the 128 sounds as a field of cards; one player docked at the bottom, like the plug-in's ribbon */
+:root {
+  --bg: #050708; --bg2: #0e1516; --fg: #e8e8e8; --strong: #f2f2f2; --sub: #8e978f; --line: rgba(141,224,195,.14); --line2: rgba(141,224,195,.35);
+  --acc: #8de0c3; --cat: #3fd1a0; --card: rgba(255,255,255,.035); --card-hi: rgba(63,209,160,.10); --wave: rgba(141,224,195,.35); --wave-on: #8de0c3;
+  --bar: rgba(8,12,13,.92); --on-ink: #0c0c0d;
+  --display: Michroma, 'Arial', sans-serif; --body: 'Barlow Condensed', 'Arial Narrow', sans-serif; --mono: 'Space Mono', ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #e9f1ee; --bg2: #f6faf8; --fg: #1b2622; --strong: #101614; --sub: #4c5f58; --line: rgba(11,90,65,.14); --line2: rgba(11,90,65,.35);
+  --acc: #0b5a41; --cat: #178a64; --card: rgba(255,255,255,.65); --card-hi: rgba(23,138,100,.12); --wave: rgba(11,90,65,.28); --wave-on: #178a64;
+  --bar: rgba(246,250,248,.94); --on-ink: #0c0c0d; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #e9f1ee; --bg2: #f6faf8; --fg: #1b2622; --strong: #101614; --sub: #4c5f58; --line: rgba(11,90,65,.14); --line2: rgba(11,90,65,.35);
+  --acc: #0b5a41; --cat: #178a64; --card: rgba(255,255,255,.65); --card-hi: rgba(23,138,100,.12); --wave: rgba(11,90,65,.28); --wave-on: #178a64;
+  --bar: rgba(246,250,248,.94); --on-ink: #0c0c0d; color-scheme: light; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: radial-gradient(ellipse 80% 50% at 30% 0%, var(--bg2), var(--bg) 70%) fixed, var(--bg); color: var(--fg); font-family: var(--body); font-size: 17px; line-height: 1.5; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 150px; display: flex; flex-direction: column; gap: 28px; }
+header { display: flex; flex-direction: column; gap: 14px; }
+.logo { height: 26px; width: auto; max-width: 100%; display: block; align-self: flex-start; }
+.logo.l { display: none; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .logo.d { display: none; } :root:not([data-theme="dark"]) .logo.l { display: block; } }
+:root[data-theme="light"] .logo.d { display: none; } :root[data-theme="light"] .logo.l { display: block; }
+:root[data-theme="dark"] .logo.d { display: block; } :root[data-theme="dark"] .logo.l { display: none; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(22px, 4vw, 34px); letter-spacing: .14em; margin: 0; color: var(--strong); text-wrap: balance; }
+.lead { margin: 0; max-width: 62ch; color: var(--fg); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font-family: var(--mono); font-size: 12px; color: var(--sub); letter-spacing: .04em; }
+.facts b { color: var(--acc); font-weight: 700; }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--body); font-size: 14px; letter-spacing: .2em; padding: 6px 12px; min-height: 36px; border-radius: 18px; border: 1px solid var(--line2); background: none; color: var(--sub); cursor: pointer; }
+.chip span { font-family: var(--mono); font-size: 10px; letter-spacing: 0; margin-left: 6px; opacity: .75; }
+.chip[aria-pressed="true"] { color: var(--on-ink); background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); border-color: transparent; }
+.chip:focus-visible, .card:focus-visible, .ctl:focus-visible, #q:focus-visible { outline: 2px solid var(--cat); outline-offset: 2px; }
+#q { font: inherit; font-size: 15px; padding: 7px 12px; min-height: 36px; border-radius: 18px; border: 1px solid var(--line2); background: var(--card); color: var(--fg); width: 220px; max-width: 100%; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.card { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 12px; row-gap: 6px; align-items: center; text-align: left;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.card:hover { border-color: var(--line2); }
+.card.on { background: var(--card-hi); border-color: var(--line2); }
+.card .no { font-family: var(--mono); font-size: 11px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.card .nm { font-size: 18px; font-weight: 500; letter-spacing: .03em; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; padding-right: 44px; }
+.card .ct { position: absolute; top: 14px; right: 14px; font-size: 11px; letter-spacing: .24em; color: var(--sub); }
+.card canvas { grid-column: 1 / -1; width: 100%; height: 30px; display: block; }
+.empty { color: var(--sub); margin: 0; }
+.bar { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--bar); border-top: 1px solid var(--line); backdrop-filter: blur(10px); }
+.bar .in { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.ctls { display: flex; gap: 6px; }
+.ctl { width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line2); background: none; color: var(--fg); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.ctl.play { background: linear-gradient(180deg, #8de0c3 -30%, #22a87c 70%); color: var(--on-ink); border-color: transparent; }
+.now { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.now .t { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.now .t b { font-family: var(--display); font-weight: 400; font-size: 14px; letter-spacing: .12em; color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.now .t span { font-size: 12px; letter-spacing: .22em; color: var(--sub); white-space: nowrap; }
+#big { width: 100%; height: 34px; display: block; cursor: pointer; }
+.auto { display: flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: .2em; color: var(--sub); white-space: nowrap; }
+.auto input { accent-color: #22a87c; width: 18px; height: 18px; }
+footer { font-size: 14px; color: var(--sub); max-width: 70ch; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 560px) { .bar .in { grid-template-columns: minmax(0, 1fr) auto; } .ctls { grid-column: 1 / -1; order: 3; justify-content: center; } .auto span { display: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <img class="logo d" alt="SWINGBY" src="data:image/svg+xml;base64,@@DARK@@">
+    <img class="logo l" alt="SWINGBY" src="data:image/svg+xml;base64,@@LIGHT@@">
+    <h1>128 SOUNDS, ONE LEVEL</h1>
+    <p class="lead">SWINGBY のファクトリープリセット 128 種を、プラグインが鳴らすそのままの音で。ここで音量はそろえていません。プリセット自体がすべて −16 LUFS です。</p>
+    <div class="facts"><span><b>128</b> PRESETS</span><span><b>−16</b> LUFS</span><span><b>48</b> kHz</span><span><b>120</b> BPM</span><span>MP3 160 kbps</span></div>
+  </header>
+
+  <div class="tools">
+    <div class="chips" id="chips" role="group" aria-label="カテゴリ"></div>
+    <input id="q" type="search" placeholder="名前で探す" aria-label="名前で探す" autocomplete="off">
+  </div>
+
+  <section class="grid" id="grid" aria-label="プリセット"></section>
+  <p class="empty" id="empty" hidden>その名前のプリセットはありません。</p>
+
+  <footer>
+    <span>録り方：カテゴリごとの試聴フレーズ（音の高さと長さはカテゴリで決まっています）を、ベロシティ 0.8・テンポ 120 で、プラグインと同じエンジンから書き出しました。各プリセットのエフェクトと音量のまま、後の加工はなし。フレーズのあとに 2 秒の余韻があります。</span>
+    <span>番号はプリセットの並び順です。MIDI のプログラムチェンジは番号から 1 を引いた値です（#001 は 0）。</span>
+  </footer>
+</div>
+
+<div class="bar" role="region" aria-label="プレーヤー">
+  <div class="in">
+    <div class="ctls">
+      <button class="ctl" id="prev" type="button" aria-label="前のプリセット"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 2v10M12 2 5 7l7 5z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+      <button class="ctl play" id="play" type="button" aria-label="再生"><svg id="pi" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11L13.5 8z" fill="currentColor"/></svg></button>
+      <button class="ctl" id="next" type="button" aria-label="次のプリセット"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M11 2v10M2 2l7 5-7 5z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="now"><div class="t"><b id="nn">プリセットを選んで再生</b><span id="nc"></span></div><canvas id="big" aria-hidden="true"></canvas></div>
+    <label class="auto"><input type="checkbox" id="auto" checked><span>続けて再生</span></label>
+  </div>
+</div>
+<audio id="au" preload="none"></audio>
+
+<script>
+const DATA = @@DATA@@;
+const CATS = ['LEAD', 'PAD', 'BASS', 'PLUCK', 'KEYS', 'SEQ', 'FX'];
+const byId = id => document.getElementById(id);
+const au = byId('au');
+let cat = 'ALL', q = '', cur = -1;
+try { const s = localStorage.getItem('swg-cat'); if (s && (s === 'ALL' || CATS.includes(s))) cat = s; } catch (e) { /* no storage */ }
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const num = i => '#' + String(i + 1).padStart(3, '0');
+// a preset's level over time (peaks of its audition, 72 bins), lit up to where the playback is
+function drawWave(cv, peaks, frac) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, w, h);
+  const n = peaks.length, bw = w / n, on = css('--wave-on'), off = css('--wave');
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(0.06, Math.min(1, Math.sqrt(peaks[i] / 0.9))), bh = v * (h - 2);   // square root: quiet tails stay visible
+    g.fillStyle = (i + 0.5) / n <= frac ? on : off;
+    g.fillRect(i * bw + bw * 0.18, (h - bh) / 2, Math.max(1, bw * 0.64), bh);
+  }
+}
+const cards = DATA.map((p, i) => {
+  const b = document.createElement('button');
+  b.className = 'card'; b.type = 'button';
+  b.setAttribute('aria-label', num(i) + ' ' + p.n + '（' + p.c + '）を再生');
+  b.innerHTML = '<span class="no">' + num(i) + '</span><span class="nm"></span><span class="ct">' + p.c + '</span><canvas aria-hidden="true"></canvas>';
+  b.querySelector('.nm').textContent = p.n;
+  b.addEventListener('click', () => (cur === i && !au.paused) ? au.pause() : play(i));
+  byId('grid').appendChild(b);
+  return b;
+});
+const visible = () => DATA.map((p, i) => i).filter(i => (cat === 'ALL' || DATA[i].c === cat) && (!q || DATA[i].n.toLowerCase().includes(q)));
+const frac = () => au.duration ? au.currentTime / au.duration : 0;
+function render() {
+  const v = new Set(visible());
+  cards.forEach((c, i) => { c.hidden = !v.has(i); });
+  byId('empty').hidden = v.size > 0;
+  requestAnimationFrame(() => cards.forEach((c, i) => { if (!c.hidden) drawWave(c.querySelector('canvas'), DATA[i].p, i === cur ? frac() : 0); }));
+  [...byId('chips').children].forEach(b => b.setAttribute('aria-pressed', b.dataset.c === cat ? 'true' : 'false'));
+}
+['ALL'].concat(CATS).forEach(c => {
+  const b = document.createElement('button');
+  b.className = 'chip'; b.type = 'button'; b.dataset.c = c;
+  b.innerHTML = c + '<span>' + (c === 'ALL' ? DATA.length : DATA.filter(p => p.c === c).length) + '</span>';
+  b.addEventListener('click', () => { cat = c; try { localStorage.setItem('swg-cat', c); } catch (e) { /* none */ } render(); });
+  byId('chips').appendChild(b);
+});
+byId('q').addEventListener('input', e => { q = e.target.value.trim().toLowerCase(); render(); });
+function play(i) {
+  if (i < 0 || i >= DATA.length) return;
+  const was = cur;
+  cur = i;
+  if (was >= 0) { cards[was].classList.remove('on'); drawWave(cards[was].querySelector('canvas'), DATA[was].p, 0); }
+  cards[i].classList.add('on');
+  au.src = DATA[i].f;
+  au.play().catch(() => {});
+  byId('nn').textContent = num(i) + '  ' + DATA[i].n;
+  byId('nc').textContent = DATA[i].c;
+}
+function step(d) {
+  const v = visible();
+  if (!v.length) return;
+  const k = v.indexOf(cur);
+  play(v[k < 0 ? 0 : (k + d + v.length) % v.length]);
+  cards[cur].scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+byId('prev').addEventListener('click', () => step(-1));
+byId('next').addEventListener('click', () => step(1));
+byId('play').addEventListener('click', () => { if (cur < 0) step(1); else if (au.paused) au.play().catch(() => {}); else au.pause(); });
+const showPlay = () => {
+  byId('pi').innerHTML = au.paused ? '<path d="M4 2.5v11L13.5 8z" fill="currentColor"/>' : '<path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" fill="currentColor"/>';
+  byId('play').setAttribute('aria-label', au.paused ? '再生' : '一時停止');
+};
+au.addEventListener('play', showPlay);
+au.addEventListener('pause', showPlay);
+au.addEventListener('ended', () => { if (byId('auto').checked) step(1); });
+const idle = new Array(72).fill(0.05);
+function tick() {
+  if (cur >= 0) { const f = frac(); drawWave(cards[cur].querySelector('canvas'), DATA[cur].p, f); drawWave(byId('big'), DATA[cur].p, f); }
+  else drawWave(byId('big'), idle, 0);
+  requestAnimationFrame(tick);
+}
+byId('big').addEventListener('click', e => {
+  if (cur < 0 || !au.duration) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  au.currentTime = (e.clientX - r.left) / r.width * au.duration;
+});
+document.addEventListener('keydown', e => {
+  if (e.target === byId('q') || e.target.tagName === 'BUTTON' && e.key === ' ') return;
+  if (e.key === ' ') { e.preventDefault(); byId('play').click(); }
+  else if (e.key === 'ArrowRight') step(1);
+  else if (e.key === 'ArrowLeft') step(-1);
+});
+window.addEventListener('resize', render);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+render();
+requestAnimationFrame(tick);
+</script>

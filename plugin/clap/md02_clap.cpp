@@ -12,7 +12,7 @@ struct Md02 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_FLANGER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.md02", "SW MD02 Flanger", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.13.0", "Flanger with through-zero", f};
+                                                   "https://seventh-well.com", "", "", "0.14.0", "Flanger with through-zero", f};
         return &d;
     }
 };
