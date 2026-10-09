@@ -1059,6 +1059,38 @@
   }
 
 
+  // ---- VO08 breath: the input level over the last ~12 s (grey area) with the output (line), and a pink band wherever the plug-in decided "breath"
+  // readouts: [in a breath now (1 / 0), the gain it gets (dB), breaths counted]; levels from the measured input / output peaks. The design's three example bands are replaced by the real ones.
+  function breathDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const rects = [...svg.querySelectorAll(':scope > rect')], texts = [...svg.querySelectorAll(':scope > text')], area = svg.querySelector(':scope > path'); if (!rects.length || !texts.length || !area) return null;
+    const bandAttr = { fill: rects[0].getAttribute('fill'), 'fill-opacity': rects[0].getAttribute('fill-opacity') }, textAttr = {}; for (const a of texts[0].attributes) textAttr[a.name] = a.value;
+    rects.forEach(r => r.remove()); texts.forEach(t => t.remove());
+    const [, , W, H] = vbOf(svg), N = 200, CY = H / 2, AMP = CY - 10, lvl = Ring(N, -90), outl = Ring(N, -90), flag = Ring(N, 0), pool = [];
+    const out = mkEl('path', { fill: 'none', stroke: '#f2f2f2', 'stroke-width': 1.2, 'stroke-opacity': 0.8 }); svg.append(out);
+    const band = k => pool[k] || (pool[k] = { r: svg.insertBefore(mkEl('rect', Object.assign({ y: 0, height: H }, bandAttr)), area), t: svg.insertBefore(mkEl('text', Object.assign({}, textAttr, { y: 14 })), area) });
+    const hgt = db => clamp((db + 60) / 60, 0, 1) * AMP;
+    return { update(info) {
+      const m = info && info.meters, r = info && info.readouts; if (!m || !r || r.length < 3) return;
+      lvl.push(Math.max(m[0], m[1])); outl.push(Math.max(m[2], m[3])); flag.push(r[0] > 0.5 ? 1 : 0);
+      const dx = W / (N - 1); let up = '', dn = '', o = '';
+      for (let i = 0; i < N; i++) { const x = (i * dx).toFixed(1); up += (i ? ' L' : 'M') + x + ' ' + (CY - hgt(lvl.a[i])).toFixed(1); o += (i ? ' L' : 'M') + x + ' ' + (CY - hgt(outl.a[i])).toFixed(1); }
+      for (let i = N - 1; i >= 0; i--) dn += ' L' + (i * dx).toFixed(1) + ' ' + (CY + hgt(lvl.a[i]) * 0.9).toFixed(1);
+      area.setAttribute('d', up + dn + ' Z'); out.setAttribute('d', o);
+      let k = 0, i = 0;
+      while (i < N) {
+        if (!flag.a[i]) { i++; continue; }
+        let j = i; while (j < N && flag.a[j]) j++;
+        const b = band(k++), x0 = i * dx, w = Math.max(3, (j - i) * dx);
+        b.r.setAttribute('x', x0.toFixed(1)); b.r.setAttribute('width', w.toFixed(1)); b.r.style.display = '';
+        b.t.setAttribute('x', (x0 + w / 2).toFixed(1)); b.t.textContent = w > 34 ? 'Breath' : ''; b.t.style.display = '';
+        i = j;
+      }
+      for (; k < pool.length; k++) { pool[k].r.style.display = 'none'; pool[k].t.style.display = 'none'; }
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1104,6 +1136,7 @@
     RV04: convolutionDisplay,
     VO01: pitchGraphDisplay,
     VO03: harmonyGraphDisplay,
+    VO08: breathDisplay,
     RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
