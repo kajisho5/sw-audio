@@ -379,7 +379,7 @@ def bind_actions(root, code, report):
     acts = ACTIONS.get(code, [])
     done = set()
     for b in root.select('button'):
-        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call'):
+        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call') or b.get('data-tap'):
             continue
         tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None
         t = (tl.get_text() if tl is not None else b.get_text()).strip()
@@ -404,7 +404,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'compare a', 'snapshot', 'repair'}
-    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call')
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -551,7 +551,7 @@ def build(code, report):
             elif t in ('A', 'B') and not b.get('data-act'):
                 b['data-act'] = t
     for b in root.select('button, .btn, .chip, .bigbtn'):
-        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call') or b.find_parent(attrs={'data-p': True}):
+        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call') or b.get('data-tap') or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip()
         tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None   # the LIVE line's tiles: <b>label</b> + <span class="tv">value</span>
@@ -584,6 +584,14 @@ def build(code, report):
             tp = next((p for p in params if p['name'] == al['toggle']), None)
             if tp is not None:
                 b['data-p'] = str(tp['i']); b['data-toggle'] = '1'; nbb += 1; continue
+        if isinstance(al, dict) and al.get('tap'):     # tap tempo (DL01): {"tap": "Time", "off": "Sync"}: the taps' average interval is written to Time (ms); the Sync switch goes off (Time would be snapped to a note otherwise)
+            tp = next((p for p in params if p['name'] == al['tap']), None)
+            if tp is not None:
+                b['data-tap'] = str(tp['i'])
+                op = next((p for p in params if p['name'] == al.get('off')), None)
+                if op is not None:
+                    b['data-tapoff'] = str(op['i'])
+                nbb += 1; continue
         if isinstance(al, dict) and al.get('set'):     # one button sets several parameters (MS01 Character corners): {"set": [["Character X", 0], ["Character Y", 100]]}
             idx = {p['name']: p['i'] for p in params}
             b['data-set'] = json.dumps([[idx[nm], v] for nm, v in al['set']]); nbb += 1; continue

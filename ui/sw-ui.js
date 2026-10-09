@@ -340,6 +340,19 @@
         b.addEventListener('click', () => { ids.forEach(i => bridge.begin(i)); set.forEach(([i, v]) => setValue(i, v)); ids.forEach(i => bridge.end(i)); });
         const f = () => b.classList.toggle('on', set.every(([i, v]) => hostOf(i) && Math.abs(vals[i] - v) < 1e-6)); ids.forEach(i => reg(i, f));
       });
+      // tap tempo (DL01): the average interval of the last taps (a gap over 2.5 s starts again) is written to the Time parameter (ms); data-tapoff = a switch (Sync) that is turned off
+      // because Time would be snapped to a note length while it is on
+      skinBox.querySelectorAll('button[data-tap]').forEach(b => {
+        const ti = +b.dataset.tap, oi = b.dataset.tapoff === undefined ? -1 : +b.dataset.tapoff, h = hostOf(ti); if (!h) return; let taps = [];
+        b.addEventListener('click', () => {
+          const now = performance.now(); if (taps.length && now - taps[taps.length - 1] > 2500) taps = []; taps = taps.concat(now).slice(-5);
+          b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 120);
+          if (taps.length < 2) return;
+          const ms = clamp((taps[taps.length - 1] - taps[0]) / (taps.length - 1), h.p.min, h.p.max);
+          bridge.begin(ti); setValue(ti, ms); bridge.end(ti);
+          if (oi >= 0 && hostOf(oi) && Math.round(vals[oi]) !== 0) { bridge.begin(oi); setValue(oi, 0); bridge.end(oi); }
+        });
+      });
       // buttons that call a method of the core (ui/actions.json): Randomize, Ring out, Learn noise, Reset, Tap ...
       skinBox.querySelectorAll('button[data-call]').forEach(b => {
         const name = b.dataset.call, arg = b.dataset.arg === undefined ? '' : b.dataset.arg, tog = !!b.dataset.calltoggle; let on = false;

@@ -406,5 +406,11 @@
     "prefix": "Tilt"
    }
   ]
+ },
+ "DL01": {
+  "btn:tap": {
+   "tap": "Time",
+   "off": "Sync"
+  }
  }
 }
