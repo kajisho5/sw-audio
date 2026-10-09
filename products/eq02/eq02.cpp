@@ -41,7 +41,7 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; linBands_.reserve(kBands); }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 int Processor::kernelLengthFor(double fs, double base) { int L = 2048; while (L < base * fs / 48000.0 * 0.92) L *= 2; return L; }
 
@@ -53,42 +53,52 @@ int Processor::latencySamples() const {
     }
 }
 
-bool Processor::onPath(int b, int p) const {
-    if (target_[Ms] < 0.5) return true;
-    const int place = static_cast<int>(t(b, Place));
+namespace {
+bool onPathOf(const std::array<double, kNumParams>& t, int b, int p) {
+    if (t[Ms] < 0.5) return true;
+    const int place = static_cast<int>(t[static_cast<size_t>(b * kPerBand + Place)]);
     return place == 0 || (place == 1 && p == 0) || (place == 2 && p == 1);
 }
+BandShape shapeOf(const std::array<double, kNumParams>& tt, double fs, int b, double off) {
+    static const BandShape::Type types[6] = {BandShape::Bell, BandShape::LowShelf, BandShape::HighShelf, BandShape::LowCut, BandShape::HighCut, BandShape::Notch};
+    auto t = [&](int f) { return tt[static_cast<size_t>(b * kPerBand + f)]; };
+    BandShape s;
+    s.type = types[static_cast<int>(t(Type))];
+    s.freq = std::min(t(Freq), 0.49 * fs);
+    s.gainDb = t(Gain) + off;
+    s.q = t(Q);
+    s.slope = t(Slope);
+    return s;
+}
+}  // namespace
+bool Processor::onPath(int b, int p) const { return onPathOf(target_, b, p); }
 
 bool Processor::dynamic(int b) const {
     const int ty = static_cast<int>(t(b, Type));
     return std::abs(t(b, DynRange)) > 1e-6 && ty != BandShape::LowCut && ty != BandShape::HighCut;
 }
 
-BandShape Processor::shape(int b, double off) const {
-    static const BandShape::Type types[6] = {BandShape::Bell, BandShape::LowShelf, BandShape::HighShelf, BandShape::LowCut, BandShape::HighCut, BandShape::Notch};
-    BandShape s;
-    s.type = types[static_cast<int>(t(b, Type))];
-    s.freq = std::min(t(b, Freq), 0.49 * fs_);
-    s.gainDb = t(b, Gain) + off;
-    s.q = t(b, Q);
-    s.slope = t(b, Slope);
-    return s;
-}
+BandShape Processor::shape(int b, double off) const { return shapeOf(target_, fs_, b, off); }
 
 void Processor::prepare(double sampleRate, int) {
+    job_.stop();   // (a thread from the last prepare)
     fs_ = sampleRate;
     mode_ = static_cast<int>(target_[PhaseMode]);
     L_ = kernelLengthFor(fs_, target_[Length]);
     fadeLen_ = static_cast<int>(std::lround(0.020 * fs_));
     res_.setup(fs_);
     for (auto& c : conv_) { c.prepare(L_, 128, 1); c.setFadeSamples(fadeLen_); }
-    designer_.prepare(L_);
+    sync_.prepare(L_);
+    const bool worker = wantWorker_ && mode_ == Linear;
+    if (worker) wd_.prepare(L_);
+    st_.store(0); applied_.store(0);
     for (auto& b : band_) { for (auto& f : b.f) f.reset(); for (auto& d : b.det) d.reset(); b.env = {}; b.offset = {}; }
     for (int p = 0; p < 2; ++p) { nat_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); nat_[static_cast<size_t>(p)][kNatDelay] = 1.0; natHist_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); }
     natPos_ = 0;
     atk_ = std::exp(-1.0 / (0.005 * fs_)); rel_ = std::exp(-1.0 / (0.080 * fs_));  // detector: 5 ms / 80 ms (design)
     prepared_ = true;
     snapToTargets();
+    if (worker) job_.start([this] { wd_.run(); st_.store(2); });
 }
 
 void Processor::setParam(int id, double v) {
@@ -145,12 +155,22 @@ void Processor::buildNatural() {
     }
 }
 
-void Processor::buildLinear(bool immediate) {
+void Processor::Design::run() {
+    ranOn = std::this_thread::get_id();
     for (int p = 0; p < 2; ++p) {
-        std::vector<BandShape>& lin = linBands_; lin.clear();
-        for (int b = 0; b < kBands; ++b) if (active(b) && onPath(b, p)) lin.push_back(shape(b));
-        conv_[static_cast<size_t>(p)].setKernel(designer_.design([&](double f) { return totalMagnitude(lin, f); }, [](double) { return 1.0; }, false, fs_), immediate);
+        lin.clear();
+        for (int b = 0; b < kBands; ++b) if (t[static_cast<size_t>(b * kPerBand + On)] > 0.5 && onPathOf(t, b, p)) lin.push_back(shapeOf(t, fs, b, 0.0));
+        kernel[static_cast<size_t>(p)] = designer.design([&](double f) { return totalMagnitude(lin, f); }, [](double) { return 1.0; }, false, fs);   // (same size: no allocation)
     }
+}
+
+// the design on the calling thread (before playing: snapToTargets; or when there is no worker)
+void Processor::buildLinear(bool immediate) {
+    sync_.t = target_; sync_.fs = fs_;
+    sync_.run();
+    for (int p = 0; p < 2; ++p) conv_[static_cast<size_t>(p)].setKernel(sync_.kernel[static_cast<size_t>(p)], immediate);
+    lastThread_ = sync_.ranOn;
+    applied_.store(applied_.load() + 1);
     sinceKernel_ = 0;
 }
 
@@ -158,7 +178,10 @@ void Processor::snapToTargets() {
     if (!prepared_) return;
     configure(0);
     if (mode_ == Natural) buildNatural();
-    if (mode_ == Linear) buildLinear(true);
+    if (mode_ == Linear) {
+        if (job_.running()) { job_.waitIdle(); st_.store(0); }   // a design on its way is older than this one
+        buildLinear(true);
+    }
     kernelDirty_ = false;
 }
 
@@ -168,7 +191,18 @@ void Processor::process(float** ch, int numCh, int n) {
     const bool ms = target_[Ms] > 0.5 && nch == 2;
     if (mode_ == Linear) {  // static part: convolution (kernel rebuilt at most once per 20 ms crossfade)
         sinceKernel_ += n;
-        if (kernelDirty_ && sinceKernel_ >= fadeLen_ && !conv_[0].fading() && !conv_[1].fading()) { buildLinear(false); kernelDirty_ = false; }
+        const bool fading = conv_[0].fading() || conv_[1].fading();
+        if (job_.running()) {
+            if (st_.load() == 2 && !fading) {   // the worker's kernels
+                for (int p = 0; p < 2; ++p) conv_[static_cast<size_t>(p)].setKernel(wd_.kernel[static_cast<size_t>(p)], false);
+                lastThread_ = wd_.ranOn; applied_.store(applied_.load() + 1);
+                sinceKernel_ = 0; st_.store(0);
+            }
+            if (kernelDirty_ && st_.load() == 0 && sinceKernel_ >= fadeLen_ && !(conv_[0].fading() || conv_[1].fading())) {   // ask for the next ones: a copy of the parameters, then the thread is woken
+                wd_.t = target_; wd_.fs = fs_;
+                kernelDirty_ = false; st_.store(1); job_.kick();
+            }
+        } else if (kernelDirty_ && sinceKernel_ >= fadeLen_ && !fading) { buildLinear(false); kernelDirty_ = false; }
     } else if (kernelDirty_ && mode_ == Natural) { buildNatural(); kernelDirty_ = false; }
     for (int start = 0; start < n; start += kControl) {
         const int len = std::min(kControl, n - start);

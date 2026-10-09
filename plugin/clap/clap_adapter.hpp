@@ -68,6 +68,9 @@ template <class C> struct HasTail<C, std::void_t<decltype(std::declval<const C&>
 // a core that keeps audio (delay lines, reverb tails, convolver histories) and can forget it without allocating: called when the host stops or jumps (clap reset()). A core without it but with a tail is prepared again instead
 template <class C, class = void> struct HasReset : std::false_type {};
 template <class C> struct HasReset<C, std::void_t<decltype(std::declval<C&>().reset())>> : std::true_type {};
+// a core that has work for a background thread (EQ08 / EQ02 Linear: the kernel design, sw/worker.hpp) gets it switched on here, before prepare(); without it (tests, offline) the core does the work itself in process()
+template <class C, class = void> struct HasUseWorker : std::false_type {};
+template <class C> struct HasUseWorker<C, std::void_t<decltype(std::declval<C&>().useWorker(true))>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -342,7 +345,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
+        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); if constexpr (HasUseWorker<typename P::Core>::value) s->shell_.core().useWorker(true); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;

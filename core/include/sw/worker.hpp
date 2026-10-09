@@ -1,0 +1,64 @@
+// SW AUDIO core — one background thread that runs a job when it is kicked (EQ08 / EQ02 Linear: the kernel design runs here, not in the audio thread; spec: 「カーネル再計算は別スレッド」).
+// kick() is for the audio thread: it sets a flag and wakes the thread without taking a lock or allocating (a wake-up that falls between the thread's check and its wait is picked up by the
+// 50 ms timeout, so a kick is never lost, at worst late). The job itself is a function the owner gives to start(); it runs on the worker's thread, one run per kick (kicks during a run make one more run).
+// A copy of a BackgroundWork has no thread: the owner starts its own (the copy's job must point at the copy).
+#pragma once
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
+
+namespace sw {
+
+class BackgroundWork {
+public:
+    BackgroundWork() = default;
+    BackgroundWork(const BackgroundWork&) {}
+    BackgroundWork& operator=(const BackgroundWork&) { return *this; }
+    ~BackgroundWork() { stop(); }
+
+    // not on the audio thread: (re)starts the thread with `job`
+    void start(std::function<void()> job) {
+        stop();
+        job_ = std::move(job); quit_.store(false); kicked_.store(false); busy_ = false;
+        th_ = std::thread([this] { loop(); });
+    }
+    // joins the thread (what was kicked and not yet run is dropped)
+    void stop() {
+        if (!th_.joinable()) return;
+        quit_.store(true); cv_.notify_all(); th_.join();
+        kicked_.store(false); busy_ = false;
+    }
+    bool running() const { return th_.joinable(); }
+    // the audio thread: no lock, no allocation
+    void kick() { kicked_.store(true); cv_.notify_one(); }
+    // not on the audio thread: returns when nothing is kicked and no run is in progress (false: no thread, or it did not come to rest within `ms`)
+    bool waitIdle(int ms = 5000) {
+        if (!th_.joinable()) return true;
+        std::unique_lock<std::mutex> lk(m_);
+        return idle_.wait_for(lk, std::chrono::milliseconds(ms), [this] { return !kicked_.load() && !busy_; });
+    }
+
+private:
+    void loop() {
+        std::unique_lock<std::mutex> lk(m_);
+        for (;;) {
+            cv_.wait_for(lk, std::chrono::milliseconds(50), [this] { return kicked_.load() || quit_.load(); });
+            if (quit_.load()) return;
+            if (!kicked_.exchange(false)) continue;
+            busy_ = true;
+            lk.unlock(); job_(); lk.lock();
+            busy_ = false; idle_.notify_all();
+        }
+    }
+    std::thread th_;
+    std::mutex m_;
+    std::condition_variable cv_, idle_;
+    std::atomic<bool> kicked_{false}, quit_{false};
+    bool busy_ = false;
+    std::function<void()> job_;
+};
+
+}  // namespace sw

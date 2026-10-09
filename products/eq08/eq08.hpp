@@ -4,10 +4,13 @@
 // EVO Pre-ring guard: bands whose own linear kernel rings more than 3 ms ahead of the peak above -60 dB go minimum phase.
 #pragma once
 #include "sw/convolver.hpp"
+#include "sw/copy_atomic.hpp"
 #include "sw/fir_design.hpp"
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
+#include "sw/worker.hpp"
 #include <array>
+#include <thread>
 #include <vector>
 
 namespace sw::eq08 {
@@ -29,10 +32,34 @@ public:
     int latencySamples() const;  // desired (Phase); applied at prepare
     int kernelLength() const { return L_; }
 
+    // The Linear / Mixed kernel is designed on a background thread when asked (the plug-in layer does; spec: the recalculation runs on another thread): the audio thread copies the parameters, kicks the
+    // thread and takes the finished kernel at a later block, when the crossfade of the last one is over. Without it (the default: tests, offline) the design runs in process() as before.
+    // Call before prepare(); the thread lives from prepare() to the next prepare() or the end (no thread in Minimum mode, which has no kernel).
+    void useWorker(bool on) { wantWorker_ = on; }
+    bool workerRunning() const { return job_.running(); }   // (a copy of a Processor has no thread: it designs in process() until its own prepare())
+    void waitKernel() { job_.waitIdle(); }                   // not the audio thread: returns when no design is on its way (the next process() takes a finished one)
+    int kernelsApplied() const { return applied_.load(); }   // kernels handed to the convolver since prepare()
+    std::thread::id lastDesignThread() const { return lastThread_; }   // (tests: which thread ran the last design)
+
 private:
+    struct GuardCache { double key[4] = {-1, -1, -1, -1}; bool guard = false; };
+    // a kernel design: a copy of the parameters, the tables and the work arrays; the audio thread owns `sync_`, the worker thread `wd_` (they are handed over by st_)
+    struct Design {
+        std::array<double, kNumParams> t{};
+        double fs = 48000.0; int mode = Linear;
+        FirDesigner designer;
+        std::vector<BandShape> lin, mn;
+        std::array<GuardCache, kBands> cache{};
+        const std::vector<double>* result = nullptr;
+        std::thread::id ranOn;
+        void prepare(int L) { designer.prepare(L); lin.reserve(kBands); mn.reserve(kBands); cache = {}; result = nullptr; }
+        bool active(int b) const { return t[static_cast<size_t>(b * kPerBand + On)] > 0.5; }
+        BandShape shape(int b) const;
+        bool guarded(int b);
+        const std::vector<double>& run();   // the kernel of `t` (the designer's own buffer: valid until the next run)
+    };
     BandShape shape(int b) const;
     bool active(int b) const { return target_[static_cast<size_t>(b * kPerBand + On)] > 0.5; }
-    bool guarded(int b);
     void rebuildKernel(bool immediate);
     void updateIir(int ramp);
     static int kernelLengthFor(double fs, double base);
@@ -41,13 +68,15 @@ private:
     bool dirty_ = false, iirDirty_ = false, prepared_ = false;
     std::array<double, kNumParams> target_{};
     Convolver conv_;
-    FirDesigner designer_;                       // the kernel design's tables and work arrays (the design runs on the audio thread: nothing is allocated there)
-    std::vector<BandShape> linBands_, minBands_;
+    Design sync_, wd_;                           // the design's tables and work arrays (nothing is allocated when a knob moves)
     std::array<std::array<Svf, kBands>, 2> iir_{};
     std::vector<float> sideDelay_;
-    struct GuardCache { double key[4] = {-1, -1, -1, -1}; bool guard = false; };
-    std::array<GuardCache, kBands> guardCache_{};
     std::vector<float> scratch_;
+    bool wantWorker_ = false;
+    CopyAtomic<int> st_{0};                      // the worker's hand-over: 0 nothing on its way, 1 asked (wd_.t is the request), 2 done (wd_.result is the kernel)
+    CopyAtomic<int> applied_{0};
+    std::thread::id lastThread_;
+    BackgroundWork job_;                         // (last: the thread is joined before the rest goes)
 };
 
 }  // namespace sw::eq08

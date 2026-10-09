@@ -38,7 +38,7 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; linBands_.reserve(kBands); minBands_.reserve(kBands); }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 int Processor::kernelLengthFor(double fs, double base) {  // base taps at 48 kHz, same duration at other rates (power of two)
     int L = 2048;
@@ -51,48 +51,62 @@ int Processor::latencySamples() const {
     return kernelLengthFor(fs_, target_[Length]) / 2 + B_;
 }
 
-BandShape Processor::shape(int b) const {
-    const double* t = &target_[static_cast<size_t>(b * kPerBand)];
+namespace {
+BandShape shapeOf(const std::array<double, kNumParams>& tt, double fs, int b) {
+    const double* t = &tt[static_cast<size_t>(b * kPerBand)];
     static const BandShape::Type types[5] = {BandShape::Bell, BandShape::LowShelf, BandShape::HighShelf, BandShape::LowCut, BandShape::HighCut};
     BandShape s;
     s.type = types[static_cast<int>(t[Type])];
-    s.freq = std::min(t[Freq], 0.49 * fs_);
+    s.freq = std::min(t[Freq], 0.49 * fs);
     s.gainDb = t[Gain];
     s.q = t[Q];
     s.slope = 12;  // EQ08 has no slope control: cuts are 12 dB/oct following Q
     return s;
 }
+}  // namespace
+BandShape Processor::shape(int b) const { return shapeOf(target_, fs_, b); }
+BandShape Processor::Design::shape(int b) const { return shapeOf(t, fs, b); }
 
-bool Processor::guarded(int b) {
-    GuardCache& c = guardCache_[static_cast<size_t>(b)];
-    const double* t = &target_[static_cast<size_t>(b * kPerBand + Type)];
-    if (c.key[0] == t[0] && c.key[1] == t[1] && c.key[2] == t[2] && c.key[3] == t[3]) return c.guard;
-    for (int i = 0; i < 4; ++i) c.key[i] = t[i];
+bool Processor::Design::guarded(int b) {
+    GuardCache& c = cache[static_cast<size_t>(b)];
+    const double* tt = &t[static_cast<size_t>(b * kPerBand + Type)];
+    if (c.key[0] == tt[0] && c.key[1] == tt[1] && c.key[2] == tt[2] && c.key[3] == tt[3]) return c.guard;
+    for (int i = 0; i < 4; ++i) c.key[i] = tt[i];
     const BandShape one = shape(b);
-    const auto& h = designer_.design([&](double f) { return one.magnitude(f); }, [](double) { return 1.0; }, false, fs_);
-    const int D = L_ / 2, edge = D - static_cast<int>(kGuardWindowMs * 0.001 * fs_);
+    const auto& h = designer.design([&](double f) { return one.magnitude(f); }, [](double) { return 1.0; }, false, fs);
+    const int L = static_cast<int>(h.size());
+    const int D = L / 2, edge = D - static_cast<int>(kGuardWindowMs * 0.001 * fs);
     double pre = 0; for (int n = 0; n < edge; ++n) pre += h[static_cast<size_t>(n)] * h[static_cast<size_t>(n)];
     c.guard = 10.0 * std::log10(pre / std::max(h[static_cast<size_t>(D)] * h[static_cast<size_t>(D)], 1e-30) + 1e-300) > kGuardDb;
     return c.guard;
 }
 
-void Processor::rebuildKernel(bool immediate) {
-    std::vector<BandShape>& lin = linBands_; std::vector<BandShape>& mn = minBands_;   // (kept, reserved: this runs on the audio thread when a knob moves)
+const std::vector<double>& Processor::Design::run() {
+    ranOn = std::this_thread::get_id();
     lin.clear(); mn.clear();
-    const bool guard = target_[Guard] > 0.5;
+    const bool guard = t[Guard] > 0.5;
     for (int b = 0; b < kBands; ++b) {
         if (!active(b)) continue;
         if (guard && guarded(b)) mn.push_back(shape(b)); else lin.push_back(shape(b));
     }
     const std::vector<double>* h;
-    if (mode_ == Mixed) {  // split the linear part's magnitude in the log domain around 200 Hz
+    if (mode == Mixed) {  // split the linear part's magnitude in the log domain around 200 Hz
         auto w = [](double f) { return 1.0 / (1.0 + std::pow(f / kMixedSplitHz, 4.0)); };
-        h = &designer_.design([&](double f) { return std::pow(totalMagnitude(lin, f), 1.0 - w(f)); },
-                              [&](double f) { return totalMagnitude(mn, f) * std::pow(totalMagnitude(lin, f), w(f)); }, true, fs_);
+        h = &designer.design([&](double f) { return std::pow(totalMagnitude(lin, f), 1.0 - w(f)); },
+                             [&](double f) { return totalMagnitude(mn, f) * std::pow(totalMagnitude(lin, f), w(f)); }, true, fs);
     } else {
-        h = &designer_.design([&](double f) { return totalMagnitude(lin, f); }, [&](double f) { return totalMagnitude(mn, f); }, !mn.empty(), fs_);
+        h = &designer.design([&](double f) { return totalMagnitude(lin, f); }, [&](double f) { return totalMagnitude(mn, f); }, !mn.empty(), fs);
     }
-    conv_.setKernel(*h, immediate);
+    result = h;
+    return *h;
+}
+
+// the design on the calling thread (before playing: snapToTargets; or when there is no worker)
+void Processor::rebuildKernel(bool immediate) {
+    sync_.t = target_; sync_.fs = fs_; sync_.mode = mode_;
+    conv_.setKernel(sync_.run(), immediate);
+    lastThread_ = sync_.ranOn;
+    applied_.store(applied_.load() + 1);
     sinceKernel_ = 0;
     dirty_ = false;
 }
@@ -119,19 +133,24 @@ void Processor::updateIir(int ramp) {
 }
 
 void Processor::prepare(double sampleRate, int) {
+    job_.stop();   // (a thread from the last prepare)
     fs_ = sampleRate;
     mode_ = static_cast<int>(target_[Phase]);
     L_ = kernelLengthFor(fs_, target_[Length]);
     fadeLen_ = static_cast<int>(std::lround(0.020 * fs_));
     conv_.prepare(L_, B_, 2);
-    designer_.prepare(L_);
     conv_.setFadeSamples(fadeLen_);
+    sync_.prepare(L_);
+    const bool worker = wantWorker_ && mode_ != Minimum;
+    if (worker) wd_.prepare(L_);
+    st_.store(0); applied_.store(0);
     for (auto& c : iir_) for (auto& f : c) f.reset();
     sideDelay_.assign(static_cast<size_t>(std::max(1, latencySamples())), 0.0f);
     dpos_ = 0;
     scratch_.assign(4096, 0.0f);
     prepared_ = true;
     snapToTargets();
+    if (worker) job_.start([this] { wd_.run(); st_.store(2); });
 }
 
 void Processor::setParam(int id, double v) {
@@ -142,7 +161,9 @@ void Processor::setParam(int id, double v) {
 
 void Processor::snapToTargets() {
     if (!prepared_) return;  // nothing to build before prepare()
-    if (mode_ == Minimum) updateIir(0); else rebuildKernel(true);
+    if (mode_ == Minimum) { updateIir(0); return; }
+    if (job_.running()) { job_.waitIdle(); st_.store(0); }   // a design on its way is older than this one
+    rebuildKernel(true);
 }
 
 void Processor::process(float** ch, int numCh, int n) {
@@ -161,9 +182,18 @@ void Processor::process(float** ch, int numCh, int n) {
         }
         return;
     }
-    // Linear / Mixed: rebuild at most once per crossfade (20 ms), only at block boundaries of the host call
+    // Linear / Mixed: a new kernel at most once per crossfade (20 ms), only at block boundaries of the host call
     sinceKernel_ += n;
-    if (dirty_ && sinceKernel_ >= fadeLen_ && !conv_.fading()) rebuildKernel(false);
+    if (job_.running()) {
+        if (st_.load() == 2 && !conv_.fading()) {   // the worker's kernel
+            conv_.setKernel(*wd_.result, false); lastThread_ = wd_.ranOn; applied_.store(applied_.load() + 1);
+            sinceKernel_ = 0; st_.store(0);
+        }
+        if (dirty_ && st_.load() == 0 && sinceKernel_ >= fadeLen_ && !conv_.fading()) {   // ask for the next one: a copy of the parameters, then the thread is woken
+            wd_.t = target_; wd_.fs = fs_; wd_.mode = mode_;
+            dirty_ = false; st_.store(1); job_.kick();
+        }
+    } else if (dirty_ && sinceKernel_ >= fadeLen_ && !conv_.fading()) rebuildKernel(false);
     if (!ms) { conv_.process(ch, nch, n); return; }
     // M/S: the EQ works on the mid; the side is delayed by the same latency (interpretation, see README)
     const int lat = static_cast<int>(sideDelay_.size());
