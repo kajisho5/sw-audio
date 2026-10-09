@@ -312,7 +312,7 @@
       // one control: cur() gives the host index it drives now; draw(v) shows a value
       function attachDial(ctl, cur) {
         const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr, .kn'), val = ctl.querySelector('.val, .rv');   // .rc/.rk/.kn/.rv: the LIVE line's knobs
-        const draw = () => { const i = cur(), h = hostOf(i); if (!h) return; const x = h.c.norm(vals[i]), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(h.p, vals[i], h.c); };
+        const draw = () => { const i = cur(), h = hostOf(i); if (!h) return; const x = h.c.norm(vals[i]), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = ctl.dataset.zerotext && Math.abs(vals[i]) < 1e-9 ? ctl.dataset.zerotext : (ctl.dataset.valprefix || '') + format(h.p, vals[i], h.c); };
         let drag = null; dial.style.touchAction = 'none'; dial.style.cursor = 'ns-resize';
         dial.addEventListener('pointerdown', e => { const i = cur(); if (!hostOf(i)) return; dial.setPointerCapture(e.pointerId); drag = { i, y: e.clientY, x0: hostOf(i).c.norm(vals[i]) }; bridge.begin(i); });
         dial.addEventListener('pointermove', e => { if (!drag) return; setValue(drag.i, hostOf(drag.i).c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
@@ -384,10 +384,16 @@
         }
         reg(i, draw);
       });
-      const list = o => JSON.parse(o.dataset.pb);
+      const list = o => JSON.parse(o.dataset.pb), list2 = t => JSON.parse(t);
       skinBox.querySelectorAll('.ctl[data-p], .rc[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
       skinBox.querySelectorAll('.ctl[data-pb], .rc[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p], .evo[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
+      // EQ02 "Dynamic": the selected band's Dyn Range is 0 (static) or not (dynamic); a press switches between 0 and -6 dB (data-dynpb = the Dyn Range of every band)
+      skinBox.querySelectorAll('button[data-dynpb]').forEach(b => {
+        const l = list2(b.dataset.dynpb), cur = () => l[Math.min(band, l.length - 1)];
+        b.addEventListener('click', () => { const i = cur(); if (!hostOf(i)) return; bridge.begin(i); setValue(i, Math.abs(vals[i]) > 1e-9 ? 0 : -6); bridge.end(i); });
+        const f = () => { const i = cur(); if (hostOf(i)) b.classList.toggle('on', Math.abs(vals[i]) > 1e-9); }; dyn.push(f); l.forEach(i => reg(i, f)); f();
+      });
       skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       // the 3-D toggle switches: lever up = the value in data-up, down = the other one (class dn)
       skinBox.querySelectorAll('.tog[data-tog]').forEach(t => {

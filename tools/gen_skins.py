@@ -318,6 +318,20 @@ def cs04_bind(root, params):
     ctls[0].parent.append(box)
 
 
+def eq02_dynamic(root, params):
+    """EQ02: the "Dynamic" button and the small "Range off" dial under it belong to the selected band's Dyn Range (0 = static EQ, otherwise the band works as a dynamic EQ): the button switches it
+    between 0 and -6 dB (data-dynpb), the dial sets it (data-pb; the text says "Range off" at 0)."""
+    dyn = [p['i'] for p in params if p['name'] == 'Dyn Range']
+    btn = next((b for b in root.find_all('button') if b.get_text().strip() == 'Dynamic'), None)
+    dial = next((c for c in root.select('.ctl') if (c.select_one('.val') or c).get_text().strip().startswith('Range off') and c.select_one('.dk, .knob')), None)
+    if not dyn or btn is None or dial is None:
+        return ''
+    btn['data-dynpb'] = json.dumps(dyn)
+    dial['data-pb'] = json.dumps(dyn); dial['data-zerotext'] = 'Range off'; dial['data-valprefix'] = 'Range '
+    dial.select_one('.dk, .knob')['data-dial'] = '1'
+    return ''
+
+
 def lv03_fader(root, params):
     """LV03's Out fader: the cap (the element drawn with the fader image) becomes a bound fader (data-fader = the Out parameter)."""
     out = next((p for p in params if p['id'] == 'lv03.out'), None)
@@ -327,7 +341,7 @@ def lv03_fader(root, params):
     return ''
 
 
-HOOKS = {'LV03': lv03_fader, 'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
+HOOKS = {'EQ02': eq02_dynamic, 'LV03': lv03_fader, 'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 
@@ -404,7 +418,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair'}
-    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare')
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
