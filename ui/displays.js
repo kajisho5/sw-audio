@@ -664,7 +664,38 @@
     return { update(info) { const r = info && info.readouts; if (!r) return; el.textContent = r[0] > 20 ? NOTE[((Math.round(r[1]) % 12) + 12) % 12] + (Math.floor(Math.round(r[1]) / 12) - 1) + ' ' + (r[2] >= 0 ? '+' : '') + r[2].toFixed(0) + '¢ ' + r[0].toFixed(1) + ' Hz' : '—'; } };
   }
 
+
+  // ---- polarity gauge (LV22): readouts = result, correlation (-1 .. +1), lag (ms). The needle: -1 at the left end of the arc, 0 up, +1 right
+  function polarityGauge(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const needle = svg.querySelector(':scope > line'); if (!needle) return null;
+    const x0 = +needle.getAttribute('x1'), y0 = +needle.getAttribute('y1'), len = 140;
+    const t = mkEl('text', { x: 14, y: 22, 'text-anchor': 'start', 'font-family': 'Space Mono, monospace', 'font-size': 13, fill: '#e6e6e6' }); svg.append(t);
+    let a = 0;
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return; a += (r[1] - a) * 0.3; const th = clamp(a, -1, 1) * Math.PI / 2;
+      needle.setAttribute('x2', (x0 + len * Math.sin(th)).toFixed(1)); needle.setAttribute('y2', (y0 - len * Math.cos(th)).toFixed(1));
+      t.textContent = 'r ' + (r[1] >= 0 ? '+' : '') + r[1].toFixed(2) + (Math.abs(r[2]) > 0.001 ? '   lag ' + r[2].toFixed(2) + ' ms' : '');
+    } };
+  }
+  // ---- gain trace with blocks (LV05 BGM ducking, LV29 floor ducking): readouts = gain (dB), key active (1 / 0); the last 30 s
+  function gainTraceDisplay(box, ctx, cfg) {
+    const svg = svgOf(box); if (!svg) return null;
+    const path = svg.querySelector(':scope > path'), demo = [...svg.querySelectorAll('rect')]; if (!path || !demo.length) return null;
+    const [, , W] = vbOf(svg), ry = demo[0].getAttribute('y'), rh = demo[0].getAttribute('height'), parent = demo[0].parentElement, rx = demo[0].getAttribute('rx') || '3', fo = demo[0].getAttribute('fill-opacity') || parent.getAttribute('fill-opacity') || '0.3', fill = demo[0].getAttribute('fill') || parent.getAttribute('fill') || '#f2f2f2';
+    demo.forEach(r => r.remove()); const g = mkEl('g', { fill, 'fill-opacity': fo }); svg.append(g);
+    [...svg.querySelectorAll(':scope > text')].filter(t => /gap held/i.test(t.textContent)).forEach(t => t.remove());
+    const N = 150, gain = Ring(N, 0), key = Ring(N, 0); let last = 0;
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return; const now = Date.now(); if (now - last < 200) return; last = now; gain.push(r[0]); key.push(r[1] > 0.5 ? 1 : 0);
+      let d = '', rects = ''; for (let k = 0; k < N; k++) d += (k ? ' L' : 'M') + (k / (N - 1) * W).toFixed(1) + ' ' + cfg.y(gain.a[k]).toFixed(1);
+      for (let k = 0; k < N;) { if (!key.a[k]) { k++; continue; } let e = k; while (e < N && key.a[e]) e++; rects += '<rect x="' + (k / (N - 1) * W).toFixed(1) + '" y="' + ry + '" width="' + Math.max(2, (e - k) / (N - 1) * W).toFixed(1) + '" height="' + rh + '" rx="' + rx + '"/>'; k = e; }
+      path.setAttribute('d', d); g.innerHTML = rects;
+    } };
+  }
+
   const registry = {
+    LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,

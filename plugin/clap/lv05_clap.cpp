@@ -9,6 +9,8 @@ struct Lv05 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 2;   // background gain (dB), voice (key) active (1 / 0)
+    static void readouts(const Core& c, double* o) { o[0] = c.gainDb(); o[1] = c.keyActive() ? 1.0 : 0.0; }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

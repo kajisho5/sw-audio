@@ -9,6 +9,8 @@ struct Lv29 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 2;   // floor gain (dB), interpreter speaking (1 / 0)
+    static void readouts(const Core& c, double* o) { o[0] = c.floorGainDb(); o[1] = c.interpreterSpeaking() ? 1.0 : 0.0; }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

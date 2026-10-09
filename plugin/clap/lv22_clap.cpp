@@ -9,6 +9,8 @@ struct Lv22 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 3;   // result code, correlation (-1 .. +1), lag (ms)
+    static void readouts(const Core& c, double* o) { o[0] = c.result(); o[1] = c.correlation(); o[2] = c.lagMs(); }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {
