@@ -9,6 +9,8 @@ struct Lv17 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 1;   // gain reduction (dB, <= 0)
+    static void readouts(const Core& c, double* o) { o[0] = c.gainReductionDb(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_COMPRESSOR, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv17", "SW LV17 Bus Comp", "SEVENTHWELL",

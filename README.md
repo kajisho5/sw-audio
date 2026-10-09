@@ -1072,7 +1072,7 @@ LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`�
 
 ### コアが測った値を画面へ渡す口（`readouts`）
 
-製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29・MD02・MD04・LV14・LV19 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
+製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29・MD02・MD04・LV14・LV19・LV17 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
 
 ### 画面の中央の表示（`ui/displays.js`）
 
@@ -1088,6 +1088,8 @@ LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`�
 | MS01 | フェーダー・メーター・GR 履歴 | デザインの Threshold フェーダーは仕様の Gain（0〜24 dB）に結び付け（名前も Gain に変更）。Ceiling フェーダーと合わせてドラッグ可（ダブルクリックで既定値）。In／Out のバーは入出力ピーク。**GR はコア自身の値**（slow 段＋リミッター、`readouts`）、履歴は約 10 秒。Integrated はコアの値（10 秒の記憶）。Short-term・True peak はコアが公開していないため「—」（Max GR は記録、クリックでリセット） |
 | RV06・LV24・RS06 | リバーブの減衰 | Decay（RS06 は Tail length）で −60 dB に落ちる直線（dB 軸で直線）、LV24 は Pre-delay だけ右へ。時間軸は 4 s、長いときは自動で広げる。左の初期反射の棒はデザインの見本のまま。実際の残響の形（高域の減衰差など）ではない |
 | RV01 | リバーブの減衰（RT60 とプリディレイ） | Pre-delay の位置から Decay（RT60）まで −60 dB に落ちる直線、RT60 の縦線、時間軸は 4 s から Decay に合わせて広がる。デザインの「High band decay」の線は（Damping の模型が要るため）外した |
+| LV10・VO06 | ピッチ／フォルマントのパッド | 点が Pitch（左右）と Formant（上下）。パッド上のドラッグで両方、ダブルクリックで既定値（画面だけで、コアの値は不要） |
+| LV17 | GR 履歴 | オレンジ＝コアの `gainReductionDb()`（今回コアに足した読み取り用の値。音は変えない）、灰色＝出力ピークの履歴（約 10 秒） |
 | DL04・LV25 | ディレイの繰り返しの棒 | DL04 は Tap 1〜6 の On・Time・Level、LV25 は Time の整数倍に Feedback の累乗の高さ。Clock が Tap／MIDI／BPM のときの実際の時間は反映しない（Time の値で描く） |
 | LV16 | ゲート／ダッカー | しきい値の線（上下ドラッグで Threshold）、入力ピークの履歴（同じ目盛り）、Open／Closed（Duck では Ducking／Idle）は入力ピークがしきい値を超えたかで判定。Key HPF 通過後の値ではない |
 | ST01 | バンドごとのステレオ幅 | 棒の幅が各バンドの Width（左右にドラッグ、ダブルクリックで既定値） |

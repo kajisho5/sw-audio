@@ -22,11 +22,12 @@ public:
     void snapToTargets() { makeup_.skip(1 << 30); }
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    double gainReductionDb() const { return gr_; }   // the compression now (dB, <= 0), for the screen
 
 private:
     void update();
     bool autoRelease() const { return target_[Release] >= specs()[Release].max; }
-    double fs_ = 48000.0;
+    double fs_ = 48000.0, gr_ = 0.0;
     std::array<double, kNumParams> target_{};
     GainComputer comp_;
     Ballistics fast_, slow_;

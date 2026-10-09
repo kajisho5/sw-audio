@@ -756,7 +756,42 @@
     } };
   }
 
+
+  // ---- pitch / formant pad (LV10, VO06): the dot is Pitch (left-right) and Formant (up-down); drag it, double-click for the defaults
+  function xyPadDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const xi = (ctx.params.find(q => q.name === 'Pitch') || {}).i, yi = (ctx.params.find(q => q.name === 'Formant') || {}).i; if (xi === undefined || yi === undefined) return null;
+    const cs = [...svg.querySelectorAll(':scope > circle')], ls = [...svg.querySelectorAll(':scope > line')].filter(l => (l.getAttribute('stroke') || '') !== '#ffffff'); if (cs.length < 2 || ls.length < 2) return null;
+    const vl = ls.find(l => l.getAttribute('x1') === l.getAttribute('x2')), hl = ls.find(l => l.getAttribute('y1') === l.getAttribute('y2')); if (!vl || !hl) return null;
+    const [, , W, H] = vbOf(svg), q = i => ctx.params.find(x => x.i === i), pad = 12;
+    const px = v => { const m = q(xi).p; return pad + (v - m.min) / (m.max - m.min) * (W - 2 * pad); }, py = v => { const m = q(yi).p; return H - pad - (v - m.min) / (m.max - m.min) * (H - 2 * pad); };
+    const at = e => { const r = svg.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width * W, pad, W - pad), clamp((e.clientY - r.top) / r.height * H, pad, H - pad)]; };
+    const set = e => { const [x, y] = at(e), mx = q(xi), my = q(yi); ctx.set(xi, mx.c.value(mx.c.norm(mx.p.min + (x - pad) / (W - 2 * pad) * (mx.p.max - mx.p.min)))); ctx.set(yi, my.c.value(my.c.norm(my.p.min + (H - pad - y) / (H - 2 * pad) * (my.p.max - my.p.min)))); };
+    const hit = mkEl('rect', { x: 0, y: 0, width: W, height: H, fill: 'transparent' }); svg.append(hit); hit.style.cursor = 'crosshair'; let on = false;
+    hit.addEventListener('pointerdown', e => { hit.setPointerCapture(e.pointerId); on = true; ctx.begin(xi); ctx.begin(yi); set(e); });
+    hit.addEventListener('pointermove', e => { if (on) set(e); });
+    const end = () => { if (!on) return; on = false; ctx.end(xi); ctx.end(yi); }; hit.addEventListener('pointerup', end); hit.addEventListener('pointercancel', end);
+    hit.addEventListener('dblclick', () => { ctx.begin(xi); ctx.begin(yi); ctx.set(xi, q(xi).p.def); ctx.set(yi, q(yi).p.def); ctx.end(xi); ctx.end(yi); });
+    return { update() { const x = px(ctx.get(xi)), y = py(ctx.get(yi)); vl.setAttribute('x1', x.toFixed(1)); vl.setAttribute('x2', x.toFixed(1)); hl.setAttribute('y1', y.toFixed(1)); hl.setAttribute('y2', y.toFixed(1)); cs.forEach(c => { c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1)); }); } };
+  }
+
+
+  // ---- gain-reduction history (LV17): the design's two grey level areas (mirrored around the centre) and the orange gain reduction from the top; readouts[0] = gain reduction (dB, <= 0)
+  function grHistoryDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')]; if (ps.length < 3) return null;
+    const [, , W, H] = vbOf(svg), C = H * 0.55, N = 40, dx = W / (N - 1), lvl = Ring(N, -90), gr = Ring(N, 0); let tick = 0;
+    return { update(info) {
+      const m = info && info.meters, r = info && info.readouts; if (!m || !r || r.length < 1 || ++tick % 4) return;
+      lvl.push(peakDb(m)); gr.push(Math.max(0, -r[0])); let up = 'M0 ' + C, dn = 'M0 ' + C, g = 'M0 0';
+      for (let k = 0; k < N; k++) { const x = (k * dx).toFixed(1), a = clamp((lvl.a[k] + 60) / 60, 0, 1) * (C - 8); up += ' L' + x + ' ' + (C - a).toFixed(1); dn += ' L' + x + ' ' + (C + a * 0.9).toFixed(1); g += ' L' + x + ' ' + (clamp(gr.a[k], 0, 24) / 24 * C * 0.6).toFixed(1); }
+      ps[0].setAttribute('d', up + ' L' + W + ' ' + C + ' L0 ' + C + ' Z'); ps[1].setAttribute('d', dn + ' L' + W + ' ' + C + ' L0 ' + C + ' Z'); ps[2].setAttribute('d', g + ' L' + W + ' 0 Z');
+    } };
+  }
+
   const registry = {
+    LV17: grHistoryDisplay,
+    LV10: xyPadDisplay, VO06: xyPadDisplay,
     RV01: reverbDisplay,
     LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), LV19: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'),
     CR05: tapeStopDisplay,

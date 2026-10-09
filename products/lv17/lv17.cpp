@@ -56,6 +56,7 @@ void Processor::process(float** ch, int numCh, int n) {
         const double target = comp_.gainDb(20.0 * std::log10(std::max(level, 1e-9)));
         double gr = fast_.process(target);
         if (autoRel) gr = std::min(gr, slow_.process(target));
+        gr_ = gr;
         const double g = std::pow(10.0, gr / 20.0) * makeup_.next();
         for (int c = 0; c < nch; ++c) {
             double y = ch[c][i] * g;
