@@ -30,6 +30,7 @@ public:
     int latencySamples() const { return 0; }
     double tempo() const { return bpm_; }   // the host tempo (0 = none)
     double timeSeconds() const;   // the delay in use (a note length when Sync is on and the tempo is known)
+    double tailSeconds() const;   // how long the repeats go on (sw/tail.hpp)
 
 private:
     double read(int c, double delay) const;

@@ -40,6 +40,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets() { inGain_ = std::pow(10.0, target_[Input] / 20.0); if (prepared_) { assign(); applyAll(); } }
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double tunerHz() const { return hz_; }
     int tunerNote() const;

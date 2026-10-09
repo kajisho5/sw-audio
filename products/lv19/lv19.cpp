@@ -75,4 +75,7 @@ int Processor::takeParamWrite(int& id, double& plain) {
     writePending_ = false; id = Delay; plain = std::clamp(std::round(foundMs_ * 10.0) / 10.0, 0.0, 1000.0); return 7;
 }
 
+// the delay it makes on purpose is still coming out after the input has stopped: the tail is that delay
+double Processor::tailSeconds() const { return effectiveDelayMs() * 0.001 + 0.1; }
+
 }  // namespace sw::lv19

@@ -1,4 +1,5 @@
 #include "cr06/cr06.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -107,5 +108,8 @@ void Processor::process(float** ch, int numCh, int n) {
         for (int c = 0; c < nch; ++c) { double v = y[c]; if (!std::isfinite(v) || std::abs(v) < 1e-30) v = 0.0; ch[c][i] = static_cast<float>(v); }
     }
 }
+
+// the tail: only Space (the plate reverb core) rings on; the others are filters, followers and a sample-rate reducer
+double Processor::tailSeconds() const { return static_cast<int>(target_[Effect] + 0.5) == Space && target_[Amount] > 0.0 ? plate_.tailSeconds() : 0.0; }
 
 }  // namespace sw::cr06

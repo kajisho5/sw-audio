@@ -1,4 +1,5 @@
 #include "cr03/cr03.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -166,6 +167,17 @@ void Processor::process(float** ch, int numCh, int n) {
         active_ = act;
         for (int c = 0; c < nch; ++c) { double y = c == 0 ? l : r; if (!std::isfinite(y) || std::abs(y) < 1e-30) y = 0.0; ch[c][i] = static_cast<float>(y); }
     }
+}
+
+// the tail: grains read the buffer up to `back` behind the write point (spawn()), so what was put in last is still being picked up that long after the input stops, and a grain lasts Grain;
+// the Harmony shift can add up to 6 semitones to Pitch; a frozen buffer is read for ever
+double Processor::tailSeconds() const {
+    if (target_[Freeze] > 0.5) return tail::kInfinite;
+    const double len = target_[Grain] * 0.001, rate = std::max(1.0, std::exp2((std::max(0.0, std::round(target_[Pitch])) + (target_[Harmony] > 0.5 ? 6.0 : 0.0)) / 12.0));
+    const double minBack = len * rate + 2.0 / fs_;
+    const int mode = static_cast<int>(target_[Mode] + 0.5);
+    const double back = mode == Scatter ? std::max(2.0, minBack) : mode == Cloud ? minBack + target_[Spray] * 0.01 * 0.5 : 4.0 * minBack;
+    return back + len * 1.5 + 0.3;
 }
 
 }  // namespace sw::cr03

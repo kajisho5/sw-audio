@@ -1,4 +1,5 @@
 #include "dl04/dl04.hpp"
+#include "sw/tail.hpp"
 #include "sw/notes.hpp"
 #include <algorithm>
 #include <cmath>
@@ -89,6 +90,20 @@ double Processor::read(int line, double d) const {
     const double y0 = at(i - 1), y1 = at(i), y2 = at(i + 1), y3 = at(i + 2);
     const double c0 = y1, c1 = 0.5 * (y2 - y0), c2 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3, c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
     return ((c3 * f + c2) * f + c1) * f + c0;
+}
+
+// the repeats: the heard taps feed back together (the mean of them, Feedback each); with ping-pong a repeat crosses to the other line and back, two taps and two gains per trip
+double Processor::tailSeconds() const {
+    double d[kTaps]; int n = 0;
+    for (int t = 0; t < kTaps; ++t) if (target_[static_cast<size_t>(tapParam(t, On))] > 0.5) d[n++] = tapSeconds(t);
+    if (n == 0) return 0.3;
+    const double fb = target_[Feedback] * 0.01;
+    if (target_[PingPong] > 0.5) {
+        double pair[kTaps * kTaps]; int m = 0;
+        for (int a = 0; a < n; ++a) for (int b = 0; b < n; ++b) pair[m++] = d[a] + d[b];
+        return tail::multi(pair, m, fb * fb / (static_cast<double>(n) * n)) + 0.3;
+    }
+    return tail::multi(d, n, fb / n) + 0.3;
 }
 
 void Processor::process(float** ch, int numCh, int n) {

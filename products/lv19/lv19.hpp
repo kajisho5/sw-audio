@@ -24,6 +24,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets() { if (prepared_) cur_ = effectiveDelayMs() * 0.001 * fs_; }
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double effectiveDelayMs() const;
     double frames() const { return effectiveDelayMs() * 0.001 * framesPerSecond(static_cast<int>(target_[FrameRate] + 0.5)); }

@@ -1,4 +1,5 @@
 #include "rv01/rv01.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -171,6 +172,12 @@ void Processor::process(float** ch, int numCh, int n) {
         ch[0][i] = static_cast<float>(l);
         if (nch > 1) ch[1][i] = static_cast<float>(r);
     }
+}
+
+// the late tail: Decay is the time to fall by 60 dB, taken down to -80 dB, after the pre-delay; Freeze holds it for ever
+double Processor::tailSeconds() const {
+    if (target_[Freeze] > 0.5) return tail::kInfinite;
+    return tail::fromRt60(target_[Decay]) + target_[PreDelay] * 0.001 + 0.4;
 }
 
 }  // namespace sw::rv01

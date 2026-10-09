@@ -1,4 +1,5 @@
 #include "dl02/dl02.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -27,6 +28,14 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 void Processor::setTransport(bool playing, double beatsToNextBar) {
     barKnown_ = playing && beatsToNextBar >= 0.0 && bpm_ > 0.0;
     if (barKnown_) countdown_ = beatsToNextBar * 60.0 / bpm_ * fs_;
+}
+
+// the repeats: the heads at 1, 2 and 3 times the Rate feed back together (the mean of the heard ones, Intensity 10 = 110 %)
+double Processor::tailSeconds() const {
+    const int mask = headMask(static_cast<int>(target_[Heads] + 0.5));
+    int m[3], n = 0; for (int k = 0; k < 3; ++k) if ((mask >> k) & 1) m[n++] = k + 1;
+    const double boost = std::pow(10.0, std::max({target_[Bass], target_[Treble], 0.0}) / 20.0);   // a shelf that lifts raises the loop gain where it lifts: that frequency lasts longest
+    return tail::taps(target_[Rate] * 0.001, m, n, target_[Intensity] * 0.11 * boost / n) + 0.4;
 }
 
 void Processor::setTone() {

@@ -1,4 +1,5 @@
 #include "rv02/rv02.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -123,5 +124,8 @@ void Processor::process(float** ch, int numCh, int n) {
         if (nch > 1) ch[1][i] = static_cast<float>(r);
     }
 }
+
+// the tail: Decay is the time to fall by 60 dB, taken down to -80 dB, after the pre-delay
+double Processor::tailSeconds() const { return tail::fromRt60(target_[Decay]) + target_[PreDelay] * 0.001 + 0.4; }
 
 }  // namespace sw::rv02

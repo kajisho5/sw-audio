@@ -1,4 +1,5 @@
 #include "gt03/gt03.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -135,6 +136,20 @@ void Processor::run(float** ch, int numCh, int n) {
             }
         }
     }
+}
+
+// the tail: the pedals run in series, so the tails of the Delay and Reverb pedals that are On add up (a Chorus a little); Bypass all runs none of them
+double Processor::tailSeconds() const {
+    if (!prepared_ || target_[BypassAll] > 0.5) return 0.0;
+    double t = 0.0;
+    for (int s = 0; s < kSlots; ++s) {
+        if (!slotActive(s)) continue;
+        const Assigned& a = assigned_[static_cast<size_t>(s)];
+        if (a.type == Delay) t += delay_[static_cast<size_t>(a.pool)]->tailSeconds();
+        else if (a.type == Reverb) t += reverb_[static_cast<size_t>(a.pool)]->tailSeconds();
+        else if (a.type == Chorus) t += 0.05;
+    }
+    return t;
 }
 
 }  // namespace sw::gt03

@@ -25,6 +25,7 @@
 #include "sw/text.hpp"
 #include <clap/clap.h>
 #include <clap/ext/note-ports.h>
+#include <clap/ext/tail.h>
 #include <clap/ext/track-info.h>
 #include <algorithm>
 #include <array>
@@ -61,6 +62,9 @@ template <class P> struct DeltaEnabled<P, std::void_t<decltype(P::kDelta)>> : st
 template <class C, class = void> struct HasSetTransport : std::false_type {};
 template <class C> struct HasSetTransport<C, std::void_t<decltype(std::declval<C&>().setTransport(false, 0.0))>> : std::true_type {};
 
+// a core that rings on after its input stops reports for how long (seconds, from the current settings; sw/tail.hpp): the host's bounce / freeze / VST3 getTailSamples need it
+template <class C, class = void> struct HasTail : std::false_type {};
+template <class C> struct HasTail<C, std::void_t<decltype(std::declval<const C&>().tailSeconds())>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -341,6 +345,7 @@ private:
         s->active_ = true;
         s->applyPending();
         s->restart_requested_.store(false);
+        s->updateTail();
         return true;
     }
     static void deactivate(const clap_plugin_t* p) { self(p)->active_ = false; }
@@ -413,6 +418,7 @@ private:
         }
         s->measure(ob.data32, nch, frames, 2);
         if constexpr (HasReadouts<P>::value) s->publishReadouts();
+        s->updateTail();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
             if (s->host_ && s->host_->request_restart) s->host_->request_restart(s->host_);
@@ -445,6 +451,7 @@ private:
         static const clap_plugin_gui_t gui = {guiIsApiSupported, guiPreferredApi, guiCreate, guiDestroy, guiSetScale, guiGetSize, guiCanResize, guiResizeHints, guiAdjustSize, guiSetSize, guiSetParent, guiSetTransient, guiSuggestTitle, guiShow, guiHide};
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
+        if constexpr (HasTail<typename P::Core>::value) { static const clap_plugin_tail_t tailExt = {tailGet}; if (!std::strcmp(id, CLAP_EXT_TAIL)) return &tailExt; }
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
@@ -619,6 +626,16 @@ private:
     }
 
     // ---- latency
+    // tail = what the core says it rings on for plus the delay the plug-in reports (the sound leaves that much later); INT32_MAX: it never stops
+    void updateTail() {
+        if constexpr (HasTail<typename P::Core>::value) {
+            const double sec = shell_.core().tailSeconds();
+            if (!(sec < 3600.0)) { tail_.store(0x7fffffffu); return; }
+            const double samples = std::min(sec, 600.0) * sr_ + static_cast<double>(shell_.latencySamples());
+            tail_.store(static_cast<uint32_t>(std::min(samples, 2.0e9)));
+        }
+    }
+    static uint32_t tailGet(const clap_plugin_t* p) { return self(p)->tail_.load(); }
     static uint32_t latencyGet(const clap_plugin_t* p) { return static_cast<uint32_t>(self(p)->shell_.latencySamples()); }
 
     clap_plugin_t plugin_{};
@@ -641,6 +658,7 @@ private:
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
+    std::atomic<uint32_t> tail_{0};   // the tail in samples, kept up to date by the audio thread (the host asks from any thread)
     uint32_t maxFrames_ = 4096;   // the largest block activate() promised the buffers for (process() cuts a longer block, which the CLAP rules forbid but a host can still send)
     std::array<std::atomic<float>, 4> peaks_{};
     std::array<std::atomic<double>, gui::kMaxReadouts> ro_{};   // the core's measured values for the screen (trait readouts)

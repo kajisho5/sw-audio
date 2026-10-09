@@ -1,4 +1,5 @@
 #include "dl05/dl05.hpp"
+#include "sw/tail.hpp"
 #include "sw/notes.hpp"
 #include <algorithm>
 #include <cmath>
@@ -30,6 +31,13 @@ double Processor::timeSamples() const {
     const double bpm = bpm_ > 0.0 ? bpm_ : 120.0;
     const int idx = 5 + std::clamp(static_cast<int>(target_[Time] + 0.5), 0, kNumTimes - 1);
     return std::min(noteSeconds(idx, bpm), kMaxSeconds) * fs_;
+}
+
+// no feedback: what is in the buffer plays out once. Reverse reads backwards from (1 + rate) x the position in the period, so a sample is heard up to (1 + rate) x Time later (rate 2 with Pitch +12);
+// the grain and the spray come on top; a frozen buffer goes round for ever
+double Processor::tailSeconds() const {
+    if (target_[Freeze] > 0.5) return tail::kInfinite;
+    return timeSamples() / fs_ * (target_[Pitch] > 0.5 ? 3.0 : 2.0) + 2.0 * target_[GrainSize] * 0.001 + 0.3;
 }
 
 void Processor::setTransport(bool playing, double beatsToNextBar) {

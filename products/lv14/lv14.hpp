@@ -27,6 +27,7 @@ public:
     void snapToTargets() { if (prepared_) cur_ = target_[Delay] * 0.001 * fs_; }
     void process(float** ch, int numCh, int n) { processWithSidechain(ch, numCh, n, nullptr, 0); }
     void processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double distanceM() const { return target_[Delay] * 0.001 * speedOfSound(target_[AirTemp]); }
     // Measure

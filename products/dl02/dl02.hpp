@@ -28,6 +28,7 @@ public:
     void setTempo(double bpm) { bpm_ = bpm; }
     void setTransport(bool playing, double beatsToNextBar);
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long the repeats go on (sw/tail.hpp)
     int latencySamples() const { return 0; }
 
 private:

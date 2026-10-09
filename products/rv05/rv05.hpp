@@ -31,6 +31,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets();
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
 
 private:

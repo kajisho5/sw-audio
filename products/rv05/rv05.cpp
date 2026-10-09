@@ -1,4 +1,5 @@
 #include "rv05/rv05.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -156,5 +157,8 @@ void Processor::process(float** ch, int numCh, int n) {
         if (nch > 1) ch[1][i] = static_cast<float>(r);
     }
 }
+
+// the tail: Decay (the knob 0..10 is 0.4 s .. 4 s for 60 dB) taken down to -80 dB
+double Processor::tailSeconds() const { return tail::fromRt60(decaySeconds(target_[Decay])) + 0.4; }
 
 }  // namespace sw::rv05

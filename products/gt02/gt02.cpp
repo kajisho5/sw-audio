@@ -1,4 +1,5 @@
 #include "gt02/gt02.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -171,5 +172,8 @@ void Processor::process(float** ch, int numCh, int n) {
     if (lowCutOn_) for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) ch[c][i] = static_cast<float>(hp_[static_cast<size_t>(c)].process(ch[c][i]));
     for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) if (std::abs(ch[c][i]) < 1e-30f) ch[c][i] = 0.0f;
 }
+
+// the tail: the length of the impulse response (cabinet and room), plus a little
+double Processor::tailSeconds() const { return fs_ > 0.0 ? static_cast<double>(len_) / fs_ + 0.1 : 0.0; }
 
 }  // namespace sw::gt02

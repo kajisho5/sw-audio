@@ -26,6 +26,7 @@ public:
     void snapToTargets();
     void setTempo(double bpm) { bpm_ = bpm; }
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long the repeats go on (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double timeSeconds() const;      // the delay in use
     double clockHz() const;          // the bucket clock for the delay in use

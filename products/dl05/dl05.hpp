@@ -30,6 +30,7 @@ public:
     void setTempo(double bpm) { bpm_ = bpm; }
     void setTransport(bool playing, double beatsToNextBar);
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double timeSamples() const;   // P in use
     // for the screen (audio thread): per grain slot (kGrainSlots) 5 values: on (0 / 1), how far back in the recording it reads now (seconds), its speed (direction x rate: -2 .. 2),

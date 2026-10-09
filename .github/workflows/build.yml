@@ -93,6 +93,8 @@ jobs:
           for r in 44100 96000 192000; do build/sw-host-smoke --rate=$r build/plugins; done
           # the same input in blocks of 1 / 7 / 64 / 509 / 1024 / mixed / 2048 (longer than max_frames) against blocks of 256: the result must not depend on how the host cuts the audio
           build/sw-host-smoke --blocks build/plugins
+          # how long each one rings on after its input stops: what it reports (the CLAP tail extension) must be at least what it does, with the defaults and 2 random settings
+          build/sw-host-smoke --tails=2 build/plugins
 
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'

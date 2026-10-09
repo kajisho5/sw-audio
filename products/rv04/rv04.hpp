@@ -30,6 +30,7 @@ public:
     void setTempo(double bpm) { if (std::abs(bpm - bpm_) > 0.05) { bpm_ = bpm; if (target_[BarFit] > 0.5) markTransform(); } }
     void snapToTargets();
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     // Custom: an IR from a file (frames x channels interleaved, 1 or 2 channels, any rate); stored with the project. The IR is built off to the side and the audio thread takes it over at the
     // start of a block (through a small mailbox: free / being written / ready / being taken), so loading never waits for, or disturbs, the audio thread. One loading thread at a time.

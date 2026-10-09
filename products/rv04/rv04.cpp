@@ -1,4 +1,5 @@
 #include "rv04/rv04.hpp"
+#include "sw/tail.hpp"
 #include "sw/base64.hpp"
 #include <algorithm>
 #include <cmath>
@@ -356,5 +357,8 @@ void Processor::process(float** ch, int numCh, int n) {
         ch[c][i] = static_cast<float>(y);
     }
 }
+
+// the tail: the impulse response in use, or the one being built (Length / Size just changed), after the pre-delay
+double Processor::tailSeconds() const { return fs_ > 0.0 ? std::max(irLen_, static_cast<double>(outLen_)) / fs_ + target_[PreDelay] * 0.001 + 0.2 : 0.0; }
 
 }  // namespace sw::rv04

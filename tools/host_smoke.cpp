@@ -914,24 +914,59 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
     }
     return ok;
 }
-// How long a sound goes on after the input has stopped: an impulse (0.5) in silence, 30 s of silence after it; the last sample above -80 dBFS (1e-4) minus the position of the impulse (the delay the plug-in reports is part of it).
-// A host that bounces or freezes a track needs this ("tail" in CLAP / VST3 getTailSamples): without it the reverb or delay stops at the end of the region.
-void tailChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines) {
+// How long a sound goes on after the input has stopped: 0.1 s of noise, then 30 s of silence; the last sample above -80 dBFS (1e-4) is the end (counted from the end of the noise, so the delay the plug-in reports is part of it).
+// A host that bounces or freezes a track needs the number ("tail" in CLAP, getTailSamples in VST3): without it the reverb or delay stops at the end of the region. Measured with the defaults and with random settings;
+// the plug-in has to report at least what it does (the tail extension, read after the settings have been processed), and not absurdly more.
+double measureTail(Loaded& a, double& reportedSec, bool& hasExt) {
+    // 0.1 s of noise (about -20 dBFS RMS), then 30 s of silence; the tail is counted from the end of the noise
+    a.run.clearLogs(); a.run.impulse = -1; EventList none;
+    const int noiseBlocks = static_cast<int>(std::ceil(0.1 * kSr / kBlock)), blocks = static_cast<int>(30.0 * kSr / kBlock);
+    a.run.process(noiseBlocks, 5, none);
+    a.run.impulse = INT64_MAX;   // silence from here
+    a.run.process(blocks, 1, none);
+    const size_t at = static_cast<size_t>(noiseBlocks) * kBlock;
+    // a noise source (hiss, hum, crackle: SA01 / SA02 / SA07 / SA08 with Noise up) is not a tail: if the last 2 s are still above -90 dBFS RMS the sound is not dying away
+    { double e = 0; size_t n0 = a.run.outAll[0].size() - static_cast<size_t>(2.0 * kSr); for (size_t i = n0; i < a.run.outAll[0].size(); ++i) e += static_cast<double>(a.run.outAll[0][i]) * a.run.outAll[0][i];
+      if (std::sqrt(e / (2.0 * kSr)) > 3e-5) { a.run.impulse = -1; reportedSec = 0; hasExt = false; return -1.0; } }
+    long last = -1; for (int c = 0; c < 2; ++c) for (size_t i = a.run.outAll[c].size(); i-- > 0;) if (std::fabs(a.run.outAll[c][i]) > 1e-4f) { last = std::max<long>(last, static_cast<long>(i)); break; }
+    const auto* te = static_cast<const clap_plugin_tail_t*>(a.p->get_extension(a.p, CLAP_EXT_TAIL));
+    hasExt = te != nullptr; reportedSec = te ? (te->get(a.p) >= 0x7fffffffu ? 1e9 : te->get(a.p) / kSr) : 0.0;
+    a.run.impulse = -1;
+    return last < static_cast<long>(at) ? 0.0 : (static_cast<double>(last) - static_cast<double>(at)) / kSr;
+}
+bool tailChecks(const std::vector<fs::path>& files, int settings, std::vector<std::string>& lines) {
+    bool ok = true;
     for (const auto& f : files) {
-        Loaded a; std::string why; if (!a.open(f, why)) { lines.push_back("FAIL  " + f.stem().string() + ": " + why); continue; }
-        a.run.impulse = 4 * kBlock; EventList none;
-        const int blocks = static_cast<int>(30.0 * kSr / kBlock);
-        a.run.process(blocks, 1, none);
-        long last = -1; for (int c = 0; c < 2; ++c) for (size_t i = a.run.outAll[c].size(); i-- > 0;) if (std::fabs(a.run.outAll[c][i]) > 1e-4f) { last = std::max<long>(last, static_cast<long>(i)); break; }
-        const auto* lat = static_cast<const clap_plugin_latency_t*>(a.p->get_extension(a.p, CLAP_EXT_LATENCY));
-        const uint32_t reported = lat ? lat->get(a.p) : 0;
-        const double tail = last < 0 ? 0.0 : (static_cast<double>(last) - 4.0 * kBlock - reported) / kSr;
-        const auto* te = static_cast<const clap_plugin_tail_t*>(a.p->get_extension(a.p, CLAP_EXT_TAIL));
-        const double said = te ? te->get(a.p) / kSr : -1.0;
-        char b[200]; std::snprintf(b, sizeof b, "%-26s tail %7.3f s   reported %s", f.stem().string().c_str(), tail, te ? (std::to_string(said).substr(0, 7) + " s").c_str() : "(none)");
-        if (tail > 0.01) lines.push_back(b);
+        const std::string name = f.stem().string();
+        Loaded a; std::string why; if (!a.open(f, why)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; continue; }
+        const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+        std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
+        Rng rng(0x7A11 ^ std::hash<std::string>()(name));
+        double worstUnder = 0, maxTail = 0, maxSaid = 0; std::string under; bool anyExt = false, over = false; std::string overText;
+        for (int k = 0; k <= settings; ++k) {
+            if (k > 0) {   // random settings (the defaults first)
+                EventList ev;
+                for (const auto& pi : info) {
+                    if (pi.flags & CLAP_PARAM_IS_READONLY) continue;
+                    double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                    ev.set(pi.id, v);
+                }
+                a.run.process(2, 99, ev);
+                { EventList none; a.run.process(20, 100, none); }   // let the settings settle
+            }
+            double said = 0; bool ext = false; const double tail = measureTail(a, said, ext); anyExt = anyExt || ext;
+            if (tail < 0.0) continue;   // a noise source
+            maxTail = std::max(maxTail, tail); maxSaid = std::max(maxSaid, said);
+            if (tail > said + 0.5 && tail - said > worstUnder && name != "SW SA01 Tape" && name != "SW SA02 Console Sum" && name != "SW SA07 Lo-Fi" && name != "SW SA08 Bitcrush")   // hiss / hum / crackle sources are not tails { worstUnder = tail - said; char b[120]; std::snprintf(b, sizeof b, "setting %d: rings %.3f s, reports %.3f s", k, tail, said); under = b; }
+            if (said > 3.0 * tail + 0.3 && said < 1e8 && tail > 0.01 && tail < 29.0 && !over) { over = true; char b[120]; std::snprintf(b, sizeof b, "setting %d: rings %.3f s, reports %.3f s", k, tail, said); overText = b; }
+        }
+        char b[260];
+        if (worstUnder > 0) { std::snprintf(b, sizeof b, "UNDER %-26s %s%s", name.c_str(), under.c_str(), anyExt ? "" : "   (no tail extension)"); lines.push_back(b); ok = false; }
+        else if (over) { std::snprintf(b, sizeof b, "OVER  %-26s %s", name.c_str(), overText.c_str()); lines.push_back(b); }
+        else if (maxTail > 0.01 || maxSaid > 0.0) { std::snprintf(b, sizeof b, "ok    %-26s longest %.3f s, reports up to %.3f s", name.c_str(), maxTail, maxSaid); lines.push_back(b); }
         a.close();
     }
+    return ok;
 }
 }   // namespace
 
@@ -939,7 +974,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -948,7 +983,7 @@ int main(int argc, char** argv) {
         }
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         if (opt == "--blocks") { blocksOnly = true; continue; }
-        if (opt == "--tails") { tailsOnly = true; continue; }
+        if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
             for (auto& e : fs::directory_iterator(a))
@@ -961,10 +996,10 @@ int main(int argc, char** argv) {
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
     if (tailsOnly) {   // --tails: only the tail measurement
-        std::vector<std::string> lines; tailChecks(files, lines);
+        std::vector<std::string> lines; const bool ok = tailChecks(files, tailSettings, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
-        std::printf("tails: %zu plug-ins, %zu with a tail over 10 ms\n", files.size(), lines.size());
-        return 0;
+        std::printf("tails: %zu plug-ins, defaults and %d random settings each: %s\n", files.size(), tailSettings, ok ? "no tail longer than reported" : "SOME RING LONGER THAN THEY REPORT");
+        return ok ? 0 : 1;
     }
     if (blocksOnly) {   // --blocks: only the block-size check
         std::vector<std::string> lines; int differ = 0; const bool ok = blockChecks(files, lines, differ);

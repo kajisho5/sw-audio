@@ -26,6 +26,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets() { if (prepared_) setFilters(); }
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double macroValue(int i) const;
 

@@ -1,4 +1,5 @@
 #include "lv25/lv25.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -26,6 +27,9 @@ double Processor::goalS() const {
         default: return midiBpm_ > 20.0 ? std::clamp(60.0 / midiBpm_, 0.001, 2.0) : target_[Time] * 0.001;
     }
 }
+
+// the repeats: one trip round the loop per delay time (the time the clock gives), each Feedback of the one before
+double Processor::tailSeconds() const { return tail::loop(std::max(timeS_, goalS()), target_[Feedback] * 0.01) + 0.3; }
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate; size_t sz = 16; while (sz < static_cast<size_t>(2.1 * fs_) + 16) sz <<= 1;

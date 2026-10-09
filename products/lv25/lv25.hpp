@@ -31,6 +31,7 @@ public:
     void midiClockTick();
     int takeParamWrite(int& id, double& plain);
     double timeMs() const { return goalS() * 1000.0; }
+    double tailSeconds() const;   // how long the repeats go on (sw/tail.hpp)
 
 private:
     double goalS() const;

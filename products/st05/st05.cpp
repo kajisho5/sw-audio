@@ -1,4 +1,5 @@
 #include "st05/st05.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -207,5 +208,8 @@ void Processor::process(float** ch, int numCh, int n) {
         }
     }
 }
+
+// the tail: the length of the impulse responses (a fixed kIrSeconds), plus a little
+double Processor::tailSeconds() const { return fs_ > 0.0 ? static_cast<double>(len_) / fs_ + 0.1 : 0.0; }
 
 }  // namespace sw::st05

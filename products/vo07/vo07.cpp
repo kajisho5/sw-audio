@@ -1,4 +1,5 @@
 #include "vo07/vo07.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -131,6 +132,14 @@ void Processor::chunk(float** ch, int nch, int n) {
             if (std::abs(y) < 1e-30) y = 0.0;
             ch[c][i] = static_cast<float>(y);
         }
+}
+
+// the tail: the plate and the echo are sends (in parallel), each only while it is turned up
+double Processor::tailSeconds() const {
+    double t = 0.0;
+    if (target_[Plate] > 0.0) t = std::max(t, plate_.tailSeconds());
+    if (target_[Echo] > 0.0) t = std::max(t, echo_.tailSeconds());
+    return t;
 }
 
 }  // namespace sw::vo07

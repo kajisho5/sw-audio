@@ -1,4 +1,5 @@
 #include "rv03/rv03.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -109,5 +110,8 @@ void Processor::process(float** ch, int numCh, int n) {
         if (nch > 1) ch[1][i] = static_cast<float>(r);
     }
 }
+
+// the tail: the springs ring for kDecaySeconds (60 dB), taken down to -80 dB, and the dispersion adds a little
+double Processor::tailSeconds() const { return tail::fromRt60(kDecaySeconds) + 0.4; }
 
 }  // namespace sw::rv03

@@ -29,6 +29,7 @@ public:
     void snapToTargets();
     void setTempo(double bpm) { bpm_ = bpm; }
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long the repeats go on (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double tapSeconds(int tap) const;   // the delay in use
 

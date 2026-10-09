@@ -27,6 +27,7 @@ public:
     void setTempo(double bpm) { bpm_ = bpm; }
     void snapToTargets();
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double preDelayMs() const;   // the pre-delay in use (the note length when Sync is on and the tempo is known)
 

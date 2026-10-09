@@ -46,6 +46,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 - **非線形の段は `sw::OsSwitch`（`DriveStage`・`BiasShaper` もその上）を通し、`oversampleSpec("<コード>.os")` を製品パラメータの末尾（Unit があればその直前）にする**（1x／2x／4x、既定 2x。仕様書が 4× の製品は第 2 引数）。段のループの中にある時間のもの（フィルター係数、DC 除去、包絡の追従）は `os.rate(fs)` で計算する（`fs` 決め打ちや 2×fs 決め打ちは設定を変えると音が変わる）。画面の「2× OS」ボタンは `gen_skins.py` が `.os` に結び付ける。
 - アナログ系の段のヘッドルームは +6 dBFS（決定事項）。
 - **ブロック長に依存させない**：制御値・判定・ランプ・時定数は、`process()` の局所変数や「ホストのブロックの頭から」でなく、ストリームの絶対位置の格子（`ph_` を持ち、32〜64 サンプル）で決める。制御ブロックの終わりで決めたものは次の制御ブロックにかけて直線で入れる。リミッターの Auto release は `PeakLimiter::setAutoRelease`（1 サンプルごとの判定）。`tests/block_helpers.hpp` の `bsi::worstDb` が −90 dB 未満（定常）で、`host_smoke --blocks` が通ること。`activate` の `max_frames` より長いブロックはアダプターが割る。
+- **残響・繰り返しのある製品はテールを報告する**：コアに `double tailSeconds() const`（今の設定で、入力が止まってから 80 dB 下がるまでの秒数。ずっと続くなら `sw::tail::kInfinite`。`sw/tail.hpp` の `loop`・`multi`・`fromRt60`）。アダプターが CLAP の tail 拡張（遅延を足した値）にする。`host_smoke --tails` が「報告値 ≥ 実測」を乱数設定で確かめる。
 - **テストの処理ループは端数ブロックを必ず `std::min(256, n - off)` で切る**（配列の外を読む不具合を2回出した）。
 - 有効化前に状態を読み込まれても落ちないこと（prepare 前は `snapToTargets()` で何もしない）。
 

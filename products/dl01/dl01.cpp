@@ -1,5 +1,6 @@
 #include "dl01/dl01.hpp"
 #include "sw/notes.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -35,6 +36,9 @@ double Processor::timeSeconds() const {
     if (target_[Sync] > 0.5 && bpm_ > 0.0) t = noteSeconds(noteIndexFromNorm(specs()[Time].toNorm(target_[Time])), bpm_);
     return std::clamp(t, 0.001, kMaxSeconds);
 }
+
+// the repeats: one trip round the feedback loop per delay time, each one `Feedback` of the one before (the Tape / Analog soft limiter keeps a loop at 100 % or more going for ever); the filters add a little
+double Processor::tailSeconds() const { return tail::loop(timeSeconds(), target_[Feedback] * 0.01) + 0.25; }
 
 void Processor::setFilters() {
     const int mode = static_cast<int>(target_[Mode] + 0.5);

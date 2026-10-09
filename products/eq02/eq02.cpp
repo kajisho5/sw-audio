@@ -1,4 +1,5 @@
 #include "eq02/eq02.hpp"
+#include "sw/tail.hpp"
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -219,6 +220,13 @@ void Processor::process(float** ch, int numCh, int n) {
             if (ms) { const float m = ch[0][i], s = ch[1][i]; ch[0][i] = m + s; ch[1][i] = m - s; }
         }
     }
+}
+
+// the tail: a band with a high Q rings like a resonator, 2.9 Q / f seconds to fall by 80 dB (the cap is the longest a sane setting needs)
+double Processor::tailSeconds() const {
+    double t = 0.0;
+    for (int b = 0; b < kBands; ++b) if (active(b) && std::abs(this->t(b, Gain)) > 0.05) t = std::max(t, 2.93 * this->t(b, Q) / std::max(this->t(b, Freq), 10.0));
+    return std::min(t, 10.0);
 }
 
 }  // namespace sw::eq02

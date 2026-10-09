@@ -1,4 +1,5 @@
 #include "dl03/dl03.hpp"
+#include "sw/tail.hpp"
 #include "sw/notes.hpp"
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,16 @@ double Processor::timeSeconds() const {
     if (target_[Sync] > 0.5 && bpm_ > 0.0) t = noteSeconds(noteNearest(t, bpm_), bpm_);
     return std::clamp(t, 0.020, 0.600);
 }
+// the repeats: the loop has a compander (compress by 1/sqrt(level), expand by the level), so a repeat is Feedback x sqrt(level) times the one before it, in level: each one is lower than the
+// last by more than Feedback and the repeats stop after a few trips whatever Feedback is below 100 % (10 = 110 % goes on for ever). Starting from a full-scale input, trips until the repeat is under -80 dBFS
+double Processor::tailSeconds() const {
+    const double fb = target_[Feedback] * 0.11;
+    if (fb >= 1.0) return tail::kInfinite;
+    double level = 1.0; int trips = 0;
+    while (level > 1e-4 && trips < 400) { level = fb * level * std::sqrt(level); ++trips; }
+    return timeSeconds() * (trips + 1) + 0.3;
+}
+
 double Processor::clockHz() const { return std::min(kStages / timeSeconds(), fs_); }
 
 void Processor::setFilters(double clock) {   // `clock` is the unclamped 4096 / T: the filters keep following it above the host rate
