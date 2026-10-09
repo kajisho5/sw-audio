@@ -65,9 +65,9 @@ struct EventList {
             return i < self->ev.size() ? reinterpret_cast<const clap_event_header_t*>(self->ev[i].bytes) : nullptr;
         };
     }
-    void set(clap_id id, double value) {
+    void set(clap_id id, double value, uint32_t time = 0) {
         clap_event_param_value_t e{};
-        e.header.size = sizeof(e); e.header.time = 0; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
         e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = 0;
         e.param_id = id; e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = value;
         push(&e, sizeof e);
@@ -518,13 +518,13 @@ Result testOne(const fs::path& path) {
 //   loaded afterwards, finds the same registry (it was not freed with A's library) and sees B.
 struct Loaded {
     void* lib = nullptr; const clap_plugin_entry_t* entry = nullptr; const clap_plugin_t* p = nullptr; const sw_plugin_message_t* m = nullptr; Run run; EventList ev;
-    bool open(const fs::path& path, std::string& why) {
+    bool open(const fs::path& path, std::string& why, uint32_t maxFrames = kBlock) {
         lib = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL); if (!lib) { why = std::string("dlopen: ") + dlerror(); return false; }
         entry = static_cast<const clap_plugin_entry_t*>(dlsym(lib, "clap_entry")); if (!entry || !entry->init(path.c_str())) { why = "no clap_entry"; return false; }
         auto* fac = static_cast<const clap_plugin_factory_t*>(entry->get_factory(CLAP_PLUGIN_FACTORY_ID)); if (!fac || fac->get_plugin_count(fac) < 1) { why = "no factory"; return false; }
         const clap_plugin_descriptor_t* d = fac->get_plugin_descriptor(fac, 0);
         p = fac->create_plugin(fac, &gHost, d->id);
-        if (!p || !p->init(p) || !p->activate(p, kSr, 16, kBlock) || !p->start_processing(p)) { why = "create/init/activate"; return false; }
+        if (!p || !p->init(p) || !p->activate(p, kSr, 16, maxFrames) || !p->start_processing(p)) { why = "create/init/activate"; return false; }
         m = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE)); if (!m) { why = "no message hook"; return false; }
         run.p = p; run.nIn = 1; for (int c = 0; c < 2; ++c) { run.in[c].resize(kBlock); run.out[c].resize(kBlock); run.sc[c].resize(kBlock); }
         return true;
@@ -537,6 +537,71 @@ struct Loaded {
     // [peers, spectrum of the others] from a poll
     std::vector<double> link() { const auto a = updateArrays(m->send(p, "p")); return a.size() > 5 ? a[5] : std::vector<double>{}; }
 };
+// The same input in blocks of different sizes: what comes out must not depend on how the host cuts the audio (the buffer size of a DAW, an offline bounce, a host that splits a block at every automation point).
+// The reference is blocks of 256; the others are 1, 7, 64, 509, 1024 and a mix (1, 2, 3, 5, 8 ... 987). The input is the same noise, three parameter events (random parameters, random values) fall at the same absolute samples in
+// every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
+struct TimedParam { size_t at; clap_id id; double v; };
+struct Cut { const char* name; std::vector<uint32_t> sizes; };
+void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
+    const size_t total = in[0].size(); uint32_t maxSize = 1; for (uint32_t z : sizes) maxSize = std::max(maxSize, z);
+    std::vector<float> bi[2], bo[2]; for (int c = 0; c < 2; ++c) { bi[c].resize(maxSize); bo[c].resize(maxSize); out[c].assign(total, 0.0f); }
+    size_t pos = 0, k = 0, ti = 0;
+    while (pos < total) {
+        const uint32_t n = static_cast<uint32_t>(std::min<size_t>(sizes[k++ % sizes.size()], total - pos));
+        EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { ev.set(tp[ti].id, tp[ti].v, static_cast<uint32_t>(tp[ti].at - pos)); ++ti; }
+        for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); }
+        float* ip[2] = {bi[0].data(), bi[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
+        clap_audio_buffer_t ib{}; ib.channel_count = 2; ib.data32 = ip; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
+        clap_output_events_t oe{nullptr, outTryPush}; clap_process_t pr{};
+        pr.steady_time = -1; pr.frames_count = n; pr.audio_inputs = &ib; pr.audio_inputs_count = 1; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
+        if (a.p->process(a.p, &pr) == CLAP_PROCESS_ERROR) bad = true;
+        for (int c = 0; c < 2; ++c) for (uint32_t i = 0; i < n; ++i) { out[c][pos + i] = bo[c][i]; if (!std::isfinite(bo[c][i])) bad = true; }
+        pos += n;
+    }
+}
+bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& differ) {
+    bool ok = true; differ = 0;
+    const size_t total = static_cast<size_t>(kSr * 0.7);
+    const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        std::vector<float> in[2]; { Rng rng(77); for (int c = 0; c < 2; ++c) { in[c].resize(total); for (auto& x : in[c]) x = rng.next() * 0.1732f; } }
+        std::vector<TimedParam> tp; bool bad = false; std::string why;
+        auto runCut = [&](const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool withEvents) -> bool {
+            Loaded a; if (!a.open(f, why, 1024)) return false;
+            if (withEvents && tp.empty()) {   // chosen once, from the first plug-in instance: three random writable parameters
+                const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS)); Rng rr(0xB10C ^ std::hash<std::string>()(name));
+                std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
+                const size_t at[3] = {total / 7, total / 3 + 11, total / 2 + 301};
+                for (int e = 0; e < 3 && !info.empty(); ++e) {
+                    const uint32_t i = static_cast<uint32_t>((rr.next() * 0.5f + 0.5f) * static_cast<float>(info.size())) % static_cast<uint32_t>(info.size()); if (info[i].flags & CLAP_PARAM_IS_READONLY) continue;
+                    double v = info[i].min_value + (rr.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                    tp.push_back({at[e], info[i].id, v});
+                }
+            }
+            processCut(a, in, withEvents ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
+        };
+        std::string row[2]; double worstAll = -400.0; bool failed = false;
+        for (int withEvents = 0; withEvents < 2 && !failed; ++withEvents) {
+            std::vector<float> ref[2];
+            if (!runCut({256}, ref, withEvents != 0)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
+            double peak = 1e-9; for (int c = 0; c < 2; ++c) for (float x : ref[c]) peak = std::max(peak, static_cast<double>(std::fabs(x)));
+            for (const auto& cut : cuts) {
+                std::vector<float> o[2];
+                if (!runCut(cut.sizes, o, withEvents != 0)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
+                double err = 0; for (int c = 0; c < 2; ++c) for (size_t i = 0; i < total; ++i) err = std::max(err, static_cast<double>(std::fabs(o[c][i] - ref[c][i])));
+                const double db = 20.0 * std::log10(std::max(err / peak, 1e-20)); worstAll = std::max(worstAll, db);
+                char b[32]; std::snprintf(b, sizeof b, " %s:%.0f", cut.name, db); row[withEvents] += b;
+            }
+        }
+        if (failed) continue;
+        const bool differs = worstAll > -90.0; if (differs) ++differ;
+        if (bad) { lines.push_back("FAIL  " + name + "   NaN / Inf or a process() error"); ok = false; }
+        else if (!differs) { char b[200]; std::snprintf(b, sizeof b, "ok    %-26s the same in every block size (worst %.0f dB re peak)", name.c_str(), worstAll); lines.push_back(b); }
+        else { lines.push_back("DIFF  " + name + "\n        steady settings (dB re peak, blocks of 256 as the reference):" + row[0] + "\n        with three parameter events:                                 " + row[1]); }
+    }
+    return ok;
+}
 // Unit A / B / C through the real plug-in: with flat default settings the only thing Unit B / C change is the gain tolerance of the output stage, a different one per channel (the Shell, routed by the adapter's kUnitParam):
 // the level of each channel against Unit A must move by the tolerance sw::Unit gives that channel
 bool unitChecks(const std::vector<fs::path>& files) {
@@ -569,16 +634,22 @@ bool unitChecks(const std::vector<fs::path>& files) {
 // ---- soak: a long run of the real plug-in (--soak=SECONDS of audio per plug-in, faster than real time): noise, a tone, near-silence, and a random parameter every second.
 // What it looks for: memory that keeps growing (the process's resident set after the first tenth of the run against the end), the time a block takes creeping up (the first tenth against the last tenth), NaN / Inf / runaway output.
 double residentMB() { long pages = 0, rss = 0; std::FILE* f = std::fopen("/proc/self/statm", "r"); if (!f) return 0.0; if (std::fscanf(f, "%ld %ld", &pages, &rss) != 2) rss = 0; std::fclose(f); return static_cast<double>(rss) * static_cast<double>(sysconf(_SC_PAGESIZE)) / 1048576.0; }
-bool soakOne(const fs::path& f, double secs, std::string& line) {
+bool soakOne(const fs::path& f, double secs, std::string& line, bool* timingOnly = nullptr) {
     Loaded a; std::string why; if (!a.open(f, why)) { line = "FAIL  " + f.stem().string() + ": " + why; return false; }
     const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
     std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
     Rng rng(0xC0FFEEull ^ info.size() * 7919u);
-    const int chunks = std::max(10, static_cast<int>(secs)), blocksPerChunk = static_cast<int>(std::ceil(kSr / kBlock));
-    std::vector<double> cpu(static_cast<size_t>(chunks)); double rss0 = 0, rssEnd = 0, rssMax = 0;
-    for (int c = 0; c < chunks; ++c) {
+    const int blocksPerChunk = static_cast<int>(std::ceil(kSr / kBlock)), lead = 2, measure = 8, total = std::max(static_cast<int>(secs), 2 * (lead + measure) + 4);
+    // layout (chunks of one second): [warm-up][A: the defaults][a random parameter every second ...][every parameter back to its default][warm-up][B]; the time per block of A and B must be the same
+    // (the parameters are, so only what the plug-in has piled up in between can make B slower); the memory after A and at the end
+    std::vector<double> cpu(static_cast<size_t>(total));
+    const int endA = lead + measure, startB = total - measure, resetAt = startB - lead;
+    double rss0 = 0, rssEnd = 0;
+    for (int c = 0; c < total; ++c) {
         EventList ev;
-        if (!info.empty()) {   // one random parameter per second (the stepped ones to a step)
+        if (c == resetAt) {
+            for (uint32_t i = 0; i < info.size(); ++i) if (!(info[i].flags & CLAP_PARAM_IS_READONLY)) ev.set(info[i].id, info[i].default_value);
+        } else if (c >= endA && c < resetAt && !info.empty()) {   // one random parameter per second (the stepped ones to a step)
             const uint32_t i = static_cast<uint32_t>((rng.next() * 0.5f + 0.5f) * static_cast<float>(info.size())) % static_cast<uint32_t>(info.size());
             if (!(info[i].flags & CLAP_PARAM_IS_READONLY)) { double v = info[i].min_value + (rng.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v); ev.set(info[i].id, v); }
         }
@@ -588,17 +659,19 @@ bool soakOne(const fs::path& f, double secs, std::string& line) {
         a.run.process(blocksPerChunk, 1000u + static_cast<uint64_t>(c), ev);
         cpu[static_cast<size_t>(c)] = (a.run.seconds - s0) / std::max(1e-9, a.run.audioSeconds - a0);
         a.run.clearLogs();
-        const double rss = residentMB(); if (c == chunks / 10) rss0 = rss; rssEnd = rss; rssMax = std::max(rssMax, rss);
+        const double rss = residentMB(); if (c == endA - 1) rss0 = rss; rssEnd = rss;
     }
-    const int k = std::max(1, chunks / 10); double first = 0, last = 0;
-    for (int i = 0; i < k; ++i) { first += cpu[static_cast<size_t>(i + k)]; last += cpu[static_cast<size_t>(chunks - 1 - i)]; }   // the very first tenth is warm-up: take the second one
-    first /= k; last /= k;
+    auto best = [&](int from) { return *std::min_element(cpu.begin() + from, cpu.begin() + from + measure); };   // the fastest second: the machine (other work, the clock) can only make a second slower, never faster
+    const double first = best(lead), last = best(startB);
     char buf[256]; std::snprintf(buf, sizeof buf, "%-26s cpu %5.2f%% -> %5.2f%%   memory %.1f -> %.1f MB", f.stem().string().c_str(), first * 100.0, last * 100.0, rss0, rssEnd);
     line = buf; bool ok = true;
     if (a.run.bad) { line += "   FAIL: NaN / Inf or a process() error"; ok = false; }
     if (a.run.peak > 1e4) { line += "   FAIL: output peak " + std::to_string(a.run.peak); ok = false; }
     if (rssEnd - rss0 > 16.0) { line += "   FAIL: memory grows by " + std::to_string(rssEnd - rss0) + " MB"; ok = false; }
-    if (last > first * 1.6 && last > 0.005) { line += "   FAIL: the time per block grows (" + std::to_string(last / first) + "x)"; ok = false; }
+    // (below 0.5 % of a core the clock of the machine is as big as the number)
+    const bool grown = last > first * 1.6 && last > 0.005;
+    if (grown) { line += "   FAIL: at the same settings the time per block has grown (" + std::to_string(last / first) + "x)"; ok = false; }
+    if (timingOnly) *timingOnly = grown && !a.run.bad && a.run.peak <= 1e4 && rssEnd - rss0 <= 16.0;
     a.close(); return ok;
 }
 bool linkChecks(const std::vector<fs::path>& files) {
@@ -804,7 +877,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -812,6 +885,7 @@ int main(int argc, char** argv) {
             kPhaseBlocks = static_cast<int>(std::lround(563.0 * kSr / 48000.0)); kMeasureBlocks = static_cast<int>(std::lround(188.0 * kSr / 48000.0)); continue;
         }
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
+        if (opt == "--blocks") { blocksOnly = true; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
             for (auto& e : fs::directory_iterator(a))
@@ -823,9 +897,21 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (blocksOnly) {   // --blocks: only the block-size check
+        std::vector<std::string> lines; int differ = 0; const bool ok = blockChecks(files, lines, differ);
+        for (const auto& l : lines) std::printf("%s\n", l.c_str());
+        std::printf("blocks: %zu plug-ins, %d differ from the blocks of 256 by more than -90 dB, %s\n", files.size(), differ, ok ? "no failure" : "FAILURES");
+        return ok ? 0 : 1;
+    }
     if (soakSeconds > 0) {   // --soak=SECONDS: only the long run
         int bad = 0; double worstGrowth = 0;
-        for (const auto& f : files) { std::string line; const bool ok = soakOne(f, soakSeconds, line); std::printf("%s %s\n", ok ? "ok  " : "FAIL", line.c_str()); std::fflush(stdout); if (!ok) ++bad; }
+        for (const auto& f : files) {
+            // the clock of a shared machine moves by a factor of two within seconds: a plug-in that fails only on the time per block is measured twice more (the runs are the same, so a plug-in
+            // that piles something up fails every time: CR04 was 26x), and it fails if it fails all three
+            std::string line; bool timingOnly = false; bool ok = soakOne(f, soakSeconds, line, &timingOnly);
+            for (int again = 0; !ok && timingOnly && again < 2; ++again) { std::printf("retry %s\n", line.c_str()); timingOnly = false; ok = soakOne(f, soakSeconds, line, &timingOnly); }
+            std::printf("%s %s\n", ok ? "ok  " : "FAIL", line.c_str()); std::fflush(stdout); if (!ok) ++bad;
+        }
         std::printf("soak: %zu plug-ins x %.0f s of audio: %d FAIL\n", files.size(), soakSeconds, bad); (void)worstGrowth;
         return bad ? 1 : 0;
     }
