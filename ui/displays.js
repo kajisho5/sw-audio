@@ -1229,6 +1229,38 @@
   }
 
 
+  // ---- LV02 feedback suppressor: the notch filters the plug-in has now (F1..F12, FIXED = kept, LIVE = found by the detector) as a curve on 20 Hz - 20 kHz, and in the twelve chips
+  // readouts: for each slot frequency (Hz, 0 = unused) and depth (dB, +100 = FIXED), then ring out (1 / 0). The curve is the sum of the bells the core sets (Q from Width as in sw/feedback.hpp).
+  // The design's example filters and "Watching 4.0k" are gone (the core does not report what it is watching).
+  function feedbackFiltersDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const chips = [...box.querySelectorAll('.slot')]; if (chips.length !== 12) return null;
+    const curve = [...svg.querySelectorAll(':scope > path')].find(p => p.getAttribute('fill') === 'none' && p.getAttribute('stroke') === '#f2f2f2'), g = [...svg.querySelectorAll(':scope > g')].find(e => e.getAttribute('font-weight') === '700');
+    const watchPath = [...svg.querySelectorAll(':scope > path')].find(p => p.getAttribute('fill') === '#f0c93d'), watchText = [...svg.querySelectorAll(':scope > text')].find(t => /^Watching/.test(t.textContent));
+    if (!curve || !g) return null;
+    if (watchPath) watchPath.style.display = 'none'; if (watchText) watchText.style.display = 'none';
+    const [, , W, H] = vbOf(svg), Y0 = 24, PXDB = 8, N = 200, xOf = f => 394.2 + 232 * Math.log10(f / 1000), labels = [...g.querySelectorAll('text')]; g.innerHTML = '';
+    const fmt = f => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2).replace(/\.?0+$/, '') + 'k' : Math.round(f) + ' Hz', pool = [];
+    let last = '';
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 25) return; const key = r.slice(0, 24).map(v => Math.round(v * 10)).join(',') + '|' + ctx.value('Width'); if (key === last) return; last = key;
+      const width = ctx.value('Width') || 0.1, q = Math.max(0.3, 1 / (2 * Math.sinh(Math.LN2 * width))), slots = [];
+      for (let i = 0; i < 12; i++) { const f = r[2 * i], e = r[2 * i + 1], fixed = e >= 100; slots.push({ f, depth: fixed ? e - 100 : e, fixed, on: f > 0 }); }
+      let d = '';
+      for (let k = 0; k <= N; k++) { const f = 20 * Math.pow(1000, k / N); let db = 0; slots.forEach(s => { if (s.on) db += biquadMag('bell', s.f, -s.depth, q, f); }); d += (k ? ' L' : 'M') + (k / N * W).toFixed(1) + ' ' + clamp(Y0 - db * PXDB, 6, H - 18).toFixed(1); }
+      curve.setAttribute('d', d);
+      slots.forEach((s, i) => {
+        const t = pool[i] || (pool[i] = g.appendChild(mkEl('text', {})));
+        if (s.on) { t.setAttribute('x', xOf(s.f).toFixed(1)); t.setAttribute('y', clamp(Y0 + s.depth * PXDB + 16, 20, H - 6).toFixed(1)); t.textContent = 'F' + (i + 1); t.style.display = ''; } else t.style.display = 'none';
+        const c = chips[i], tag = c.querySelector('.t span:last-child'), val = c.querySelector('.f');
+        c.classList.toggle('fx', s.on && s.fixed); c.classList.toggle('lv', s.on && !s.fixed);
+        if (tag) { tag.textContent = s.on ? (s.fixed ? 'FIXED' : 'LIVE') : '—'; tag.style.color = s.on ? '#f2f2f2' : ''; }
+        if (val) { val.textContent = s.on ? fmt(s.f) + ' -' + Math.round(s.depth) : '--'; val.style.color = s.on ? '' : '#5a5c60'; }
+      });
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1268,7 +1300,7 @@
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     MT01: loudnessDisplay, LV23: loudnessDisplay,
-    MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
+    MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,

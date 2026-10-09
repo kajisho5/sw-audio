@@ -123,7 +123,7 @@ public:
         }
         return "";
     }
-    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[16] = {}; const int nro = std::min(16, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); double st[1 + 2 * kGonioPts]; f_.stereo(st); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro, st); }
+    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[32] = {}; const int nro = std::min(32, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); double st[1 + 2 * kGonioPts]; f_.stereo(st); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro, st); }
 private:
     F& f_;
 };
