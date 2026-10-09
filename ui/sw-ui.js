@@ -163,7 +163,7 @@
     // ---- presets (the design's preset menu): the person's own settings, saved as files by the plug-in (bridge.call presetlist / presetsave / presetload / presetdelete; replies through bridge.onPreset)
     // A preset is the product's own parameters as "id=value" pairs; one that lacks a parameter leaves it as it is. The label shows the preset last loaded or saved ("*" once something moved),
     // "Init" while every parameter is at its default, otherwise "Custom".
-    let presetDraw = null;
+    let presetDraw = null, bandHook = null;
     const own = host.filter(h => !h.extra), idx = new Map(own.map(h => [h.p.id, h.i]));
     const bodyOfValues = () => own.map(h => h.p.id + '=' + vals[h.i]).join(';');
     const applyValues = body => {   // the pairs of a body onto the current values (a parameter the body lacks stays); what is not a number or an id of this product is ignored
@@ -405,6 +405,12 @@
         b.addEventListener('click', () => { const i = cur(); if (!hostOf(i)) return; bridge.begin(i); setValue(i, Math.abs(vals[i]) > 1e-9 ? 0 : -6); bridge.end(i); });
         const f = () => { const i = cur(); if (hostOf(i)) b.classList.toggle('on', Math.abs(vals[i]) > 1e-9); }; dyn.push(f); l.forEach(i => reg(i, f)); f();
       });
+      // EQ02 "+": the first band that is off is switched on and selected (data-addband = the On parameter of every band)
+      skinBox.querySelectorAll('button[data-addband]').forEach(b => b.addEventListener('click', () => {
+        const on = list2(b.dataset.addband), k = on.findIndex(i => Math.abs(vals[i]) < 1e-9); if (k < 0) { b.title = 'All bands are in use'; return; }
+        bridge.begin(on[k]); setValue(on[k], 1); bridge.end(on[k]);
+        const sel = skinBox.querySelector('button[data-band="' + k + '"]'); if (sel) sel.click(); else if (bandHook) bandHook(k);
+      }));
       skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       // the 3-D toggle switches: lever up = the value in data-up, down = the other one (class dn)
       skinBox.querySelectorAll('.tog[data-tog]').forEach(t => {
@@ -459,6 +465,7 @@
       const sel = [...skinBox.querySelectorAll('button[data-band]')];
       const drawSel = () => sel.forEach(b => b.classList.toggle('on', +b.dataset.band === band));
       sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; selBand = band; drawSel(); dyn.forEach(f => f()); }));
+      bandHook = k => { band = k; selBand = k; drawSel(); dyn.forEach(f => f()); };   // a band that has no selector button of its own (EQ02 has 24 bands and 5 buttons)
       // the band shown first is the one the design marks as selected
       const first = sel.find(b => b.classList.contains('on')); if (first) { band = +first.dataset.band; selBand = band; } drawSel();
       draws.forEach((fs, i) => { const prev = widgets.get(i); widgets.set(i, v => { if (prev) prev(v); fs.forEach(f => f()); }); });
@@ -483,7 +490,7 @@
       params: host.map(h => ({ name: h.p.name, i: h.i, p: h.p, c: h.c })), get: i => vals[i], set: (i, v) => setValue(i, v, false), begin: i => bridge.begin(i), end: i => bridge.end(i),
       band: () => selBand,
       call: (name, arg) => bridge.call(name, arg === undefined ? '' : arg),
-      selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); } }) : null;
+      selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); else if (bandHook) bandHook(k); } }) : null;
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
       if (disp) disp.update(inf);

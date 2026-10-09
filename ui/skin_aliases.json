@@ -318,7 +318,14 @@
      0
     ]
    ]
-  }
+  },
+  "_valchip": [
+   {
+    "text": "Link",
+    "p": 7,
+    "prefix": "Link"
+   }
+  ]
  },
  "DY04": {
   "btn:hpf": {

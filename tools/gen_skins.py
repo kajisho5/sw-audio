@@ -324,6 +324,10 @@ def eq02_dynamic(root, params):
     dyn = [p['i'] for p in params if p['name'] == 'Dyn Range']
     btn = next((b for b in root.find_all('button') if b.get_text().strip() == 'Dynamic'), None)
     dial = next((c for c in root.select('.ctl') if (c.select_one('.val') or c).get_text().strip().startswith('Range off') and c.select_one('.dk, .knob')), None)
+    on = [p['i'] for p in params if p['name'] == 'On']
+    plus = next((b for b in root.find_all('button') if b.get_text().strip() == '+'), None)
+    if plus is not None and on:   # "+" adds a band: the first band that is Off is switched On and selected
+        plus['data-addband'] = json.dumps(on); plus['title'] = 'Add a band (switches on the first band that is off)'
     if not dyn or btn is None or dial is None:
         return ''
     btn['data-dynpb'] = json.dumps(dyn)
@@ -418,7 +422,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair'}
-    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave')
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave', 'data-addband')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -539,7 +543,7 @@ def build(code, report):
                 continue
             k = labels.index(n) if n in labels else None
             if k is None and not labels:
-                m = re.match(r'^(?:(?:band|voice|tap|pedal|module|slot) )?(\d+)$', n)
+                m = re.match(r'^(?:(?:band|voice|tap|pedal|module|slot) )?(\d+)$', n) if '%' not in t else None   # ("100%" is the zoom chip, not band 100)
                 if m:
                     k = int(m.group(1)) - 1
             if k is not None:
@@ -597,6 +601,8 @@ def build(code, report):
         mom = next((p for p in params if p['curve'] == 'step' and len(p['steps']) == 2 and p.get('auto') is False and re.match(r'^(hold to|mute$)', p['name'].lower()) and (norm(p['name']) == tn or tn.endswith(' ' + norm(p['name'])))), None)
         if mom is not None and tn.startswith('hold to'):   # press and hold (LV01 "Hold to mute" = Mute, LV11 "Hold to cough")
             b['data-p'] = str(mom['i']); b['data-hold'] = '1'; nbt += 1; nbb += 1; continue
+        if t == 'Gain match' and autogain and not any(p['name'] == 'Gain match' for p in params):   # MS01: the chip repeats the common Auto gain
+            b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
         if t == 'Auto' and autogain and b.parent is not None and any(x.get_text().strip() == 'Δ' for x in b.parent.find_all('button', recursive=False)):
             b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue   # the panel's Auto next to the Δ button = the common Auto gain
         if not t:
