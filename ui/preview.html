@@ -18,7 +18,7 @@
   const simMeters = () => { t0 += 1; const a = -30 + 22 * Math.sin(t0 / 9) * Math.sin(t0 / 23), th = vals[0] === undefined ? -20 : vals[0], r = vals[1] || 2, o = a > th ? th + (a - th) / r : a; return [a, a - 1, o + 2, o + 1]; };
   const listeners = [];
   const simSpec = () => Array.from({ length: 64 }, (_, b) => -28 - 5.5 * b / 64 * 10 / 3 + 9 * Math.sin(b / 5 + t0 / 11) + 5 * Math.sin(b * 1.7 + t0 / 3) - (b > 56 ? (b - 56) * 4 : 0));
-  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2, meters: sim ? simMeters() : [-18, -22, -6, -0.5], spectrum: sim ? simSpec() : undefined, readouts: sim && /^(MT01|LV23)$/.test(code) ? [-22.8 + 3 * Math.sin(t0 / 7), -23.6, -24.3, 7.4, -2.1, -24, -0.3, 1, 0, 0] : undefined }) };
+  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2, meters: sim ? simMeters() : [-18, -22, -6, -0.5], spectrum: sim ? simSpec() : undefined, readouts: sim && /^(MT01|LV23)$/.test(code) ? [-22.8 + 3 * Math.sin(t0 / 7), -23.6, -24.3, 7.4, -2.1, -24, -0.3, 1, 0, 0] : code === 'LV06' ? [-15 + 2 * Math.sin(t0 / 30), 1.8 * Math.sin(t0 / 60), -0.4, -14] : code === 'LV07' ? [-21 + 4 * Math.sin(t0 / 25), 3 + 2 * Math.sin(t0 / 25)] : undefined }) };
   window.screen_ = SWUI.mount(document.getElementById('app'), { product: P[code], params, traits, bridge, skin: K[code] && { html: K[code].html, css: (K._base ? K._base.css : '') + K[code].css } });
   document.title = 'SW ' + code; window.ready = true;
 })();

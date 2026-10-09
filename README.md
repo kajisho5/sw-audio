@@ -1050,7 +1050,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 
 ### コアが測った値を画面へ渡す口（`readouts`）
 
-製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
+製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
 
 ### 画面の中央の表示（`ui/displays.js`）
 
@@ -1074,6 +1074,8 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 | LV20 | 1/3 オクターブ 31 本のバー＋ピークホールド | 上と同じ実測（64 バンドから 1/3 オクターブごとの最大）。ピークは 1 更新あたり 0.012 ずつ下がる |
 | MT03・RS04・RS07 | セルのスペクトラム | 上と同じ実測を、列＝周波数・行＝レベル（−80〜0 dB）のセルの点灯で表す。デザインのセルの色は保つ。RS04・RS07 の白い枠（修復範囲）は見本のまま |
 | MT01・LV23 | ラウドネスメーター | **コアの測った値そのもの**（`readouts` トレイト：Momentary・Short-term・Integrated・Range・True peak・Target・差・帯の内外、LV23 は Dead air・TP over も）。M・S・I の 3 本のバー（−36〜−12 LUFS、白線は Target）、巨大な数字、差の色（帯内＝緑、3 LU 超＝赤）、履歴（Short-term を 1 秒ごとに溜める。画面を閉じると消える。最大 10 分）。音がまだ無い間は「—」 |
+| LV06 | ストリーム用マスターの表示 | コアが測るのは**入力**の 3 秒ラウドネスだけなので、デザインの Integrated／True peak／Range は出さず、大きな数字を「Short-term (input)」に、小さな欄を Auto gain・Limiter（GR）・Output ≈（入力＋Auto gain の見積もり）に替えた。Auto level バーは Auto gain（±6 dB）、履歴は Short-term（最大 10 分、画面を閉じると消える）、差は入力と Target の差 |
+| LV07 | スピーチレベラーの入出力ライン | コアが測る入力の 400 ms ラウドネスを灰色、白は「入力＋適用ゲイン」（見積もり）、破線は Target。約 20 秒 |
 | DY03 | GR メーターの針 | デザイン独自の目盛り（右が 0、左が 20 dB）に合わせる。GR は「入力ピーク＋Makeup−出力ピーク」から出す（コア内部の値ではない） |
 | DY01・DY02・DY06・MT05 | VU 針 | 目盛りの角度に合わせる。基準は 0 VU ＝ −15 dBFS（ピーク）の設計値、GR は入出力の差 |
 | DL02・SA01・MD05 | リール・ホーンとドラムの回転 | 音が通っている間（DL02・SA01）、Speed と Accel のモデル（MD05） |

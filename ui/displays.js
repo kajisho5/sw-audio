@@ -547,7 +547,47 @@
     } };
   }
 
+
+  // stream master (LV06): readouts = input short-term (LUFS), auto gain (dB), limiter reduction (dB), target (LUFS). The core measures the input; the integrated / true peak / range of
+  // the design are not published, so the screen shows what the core has: short-term, auto gain, limiter, and the output estimated as input + gain.
+  function streamMasterDisplay(box, ctx) {
+    const big = box.querySelector('span[style*="font-size:46px"]'), minis = [...box.querySelectorAll('.mini')]; if (!big || minis.length < 3) return null;
+    const row = big.parentElement, head = row.previousElementSibling, delta = row.querySelector('span[style*="margin-left:auto"]'), tgtT = head && head.lastElementChild, lblT = head && head.firstElementChild;
+    const lab = (m, t) => { m.firstElementChild.textContent = t; }, val = (m, t) => { m.lastElementChild.textContent = t; };
+    if (lblT) lblT.textContent = 'Short-term (input)'; lab(minis[0], 'Auto gain'); lab(minis[1], 'Limiter'); lab(minis[2], 'Output ≈');
+    const bar = [...box.querySelectorAll('div[style*="border-radius:3px"][style*="height:16px"]')].find(e => e.children.length >= 2), fill = bar && bar.children[1], gRead = box.querySelector('.rv[style*="font-size:18px"]');
+    const svg = box.querySelector('.disp svg'), hp = svg && svg.querySelector(':scope > path'), band = svg && svg.querySelector(':scope > rect'), txt = svg && svg.querySelector(':scope > text');
+    const hist = Ring(600, null); let last = 0;
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return; const fm = v => v > -150 ? v.toFixed(1) : '—', t = r[3];
+      big.textContent = fm(r[0]); if (tgtT) tgtT.textContent = 'Target ' + t.toFixed(1);
+      if (delta) { const d = r[0] - t; delta.textContent = r[0] > -150 ? (d >= 0 ? '+' : '') + d.toFixed(1) + ' LU' : '— LU'; delta.style.color = r[0] <= -150 ? '#8d8d8d' : (Math.abs(d) <= 1 ? '#2bd14a' : Math.abs(d) > 4 ? '#e0443e' : '#f0c93d'); }
+      val(minis[0], (r[1] >= 0 ? '+' : '') + r[1].toFixed(1) + ' dB'); val(minis[1], r[2].toFixed(1) + ' dB'); val(minis[2], r[0] > -150 ? (r[0] + r[1]).toFixed(1) : '—');
+      if (fill) { const w = clamp(Math.abs(r[1]) / 6, 0, 1) * 50; fill.style.width = w.toFixed(1) + '%'; fill.style.left = (r[1] >= 0 ? 50 : 50 - w) + '%'; fill.style.borderRadius = r[1] >= 0 ? '0 3px 3px 0' : '3px 0 0 3px'; }
+      if (gRead) gRead.textContent = (r[1] >= 0 ? '+' : '') + r[1].toFixed(1) + ' dB';
+      const now = Date.now(); if (hp && now - last >= 1000) { last = now; hist.push(r[0] > -150 ? r[0] : null); const W = 704, y = v => clamp(46 - (v - t) * 3, 4, 88); let d = '', open = false;
+        hist.a.forEach((v, k) => { if (v === null) { open = false; return; } d += (open ? ' L' : ' M') + (k / 599 * W).toFixed(1) + ' ' + y(v).toFixed(1); open = true; }); hp.setAttribute('d', d.trim());
+        if (band) { band.setAttribute('y', 40); band.setAttribute('height', 12); } if (txt) txt.textContent = 'Short-term loudness of the input, last 10 min'; }
+    } };
+  }
+
+  // speech leveler (LV07): readouts = input momentary loudness (LUFS), applied gain (dB); the output line is the input plus the applied gain (an estimate), the dashed line is Target
+  function speechLevelerDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')], dash = svg.querySelector(':scope > line[stroke-dasharray]'), tt = [...svg.querySelectorAll(':scope > text')].find(t => t.getAttribute('text-anchor') === 'end');
+    if (ps.length < 3 || !dash) return null;
+    const N = 50, W = 704, inH = Ring(N, null), gH = Ring(N, 0); let last = 0;
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return; const t = ctx.value('Target'); if (t === undefined) return;
+      const y = v => clamp(63 - (v - t) * 4, 6, 134); dash.setAttribute('y1', '63'); dash.setAttribute('y2', '63'); if (tt) tt.textContent = 'Target ' + t + ' LUFS';
+      const now = Date.now(); if (now - last < 400) return; last = now; inH.push(r[0] > -150 ? r[0] : null); gH.push(r[1]);
+      let di = '', dout = '', oi = false; for (let k = 0; k < N; k++) { const v = inH.a[k]; if (v === null) { oi = false; continue; } const x = (k / (N - 1) * W).toFixed(1); di += (oi ? ' L' : ' M') + x + ' ' + y(v).toFixed(1); dout += (oi ? ' L' : ' M') + x + ' ' + y(v + gH.a[k]).toFixed(1); oi = true; }
+      ps[0].setAttribute('d', di.trim()); ps[1].setAttribute('d', dout.trim()); ps[2].setAttribute('d', dout.trim());
+    } };
+  }
+
   const registry = {
+    LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,

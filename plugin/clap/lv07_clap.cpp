@@ -9,6 +9,8 @@ struct Lv07 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 2;   // input momentary loudness (LUFS), applied gain (dB)
+    static void readouts(const Core& c, double* o) { o[0] = c.loudnessLufs(); o[1] = c.gainDb(); }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

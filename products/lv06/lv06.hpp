@@ -29,6 +29,7 @@ public:
     int latencySamples() const { return 0; }
     double autoGainDb() const { return gDb_; }
     double loudnessLufs() const { return meter_.shortTerm(); }
+    double targetLufsNow() const { return targetLufs(static_cast<int>(target_[Target] + 0.5), target_[Custom]); }
     bool deadAir() const { return dead_; }
     double limiterReductionDb() const { return 20.0 * std::log10(std::max(lim_, 1e-9)); }
 
