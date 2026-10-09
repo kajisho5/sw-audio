@@ -34,10 +34,10 @@ namespace fs = std::filesystem;
 
 namespace {
 
-constexpr double kSr = 48000.0;
+double kSr = 48000.0;   // --rate=N changes it (the spec says 44.1 - 192 kHz)
 constexpr uint32_t kBlock = 256;
-constexpr int kPhaseBlocks = 563;   // ~3 s
-constexpr int kMeasureBlocks = 188; // last ~1 s of a phase
+int kPhaseBlocks = 563;   // ~3 s (scaled with the rate)
+int kMeasureBlocks = 188; // last ~1 s of a phase
 
 // ---- minimal host
 // the host's track information (CLAP track-info): a track called "Lead Vocal" (UT01 sorts its Gain by the kind of track)
@@ -504,6 +504,11 @@ int main(int argc, char** argv) {
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
     std::vector<fs::path> files;
     for (int i = 1; i < argc; ++i) {
+        const std::string opt = argv[i];
+        if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
+            kSr = std::atof(opt.c_str() + 7); if (kSr < 8000.0 || kSr > 384000.0) { std::fprintf(stderr, "bad rate\n"); return 2; }
+            kPhaseBlocks = static_cast<int>(std::lround(563.0 * kSr / 48000.0)); kMeasureBlocks = static_cast<int>(std::lround(188.0 * kSr / 48000.0)); continue;
+        }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
             for (auto& e : fs::directory_iterator(a))

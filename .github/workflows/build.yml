@@ -82,6 +82,8 @@ jobs:
         run: |
           # loads every .clap like a DAW and pushes noise through it: Output gain, Bypass level, NaN at the defaults
           build/sw-host-smoke build/plugins
+          # the specification says 44.1 - 192 kHz: the same run at the ends of that range (and 96 kHz), with the same lengths in seconds
+          for r in 44100 96000 192000; do build/sw-host-smoke --rate=$r build/plugins; done
 
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
