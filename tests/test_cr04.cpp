@@ -84,3 +84,43 @@ TEST_CASE("CR04 MIDI: while Freeze is On a note-on makes a new capture (in every
         p.noteOn(); go1(36000, 48000); CHECK(p.captures() == before + 1);               // one more capture, made through the 15 ms cross-fade
     }
 }
+
+// the texture is only made while it can be heard (the soak run found 25x the CPU after one Freeze cycle: the frames went on being made at a = 0)
+TEST_CASE("CR04 makes no frames while the freeze is off and has faded out, and goes on from there when it comes back (no catch-up burst)") {
+    auto p = make({{Trigger, Hold}, {Mix, 100}});
+    const auto x = sine(-18, 1.0, 330);
+    std::vector<float> l, r;
+    auto run = [&](double seconds) {
+        const int n = static_cast<int>(seconds * kFs); l.assign(static_cast<size_t>(n), 0.0f); for (int i = 0; i < n; ++i) l[static_cast<size_t>(i)] = x[static_cast<size_t>(i) % x.size()]; r = l;
+        int mostInABlock = 0;
+        for (int off = 0; off < n; off += 256) { const int before = p.framesMade(); float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, std::min(256, n - off)); mostInABlock = std::max(mostInABlock, p.framesMade() - before); }
+        return mostInABlock;
+    };
+    run(1.0);                                   // Freeze Off, nothing captured
+    CHECK(p.framesMade() == 0);
+    p.setParam(Freeze, 1); run(1.0);            // a capture, the texture plays
+    CHECK(p.framesMade() > 20);
+    p.setParam(Freeze, 0); run(4.0);            // it fades out (a time constant of 0.4 s), then nothing is made
+    const int idle = p.framesMade();
+    run(5.0);
+    CHECK(p.framesMade() == idle);
+    CHECK(!p.frozen());
+    // back on in Auto (it arms the old capture again, no new one before an onset) after the long pause: the frames come at the normal pace, not a hundred at once, and the texture is there
+    p.setParam(Trigger, AutoTrig); p.setParam(Freeze, 1);
+    const int burst = run(1.0);
+    CHECK(burst <= 8);
+    CHECK(rmsDb(l, 24000, 48000) > -40.0);
+}
+TEST_CASE("CR04 Hold: the second freeze, after a long idle time, makes a new capture and is audible and steady") {
+    auto q = make();
+    std::vector<float> x = sine(-18, 4.0, 440); std::vector<float> l = x, r = x;
+    bool on1 = false, off1 = false, on2 = false;
+    for (size_t off = 0; off < l.size(); off += 256) {
+        if (!on1 && off >= 24000) { q.setParam(Freeze, 1); on1 = true; }
+        if (!off1 && off >= 48000) { q.setParam(Freeze, 0); off1 = true; }
+        if (!on2 && off >= 120000) { q.setParam(Freeze, 1); on2 = true; }
+        const int n = static_cast<int>(std::min<size_t>(256, l.size() - off)); float* c[2] = {l.data() + off, r.data() + off}; q.process(c, 2, n);
+    }
+    CHECK(q.captures() == 2);
+    CHECK(rmsDb(l, 150000, 180000) > -40.0);   // the second freeze is audible and steady
+}

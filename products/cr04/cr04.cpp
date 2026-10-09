@@ -35,7 +35,7 @@ void Processor::prepare(double sampleRate, int) {
     const size_t nb = kN / 2 + 1;
     peaksTmp_.clear(); peaksTmp_.reserve(nb);
     for (auto& c : ch_) { c.have = false; c.mag.assign(nb, 0.0); c.magBlur.assign(nb, 0.0); c.omega.assign(nb, 0.0); c.phi.assign(nb, 0.0); c.peakOf.assign(nb, 0); c.ola.assign(kOla, 0.0f); }
-    wpos_ = 0; t_ = 0; a_ = 0.0; fade_ = 1.0; env_ = slow_ = 0.0; lastOnset_ = -1000000; captures_ = 0; blurDone_ = -1; wantOn_ = false; pending_ = false;
+    wpos_ = 0; t_ = 0; a_ = 0.0; fade_ = 1.0; env_ = slow_ = 0.0; lastOnset_ = -1000000; captures_ = 0; blurDone_ = -1; wantOn_ = false; pending_ = false; synthWas_ = false; frames_ = 0;
     prepared_ = true;
 }
 
@@ -123,7 +123,12 @@ void Processor::process(float** ch, int numCh, int n) {
         const bool have = ch_[0].have || ch_[1].have;
         const bool active = on && have;
         if (active) a_ = std::min(1.0, a_ + attack); else a_ = std::max(0.0, a_ - release);
-        while (have && nextFrame_ <= t_) { for (int c = 0; c < nch; ++c) if (ch_[static_cast<size_t>(c)].have) frameFor(ch_[static_cast<size_t>(c)], nextFrame_, true); nextFrame_ += kHop; }
+        // The texture is only made while it can be heard (Freeze on, or still fading out). After a pause the frames start again like after a capture
+        // (the four that cover "now" at once) and the phases of the peaks go on from where they were; without this the frames at a_ = 0 cost CPU for good.
+        const bool synth = have && (active || a_ > 0.0);
+        if (synth && !synthWas_) nextFrame_ = t_ - 3 * kHop;
+        synthWas_ = synth;
+        while (synth && nextFrame_ <= t_) { for (int c = 0; c < nch; ++c) if (ch_[static_cast<size_t>(c)].have) frameFor(ch_[static_cast<size_t>(c)], nextFrame_, true); nextFrame_ += kHop; ++frames_; }
         for (int c = 0; c < nch; ++c) {
             auto& cc = ch_[static_cast<size_t>(c)];
             float& o = cc.ola[static_cast<size_t>(t_) % kOla]; const double wet = static_cast<double>(o) * fade_; o = 0.0f;

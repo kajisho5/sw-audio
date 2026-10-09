@@ -32,6 +32,7 @@ public:
     int latencySamples() const { return 0; }
     bool frozen() const { return a_ > 0.001; }
     int captures() const { return captures_; }
+    int framesMade() const { return frames_; }   // synthesis frames made so far (the texture is only made while it can be heard)
     // MIDI (audio thread): a note-on while Freeze is On asks for a new capture
     void noteOn() { if (target_[Freeze] > 0.5) pending_ = true; }
 
@@ -47,8 +48,8 @@ private:
     double gauss();
     double fs_ = 48000.0, a_ = 0.0, fade_ = 1.0, env_ = 0.0, slow_ = 0.0;
     int64_t t_ = 0, nextFrame_ = 0, lastOnset_ = -1000000;
-    int captures_ = 0, blurDone_ = -1;
-    bool prepared_ = false, wantOn_ = false, pending_ = false;
+    int captures_ = 0, blurDone_ = -1, frames_ = 0;
+    bool prepared_ = false, wantOn_ = false, pending_ = false, synthWas_ = false;
     uint32_t rng_ = 0x1234567u;
     std::array<double, kNumParams> target_{};
     std::array<std::vector<float>, 2> ring_;
