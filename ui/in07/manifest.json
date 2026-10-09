@@ -1,0 +1,30 @@
+{
+  "comment": "SWINGBY plug-in window: the scripts in load order and the pictures and fonts sent after boot (name -> file, from the repository root). Read by tools/embed_in07_ui.py (the plug-in) and tools/in07_ui_preview.py (the browser preview).",
+  "css": "ui/in07/in07.css",
+  "scripts": ["ui/in07/core.js", "ui/in07/components.js", "ui/in07/orbit.js", "ui/in07/screens/play.js", "ui/in07/screens/layer.js", "ui/in07/screens/arp.js", "ui/in07/screens/mod.js", "ui/in07/screens/fx.js", "ui/in07/app.js"],
+  "assets": {
+    "Barlow_Condensed-400": "ui/in07/fonts/Barlow_Condensed-400.woff2",
+    "Michroma-400": "ui/in07/fonts/Michroma-400.woff2",
+    "Space_Mono-400": "ui/in07/fonts/Space_Mono-400.woff2",
+    "Space_Mono-700": "ui/in07/fonts/Space_Mono-700.woff2",
+    "Barlow_Condensed-300": "ui/in07/fonts/Barlow_Condensed-300.woff2",
+    "Barlow_Condensed-500": "ui/in07/fonts/Barlow_Condensed-500.woff2",
+    "Barlow_Condensed-600": "ui/in07/fonts/Barlow_Condensed-600.woff2",
+    "logo-dark": "docs/design/design-system/project/assets/product-logos/swingby-dark.svg",
+    "logo-light": "docs/design/design-system/project/assets/product-logos/swingby-light.svg",
+    "bead": "docs/design/design-system/project/assets/renders/in07/bodies/bead.webp",
+    "core": "docs/design/design-system/project/assets/renders/in07/core-alpha.webp",
+    "daycore": "docs/design/design-system/project/assets/renders/in07/daycore.webp",
+    "lfo": "docs/design/design-system/project/assets/renders/in07/bodies/lfo.webp",
+    "pearl": "docs/design/design-system/project/assets/renders/in07/bodies/pearl.webp",
+    "ring": "docs/design/design-system/project/assets/renders/in07/bodies/ring.webp",
+    "crater": "docs/design/design-system/project/assets/renders/in07/bodies/crater.webp",
+    "crystal": "docs/design/design-system/project/assets/renders/in07/bodies/crystal.webp",
+    "fx_drive": "docs/design/design-system/project/assets/renders/in07/fx/fx_drive.webp",
+    "fx_chorus": "docs/design/design-system/project/assets/renders/in07/fx/fx_chorus.webp",
+    "fx_delay": "docs/design/design-system/project/assets/renders/in07/fx/fx_delay.webp",
+    "fx_reverb": "docs/design/design-system/project/assets/renders/in07/fx/fx_reverb.webp",
+    "fx_eq": "docs/design/design-system/project/assets/renders/in07/fx/fx_eq.webp",
+    "fx_limit": "docs/design/design-system/project/assets/renders/in07/fx/fx_limit.webp"
+  }
+}

@@ -58,11 +58,13 @@ private:
         CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);   // S_FALSE / RPC_E_CHANGED_MODE: the host already did it
         wchar_t tmp[MAX_PATH]; GetTempPathW(MAX_PATH, tmp); std::wstring data = std::wstring(tmp) + L"SWAudioWebView2";
         auto alive = alive_;
-        CreateCoreWebView2EnvironmentWithOptions(nullptr, data.c_str(), nullptr,
+        const HRESULT started = CreateCoreWebView2EnvironmentWithOptions(nullptr, data.c_str(), nullptr,
             Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>([this, alive](HRESULT hr, ICoreWebView2Environment* env) -> HRESULT {
-                if (!alive->load() || FAILED(hr) || !env) return S_OK;
+                if (!alive->load()) return S_OK;
+                if (FAILED(hr) || !env) { showMissing(); return S_OK; }
                 env->CreateCoreWebView2Controller(hwnd_, Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>([this, alive](HRESULT hr2, ICoreWebView2Controller* c) -> HRESULT {
-                    if (!alive->load() || FAILED(hr2) || !c) return S_OK;
+                    if (!alive->load()) return S_OK;
+                    if (FAILED(hr2) || !c) { showMissing(); return S_OK; }
                     controller_ = c; c->get_CoreWebView2(&webview_);
                     ComPtr<ICoreWebView2Settings> st; if (SUCCEEDED(webview_->get_Settings(&st)) && st) { st->put_AreDefaultContextMenusEnabled(FALSE); st->put_AreDevToolsEnabled(FALSE); st->put_IsStatusBarEnabled(FALSE); st->put_IsZoomControlEnabled(FALSE); }
                     EventRegistrationToken tok;
@@ -77,10 +79,17 @@ private:
                 }).Get());
                 return S_OK;
             }).Get());
+        if (FAILED(started)) showMissing();   // no WebView2 Runtime on this computer: the handler is never called
+    }
+    // without the WebView2 Runtime (Windows 10 without it, or a damaged one) the window says what is missing instead of staying empty
+    void showMissing() {
+        if (!hwnd_ || note_) return;
+        note_ = CreateWindowExW(0, L"STATIC", L"This window needs the Microsoft Edge WebView2 Runtime.\r\nInstall it from Microsoft (search: WebView2 Runtime download), then open the window again.\r\nThe plug-in plays and the host's own controls work without it.",
+                                WS_CHILD | WS_VISIBLE | SS_CENTER, 20, 40, static_cast<int>(w_) - 40, 120, hwnd_, nullptr, reinterpret_cast<HINSTANCE>(&__ImageBase), nullptr);
     }
     std::wstring html_;
     std::function<std::string(const std::string&)> onMessage_;
-    HWND parent_ = nullptr, hwnd_ = nullptr; uint32_t w_ = 960, h_ = 550; bool visible_ = true;
+    HWND parent_ = nullptr, hwnd_ = nullptr, note_ = nullptr; uint32_t w_ = 960, h_ = 550; bool visible_ = true;
     ComPtr<ICoreWebView2Controller> controller_; ComPtr<ICoreWebView2> webview_;
     std::shared_ptr<std::atomic<bool>> alive_ = std::make_shared<std::atomic<bool>>(true);
 };

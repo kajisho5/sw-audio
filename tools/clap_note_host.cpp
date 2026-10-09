@@ -19,6 +19,8 @@
 #include <vector>
 
 namespace {
+// a parameter by the group a host shows it in (CLAP module, "Layer 1/Filter") and its name
+bool isParam(const clap_param_info_t& i, const char* module, const char* name) { return !std::strcmp(i.module, module) && !std::strcmp(i.name, name); }
 struct InEvents {
     std::vector<std::vector<uint8_t>> ev;
     static uint32_t size(const clap_input_events_t* l) { return static_cast<uint32_t>(static_cast<InEvents*>(l->ctx)->ev.size()); }
@@ -164,8 +166,8 @@ int main(int argc, char** argv) {
         if (params && state) {
             const uint32_t n = params->count(p);
             clap_id cutoff = CLAP_INVALID_ID;
-            for (uint32_t i = 0; i < n; ++i) { clap_param_info_t inf; params->get_info(p, i, &inf); if (!std::strcmp(inf.module, "in07.l1.flt.cutoff")) cutoff = inf.id; }
-            check(cutoff != CLAP_INVALID_ID, "L1 cutoff is found by its id string");
+            for (uint32_t i = 0; i < n; ++i) { clap_param_info_t inf; params->get_info(p, i, &inf); if (isParam(inf, "Layer 1/Filter", "L1 Cutoff")) cutoff = inf.id; }
+            check(cutoff != CLAP_INVALID_ID, "L1 cutoff is found by its group and name");
             clap_event_param_value_t pv{}; pv.header.size = sizeof(pv); pv.header.space_id = CLAP_CORE_EVENT_SPACE_ID; pv.header.type = CLAP_EVENT_PARAM_VALUE;
             pv.param_id = cutoff; pv.note_id = -1; pv.port_index = -1; pv.channel = -1; pv.key = -1; pv.value = 0.25;
             OutEvents oe; run(0.01, {{0.0, bytes(pv)}}, 0, 0, oe);
@@ -181,12 +183,12 @@ int main(int argc, char** argv) {
             int polar = -1;
             for (uint32_t i = 0; i < n; ++i) {
                 clap_param_info_t inf; params->get_info(p, i, &inf);
-                if (!std::strcmp(inf.module, "in07.preset")) {
+                if (isParam(inf, "Preset", "Preset")) {
                     sel = inf.id;
                     check(!(inf.flags & CLAP_PARAM_IS_AUTOMATABLE) && (inf.flags & CLAP_PARAM_IS_STEPPED), "the preset selector is stepped and not automatable");
                     for (int k = 0; k <= static_cast<int>(inf.max_value); ++k) { char t[64]; params->value_to_text(p, sel, k, t, sizeof(t)); if (!std::strcmp(t, "Polar Bass")) polar = k; }
                 }
-                if (!std::strcmp(inf.module, "in07.mode")) mode = inf.id;
+                if (isParam(inf, "Voice", "Mode")) mode = inf.id;
             }
             check(sel != CLAP_INVALID_ID && polar > 0, "the preset selector lists the factory presets by name");
             if (sel != CLAP_INVALID_ID && polar > 0) {
@@ -282,9 +284,9 @@ int main(int argc, char** argv) {
             clap_id cutoff = CLAP_INVALID_ID, mode = CLAP_INVALID_ID, sel = CLAP_INVALID_ID;
             for (uint32_t i = 0; i < params->count(p); ++i) {
                 clap_param_info_t inf; params->get_info(p, i, &inf);
-                if (!std::strcmp(inf.module, "in07.l1.flt.cutoff")) cutoff = inf.id;
-                if (!std::strcmp(inf.module, "in07.mode")) mode = inf.id;
-                if (!std::strcmp(inf.module, "in07.preset")) sel = inf.id;
+                if (isParam(inf, "Layer 1/Filter", "L1 Cutoff")) cutoff = inf.id;
+                if (isParam(inf, "Voice", "Mode")) mode = inf.id;
+                if (isParam(inf, "Preset", "Preset")) sel = inf.id;
             }
             auto text = [&](clap_id id) { double v = 0; params->get_value(p, id, &v); static char t[64]; params->value_to_text(p, id, v, t, sizeof(t)); return std::string(t); };
             gPresetLog = {};

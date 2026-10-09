@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum macOS version")
 endif()
-project(sw-audio VERSION 0.13.0 LANGUAGES C CXX)
+project(sw-audio VERSION 0.14.0 LANGUAGES C CXX)
 if (APPLE)
     enable_language(OBJC OBJCXX)  # clap-wrapper (AUv2 / VST3 on macOS) compiles Objective-C++ sources
 endif()
@@ -81,6 +81,17 @@ add_custom_command(OUTPUT ${SW_GUI_ASSETS}
     DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${CMAKE_SOURCE_DIR}/ui/sw-ui.css ${CMAKE_SOURCE_DIR}/ui/sw-ui.js ${CMAKE_SOURCE_DIR}/ui/displays.js ${CMAKE_SOURCE_DIR}/ui/host.js ${CMAKE_SOURCE_DIR}/ui/products.json
     COMMENT "Embedding the plug-in screen")
 add_custom_target(sw-gui-assets DEPENDS ${SW_GUI_ASSETS})
+# SW IN07 SWINGBY's window (ui/in07: manifest.json lists the stylesheet, the scripts and the pictures and fonts) as one header
+file(READ ${CMAKE_SOURCE_DIR}/ui/in07/manifest.json SW_IN07_MANIFEST)
+string(REGEX MATCHALL "\"(ui|docs)/[^\"]+\"" SW_IN07_UI_FILES "${SW_IN07_MANIFEST}")
+list(TRANSFORM SW_IN07_UI_FILES REPLACE "\"" "")
+list(TRANSFORM SW_IN07_UI_FILES PREPEND "${CMAKE_SOURCE_DIR}/")
+set(SW_IN07_UI ${CMAKE_BINARY_DIR}/gen/in07_ui_assets.hpp)
+add_custom_command(OUTPUT ${SW_IN07_UI}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/embed_in07_ui.py ${SW_IN07_UI}
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_in07_ui.py ${CMAKE_SOURCE_DIR}/ui/in07/manifest.json ${SW_IN07_UI_FILES}
+    COMMENT "Embedding the SWINGBY window")
+add_custom_target(sw-in07-ui DEPENDS ${SW_IN07_UI})
 
 # ---- the product designs (docs/design/canvas) as one header per plug-in (build/gen/skins/skin_<code>.hpp); needs beautifulsoup4
 set(SW_PY ${Python3_EXECUTABLE})
@@ -136,7 +147,7 @@ if (SW_BUILD_TESTS)
     file(GLOB SW_TEST_SOURCES CONFIGURE_DEPENDS tests/test_*.cpp)
     add_executable(sw-tests ${SW_TEST_SOURCES})
     target_include_directories(sw-tests PRIVATE ${doctest_SOURCE_DIR} ${CMAKE_BINARY_DIR}/gen ${CMAKE_SOURCE_DIR}/plugin/clap)
-    add_dependencies(sw-tests sw-gui-assets)
+    add_dependencies(sw-tests sw-gui-assets sw-in07-ui)
     foreach(code IN LISTS SW_PRODUCTS SW_ENGINES)
         target_link_libraries(sw-tests PRIVATE sw-${code})
     endforeach()
@@ -148,6 +159,10 @@ endif()
 # ---- plugins
 if (SW_BUILD_PLUGINS)
     FetchContent_MakeAvailable(clap)
+    if (SW_BUILD_TESTS)   # the window's tests drive the instrument plug-in itself (tests/test_in07_window.cpp)
+        target_link_libraries(sw-tests PRIVATE clap sw-gui-view)
+        target_compile_definitions(sw-tests PRIVATE SW_TEST_CLAP=1)
+    endif()
     set(CLAP_SDK_ROOT ${clap_SOURCE_DIR} CACHE PATH "" FORCE)
     set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES TRUE CACHE BOOL "" FORCE)  # VST3 SDK / AudioUnit SDK
     FetchContent_MakeAvailable(clap-wrapper)
@@ -322,4 +337,5 @@ if (SW_BUILD_PLUGINS)
     sw_add_plugin(lv30 "SW LV30 Recorder" Lv30)
     sw_add_plugin(gt03 "SW GT03 Pedalboard" Gt03)
     sw_add_plugin(in07 "SW IN07 SWINGBY" In07 aumu)   # an instrument: plugin/clap/instrument_adapter.hpp
+    add_dependencies(sw-in07-impl sw-in07-ui)
 endif()
