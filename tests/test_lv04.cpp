@@ -52,6 +52,9 @@ TEST_CASE("every limit event is logged with its start time") {
     CHECK(std::abs(p.event(0).startSample - 10000) < 48);
     CHECK(std::abs(p.event(2).startSample - 100000) < 48);
     CHECK(p.event(1).maxReductionDb < -2.0);
+    // the screen turns "samples since the last event" into a clock time: the core's own sample counter and rate
+    CHECK(p.nowSample() == static_cast<long long>(x.size())); CHECK(p.sampleRate() == kFs);
+    CHECK((p.nowSample() - p.event(2).startSample) / p.sampleRate() == doctest::Approx((48000.0 * 3 - 100000) / kFs).epsilon(0.002));
 }
 TEST_CASE("Subsonic filter removes 10 Hz rumble; Off leaves it") {
     auto level = [](double sub) {

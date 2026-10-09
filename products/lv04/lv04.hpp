@@ -29,6 +29,8 @@ public:
     int eventCount() const { return static_cast<int>(std::min<long long>(events_, kLog)); }
     long long totalEvents() const { return events_; }
     LimitEvent event(int i) const;  // 0 = oldest kept
+    long long nowSample() const { return t_; }   // samples processed since prepare (the clock of LimitEvent::startSample)
+    double sampleRate() const { return fs_; }
 
 private:
     static constexpr int kLog = 256;

@@ -71,8 +71,10 @@ jobs:
           node tests/ui/curves.test.js
           node tests/ui/traits.test.js
           node tests/ui/shapes.test.js
-          python3 tools/gen_skins.py > /dev/null
-          python3 tools/check_skins.py
+          # the Python CMake used for the skins (a private environment with beautifulsoup4 when the runner's python has none)
+          PY=python3; [ -x build/pyenv/bin/python ] && PY=build/pyenv/bin/python
+          $PY tools/gen_skins.py > /dev/null
+          $PY tools/check_skins.py
 
       - name: Host smoke test (Linux)
         if: matrix.shard == 0 && runner.os == 'Linux'
