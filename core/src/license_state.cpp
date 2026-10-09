@@ -108,6 +108,37 @@ std::string licenseFolder() {
 #endif
 }
 
+std::string thisMachine() {
+    static std::mutex m;
+    static std::string machine;
+    static bool have = false;
+    std::lock_guard<std::mutex> l(m);
+    if (!have) { machine = machineHash(kMachineSalt); have = true; }
+    return machine;
+}
+
+Status install(const std::string& folder, std::string_view text, const PublicKey* keys, size_t numKeys, const std::vector<std::string>& accepted,
+               int pluginMajor, const std::string& machine, License& out, std::string& error) {
+    namespace fs = std::filesystem;
+    error.clear();
+    if (text.size() > kMaxBytes) { out = License{}; error = statusText(Status::NotALicense); return Status::NotALicense; }
+    const Status s = check(text, keys, numKeys, accepted, pluginMajor, machine, out);
+    if (s != Status::Valid) { error = statusText(s); return s; }
+    if (folder.empty()) { error = "no licence folder"; return Status::NotALicense; }
+    std::error_code ec;
+    fs::create_directories(presetfile::pathOf(folder), ec);
+    const fs::path path = presetfile::pathOf(folder) / fs::u8path(presetfile::safeFileName(out.id) + ".swlicense");
+    // the folder holds at most kMaxFiles licences (the check reads no more): a new id is refused when it is full
+    if (!fs::exists(path, ec) && presetfile::listFiles(folder, "swlicense", 1, kMaxFiles).size() >= kMaxFiles) { error = "the licence folder is full"; return Status::NotALicense; }
+    if (!presetfile::writeFileAtomic(path.u8string(), std::string(text), true, error)) return Status::NotALicense;
+    return Status::Valid;
+}
+
+Status installForProduct(std::string_view text, const std::string& code, int pluginMajor, License& out, std::string& error) {
+    const auto& keys = builtInKeys();
+    return install(licenseFolder(), text, keys.data(), keys.size(), acceptedProducts(code), pluginMajor, thisMachine(), out, error);
+}
+
 Verdict productState(const std::string& code, int pluginMajor) {
     if (!enforced()) {
         Verdict v;
@@ -116,15 +147,8 @@ Verdict productState(const std::string& code, int pluginMajor) {
         v.detail = "development build: licences are not checked";
         return v;
     }
-    static std::mutex m;
-    static std::string machine;
-    static bool haveMachine = false;
-    {
-        std::lock_guard<std::mutex> l(m);
-        if (!haveMachine) { machine = machineHash(kMachineSalt); haveMachine = true; }
-    }
     const auto& keys = builtInKeys();
-    return evaluate(licenseFolder(), keys.data(), keys.size(), acceptedProducts(code), pluginMajor, machine);
+    return evaluate(licenseFolder(), keys.data(), keys.size(), acceptedProducts(code), pluginMajor, thisMachine());
 }
 
 }  // namespace sw::license

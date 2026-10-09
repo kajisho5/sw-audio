@@ -7,6 +7,7 @@
 //   POST /api/activate       {key, machine} -> {license: "<.swlicense text>"} bound to that computer; at most MAX_ACTIVATIONS
 //                            computers per licence (the same computer again is free)
 //   POST /api/deactivate     {key, machine} -> frees that computer's place
+//                            (/api/*: CORS for any origin, the plug-in window's page calls them; OPTIONS answered)
 //   POST /activate           the same as a form (key, machine) -> the .swlicense file as a download
 // Secrets (wrangler secret put): STRIPE_WEBHOOK_SECRET, STRIPE_API_KEY (restricted: read Checkout Sessions and Products),
 // LICENSE_KEY_SECRET (HMAC for licence keys), LICENSE_PRIVATE_KEY (Ed25519, PKCS#8, base64). Vars: LICENSE_KEY_ID, LICENSE_MAJOR,
@@ -20,8 +21,15 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...SECURITY_HEADERS } });
+function json(body, status = 200, extra = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', ...SECURITY_HEADERS, ...extra } });
+}
+// /api/* is called from the plug-in window's page, which has no origin of its own (Origin: null): any origin, never credentials
+// (the key and the machine code are in the body; nothing in a cookie)
+const CORS = { 'Access-Control-Allow-Origin': '*' };
+function api(body, status = 200) { return json(body, status, CORS); }
+function preflight() {
+  return new Response(null, { status: 204, headers: { ...SECURITY_HEADERS, ...CORS, 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' } });
 }
 function html(body, status = 200) {
   return new Response(body, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', ...SECURITY_HEADERS } });
@@ -120,9 +128,9 @@ async function activation(key, machine, env, deps) {
 }
 async function activateApi(request, env, deps) {
   let body;
-  try { body = JSON.parse(await readBody(request, 4096)); } catch { return json({ error: 'not json' }, 400); }
+  try { body = JSON.parse(await readBody(request, 4096)); } catch { return api({ error: 'not json' }, 400); }
   const r = await activation(body?.key, body?.machine, env, deps);
-  return r.license ? json({ license: r.license }) : json({ error: r.error }, r.status);
+  return r.license ? api({ license: r.license }) : api({ error: r.error }, r.status);
 }
 async function activateForm(request, env, deps) {
   let form;
@@ -133,12 +141,12 @@ async function activateForm(request, env, deps) {
 }
 async function deactivateApi(request, env, deps) {
   let body;
-  try { body = JSON.parse(await readBody(request, 4096)); } catch { return json({ error: 'not json' }, 400); }
+  try { body = JSON.parse(await readBody(request, 4096)); } catch { return api({ error: 'not json' }, 400); }
   const k = normalizeKey(body?.key);
-  if (!k || !validMachine(body?.machine)) return json({ error: 'licence key and machine code are needed' }, 400);
+  if (!k || !validMachine(body?.machine)) return api({ error: 'licence key and machine code are needed' }, 400);
   const l = await deps.store.licenseByKeyHash(await keyHash(k));
-  if (!l) return json({ error: 'licence key not found' }, 404);
-  return json({ removed: await deps.store.removeActivation(l.id, body.machine) });
+  if (!l) return api({ error: 'licence key not found' }, 404);
+  return api({ removed: await deps.store.removeActivation(l.id, body.machine) });
 }
 
 export async function handle(request, env, deps) {
@@ -149,12 +157,13 @@ export async function handle(request, env, deps) {
     if (route === 'GET /thanks') return await thanks(url, env, deps);
     if (route === 'POST /api/activate') return await activateApi(request, env, deps);
     if (route === 'POST /api/deactivate') return await deactivateApi(request, env, deps);
+    if (route === 'OPTIONS /api/activate' || route === 'OPTIONS /api/deactivate') return preflight();
     if (route === 'POST /activate') return await activateForm(request, env, deps);
     if (route === 'GET /health') return json({ ok: true });
     return json({ error: 'not found' }, 404);
   } catch (e) {
     console.error(route, e && e.message);
-    return json({ error: 'server error' }, 500);   // Stripe retries a webhook that got 500
+    return json({ error: 'server error' }, 500, url.pathname.startsWith('/api/') ? CORS : {});   // Stripe retries a webhook that got 500
   }
 }
 

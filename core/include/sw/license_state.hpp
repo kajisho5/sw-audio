@@ -30,5 +30,14 @@ Verdict productState(const std::string& code, int pluginMajor);
 bool enforced();
 bool forcedDemo();
 std::string licenseFolder();
+std::string thisMachine();   // machineHash(kMachineSalt), worked out once
+
+// a licence file the user gives (the plug-in window: a file, or what the activation server sent back), checked as the folder's files are
+// (the keys, a product of this plug-in, the major version, this computer). Valid: written into the folder (made when missing) as
+// "<licence id, cleaned into a file name>.swlicense", replacing a file of the same id; anything else writes nothing. out as check() fills it.
+Status install(const std::string& folder, std::string_view text, const PublicKey* keys, size_t numKeys, const std::vector<std::string>& accepted,
+               int pluginMajor, const std::string& machine, License& out, std::string& error);
+// the same for this product on this computer: the built-in keys, licenseFolder()
+Status installForProduct(std::string_view text, const std::string& code, int pluginMajor, License& out, std::string& error);
 
 }  // namespace sw::license

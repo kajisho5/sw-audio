@@ -153,3 +153,23 @@ test('licence keys: typed loosely they still match; anything else is not a key',
   assert.equal(normalizeKey(42), null);
   assert.equal(normalizeKey('x'.repeat(100)), null);
 });
+
+test('the plug-in window may call /api/* from its page (CORS: any origin, no credentials); the rest of the site stays closed', async () => {
+  const s = await setup();
+  // the window's page has no origin of its own (Origin: null); text/plain keeps the request simple (no preflight), but one is answered
+  const r = await handle(post('/api/activate', JSON.stringify({ key: 'SWL-00000-00000-00000-00000', machine: MACHINE('a') }), { Origin: 'null', 'Content-Type': 'text/plain' }), s.env, s.deps);
+  assert.equal(r.status, 404);
+  assert.equal(r.headers.get('access-control-allow-origin'), '*');
+  assert.equal(r.headers.get('access-control-allow-credentials'), null);
+  const pre = await handle(new Request('https://licence.example/api/activate', { method: 'OPTIONS', headers: { Origin: 'null', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' } }), s.env, s.deps);
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), '*');
+  assert.match(pre.headers.get('access-control-allow-methods'), /POST/);
+  assert.match(pre.headers.get('access-control-allow-headers').toLowerCase(), /content-type/);
+  const de = await handle(post('/api/deactivate', '{not json'), s.env, s.deps);
+  assert.equal(de.headers.get('access-control-allow-origin'), '*');
+  const health = await handle(new Request('https://licence.example/health'), s.env, s.deps);
+  assert.equal(health.headers.get('access-control-allow-origin'), null);
+  const form = await handle(new Request('https://licence.example/activate', { method: 'OPTIONS' }), s.env, s.deps);
+  assert.equal(form.status, 404);
+});

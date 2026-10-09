@@ -9,6 +9,7 @@
 //   build/sw_license pkcs8 <secret-key-file>                     the secret key as PKCS#8 base64, for the licence server's secret store
 //   build/sw_license machine                                     this computer's hash (for a licence bound to it)
 #include "sw/license.hpp"
+#include "sw/license_state.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -139,7 +140,12 @@ int main(int argc, char** argv) {
         std::printf("%s\n", h.empty() ? "(no machine id)" : h.c_str());
         return h.empty() ? 1 : 0;
     }
+    if (cmd == "enforced" && argc == 2) {   // a release build must check licences: exit 1 when this build would play without one
+        const bool on = lic::enforced();
+        std::printf("%s\n", on ? "licences are checked (release build with a built-in public key)" : "licences are NOT checked (SW_LICENSE_ENFORCE off, or no public key in core/src/license_state.cpp)");
+        return on ? 0 : 1;
+    }
     std::fprintf(stderr, "usage: %s keygen <secret-file> | sign <secret-file> <key-id> <products> <licence-id> <major> [machine] | "
-                         "verify <public-hex> <key-id> <licence-file> <product> <major> [machine] | pkcs8 <secret-file> | machine\n", argv[0]);
+                         "verify <public-hex> <key-id> <licence-file> <product> <major> [machine] | pkcs8 <secret-file> | machine | enforced\n", argv[0]);
     return 2;
 }
