@@ -18,6 +18,7 @@ const std::vector<ParamSpec>& specs() {
         {"dy09.b2.sustain", "Mid Sustain",  -15, 15, 0, Curve::Lin, 1, {}, "dB"},
         {"dy09.b3.attack",  "High Attack",  -15, 15, 0, Curve::Lin, 1, {}, "dB"},
         {"dy09.b3.sustain", "High Sustain", -15, 15, 0, Curve::Lin, 1, {}, "dB"},
+        oversampleSpec("dy09.os"),
     };
     return s;
 }
@@ -34,7 +35,7 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     for (auto& e : env_) e.reset();
-    for (auto& c : os_[0]) c = Oversampler2x{};
+    for (auto& c : os_) c.reset();
     cG_ = coefMsFs(fs_, 0.5);
     cPk_ = coefMsFs(fs_, 80.0);
     for (int i = 0; i < kNumParams; ++i) setParam(i, target_[static_cast<size_t>(i)]);
@@ -45,6 +46,7 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
     if (id == Speed) updateSpeed();
+    if (id == Oversample) for (auto& o : os_) o.setFactor(static_cast<int>(v));
     if (id == Mode || id == Speed) {
         for (auto& s : split_) {
             s.lp150.setup(Svf::Mode::LowPass, 150.0, fs_); s.hp150.setup(Svf::Mode::HighPass, 150.0, fs_);
@@ -102,9 +104,7 @@ void Processor::process(float** ch, int numCh, int n) {
         for (int c = 0; c < nch; ++c) {
             double v = y[c];
             if (clip > 0) {
-                double up[2]; os_[0][static_cast<size_t>(c)].up(v, up);
-                for (double& u : up) u = clip == 1 ? std::tanh(u) : std::clamp(u, -1.0, 1.0);
-                v = os_[0][static_cast<size_t>(c)].down(up);
+                v = os_[static_cast<size_t>(c)].process(v, [clip](double u) { return clip == 1 ? std::tanh(u) : std::clamp(u, -1.0, 1.0); });
                 v = std::clamp(v, -1.0, 1.0);
             }
             if (!std::isfinite(v)) v = 0.0;

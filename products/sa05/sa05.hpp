@@ -14,7 +14,7 @@
 
 namespace sw::sa05 {
 
-enum ParamId { Tune, Harmonics, Mix, LowDrive, Mode, MonoLow, AutoFill, kNumParams };
+enum ParamId { Tune, Harmonics, Mix, LowDrive, Mode, MonoLow, AutoFill, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -35,11 +35,12 @@ private:
         double process(double x) { return b.process(a.process(x)); }
     };
     struct Gen {   // normalised even / odd generator at 2x
-        Oversampler2x os;
+        OsSwitch os;   // the common setting (default 2x)
         double ms = 0;
         double process(double x, int mode, double msC);
     };
     void updateFilters();
+    void applyOversample();
     void analyse();
     double fs_ = 48000.0, msC_ = 0, fillC_ = 0;
     std::array<double, kNumParams> target_{};

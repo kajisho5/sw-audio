@@ -2,6 +2,7 @@
 #include "sa05/sa05.hpp"
 #include "sw/svf.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::sa05;
 using namespace tu;
@@ -15,7 +16,7 @@ double rel(const std::vector<float>& y, double f, double f0) { return binDb(y, f
 TEST_CASE("SA05 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa05.tune", "sa05.harmonics", "sa05.mix", "sa05.lowdrive", "sa05.mode", "sa05.monolow", "sa05.evo.on"};
+    const char* ids[] = {"sa05.tune", "sa05.harmonics", "sa05.mix", "sa05.lowdrive", "sa05.mode", "sa05.monolow", "sa05.evo.on", "sa05.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Tune].min == 1000); CHECK(s[Tune].max == 16000); CHECK(s[Tune].def == 4500); CHECK(s[Tune].curve == Curve::Log);
     CHECK(s[Harmonics].max == 100); CHECK(s[Harmonics].def == 35); CHECK(s[Mix].def == 25); CHECK(s[LowDrive].def == 0);
@@ -69,4 +70,14 @@ TEST_CASE("SA05 silence stays silent, extreme input finite, latency 0") {
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
     CHECK(p.latencySamples() == 0);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("SA05: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the harmonic generator follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "sa05.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{Tune, 2000}, {Harmonics, 100}, {Mix, 100}, {Mode, 1}, {Oversample, double(os)}}); return ost::relDb(p, 9000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("9 kHz through the odd generator, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a2 < a1 - 3.0); CHECK(ost::notWorse(a4, a2));
 }

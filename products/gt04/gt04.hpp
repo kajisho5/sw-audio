@@ -16,7 +16,7 @@
 
 namespace sw::gt04 {
 
-enum ParamId { Gain, Drive, Master, Low, LoMid, HiMid, High, MidHz, Di, DiBlend, PhaseAlign, kNumParams };
+enum ParamId { Gain, Drive, Master, Low, LoMid, HiMid, High, MidHz, Di, DiBlend, PhaseAlign, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -40,10 +40,11 @@ private:
         Svf hp20, low, lomid, himid, high, cabHp, cabBell;
         Lr4 split_lo, split_hi, cabLp;
         BiasShaper2x pre, drv;
-        Oversampler2x loOs;
+        OsSwitch loOs;   // the clean low band goes through the same half-bands as the shaped branch: same delay
         double process(double x, double gPre, double hPre, double gDrv, double hDrv, double levelLin);
     };
     void updateEq();
+    void applyOversample(int factor);
     void updateStatic();
     void measure();
     double fs_ = 48000.0, tau_ = 0.0, apA_ = 0.0;

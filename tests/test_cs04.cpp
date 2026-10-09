@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "eq_helpers.hpp"
+#include "os_helpers.hpp"
 #include "cs04/cs04.hpp"
 #include <cmath>
 #include <random>
@@ -87,7 +88,7 @@ TEST_CASE("CS04 order matters: EQ boost before the compressor is squashed, after
 }
 
 TEST_CASE("CS04 Low lat: the limiter looks ahead by 1 sample (the smallest it can) instead of 1 ms; reported from the next prepare on; the ceiling still holds; Limit Off is unaffected") {
-    CHECK(std::string(specs()[LowLat].id) == "cs04.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 1);
+    CHECK(std::string(specs()[LowLat].id) == "cs04.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 2);   // Oversample follows
     { Processor p; p.setParam(LimitOn, 1); CHECK(p.latencySamples() == 48); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 1); p.setParam(LimitOn, 0); CHECK(p.latencySamples() == 0); p.setParam(LowLat, 0); CHECK(p.latencySamples() == 0); }
     auto q = make({{LimitOn, 1}, {LimitCeiling, -6}, {LowLat, 1}}); CHECK(q.latencySamples() == 1);
     double pk = 0; for (float v : run(q, sine(0, 1000, 24000))) pk = std::max(pk, (double)std::abs(v));
@@ -97,4 +98,14 @@ TEST_CASE("CS04 Low lat: the limiter looks ahead by 1 sample (the smallest it ca
     // the Low lat output is the signal one sample later: with the limiter idle (a quiet signal) it passes unchanged
     auto r = make({{LimitOn, 1}, {LowLat, 1}}); const auto x = sine(-30, 440, 8000); const auto y = run(r, x);
     for (size_t i = 100; i + 1 < x.size(); i += 53) CHECK(y[i + 1] == doctest::Approx(x[i]).epsilon(1e-5));
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("CS04: the oversampling parameter follows Low lat, 1x / 2x / 4x, default 2x, and the Saturate module follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "cs04.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1); CHECK(Oversample == LowLat + 1);
+    auto alias = [](int os) { auto p = make({{EqOn, 0}, {SatOn, 1}, {SatDrive, 24}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz through Saturate at Drive 24, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 15.0); CHECK(ost::notWorse(a4, a2));
 }

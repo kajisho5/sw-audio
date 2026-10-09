@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include "os_helpers.hpp"
 #include "eq05/eq05.hpp"
 #include <cmath>
 #include <complex>
@@ -30,7 +31,7 @@ double maxStep(const std::vector<float>& x, int from, int to) { double m = 0; fo
 TEST_CASE("parameter table follows the spec (count, ranges, defaults)") {
     const auto& s = specs();
     REQUIRE(s.size() == kNumParams);
-    CHECK(kNumParams == 18);
+    CHECK(kNumParams == 19);   // the 18 of the spec + the common oversampling setting (eq05.os)
     CHECK(s[HfFreq].def == 8000.0);  CHECK(s[HfFreq].min == 1500.0); CHECK(s[HfFreq].max == 16000.0);
     CHECK(s[HmfFreq].def == 2000.0); CHECK(s[HmfFreq].min == 600.0); CHECK(s[HmfFreq].max == 7000.0);
     CHECK(s[LmfFreq].def == 600.0);  CHECK(s[LmfFreq].min == 200.0); CHECK(s[LmfFreq].max == 2500.0);
@@ -129,4 +130,15 @@ TEST_CASE("EQ05 Drive stage has +6 dBFS headroom: Drive 0 keeps a -7 dBFS peak t
     for (int off = 0; off < 48000; off += 256) { float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, std::min(256, 48000 - off)); }
     double pk = 0; for (int i = 24000; i < 48000; ++i) pk = std::max(pk, (double)std::abs(l[i]));
     CHECK(20 * std::log10(pk / 0.447) > -0.2);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("EQ05: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the Drive stage follows it") {
+    const auto& s = eq05::specs();
+    REQUIRE(s.back().steps == std::vector<double>{1, 2, 4});
+    CHECK(std::string(s.back().id) == "eq05.os"); CHECK(s.back().def == 2.0); CHECK(static_cast<int>(s.size()) - 1 == eq05::Oversample);
+    auto alias = [](int os) { eq05::Processor p; p.setParam(eq05::Drive, 10); p.setParam(eq05::Oversample, os); p.prepare(ost::kFs, 256); p.snapToTargets(); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz at Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -45.0); CHECK(a2 < -60.0); CHECK(ost::notWorse(a4, a2));
 }

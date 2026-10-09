@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
         {"gt01.master",   "Master",   0, 10, 5,  Curve::Lin, 1, {}, ""},
         {"gt01.bright",   "Bright",   0, 1, 0,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"gt01.evo.on",   "Volume match", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("gt01.os", 4.0),   // the spec: 4x OS
     };
     return s;
 }
@@ -144,8 +145,10 @@ void Processor::process(float** ch, int numCh, int n) {
     const int nch = std::min(numCh, 2);
     const int chn = static_cast<int>(target_[Channel] + 0.5);
     const ChannelDesign& d = kCh[chn];
-    const double fs4 = 4.0 * fs_;
-    const double aHp1 = 1.0 - std::exp(-2.0 * kPi * d.hp1 / fs4), aHp2 = 1.0 - std::exp(-2.0 * kPi * d.hp2 / fs4), aLp = 1.0 - std::exp(-2.0 * kPi * 12000.0 / fs4);
+    const int osf = OsSwitch::snap(target_[Oversample]);   // the common oversampling setting: the one-pole filters inside the loops are for the oversampled rate
+    for (int c = 0; c < nch; ++c) { c_[static_cast<size_t>(c)].pre.setFactor(osf); c_[static_cast<size_t>(c)].pow.setFactor(osf); }
+    const double fsOs = static_cast<double>(osf) * fs_;
+    const double aHp1 = 1.0 - std::exp(-2.0 * kPi * d.hp1 / fsOs), aHp2 = 1.0 - std::exp(-2.0 * kPi * d.hp2 / fsOs), aLp = 1.0 - std::exp(-2.0 * kPi * 12000.0 / fsOs);
     const double tb1 = std::tanh(d.b1), s1 = 1.0 / (1.0 - tb1 * tb1), tb2 = std::tanh(d.b2), s2 = 1.0 / (1.0 - tb2 * tb2);
     const double outLin = dbToLin(d.outDb);
     const bool bright = target_[Bright] > 0.5, matching = target_[VolumeMatch] > 0.5;
@@ -183,17 +186,14 @@ void Processor::process(float** ch, int numCh, int n) {
             Ch& s = c_[static_cast<size_t>(c)];
             double x = ch[c][i] * inGain_;
             if (bright) x = s.bright.process(x);
-            double up[4];
-            s.pre.up(x, up);
-            for (double& u : up) {
+            double v = s.pre.process(x, [&](double u) {
                 double y = s1 * (std::tanh(a1 * u + d.b1) - tb1);
                 s.dc1 += aHp1 * (y - s.dc1); y -= s.dc1;
                 s.lp1 += aLp * (y - s.lp1); y = s.lp1;
                 double z = s2 * (std::tanh(d.a2 * y + d.b2) - tb2);
                 s.dc2 += aHp2 * (z - s.dc2); z -= s.dc2;
-                u = z;
-            }
-            double v = s.pre.down(up);
+                return z;
+            });
             // tone stack (transposed direct form II), recovery gain, master
             const double t0 = tb_[0] * v + s.tz[0];
             s.tz[0] = tb_[1] * v - ta_[1] * t0 + s.tz[1];
@@ -202,10 +202,7 @@ void Processor::process(float** ch, int numCh, int n) {
             v = t0 * recovery_ * pg;
             // power stage with supply sag: the supply falls with the power drawn, the headroom with it
             const double h = std::max(0.4, 1.0 - d.sag * std::min(1.0, 2.0 * s.sag));
-            double pu[4];
-            s.pow.up(v, pu);
-            for (double& u : pu) u = h * std::tanh(u / h);
-            double y = s.pow.down(pu);
+            double y = s.pow.process(v, [h](double u) { return h * std::tanh(u / h); });
             const double ay = y * y;
             s.sag += (ay - s.sag) * (ay > s.sag ? 1.0 / (0.04 * fs_) : 1.0 / (0.2 * fs_));
             y = s.presence.process(y);

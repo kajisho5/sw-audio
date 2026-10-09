@@ -1,6 +1,7 @@
-// SW AUDIO core — biased tanh waveshaper at 2x oversampling (the building block of DriveStage, tube / transformer / saturator models)
+// SW AUDIO core — biased tanh waveshaper at 1x / 2x / 4x oversampling (default 2x; the building block of DriveStage, tube / transformer / saturator models)
 //   y = h s (tanh(g x / h + b) - tanh b) / g,  s = 1 / sech^2(b)     small-signal gain 1 for any g and b; saturates at about h / g
-// b != 0 gives even harmonics; the DC shift this makes (output minus input) is high-passed at 5 Hz inside the 2x loop.
+// b != 0 gives even harmonics; the DC shift this makes (output minus input) is high-passed at 5 Hz inside the oversampled loop (its coefficient follows the setting).
+// setOversample(1 | 2 | 4): the common oversampling setting (spec 共通機能). BiasShaper4x is the same with 4x as its default (where the spec recommends 4x).
 #pragma once
 #include "sw/oversample.hpp"
 #include <array>
@@ -8,56 +9,40 @@
 
 namespace sw {
 
-class BiasShaper2x {
+class BiasShaper {
 public:
-    void prepare(double fs) { os_ = {}; dc_ = {}; dcA_ = std::exp(-2.0 * 3.14159265358979323846 * 5.0 / (2.0 * fs)); }
-    void reset() { os_ = {}; dc_ = {}; }
+    explicit BiasShaper(int oversample = 2) { for (auto& o : os_) o.setFactor(oversample); }
+    void prepare(double fs) { fs_ = fs; reset(); setOversample(os_[0].factor()); }
+    void reset() { for (auto& o : os_) o.reset(); dc_ = {}; }
+    void setOversample(int factor) {
+        for (auto& o : os_) o.setFactor(factor);
+        if (fs_ > 0.0) dcA_ = std::exp(-2.0 * 3.14159265358979323846 * 5.0 / (os_[0].factor() * fs_));
+    }
+    int oversample() const { return os_[0].factor(); }
     // g: linear drive gain, b: bias, h: headroom (2.0 = +6 dBFS); channel 0 or 1
     double process(int ch, double x, double g, double b, double h = 2.0) {
         const size_t c = static_cast<size_t>(ch);
-        double up[2];
-        os_[c].up(x, up);
         const double tb = std::tanh(b), s = 1.0 / (1.0 - tb * tb);
-        for (double& u : up) {
+        return os_[c].process(x, [&](double u) {
             const double y = h * s * (std::tanh(g * u / h + b) - tb) / g;
             dc_[c] = dcA_ * dc_[c] + (1.0 - dcA_) * (y - u);
-            u = u + (y - u) - dc_[c];
-        }
-        return os_[c].down(up);
+            return u + (y - u) - dc_[c];
+        });
     }
 
 private:
-    std::array<Oversampler2x, 2> os_{};
+    std::array<OsSwitch, 2> os_{};
     std::array<double, 2> dc_{};
-    double dcA_ = 0;
+    double fs_ = 0, dcA_ = 0;
 };
 
-// the same at 4x oversampling (two cascaded half-band stages)
-class BiasShaper4x {
+class BiasShaper2x : public BiasShaper {
 public:
-    void prepare(double fs) { a_ = {}; b_ = {}; dc_ = {}; dcA_ = std::exp(-2.0 * 3.14159265358979323846 * 5.0 / (4.0 * fs)); }
-    double process(int ch, double x, double g, double b, double h = 2.0) {
-        const size_t c = static_cast<size_t>(ch);
-        double up[2];
-        a_[c].up(x, up);
-        const double tb = std::tanh(b), s = 1.0 / (1.0 - tb * tb);
-        for (double& u2 : up) {
-            double u4[2];
-            b_[c].up(u2, u4);
-            for (double& u : u4) {
-                const double y = h * s * (std::tanh(g * u / h + b) - tb) / g;
-                dc_[c] = dcA_ * dc_[c] + (1.0 - dcA_) * (y - u);
-                u = y - dc_[c];
-            }
-            u2 = b_[c].down(u4);
-        }
-        return a_[c].down(up);
-    }
-
-private:
-    std::array<Oversampler2x, 2> a_{}, b_{};
-    std::array<double, 2> dc_{};
-    double dcA_ = 0;
+    BiasShaper2x() : BiasShaper(2) {}
+};
+class BiasShaper4x : public BiasShaper {
+public:
+    BiasShaper4x() : BiasShaper(4) {}
 };
 
 }  // namespace sw

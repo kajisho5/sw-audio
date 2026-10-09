@@ -77,7 +77,7 @@ jobs:
           $PY tools/gen_skins.py > /dev/null
           $PY tools/check_skins.py
 
-      - name: UI in a browser (every screen loads; undo, History, Assist, Unmask, Low lat, UT01 line)
+      - name: UI in a browser (every screen loads; undo, History, Assist, Unmask, Low lat, UT01 line, oversampling button)
         if: matrix.shard == 0 && runner.os == 'Linux'
         run: |
           # Playwright's library with the Chrome that the runner already has (no browser download)

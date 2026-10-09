@@ -626,6 +626,13 @@ bool stateChecks(const std::vector<fs::path>& files, std::vector<std::string>& p
             if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
             ev.set(info[i].id, v);
         }
+        // the ids a host stores in its sessions: the product's parameters are numbered from 0 in their order, the common switches have ids of their own (whatever the number of the product's parameters)
+        for (uint32_t i = 0; i < n; ++i) {
+            const std::string nm = info[i].name;
+            const clap_id want = nm == "Auto gain" ? 0x1000 : nm == "Delta" ? 0x1001 : nm == "Bypass" ? 0x1002 : i;
+            if (info[i].id != want) { bad("parameter " + std::to_string(i) + " (" + nm + ") has id " + std::to_string(info[i].id) + ", expected " + std::to_string(want)); break; }
+            double tmp = 0; if (!pe->get_value(a.p, info[i].id, &tmp)) { bad("get_value does not know the id of " + nm); break; }
+        }
         a.run.process(3, 5, ev);
         std::vector<double> va(n); for (uint32_t i = 0; i < n; ++i) pe->get_value(a.p, info[i].id, &va[i]);
         MemOut out; if (!st->save(a.p, &out.s) || out.d.size() < 8) { bad("save failed"); a.close(); continue; }
@@ -644,6 +651,33 @@ bool stateChecks(const std::vector<fs::path>& files, std::vector<std::string>& p
             (void)lb; (void)latA;
             MemOut again; sb->save(b.p, &again.s); if (again.d != out.d) bad("saving the restored instance gives other bytes (" + std::to_string(again.d.size()) + " vs " + std::to_string(out.d.size()) + ")");
             b.close();
+        }
+        // a state saved by an older build of the product (one parameter fewer at the end of the product's list): the common switches (Auto gain, Delta, Bypass) are the last values and must keep
+        // their places, the product's parameters keep theirs
+        {
+            uint32_t nExtra = 0; for (uint32_t i = 0; i < n; ++i) { const std::string nm = info[i].name; if (nm == "Auto gain" || nm == "Delta" || nm == "Bypass") ++nExtra; }
+            const uint32_t nProd = n - nExtra, hdr = 8;
+            if (nProd >= 2 && out.d.size() >= hdr + 8ull * n) {
+                std::vector<uint8_t> old; old.insert(old.end(), out.d.begin(), out.d.begin() + hdr + 8ull * (nProd - 1));                       // magic, count, the product's values but the last
+                old.insert(old.end(), out.d.begin() + hdr + 8ull * nProd, out.d.begin() + hdr + 8ull * n);                                       // the switches
+                old.insert(old.end(), out.d.begin() + hdr + 8ull * n, out.d.end());                                                              // whatever follows the values
+                const uint32_t cnt = n - 1; std::memcpy(old.data() + 4, &cnt, 4);
+                Loaded b; if (!fresh(b)) { bad("reopen"); }
+                else {
+                    const auto* pb = static_cast<const clap_plugin_params_t*>(b.p->get_extension(b.p, CLAP_EXT_PARAMS)); const auto* sb = static_cast<const clap_plugin_state_t*>(b.p->get_extension(b.p, CLAP_EXT_STATE));
+                    MemIn in(old); if (!sb->load(b.p, &in.s)) bad("an older state (one product parameter fewer) failed to load");
+                    else {
+                        EventList none; b.run.process(3, 5, none);
+                        for (uint32_t i = 0; i < n; ++i) {
+                            if (info[i].flags & CLAP_PARAM_IS_READONLY) continue;
+                            if (i == nProd - 1) continue;   // the one the older build did not have: its default
+                            double v = 0; pb->get_value(b.p, info[i].id, &v);
+                            if (v != va[i]) { bad("an older state (one product parameter fewer): parameter " + std::to_string(i) + " (" + info[i].name + ") came back as " + std::to_string(v) + ", saved " + std::to_string(va[i])); break; }
+                        }
+                    }
+                    b.close();
+                }
+            }
         }
         // cut short at various places, and garbage: no crash, parameters stay in range
         std::vector<size_t> cuts = {0, 1, 3, 4, 7, 8, 11, 12, 15, out.d.size() / 3, out.d.size() / 2, out.d.size() - 9, out.d.size() - 1};
@@ -664,7 +698,7 @@ bool stateChecks(const std::vector<fs::path>& files, std::vector<std::string>& p
         }
         ++tested;
     }
-    if (ok) std::printf("ok    project state: %d plug-ins: random values on every parameter survive save -> new instance -> load -> save (same bytes); cut-short, byte-by-byte and garbage states do not crash\n", tested);
+    if (ok) std::printf("ok    project state: %d plug-ins: random values on every parameter survive save -> new instance -> load -> save (same bytes); cut-short, byte-by-byte and garbage states do not crash; a state saved before a product parameter was added still puts the common switches where they belong\n", tested);
     return ok;
 }
 

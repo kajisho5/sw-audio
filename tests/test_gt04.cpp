@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "gt04/gt04.hpp"
+#include "os_helpers.hpp"
 #include "tu.hpp"
 using namespace sw;
 using namespace sw::gt04;
@@ -24,7 +25,7 @@ double phaseAt(const std::vector<float>& y, const std::vector<float>& x, double 
 TEST_CASE("GT04 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"gt04.gain", "gt04.drive", "gt04.master", "gt04.low", "gt04.lomid", "gt04.himid", "gt04.high", "gt04.midhz", "gt04.di", "gt04.diblend", "gt04.evo.on"};
+    const char* ids[] = {"gt04.gain", "gt04.drive", "gt04.master", "gt04.low", "gt04.lomid", "gt04.himid", "gt04.high", "gt04.midhz", "gt04.di", "gt04.diblend", "gt04.evo.on", "gt04.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Gain].def == 5); CHECK(s[Drive].def == 0); CHECK(s[Master].def == 5);
     for (int i : {Low, LoMid, HiMid, High}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 5); }
@@ -98,4 +99,27 @@ TEST_CASE("GT04 the channels are independent and the EQ settings can move withou
     auto p = make(with(amp(), {{Drive, 6}})); const auto l = tone(-20, 200, 0.5); std::vector<float> sil(l.size(), 0.0f);
     const auto o = run2(p, l, sil); for (float v : o.second) CHECK(v == 0.0f);
     auto q = make(amp()); for (int k = 0; k < 20; ++k) { q.setParam(Low, k % 11); q.setParam(MidHz, k % 2 ? 500 : 3000); for (float v : run(q, noise(-20, 0.05))) CHECK(std::isfinite(v)); }
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("GT04: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x; the pre and the distortion follow it") {
+    const auto& s = specs();
+    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make(with(amp(), {{Gain, 10}, {Drive, 10}, {Di, 0}, {Oversample, static_cast<double>(os)}})); return ost::relDb(p, 9000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("9 kHz through the amp at Gain 10 / Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a2 < a1 - 5.0); CHECK(a4 < a2 - 5.0);   // a hard-driven amp makes harmonics of every order: each step takes away more of what folds back
+}
+TEST_CASE("GT04: Phase align keeps the DI in step with the amp at every oversampling setting") {
+    for (int os : {1, 2, 4}) {
+        const Set base = with(amp(), {{Di, 1}, {DiBlend, 100}, {Oversample, static_cast<double>(os)}});
+        const Set ampOnly = with(amp(), {{Di, 0}, {Oversample, static_cast<double>(os)}});
+        const double f = 150.0; const auto x = tone(-40, f, 1.0);
+        auto am = make(ampOnly); const auto ya = run(am, x);
+        auto on = make(with(base, {{PhaseAlign, 1}})), off = make(with(base, {{PhaseAlign, 0}}));
+        const double pa = phaseAt(ya, x, f), pon = phaseAt(run(on, x), x, f), poff = phaseAt(run(off, x), x, f);
+        const double dOn = std::abs(std::remainder(pon - pa, 2 * kPi)), dOff = std::abs(std::remainder(poff - pa, 2 * kPi));
+        INFO("oversampling " << os << "x: with Phase align " << dOn << " rad, without " << dOff << " rad");
+        CHECK(dOn < 0.25); CHECK(dOff > 2.0 * dOn);
+    }
 }

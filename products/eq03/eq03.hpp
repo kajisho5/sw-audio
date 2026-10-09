@@ -11,7 +11,7 @@
 
 namespace sw::eq03 {
 
-enum ParamId { DipFreq, Dip, PeakFreq, Peak, Width, Drive, Output, Ride, kNumParams };
+enum ParamId { DipFreq, Dip, PeakFreq, Peak, Width, Drive, Output, Ride, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

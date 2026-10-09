@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "dy09/dy09.hpp"
+#include "os_helpers.hpp"
 #include "tu.hpp"
 using namespace sw;
 using namespace sw::dy09;
@@ -103,5 +104,21 @@ TEST_CASE("DY09 reports the Attack and Sustain parts and the gain (screen read-o
     {   // Split bands: the screen sees the largest band; a hit in the high band moves it
         auto p = make({{Mode, 1}, {B3Attack, 12}}); const auto h = hit(8000, 0.5, 0.05, 1.0); feed(p, h, 0, 9600 + 1200);
         CHECK(p.attackPartDb() > 3.0);
+    }
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("DY09: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and Clip follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "dy09.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    for (int clip : {1, 2}) {
+        const double amp = clip == 1 ? 1.0 : 1.2;
+        auto alias = [&](int os, double f0, double bin) { auto p = make({{Clip, double(clip)}, {Oversample, double(os)}}); return ost::relDb(p, f0, bin, amp); };
+        // 15 kHz: the 3rd harmonic (45 kHz) folds to 3 kHz at 1x;  13 kHz -> 5 kHz: a high harmonic that only 4x keeps out
+        const double a1 = alias(1, 15000, 3000), a2 = alias(2, 15000, 3000), b2 = alias(2, 13000, 5000), b4 = alias(4, 13000, 5000);
+        INFO((clip == 1 ? "Soft" : "Hard") << " clip, 15 kHz alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB;  13 kHz alias at 5 kHz: 2x " << b2 << " dB, 4x " << b4 << " dB");
+        CHECK(a1 > -40.0); CHECK(a2 < a1 - 4.0);
+        if (clip == 1) CHECK(b4 < b2 - 15.0);   // a hard clip's corners keep making high harmonics that fold at any rate: there 4x is only no worse
+        else CHECK(ost::notWorse(b4, b2));
     }
 }

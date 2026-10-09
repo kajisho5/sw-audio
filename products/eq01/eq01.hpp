@@ -11,7 +11,7 @@
 
 namespace sw::eq01 {
 
-enum ParamId { LowFreq, LowGain, Contour, AirFreq, AirGain, Width, Drive, Output, Mode, kNumParams };
+enum ParamId { LowFreq, LowGain, Contour, AirFreq, AirGain, Width, Drive, Output, Mode, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

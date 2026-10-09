@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "sa06/sa06.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::sa06;
 using namespace tu;
@@ -90,4 +91,22 @@ TEST_CASE("SA06 shapeFn values (the screen's transfer curve uses the same number
     };
     for (const auto& r : rows)
         for (int i = 0; i < 8; ++i) CHECK(shapeFn(r.type, r.shape, us[i]) == doctest::Approx(r.y[i]).epsilon(1e-7).scale(1.0));
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x; the spec gives this saturator 4x, Fold and Fuzz 8x, so the default is 4x and those two types run one octave above the setting)
+TEST_CASE("SA06: the oversampling parameter is the last one, 1x / 2x / 4x, default 4x, and every band follows it (Fold / Fuzz one octave higher)") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "sa06.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int type, int os, double f0, double bin) {
+        auto p = make({{band(2, BType), double(type)}, {band(2, BDrive), 24}, {band(2, BShape), 2}, {Oversample, double(os)}});
+        return ost::relDb(p, f0, bin, 0.3);
+    };
+    // Tube (4x at the default): 15 kHz, the 3rd harmonic folds to 3 kHz at 1x
+    const double t1 = alias(1, 1, 15000, 3000), t2 = alias(1, 2, 15000, 3000), t4 = alias(1, 4, 15000, 3000);
+    INFO("Tube, 15 kHz alias at 3 kHz: 1x " << t1 << " dB, 2x " << t2 << " dB, 4x " << t4 << " dB");
+    CHECK(t1 > -50.0); CHECK(t2 < t1 - 10.0); CHECK(ost::notWorse(t4, t2));
+    // Fold: at the setting 4x it runs at 8x, at 2x it runs at 4x, at 1x at 2x
+    const double f1 = alias(3, 1, 15000, 3000), f2 = alias(3, 2, 15000, 3000), f4 = alias(3, 4, 15000, 3000);
+    INFO("Fold, 15 kHz alias at 3 kHz: setting 1x " << f1 << " dB, 2x " << f2 << " dB, 4x " << f4 << " dB");
+    CHECK(f1 > -30.0); CHECK(f4 < -60.0); CHECK(f4 < f2 - 20.0);   // a sine folder makes harmonics of every order: only the top setting (8x) keeps them out of the band
 }

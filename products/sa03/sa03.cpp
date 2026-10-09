@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa03.mix",    "Mix",    0, 100, 100,  Curve::Lin,  1, {}, "%"},
             {"sa03.output", "Output", -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa03.evo.on", "Moving bias", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            oversampleSpec("sa03.os", 4.0),   // the spec: 2x OS, 4x recommended
         };
         v[Bias].minLabel = "Cold"; v[Bias].maxLabel = "Hot";
         return v;
@@ -32,7 +33,7 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
-    shaper_.prepare(fs_);
+    shaper_.prepare(fs_); shaper_.setOversample(static_cast<int>(target_[Oversample]));
     envC_ = std::exp(-1.0 / (0.050 * fs_));
     env_ = shift_ = 0;
     updateTone();
@@ -48,6 +49,7 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
     if (id == Tone) updateTone();
+    else if (id == Oversample) shaper_.setOversample(static_cast<int>(v));
 }
 
 void Processor::process(float** ch, int numCh, int n) {

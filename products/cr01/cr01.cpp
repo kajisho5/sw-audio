@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"cr01.env",    "Env amount", -100, 100, 40, Curve::Lin, 1, {}, "%"},
         {"cr01.drive",  "Drive",      0, 100, 20,    Curve::Lin, 1, {}, "%"},
         {"cr01.evo.on", "Adaptive range", 0, 1, 1,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("cr01.os"),
     };
     return s;
 }
@@ -32,6 +33,7 @@ void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
+    if (id == Oversample) for (auto& c : ch_) c.os.setFactor(static_cast<int>(v));   // the filter's coefficients follow the rate (process)
 }
 
 void Processor::updateMod(double level) {
@@ -61,7 +63,7 @@ void Processor::processWithSidechain(float** ch, int numCh, int n, const float* 
     const double res = target_[Resonance] * 0.01, k = std::max(0.1, 2.0 * (1.0 - 0.95 * res)), amt = target_[EnvAmount] * 0.01, drv = target_[Drive] * 0.01, G = 1.0 + 9.0 * drv;
     const double attack = 1.0 - std::exp(-1.0 / (0.003 * fs_)), release = 1.0 - std::exp(-1.0 / (0.12 * fs_));
     const double lfoHz = bpm_ > 0.0 ? bpm_ / 240.0 : 0.5, smooth = 1.0 - std::exp(-1.0 / (0.005 * fs_));
-    const double fsOs = 2.0 * fs_;
+    const double fsOs = ch_[0].os.rate(fs_);   // the filter runs at the oversampled rate (the common setting, default 2x)
     for (int i = 0; i < n; ++i) {
         double det = 0.0;
         if (src == Sidechain && sc != nullptr && scCh > 0) { for (int c = 0; c < std::min(scCh, 2); ++c) det = std::max(det, static_cast<double>(std::abs(sc[c][i]))); }
@@ -74,19 +76,16 @@ void Processor::processWithSidechain(float** ch, int numCh, int n, const float* 
         const double g = std::tan(kPi * std::min(cutoffNow_, 0.45 * fsOs) / fsOs), a1 = 1.0 / (1.0 + g * (g + k));
         for (int c = 0; c < nch; ++c) {
             auto& f = ch_[static_cast<size_t>(c)];
-            double up[2], out[2];
-            f.os.up(ch[c][i], up);
-            for (int j = 0; j < 2; ++j) {
-                const double xin = up[j] + drv * (std::tanh(G * up[j]) / G - up[j]);   // Drive 0: exactly linear
+            double y = f.os.process(ch[c][i], [&](double u) {
+                const double xin = u + drv * (std::tanh(G * u) / G - u);   // Drive 0: exactly linear
                 const double hp = (xin - (k + g) * f.s1 - f.s2) * a1;
                 const double bp = g * hp + f.s1;
                 const double bpSat = bp + drv * (std::tanh(bp) - bp);
                 f.s1 = g * hp + bpSat;
                 const double lp = g * bpSat + f.s2;
                 f.s2 = g * bpSat + lp;
-                out[j] = type == LP ? lp : (type == BP ? k * bp : (type == HP ? hp : lp + hp));
-            }
-            double y = f.os.down(out);
+                return type == LP ? lp : (type == BP ? k * bp : (type == HP ? hp : lp + hp));
+            });
             if (!std::isfinite(y)) { y = 0.0; f.s1 = f.s2 = 0.0; }
             if (std::abs(y) < 1e-30) y = 0.0;
             ch[c][i] = static_cast<float>(y);

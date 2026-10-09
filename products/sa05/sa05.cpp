@@ -13,6 +13,7 @@ const std::vector<ParamSpec>& specs() {
         {"sa05.mode",      "Mode",      0, 2, 0,       Curve::Step, 1, {0, 1, 2}, "", {"Even", "Odd", "Both"}},
         {"sa05.monolow",   "Mono low",  0, 1, 0,       Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"sa05.evo.on",    "Auto fill", 0, 1, 1,       Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("sa05.os"),
     };
     return s;
 }
@@ -23,14 +24,13 @@ namespace { constexpr double kEvenGain = 1.0, kOddGain = 1.4, kLowScale = 0.5, k
 double Processor::Gen::process(double x, int mode, double msC) {
     ms = x * x + msC * (ms - x * x);
     const double r = std::sqrt(ms) + 1e-6, m2 = ms + 1e-10;
-    double up[2]; os.up(x, up);
-    for (double& u : up) {
+    const double s = ms;
+    return os.process(x, [&](double u) {
         double h = 0;
-        if (mode != 1) h += kEvenGain * (u * u - ms) / r;
+        if (mode != 1) h += kEvenGain * (u * u - s) / r;
         if (mode != 0) h += kOddGain * (u * u * u / m2 - 1.5 * u);
-        u = h;
-    }
-    return os.down(up);
+        return h;
+    });
 }
 
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
@@ -39,6 +39,7 @@ void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     msC_ = std::exp(-1.0 / (0.010 * fs_));
     for (auto& g : genHi_) g = Gen{}; for (auto& g : genLo_) g = Gen{};
+    applyOversample();
     an_.setup(fs_, 4096, 1.0); sinceAnalysis_ = 0;
     fill_ = {0, 0, 0}; fillWant_ = {0, 0, 0};
     fillC_ = 1.0 - std::exp(-0.1 / 1.0);   // 1 s follow, updated every 100 ms
@@ -57,11 +58,18 @@ void Processor::updateFilters() {
     }
 }
 
+void Processor::applyOversample() {
+    const int f = static_cast<int>(target_[Oversample]);
+    for (auto& g : genHi_) g.os.setFactor(f);
+    for (auto& g : genLo_) g.os.setFactor(f);
+}
+
 void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
     if (id == Tune) updateFilters();
+    else if (id == Oversample) applyOversample();
 }
 
 // 1/3-octave levels above Tune against a target that falls 1.5 dB/oct from the average of the bands just below Tune

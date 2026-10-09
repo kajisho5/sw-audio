@@ -13,7 +13,7 @@
 
 namespace sw::dy09 {
 
-enum ParamId { Attack, Sustain, Speed, Clip, Mix, Mode, B1Attack, B1Sustain, B2Attack, B2Sustain, B3Attack, B3Sustain, kNumParams };
+enum ParamId { Attack, Sustain, Speed, Clip, Mix, Mode, B1Attack, B1Sustain, B2Attack, B2Sustain, B3Attack, B3Sustain, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -53,7 +53,7 @@ private:
     std::array<double, kNumParams> target_{};
     std::array<Env, 4> env_{};
     std::array<Split, 2> split_{};
-    std::array<std::array<Oversampler2x, 2>, 1> os_{};
+    std::array<OsSwitch, 2> os_{};
 };
 
 }  // namespace sw::dy09

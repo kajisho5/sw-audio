@@ -414,7 +414,7 @@
         if (b.dataset.cycle !== undefined) {         // a chip that prints a parameter and its option ("Dither off"): a click steps to the next option
           const pre = b.dataset.cycle, low = !!b.dataset.lower;
           b.addEventListener('click', () => { const i = cur(), h = hostOf(i), st = h.p.steps, k = st.findIndex(v => Math.abs(v - vals[i]) < 1e-9); bridge.begin(i); setValue(i, st[(k + 1) % st.length]); bridge.end(i); });
-          return () => { const i = cur(), h = hostOf(i); if (!h) return; const k = h.p.steps.findIndex(v => Math.abs(v - vals[i]) < 1e-9), lab = (h.p.labels && h.p.labels[k]) || String(vals[i]); b.textContent = pre + ' ' + (low ? lab.toLowerCase() : lab); };
+          return () => { const i = cur(), h = hostOf(i); if (!h) return; const k = h.p.steps.findIndex(v => Math.abs(v - vals[i]) < 1e-9), lab = (h.p.labels && h.p.labels[k]) || String(vals[i]); b.textContent = b.dataset.fmt === 'os' ? lab.replace('x', '×') + ' OS' : pre + ' ' + (low ? lab.toLowerCase() : lab); };
         }
         const toggle = !!b.dataset.toggle, t = +b.dataset.v, inv = !!b.dataset.inv;   // inv: lit when the parameter is 0 (the power button of a product that has its own In parameter)
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });

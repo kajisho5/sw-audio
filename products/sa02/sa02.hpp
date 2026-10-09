@@ -15,7 +15,7 @@
 
 namespace sw::sa02 {
 
-enum ParamId { Color, Drive, Crosstalk, Noise, Width, Output, Group, kNumParams };
+enum ParamId { Color, Drive, Crosstalk, Noise, Width, Output, Group, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

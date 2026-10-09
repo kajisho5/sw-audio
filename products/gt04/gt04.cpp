@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
         {"gt04.di",         "DI",         0, 1, 1,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"gt04.diblend",    "DI blend",   0, 100, 50, Curve::Lin, 1, {}, "%"},
         {"gt04.evo.on",     "Phase align", 0, 1, 1,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("gt04.os"),
     };
     return s;
 }
@@ -31,7 +32,7 @@ double Processor::Chain::process(double x, double gPre, double hPre, double gDrv
     v = pre.process(0, v, gPre, 0.1, hPre) * levelLin;
     v = high.process(himid.process(lomid.process(low.process(v))));
     const double lo = split_lo.process(v), hi = split_hi.process(v);
-    double u[2]; loOs.up(lo, u); const double loD = loOs.down(u);   // same delay as the shaped branch
+    const double loD = loOs.process(lo, [](double u) { return u; });   // same delay as the shaped branch
     const double dist = drv.process(0, hi, gDrv, 0.15, hDrv) * (1.0 + (1.0 - hDrv / 8.0) * 2.0);
     double y = loD + dist;
     y = cabLp.process(cabBell.process(cabHp.process(y)));
@@ -95,9 +96,14 @@ void Processor::measure() {
     apA_ = frac > 1e-3 ? (1.0 - frac) / (1.0 + frac) : 0.0;
 }
 
+void Processor::applyOversample(int factor) {
+    for (auto& c : chain_) { c.pre.setOversample(factor); c.drv.setOversample(factor); c.loOs.setFactor(factor); }
+}
+
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     for (auto& c : chain_) { c = Chain{}; c.pre.prepare(fs_); c.drv.prepare(fs_); }
+    applyOversample(static_cast<int>(target_[Oversample]));
     updateStatic(); updateEq();
     for (auto& d : dline_) d.assign(128, 0.0);
     for (auto& l : diLo_) l.setup(Svf::Mode::LowPass, 150.0, fs_);
@@ -119,6 +125,7 @@ void Processor::setParam(int id, double v) {
         case Master: master_.setTarget(std::pow(10.0, masterDb(v) / 20.0)); break;
         case DiBlend: blend_.setTarget(v * 0.01); break;
         case Low: case LoMid: case HiMid: case High: case MidHz: case Gain: case Drive: case PhaseAlign: eqDirty_ = true; break;
+        case Oversample: applyOversample(static_cast<int>(v)); eqDirty_ = true; break;   // the half-bands' delay changes: measure the phase again
         default: break;
     }
 }

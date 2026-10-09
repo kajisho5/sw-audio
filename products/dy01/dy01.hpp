@@ -14,7 +14,7 @@
 
 namespace sw::dy01 {
 
-enum ParamId { Drive, Ratio, Speed, Bite, Color, Output, Mix, SchPf, kNumParams };
+enum ParamId { Drive, Ratio, Speed, Bite, Color, Output, Mix, SchPf, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double attackMs(double speed);   // 800 .. 20 us (log-linear in Speed)
@@ -32,14 +32,15 @@ public:
 
 private:
     struct ColorStage {
-        std::array<Oversampler2x, 2> a{}, b{};  // 2x; Crush cascades b for 4x
-        std::array<double, 2> dc2{}, dc4{};
-        void reset() { a = {}; b = {}; dc2 = {}; dc4 = {}; }
+        std::array<OsSwitch, 2> os{};   // the common setting (default 2x); Crush runs at 4x (the spec recommends it) unless the setting is 1x
+        std::array<double, 2> dc{};
+        void reset() { for (auto& o : os) o.reset(); dc = {}; }
     };
     double shape(double u, double g, double b, double& dc, double dcA) const;
     double colorProcess(int ch, double x, double env, double depthDb);
     void updateCurve();
-    double fs_ = 48000.0, gr_ = 0, gin_ = 1.0, relax_ = 1.0, fastEnv_ = 0, slowEnv_ = 0, dcA2_ = 0, dcA4_ = 0;
+    double fs_ = 48000.0, gr_ = 0, gin_ = 1.0, relax_ = 1.0, fastEnv_ = 0, slowEnv_ = 0;
+    std::array<double, 3> dcA_{};   // the DC blocker of the colour stage at 1x / 2x / 4x
     std::array<double, kNumParams> target_{};
     GainComputer comp_;
     Ballistics ball_;

@@ -15,6 +15,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy01.out",   "Output", -12, 24, 0, Curve::Lin, 1, {}, "dB"},
             {"dy01.mix",   "Mix",    0, 100, 100, Curve::Lin, 1, {}, "%"},
             {"dy01.schpf", "SC HPF", 20, 300, 20, Curve::Log, 1, {}, "Hz"},
+            oversampleSpec("dy01.os"),
         };
         v[Ratio].maxLabel = "Max"; v[Ratio].maxLabelNorm = 0.95;  // spec: rightmost 5 % is Max
         v[Speed].minLabel = "Slow"; v[Speed].maxLabel = "Fast";
@@ -36,8 +37,7 @@ void Processor::prepare(double sampleRate, int) {
     envRel_ = Ballistics::coef(fs_, 5.0);
     envSlow_ = Ballistics::coef(fs_, 30.0);
     relaxCoef_ = Ballistics::coef(fs_, 2.0);
-    dcA2_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (2.0 * fs_));
-    dcA4_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (4.0 * fs_));
+    for (int k = 0; k < 3; ++k) dcA_[static_cast<size_t>(k)] = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (static_cast<double>(1 << k) * fs_));
     color_.reset();
     gr_ = 0; relax_ = 1.0; fastEnv_ = slowEnv_ = 0; hold_ = 0; onset_ = false;
     drive_.reset(fs_, 20.0, target_[Drive] * 3.6);
@@ -86,19 +86,11 @@ double Processor::colorProcess(int ch, double x, double env, double depthDb) {
     else { g = 0.8 + depthDb / 4.0; b = 0.15; }
     if (max_) g += depthDb / 8.0;
     const size_t c = static_cast<size_t>(ch);
-    double up[2];
-    color_.a[c].up(x, up);
-    if (color == 2) {
-        for (double& s : up) {
-            double u4[2];
-            color_.b[c].up(s, u4);
-            for (double& t : u4) t = shape(t, g, b, color_.dc4[c], dcA4_);
-            s = color_.b[c].down(u4);
-        }
-    } else {
-        for (double& s : up) s = shape(s, g, b, color_.dc2[c], dcA2_);
-    }
-    return color_.a[c].down(up);
+    const int setting = OsSwitch::snap(target_[Oversample]), factor = color == 2 && setting > 1 ? 4 : setting;   // Crush: 4x (spec: recommended)
+    auto& os = color_.os[c];
+    os.setFactor(factor);
+    const double dcA = dcA_[factor == 1 ? 0u : factor == 2 ? 1u : 2u];
+    return os.process(x, [&](double u) { return shape(u, g, b, color_.dc[c], dcA); });
 }
 
 void Processor::process(float** ch, int numCh, int n) {

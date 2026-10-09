@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"eq01.out.drive",   "Drive",    0, 10, 2,            Curve::Lin,  1, {}, ""},
             {"eq01.out.level",   "Output",   -10, 10, 0,          Curve::Lin,  1, {}, "dB"},
             {"eq01.mode",        "Mode",     0, 1, 0,             Curve::Step, 1, {0, 1}, "", {"LR", "MS"}},
+            oversampleSpec("eq01.os"),
         };
         v[Width].reversed = true;  // Narrow (Q 2.0) ... Wide (Q 0.4)
         return v;
@@ -56,6 +57,7 @@ void Processor::setParam(int id, double v) {
         case Width: width_.setTarget(std::log(v)); break;
         case Drive: drive_.set(v); driveM_.set(v); break;
         case Mode: ms_.setTarget(v); break;
+        case Oversample: drive_.setOversample(static_cast<int>(v)); driveM_.setOversample(static_cast<int>(v)); break;
         default: break;  // Output: sw::Shell
     }
 }

@@ -18,7 +18,7 @@ namespace {
 std::vector<std::string> ids(const std::vector<ParamSpec>& s) { std::vector<std::string> v; for (const auto& p : s) v.push_back(p.id); return v; }
 }
 TEST_CASE("parameter IDs follow the spec") {
-    CHECK(ids(dy01::specs()) == std::vector<std::string>{"dy01.drive", "dy01.ratio", "dy01.speed", "dy01.bite", "dy01.color", "dy01.out", "dy01.mix", "dy01.schpf"});
+    CHECK(ids(dy01::specs()) == std::vector<std::string>{"dy01.drive", "dy01.ratio", "dy01.speed", "dy01.bite", "dy01.color", "dy01.out", "dy01.mix", "dy01.schpf", "dy01.os"});
     CHECK(ids(dy02::specs()) == std::vector<std::string>{"dy02.level", "dy02.out", "dy02.speed", "dy02.target", "dy02.emph", "dy02.mix", "dy02.evo.on", "dy02.automakeup"});
     CHECK(ids(dy03::specs()) == std::vector<std::string>{"dy03.thresh", "dy03.ratio", "dy03.attack", "dy03.release", "dy03.makeup", "dy03.mix", "dy03.knee", "dy03.schpf", "dy03.evo.on"});
     CHECK(ids(dy04::specs()) == std::vector<std::string>{"dy04.thresh", "dy04.range", "dy04.attack", "dy04.hold", "dy04.release", "dy04.mode", "dy04.key.hpf", "dy04.key.lpf", "dy04.key.hpffreq", "dy04.key.lpffreq", "dy04.listen"});

@@ -76,6 +76,7 @@ const std::vector<ParamSpec>& specs() {
             {"cs04.limit.release", "Limit Release", 1, 1000, 50,  Curve::Log,  1, {}, "ms"},
             {"cs04.order",         "Order",         0, 719, 0,    Curve::Step, 1, steps, "", labels},
             {"cs04.lowlat",        "Low lat",       0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            oversampleSpec("cs04.os"),
         };
         v[Order].automatable = false;  // spec: order is dragged and saved with presets, not automated
         return v;
@@ -142,6 +143,7 @@ void Processor::setParam(int id, double v) {
         }
         case LimitCeiling: case LimitRelease: instRel_ = Ballistics::coef(fs_, target_[LimitRelease]); break;
         case Order: { const int idx = static_cast<int>(v); if (idx != pendingOrder_) { pendingOrder_ = idx; if (dipLeft_ == 0) dipLeft_ = 2 * dipLen_; } break; }
+        case Oversample: for (auto& o : satOs_) o.setFactor(static_cast<int>(v)); break;
         default: break;
     }
 }
@@ -184,10 +186,7 @@ void Processor::module(int m, double* x, int nch) {
         case MSat: {
             const double mix = satMix_.current();
             for (int k = 0; k < nch; ++k) {
-                double up[2];
-                satOs_[static_cast<size_t>(k)].up(x[k], up);
-                up[0] = sat_.process(up[0]); up[1] = sat_.process(up[1]);
-                y[k] = x[k] + mix * (satOs_[static_cast<size_t>(k)].down(up) - x[k]);
+                y[k] = x[k] + mix * (satOs_[static_cast<size_t>(k)].process(x[k], [&](double u) { return sat_.process(u); }) - x[k]);
             }
             break;
         }

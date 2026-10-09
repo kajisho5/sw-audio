@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "eq_helpers.hpp"
+#include "os_helpers.hpp"
 #include "cs01/cs01.hpp"
 #include <cmath>
 #include <vector>
@@ -61,4 +62,24 @@ TEST_CASE("CS01 Link: a loud left channel pulls the right one down only when lin
 TEST_CASE("CS01 pre: the iron saturates lows more than highs") {
     auto lo = make({{Drive, 10}}), hi = make({{Drive, 10}});
     CHECK(eqt::harmonicDb(lo, 50, 3, 0.3) > eqt::harmonicDb(hi, 2000, 3, 0.3) + 6.0);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("CS01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the iron stage follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "cs01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{Drive, 10}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz at Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 15.0); CHECK(ost::notWorse(a4, a2));
+}
+TEST_CASE("CS01: the iron's low split (250 Hz) is at the same frequency at every oversampling setting") {
+    // 3rd harmonic of 100 Hz (in the low part, driven hardest) and of 1 kHz (the high part): the same at 1x, 2x, 4x
+    double lo[3], hi[3]; int k = 0;
+    for (int os : {1, 2, 4}) {
+        auto a = make({{Drive, 10}, {Oversample, double(os)}}), b = make({{Drive, 10}, {Oversample, double(os)}});
+        lo[k] = eqt::harmonicDb(a, 100, 3, 0.3); hi[k] = eqt::harmonicDb(b, 1000, 3, 0.3); ++k;
+    }
+    INFO("100 Hz: " << lo[0] << " / " << lo[1] << " / " << lo[2] << " dB, 1 kHz: " << hi[0] << " / " << hi[1] << " / " << hi[2] << " dB");
+    for (int i : {0, 2}) { CHECK(std::abs(lo[i] - lo[1]) < 1.0); CHECK(std::abs(hi[i] - hi[1]) < 1.0); }
 }

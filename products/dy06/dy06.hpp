@@ -12,7 +12,7 @@
 
 namespace sw::dy06 {
 
-enum ParamId { Input, Threshold, Time, Mu, Mix, Stereo, Density, kNumParams };
+enum ParamId { Input, Threshold, Time, Mu, Mix, Stereo, Density, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double inputDb(double knob);   // -10 + 3 * knob

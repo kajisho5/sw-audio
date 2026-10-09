@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq04.drive",     "Drive",    0, 10, 2,         Curve::Lin,  1, {}, ""},
         {"eq04.out",       "Output",   -10, 10, 0,       Curve::Lin,  1, {}, "dB"},
         {"eq04.evo.on",    "Iron",     0, 1, 1,          Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("eq04.os"),
     };
     return s;
 }
@@ -54,6 +55,11 @@ void Processor::setParam(int id, double v) {
         case HighFreq: highF_.setTarget(std::log(v)); break;
         case HighGain: highG_.setTarget(v); break;
         case Drive: drive_.set(v); break;
+        case Oversample: {
+            drive_.setOversample(static_cast<int>(v));
+            for (auto& s : ch_) { s.osLow.setFactor(static_cast<int>(v)); s.osMid.setFactor(static_cast<int>(v)); s.osHigh.setFactor(static_cast<int>(v)); }
+            break;
+        }
         case Iron: iron_.setTarget(v); break;
         default: break;
     }
@@ -100,13 +106,12 @@ void Processor::process(float** chans, int numCh, int n) {
                 const double lo = s.low.process(x), mi = s.mid.process(lo), hi = s.high.process(mi);
                 double y = hi;
                 if (iron > 0.0 && (aLow > 0 || aMid > 0 || aHigh > 0)) {
-                    // the boosted part of each band, saturated at 2x and added back as a residual
-                    double uL[2], uM[2], uH[2], r[2];
-                    s.osLow.up(aLow > 0 ? lo - x : 0.0, uL);
-                    s.osMid.up(aMid > 0 ? mi - lo : 0.0, uM);
-                    s.osHigh.up(aHigh > 0 ? hi - mi : 0.0, uH);
-                    for (int k = 0; k < 2; ++k) r[k] = ironResidual(uL[k], aLow) + ironResidual(uM[k], aMid) + ironResidual(uH[k], aHigh);
-                    y += iron * s.osLow.down(r);
+                    // the boosted part of each band, saturated at the oversampled rate (the common setting, default 2x) and added back as a residual
+                    // (the down-sampler is linear: the three residuals are brought down one by one and summed)
+                    const double rL = s.osLow.process(aLow > 0 ? lo - x : 0.0, [&](double u) { return ironResidual(u, aLow); });
+                    const double rM = s.osMid.process(aMid > 0 ? mi - lo : 0.0, [&](double u) { return ironResidual(u, aMid); });
+                    const double rH = s.osHigh.process(aHigh > 0 ? hi - mi : 0.0, [&](double u) { return ironResidual(u, aHigh); });
+                    y += iron * (rL + rM + rH);
                 }
                 y = drive_.process(c, y);
                 chans[c][i] = static_cast<float>(std::abs(y) < 1e-30 ? 0.0 : y);

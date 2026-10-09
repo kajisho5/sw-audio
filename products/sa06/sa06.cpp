@@ -26,6 +26,7 @@ const std::vector<ParamSpec>& specs() {
             }
         v.push_back({"sa06.tone", "Tone", -6, 6, 0, Curve::Lin, 1, {}, "dB"});
         v.push_back({"sa06.output", "Output", -24, 24, 0, Curve::Lin, 1, {}, "dB"});
+        v.push_back(oversampleSpec("sa06.os", 4.0));   // the spec: 4x OS, Fold and Fuzz 8x (one octave above the setting)
         return v;
     }();
     return s;
@@ -74,6 +75,7 @@ void Processor::setParam(int id, double v) {
 void Processor::process(float** ch, int numCh, int n) {
     const int nch = std::min(numCh, 2);
     const bool tone = std::abs(target_[Tone]) > 1e-9;
+    const int osSetting = OsSwitch::snap(target_[Oversample]);
     for (int i = 0; i < n; ++i) {
         double driveDb[3];
         for (int b = 0; b < 3; ++b) driveDb[b] = drive_[static_cast<size_t>(b)].next();
@@ -94,7 +96,8 @@ void Processor::process(float** ch, int numCh, int n) {
                 double slope = 1.0, f0 = 0.0;
                 if (off != 0.0) { f0 = shapeFn(type, shape, off); slope = (shapeFn(type, shape, off + 1e-4) - shapeFn(type, shape, off - 1e-4)) / 2e-4; if (std::abs(slope) < 0.05) slope = 0.05; }
                 auto f = [&](double u) { return (shapeFn(type, shape, u + off) - f0) / slope; };
-                const double y = type >= 3 ? bc.x8.process(g * xin, f) : bc.x4.process(g * xin, f);
+                bc.os.setFactor(type >= 3 ? 2 * osSetting : osSetting);   // Fold / Fuzz: one octave higher (the spec recommends 8x there)
+                const double y = bc.os.process(g * xin, f);
                 bc.dc = dcA_ * bc.dc + (1.0 - dcA_) * (y - g * xin);   // the mean of what the shape added (bias, asymmetry)
                 const double wet = y - bc.dc;
                 sum += xin + mix * (wet - xin);

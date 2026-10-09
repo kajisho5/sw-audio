@@ -13,7 +13,7 @@
 
 namespace sw::cr01 {
 
-enum ParamId { Type, ModSource, Cutoff, Resonance, EnvAmount, Drive, Evo, kNumParams };
+enum ParamId { Type, ModSource, Cutoff, Resonance, EnvAmount, Drive, Evo, Oversample, kNumParams };
 enum TypeId { LP = 0, BP = 1, HP = 2, Notch = 3 };
 enum SourceId { Envelope = 0, Lfo = 1, Sidechain = 2 };
 
@@ -33,7 +33,7 @@ public:
     double cutoffInUse() const { return cutoffNow_; }
 
 private:
-    struct Chan { double s1 = 0, s2 = 0; Oversampler2x os; };
+    struct Chan { double s1 = 0, s2 = 0; OsSwitch os; };
     void updateMod(double level);
     double fs_ = 48000.0, bpm_ = 0.0, env_ = 0.0, envDb_ = -120.0, hi_ = -60.0, lo_ = -90.0, m_ = 0.0, ph_ = 0.0, cutoffNow_ = 1200.0;
     static constexpr int kBlocks = 20;

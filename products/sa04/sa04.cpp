@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa04.topair",    "Top air",    0, 10, 0,   Curve::Lin,  1, {}, ""},
             {"sa04.output",    "Output",     -10, 10, 0, Curve::Lin,  1, {}, "dB"},
             {"sa04.pad",       "Pad",        0, 1, 0,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            oversampleSpec("sa04.os"),
         };
         v[Load].minLabel = "Low"; v[Load].maxLabel = "High";
         return v;
@@ -33,7 +34,7 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
-    lo_.prepare(fs_); hi_.prepare(fs_);
+    lo_.prepare(fs_); hi_.prepare(fs_); lo_.setOversample(static_cast<int>(target_[Oversample])); hi_.setOversample(static_cast<int>(target_[Oversample]));
     lp_ = {0, 0}; lpA_ = 1.0 - std::exp(-2.0 * kPi * kSplitHz / fs_);
     gain_.reset(fs_, 20.0, std::pow(10.0, dbOf(target_[Gain], target_[Pad] > 0.5) / 20.0));
     updateFilters();
@@ -57,6 +58,7 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     target_[static_cast<size_t>(id)] = v;
     if (id == Gain || id == Pad) gain_.setTarget(std::pow(10.0, dbOf(target_[Gain], target_[Pad] > 0.5) / 20.0));
+    else if (id == Oversample) { lo_.setOversample(static_cast<int>(v)); hi_.setOversample(static_cast<int>(v)); }
     else updateFilters();
 }
 

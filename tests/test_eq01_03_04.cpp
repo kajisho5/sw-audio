@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "eq_helpers.hpp"
+#include "os_helpers.hpp"
 #include "eq01/eq01.hpp"
 #include "eq03/eq03.hpp"
 #include "eq04/eq04.hpp"
@@ -91,4 +92,32 @@ TEST_CASE("EQ04 Iron: harmonics only on boosted bands") {
     auto h3 = [](double low, double iron) { Processor p; p.setParam(Drive, 0); p.setParam(LowGain, low); p.setParam(Iron, iron); p.prepare(eqt::kFs, 256); p.snapToTargets(); return eqt::harmonicDb(p, 50, 3, 0.02); };
     CHECK(h3(16, 1) > h3(16, 0) + 15.0);                     // boosted low band: iron adds odd harmonics
     CHECK(std::abs(h3(-16, 1) - h3(-16, 0)) < 0.5);          // cut band: iron adds nothing
+}
+
+// ---- the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x): the Drive stage of all three, and EQ04's Iron
+TEST_CASE("EQ01 / EQ03 / EQ04: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x") {
+    auto check = [](const std::vector<ParamSpec>& s, int os, const char* id) {
+        REQUIRE(s.size() == static_cast<size_t>(os) + 1);
+        const ParamSpec& p = s[static_cast<size_t>(os)];
+        CHECK(std::string(p.id) == id); CHECK(p.def == 2.0); CHECK(p.steps == std::vector<double>{1, 2, 4}); CHECK(p.labels == std::vector<std::string>{"1x", "2x", "4x"}); CHECK(p.automatable);
+    };
+    check(eq01::specs(), eq01::Oversample, "eq01.os"); check(eq03::specs(), eq03::Oversample, "eq03.os"); check(eq04::specs(), eq04::Oversample, "eq04.os");
+}
+TEST_CASE("EQ01 / EQ03 / EQ04: at Drive 10 a 15 kHz tone's 3rd harmonic folds to 3 kHz at 1x and does not at 2x / 4x") {
+    auto alias = [](auto p, int driveId, int osId, int os) { p.setParam(driveId, 10); p.setParam(osId, os); p.prepare(ost::kFs, 256); p.snapToTargets(); return ost::relDb(p, 15000, 3000, 0.3); };
+    for (int product = 0; product < 3; ++product) {
+        auto a = [&](int os) {
+            return product == 0 ? alias(eq01::Processor{}, eq01::Drive, eq01::Oversample, os) : product == 1 ? alias(eq03::Processor{}, eq03::Drive, eq03::Oversample, os) : alias(eq04::Processor{}, eq04::Drive, eq04::Oversample, os);
+        };
+        const double a1 = a(1), a2 = a(2), a4 = a(4);
+        INFO("EQ0" << (product == 0 ? 1 : product == 1 ? 3 : 4) << ": 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+        CHECK(a1 > -45.0); CHECK(a2 < -60.0); CHECK(ost::notWorse(a4, a2));
+    }
+}
+TEST_CASE("EQ04 Iron: its saturation also follows the oversampling (a 7 kHz tone through +18 dB at 7.2 kHz, Drive 0)") {
+    using namespace eq04;
+    auto alias = [](int os) { Processor p; p.setParam(Drive, 0); p.setParam(MidFreq, 7200); p.setParam(MidGain, 18); p.setParam(Iron, 1); p.setParam(Oversample, os); p.prepare(ost::kFs, 256); p.snapToTargets(); return ost::relDb(p, 7000, 13000, 0.1); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("alias at 13 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a2 < a1 - 10.0); CHECK(ost::notWorse(a4, a2));
 }

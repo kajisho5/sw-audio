@@ -11,7 +11,7 @@
 
 namespace sw::sa03 {
 
-enum ParamId { Drive, Bias, Tone, Tube, Mix, Output, Evo, kNumParams };
+enum ParamId { Drive, Bias, Tone, Tube, Mix, Output, Evo, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

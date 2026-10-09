@@ -8,7 +8,7 @@
 // Optional on Core: void setTransport(bool playing, double beatsToNextBar) — every block; beatsToNextBar is -1 when the host gives no bar position.
 //   static const clap_plugin_descriptor_t* descriptor();
 // Host-facing values (spec 共通章 2): continuous = normalized 0..1, stepped = step index.
-// Host parameter ids: product params 0..N-1, then common params (Auto gain, Delta, Bypass) appended, so ids stay stable. Bypass (CLAP_PARAM_IS_BYPASS, the host's bypass) is the panel's "In" toggle: products with their own In parameter (kInParam >= 0) do not get it.
+// Host parameter ids: product params 0..N-1 (their index), the common params (Auto gain, Delta, Bypass) at 0x1000 + 0 / 1 / 2: ids stay stable when a product's list grows. Bypass (CLAP_PARAM_IS_BYPASS, the host's bypass) is the panel's "In" toggle: products with their own In parameter (kInParam >= 0) do not get it.
 #pragma once
 #include "gui_bridge.hpp"
 #include "sw_message.h"
@@ -111,6 +111,20 @@ public:
         if (id == bypassId()) return bypassSpec();
         return deltaSpec();
     }
+    // CLAP parameter ids (what a host stores in its automation and in its sessions): a product's parameters keep their index; the common switches have ids of their own, 0x1000 + 0 Auto gain,
+    // + 1 Delta, + 2 Bypass, whatever the product's number of parameters is - so a parameter added at the end of a product's list (Low lat, Oversample, Unit) never moves them
+    static constexpr clap_id kExtraIdBase = 0x1000;
+    static clap_id clapId(int index) {
+        if (index < numProduct()) return static_cast<clap_id>(index);
+        return kExtraIdBase + (index == autoGainId() ? 0u : index == deltaId() ? 1u : 2u);
+    }
+    static int indexOf(clap_id id) {   // -1: not ours
+        if (id < static_cast<clap_id>(numProduct())) return static_cast<int>(id);
+        if (id == kExtraIdBase && kHasAutoGain) return autoGainId();
+        if (id == kExtraIdBase + 1 && kHasDelta) return deltaId();
+        if (id == kExtraIdBase + 2 && kHasBypass) return bypassId();
+        return -1;
+    }
     static bool stepped(int id) { return spec(id).curve == Curve::Step; }
     static double hostToPlain(int id, double h) {
         const auto& s = spec(id);
@@ -156,8 +170,8 @@ private:
         if constexpr (HasMidi<P>::value) { if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && handleMidi(h)) return; }
         if (h->space_id != CLAP_CORE_EVENT_SPACE_ID || h->type != CLAP_EVENT_PARAM_VALUE) return;
         const auto* ev = reinterpret_cast<const clap_event_param_value_t*>(h);
-        if (ev->param_id >= static_cast<clap_id>(numParams())) return;
-        const int id = static_cast<int>(ev->param_id);
+        const int id = indexOf(ev->param_id);
+        if (id < 0) return;
         const double v = sanitizeHost(id, ev->value);
         host_values_[static_cast<size_t>(id)].store(v);
         apply(id, hostToPlain(id, v));
@@ -255,13 +269,13 @@ private:
             const int id = op.id;
             if (op.kind == 1) { writeOneValue(out, time, id); continue; }
             clap_event_param_gesture_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.flags = CLAP_EVENT_IS_LIVE;
-            e.header.type = op.kind == 0 ? CLAP_EVENT_PARAM_GESTURE_BEGIN : CLAP_EVENT_PARAM_GESTURE_END; e.param_id = static_cast<clap_id>(id); out->try_push(out, &e.header);
+            e.header.type = op.kind == 0 ? CLAP_EVENT_PARAM_GESTURE_BEGIN : CLAP_EVENT_PARAM_GESTURE_END; e.param_id = clapId(id); out->try_push(out, &e.header);
         }
         gui_tail_.store(t, std::memory_order_release);
     }
     void writeOneValue(const clap_output_events_t* out, uint32_t time, int id) {
         clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = CLAP_EVENT_IS_LIVE;
-        e.param_id = static_cast<clap_id>(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = host_values_[static_cast<size_t>(id)].load();
+        e.param_id = clapId(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = host_values_[static_cast<size_t>(id)].load();
         out->try_push(out, &e.header);
     }
 #ifdef SW_SKIN_HEADER
@@ -486,7 +500,7 @@ private:
         const int id = static_cast<int>(index);
         const auto& s = spec(id);
         std::memset(info, 0, sizeof(*info));
-        info->id = index;
+        info->id = clapId(id);
         info->flags = (s.automatable ? CLAP_PARAM_IS_AUTOMATABLE : 0) | (stepped(id) ? CLAP_PARAM_IS_STEPPED : 0) | (kHasBypass && id == bypassId() ? CLAP_PARAM_IS_BYPASS : 0);
         std::snprintf(info->name, sizeof(info->name), "%s", s.name);
         std::snprintf(info->module, sizeof(info->module), "%s", s.id);
@@ -496,21 +510,23 @@ private:
         return true;
     }
     static bool paramsValue(const clap_plugin_t* p, clap_id id, double* out) {
-        if (id >= static_cast<clap_id>(numParams())) return false;
-        *out = self(p)->host_values_[id].load();
+        const int i = indexOf(id);
+        if (i < 0) return false;
+        *out = self(p)->host_values_[static_cast<size_t>(i)].load();
         return true;
     }
     static bool paramsToText(const clap_plugin_t*, clap_id id, double value, char* out, uint32_t cap) {
-        if (id >= static_cast<clap_id>(numParams()) || cap == 0) return false;
-        const int i = static_cast<int>(id);
+        const int i = indexOf(id);
+        if (i < 0 || cap == 0) return false;
         std::snprintf(out, cap, "%s", formatValue(spec(i), hostToPlain(i, value)).c_str());
         return true;
     }
     static bool paramsFromText(const clap_plugin_t*, clap_id id, const char* text, double* out) {
-        if (id >= static_cast<clap_id>(numParams()) || !text) return false;
+        const int i = indexOf(id);
+        if (i < 0 || !text) return false;
         double v = 0;
-        if (!parseValue(spec(static_cast<int>(id)), text, v)) return false;
-        *out = plainToHost(static_cast<int>(id), v);
+        if (!parseValue(spec(i), text, v)) return false;
+        *out = plainToHost(i, v);
         return true;
     }
     // the core moved a parameter itself: tell the host as a gesture (begin / value / end) so the track's automation can record it
@@ -526,12 +542,12 @@ private:
         if (!out) return;
         auto gesture = [&](uint16_t type) {
             clap_event_param_gesture_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = type; e.header.flags = CLAP_EVENT_IS_LIVE;
-            e.param_id = static_cast<clap_id>(id); out->try_push(out, &e.header);
+            e.param_id = clapId(id); out->try_push(out, &e.header);
         };
         if (f & 1) gesture(CLAP_EVENT_PARAM_GESTURE_BEGIN);
         if (f & 2) {
             clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = CLAP_EVENT_IS_LIVE;
-            e.param_id = static_cast<clap_id>(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1;
+            e.param_id = clapId(id); e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1;
             e.value = plainToHost(id, plain);
             host_values_[static_cast<size_t>(id)].store(e.value);
             out->try_push(out, &e.header);
@@ -574,9 +590,13 @@ private:
         std::vector<double> vals(count);              // read whole before anything changes: a cut state changes nothing
         for (uint32_t i = 0; i < count; ++i) if (!readAll(s, &vals[i], 8)) return false;
         Plugin* pl = self(p);
-        for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
-            pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
-        }
+        // The product's parameters come first and the common switches (Auto gain, Delta, Bypass) after them. A state saved by another build of the product - a parameter was added
+        // at the end of its list (Low lat, Oversample ...) - has the switches at other positions: they are the last values, the product's are the first ones.
+        const uint32_t nProduct = static_cast<uint32_t>(numProduct()), nExtra = static_cast<uint32_t>(numParams()) - nProduct;
+        const uint32_t held = count >= nExtra ? count - nExtra : count;   // how many of the values are the product's
+        auto put = [&](uint32_t id, double v) { pl->host_values_[id].store(sanitizeHost(static_cast<int>(id), v)); pl->dirty_[id].store(true); };
+        for (uint32_t i = 0; i < held && i < nProduct; ++i) put(i, vals[i]);
+        for (uint32_t e = 0; e < nExtra && held + e < count; ++e) put(nProduct + e, vals[held + e]);
         if constexpr (HasExtraState<typename P::Core>::value) {   // optional: states saved before the extra block existed end here
             char xm[4]; uint32_t len = 0;
             if (readAll(s, xm, 4) && std::memcmp(xm, "SWX1", 4) == 0 && readAll(s, &len, 4) && len <= (1u << 20)) {

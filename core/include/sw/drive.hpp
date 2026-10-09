@@ -1,5 +1,5 @@
 // SW AUDIO core — analog output stage (EQ01 / EQ03 / EQ04 family):
-// Drive 0..10 = input 0..+18 dB into ONE asymmetric soft-clip stage at 2x oversampling, with level compensation.
+// Drive 0..10 = input 0..+18 dB into ONE asymmetric soft-clip stage at 2x oversampling (1x / 2x / 4x: setOversample), with level compensation.
 // (spec: 「Drive：偶数次寄りの非対称ソフトクリップ1段、2× OS。ドライブ量に応じて出力を自動で下げ、Drive を回しても音量がほぼ変わらない」)
 //
 //   v = g x / h + b                      g = Drive gain (1..7.94), h = headroom (2.0 = +6 dBFS, decision), b = 0.3 * Drive / 10 (design value)
@@ -27,18 +27,22 @@ public:
     static constexpr double kDcHz = 5.0;      // DC removal of the distortion product
 
     void prepare(double fs, double drive010) {
-        drive_.reset(fs, 20.0, drive010 * 1.8); os_ = {}; dc_ = {};
-        dcA_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (2.0 * fs));
+        fs_ = fs; drive_.reset(fs, 20.0, drive010 * 1.8); for (auto& o : os_) o.reset(); dc_ = {};
+        setOversample(os_[0].factor());
         update(drive_.current());
     }
+    // oversampling 1x / 2x / 4x (spec: common function, default 2x): the DC blocker lives inside the oversampled loop, so its coefficient follows
+    void setOversample(int factor) {
+        for (auto& o : os_) o.setFactor(factor);
+        if (fs_ > 0.0) dcA_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (os_[0].factor() * fs_));
+    }
+    int oversample() const { return os_[0].factor(); }
     void set(double drive010) { drive_.setTarget(drive010 * 1.8); }
     void snap() { drive_.skip(1 << 30); update(drive_.current()); }
     void tick() { if (drive_.isSmoothing()) update(drive_.next()); }  // once per sample, before process()
     double process(int ch, double x) {
-        double up[2];
-        os_[static_cast<size_t>(ch)].up(x, up);
-        for (double& u : up) u = shape(static_cast<size_t>(ch), u);
-        return os_[static_cast<size_t>(ch)].down(up);
+        const size_t c = static_cast<size_t>(ch);
+        return os_[c].process(x, [&](double u) { return shape(c, u); });
     }
 
 private:
@@ -54,9 +58,9 @@ private:
         return u + (d - dc_[ch]);
     }
     LinearSmoother drive_;
-    std::array<Oversampler2x, 2> os_{};
+    std::array<OsSwitch, 2> os_{};
     std::array<double, 2> dc_{};
-    double g_ = 1.0, b_ = 0.0, dcA_ = 0.0, tb_ = 0.0, s_ = 1.0;
+    double fs_ = 0.0, g_ = 1.0, b_ = 0.0, dcA_ = 0.0, tb_ = 0.0, s_ = 1.0;
 };
 
 }  // namespace sw

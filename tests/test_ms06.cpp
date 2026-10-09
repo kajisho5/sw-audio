@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "ms06/ms06.hpp"
+#include "os_helpers.hpp"
 #include "sw/loudness.hpp"
 #include "tu.hpp"
 using namespace sw;
@@ -104,4 +105,14 @@ TEST_CASE("MS06 output meters (the screen's LUFS / TP / LRA): short-term loudnes
     // a steady tone has no range; two levels 10 LU apart give about 10 LU
     { auto p = make(); run(p, sine(-25, 20.0, 1000.0)); CHECK(p.outRangeLu() < 0.5); }
     { auto p = make(); auto a = sine(-30, 20.0, 1000.0), b = sine(-20, 20.0, 1000.0); a.insert(a.end(), b.begin(), b.end()); run(p, a); NEAR(p.outRangeLu(), 10.0, 1.5); }
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("MS06: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the Saturate stage follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s.back().id) == "ms06.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{SatOn, 1}, {SatDrive, 12}, {Oversample, static_cast<double>(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz through Saturate at Drive 12, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -45.0); CHECK(a2 < -60.0); CHECK(ost::notWorse(a4, a2));
 }

@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
         {"cs03.comp.ratio",  "Ratio",     1.2, 10, 2,  Curve::Log,  1, {}, ":1"},
         {"cs03.comp.knee",   "Knee",      0, 1, 1,     Curve::Step, 1, {0, 1}, "", {"Hard", "Soft"}},
         {"cs03.out",         "Output",    -10, 10, 0,  Curve::Lin,  1, {}, "dB"},
+        oversampleSpec("cs03.os"),
     };
     return s;
 }
@@ -39,7 +40,6 @@ void Processor::prepare(double sampleRate, int) {
     for (LinearSmoother* s : {&low_, &mid_, &high_}) s->reset(fs_, 30.0, 0.0);  // Glide 30 ms
     for (auto& c : ch_) {
         c = Ch{};
-        for (auto& f : c.split) f.setup(OnePole::Mode::LowPass, 150.0, 2.0 * fs_);
         c.dc.setup(OnePole::Mode::HighPass, 10.0, fs_);
         c.load.setup(Svf::Mode::HighShelf, std::min(8000.0, 0.45 * fs_), fs_, 0.70710678, kHiZLoadDb);
         c.det.set(fs_, LevelDetector::Mode::Program);
@@ -48,6 +48,9 @@ void Processor::prepare(double sampleRate, int) {
     for (int i = 0; i < kNumParams; ++i) setParam(i, target_[static_cast<size_t>(i)]);
     snapToTargets();
 }
+
+// the transformer's low split is a filter inside the oversampled loop: its coefficient is for the oversampled rate (the common setting, default 2x)
+void Processor::updateSplit() { for (auto& c : ch_) c.split.setup(OnePole::Mode::LowPass, 150.0, c.os.rate(fs_)); }
 
 void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
@@ -60,6 +63,7 @@ void Processor::setParam(int id, double v) {
         case Mid: mid_.setTarget(v); break;
         case High: high_.setTarget(v); break;
         case Thresh: case Ratio: case Knee: gc_.set(-4.0 * target_[Thresh], target_[Ratio], target_[Knee] > 0.5 ? 6.0 : 0.0); break;
+        case Oversample: for (auto& ch : ch_) ch.os.setFactor(static_cast<int>(v)); updateSplit(); break;
         default: break;  // Output: sw::Shell
     }
 }
@@ -90,14 +94,11 @@ void Processor::process(float** chans, int numCh, int n) {
             double x[2] = {0, 0}, level = 0;
             for (int k = 0; k < nch; ++k) {
                 Ch& c = ch_[static_cast<size_t>(k)];
-                double up[2];
-                c.os.up(chans[k][i] * g, up);
-                for (int h = 0; h < 2; ++h) {  // transformer: lows saturate first; Hi Z adds asymmetry (even harmonics)
-                    const double v = up[h] + hz * kHiZEven * up[h] * up[h] / kHeadroom;
-                    const double lo = c.split[static_cast<size_t>(h)].process(v);
-                    up[h] = tf(lo, kLowHeadroom) + tf(v - lo, kHeadroom);
-                }
-                double y = c.os.down(up);
+                double y = c.os.process(chans[k][i] * g, [&](double u) {  // transformer: lows saturate first; Hi Z adds asymmetry (even harmonics)
+                    const double v = u + hz * kHiZEven * u * u / kHeadroom;
+                    const double lo = c.split.process(v);
+                    return tf(lo, kLowHeadroom) + tf(v - lo, kHeadroom);
+                });
                 if (hz > 0.0) y = c.dc.process(y) * hz + y * (1.0 - hz);  // the asymmetry's DC is removed on Hi Z
                 if (hz > 0.0) y = y + hz * (c.load.process(y) - y);       // instrument load on the top end
                 y = c.high.process(c.mid.process(c.low.process(y)));

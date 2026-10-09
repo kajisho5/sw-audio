@@ -17,7 +17,7 @@
 namespace sw::cs04 {
 
 enum ParamId { GateOn, GateThresh, GateRange, GateRelease, EqOn, EqLow, EqMidFreq, EqMid, EqHigh, EqOut, CompOn, CompThresh, CompRatio, CompAttack, CompRelease, CompMakeup,
-               SatOn, SatDrive, SatMix, DeessOn, DeessFreq, DeessThresh, DeessRange, LimitOn, LimitCeiling, LimitRelease, Order, LowLat, kNumParams };
+               SatOn, SatDrive, SatMix, DeessOn, DeessFreq, DeessThresh, DeessRange, LimitOn, LimitCeiling, LimitRelease, Order, LowLat, Oversample, kNumParams };
 enum Module { MGate, MEq, MComp, MSat, MDeess, MLimit, kModules };
 
 const std::vector<ParamSpec>& specs();
@@ -50,7 +50,7 @@ private:
     std::array<LevelDetector, 2> compDet_{};
     GainComputer compGc_;
     Ballistics compBall_;
-    std::array<Oversampler2x, 2> satOs_{};
+    std::array<OsSwitch, 2> satOs_{};
     Saturator sat_;
     struct DeessSvf { double ic1 = 0, ic2 = 0; };  // TPT SVF state; lp + k*sqrt(G)*bp + G*hp is a high shelf that is exact identity at G = 1
     std::array<DeessSvf, 2> deessSvf_{};

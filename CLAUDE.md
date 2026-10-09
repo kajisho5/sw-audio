@@ -36,12 +36,13 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 
 ### 実装の決まりごと（過去の不具合から）
 
-- **パラメータ ID は仕様書のとおり**（`cs02.comp.thresh` など）。ホスト内部の番号は表の並び順。**一度出した番号は並べ替えない**。追加は末尾（保存済みの設定を壊さないため）。
+- **パラメータ ID は仕様書のとおり**（`cs02.comp.thresh` など）。ホストのパラメータ ID は、製品のパラメータは表の並び順（0 から）、共通のスイッチ（Auto gain・Delta・Bypass）は 0x1000・0x1001・0x1002 に固定（製品のパラメータ数が変わっても動かない。`host_smoke` が確かめる）。**一度出した番号は並べ替えない**。追加は末尾（保存済みの設定を壊さないため。状態の読み込みは共通のスイッチ Auto gain・Delta・Bypass を末尾から読むので、製品のリストの末尾に足しても古い状態のスイッチはずれない）。
 - 範囲・既定値・カーブは `ParamSpec` に：`Curve::Lin/Log/Skew/Step/Fader`、`reversed`（ノブが逆向き）、`minLabel`/`maxLabel`/`maxLabelNorm`（Off・Auto・∞・右端5 %）、`automatable=false`（Listen・並び順などの監視・保存用）。
 - 共通の処理枠 `sw::Shell`（In → Auto gain → Mix → Output → Δ）。製品の Output／In／Mix は traits で枠へ回す。コンプ部だけの Mix などは製品の中で処理し、traits は -1。量子化する製品は `kAutoGain=false`。
 - 外部サイドチェーン：Core に `processWithSidechain(...)` を書くと、自動で2つ目の入力端子が付く。
 - 遅延が変わる設定（先読み、位相モード、FIR 長など）：`latencySamples()` は「次の prepare で使う値」を返す。prepare 時に確定させる。違えばプラグイン層がホストに再起動を求める。
 - 音声スレッドでメモリを確保しない（バッファは prepare で確保）。出力は `|y|<1e-30` を 0 に。
+- **非線形の段は `sw::OsSwitch`（`DriveStage`・`BiasShaper` もその上）を通し、`oversampleSpec("<コード>.os")` を最後の製品パラメータにする**（1x／2x／4x、既定 2x。仕様書が 4× の製品は第 2 引数）。段のループの中にある時間のもの（フィルター係数、DC 除去、包絡の追従）は `os.rate(fs)` で計算する（`fs` 決め打ちや 2×fs 決め打ちは設定を変えると音が変わる）。画面の「2× OS」ボタンは `gen_skins.py` が `.os` に結び付ける。
 - アナログ系の段のヘッドルームは +6 dBFS（決定事項）。
 - **テストの処理ループは端数ブロックを必ず `std::min(256, n - off)` で切る**（配列の外を読む不具合を2回出した）。
 - 有効化前に状態を読み込まれても落ちないこと（prepare 前は `snapToTargets()` で何もしない）。

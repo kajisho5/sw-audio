@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "gt01/gt01.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::gt01;
 using namespace tu;
@@ -18,7 +19,7 @@ Set with(Set a, Set b) { a.insert(a.end(), b.begin(), b.end()); return a; }
 TEST_CASE("GT01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"gt01.channel", "gt01.gain", "gt01.bass", "gt01.middle", "gt01.treble", "gt01.presence", "gt01.master", "gt01.bright", "gt01.evo.on"};
+    const char* ids[] = {"gt01.channel", "gt01.gain", "gt01.bass", "gt01.middle", "gt01.treble", "gt01.presence", "gt01.master", "gt01.bright", "gt01.evo.on", "gt01.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Channel].labels == std::vector<std::string>{"Clean", "Crunch", "Lead"}); CHECK(s[Channel].def == 1);
     for (int i : {Gain, Bass, Middle, Treble, Presence, Master}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 5); }
@@ -116,4 +117,21 @@ TEST_CASE("GT01 Volume match: measures the playing level once and fixes the gain
 TEST_CASE("GT01 the channels are independent") {
     auto p = make(amp(Lead, 8)); const auto l = tone(-20, 500, 1.0); std::vector<float> sil(l.size(), 0.0f);
     const auto o = run2(p, l, sil); for (float v : o.second) CHECK(v == 0.0f);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x; the spec gives this amp 4x, so that is the default)
+TEST_CASE("GT01: the oversampling parameter is the last one, 1x / 2x / 4x, default 4x; the filters in the loops follow the rate") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "gt01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 1);
+    // the same amp at every setting: the level of a 1 kHz tone stays within 1 dB (the one-pole filters inside the loops are for the oversampled rate)
+    double lv[3]; int k = 0;
+    for (int os : {1, 2, 4}) { auto p = make(with(amp(1, 6, 5), {{Oversample, double(os)}})); const auto y = run(p, tone(-30, 1000, 1.0)); lv[k++] = at(y, 1000); }
+    INFO("1 kHz at 1x / 2x / 4x: " << lv[0] << " / " << lv[1] << " / " << lv[2] << " dB");
+    CHECK(std::abs(lv[0] - lv[2]) < 1.0); CHECK(std::abs(lv[1] - lv[2]) < 1.0);
+}
+TEST_CASE("GT01: the preamp and the power stage fold less with more oversampling") {
+    auto alias = [](int os) { auto p = make(with(amp(1, 10, 10), {{Oversample, double(os)}})); return ost::relDb(p, 9000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("9 kHz at Gain 10 / Master 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a2 < a1 - 5.0); CHECK(a4 < a2 - 3.0);
 }

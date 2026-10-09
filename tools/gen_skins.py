@@ -434,11 +434,12 @@ def bind_actions(root, code, report):
 
 
 # what the dimmed parts say when pressed on (the designs show them on every screen; the title says why they do nothing here)
+UNIT_NONE = 'This plug-in has no Unit A / B / C (the spec: component tolerances mean nothing for dither, meters, repair and a plain gain)'
 INERT_TITLES = {
     'low lat': 'This plug-in has no low-latency mode (the spec has one for EQ02, EQ07, EQ08, DY05, DY08, MS01, MS02, MS03, MS04, CS04 and RS01 only)',
-    '2× os': 'A choice of 1x / 2x / 4x oversampling is not built yet (the nonlinear stages of this plug-in, if it has any, run at a fixed rate)',
+    '2× os': 'This plug-in has no nonlinear stage that oversampling would apply to (MS04 has its own Oversample setting on the panel)',
     '100%': 'The window size is fixed (zoom is not built yet)',
-    'a': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'b': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'c': 'Unit A / B / C (component tolerances of the analog models) is not built yet',
+    'a': UNIT_NONE, 'b': UNIT_NONE, 'c': UNIT_NONE,
 }
 
 
@@ -633,6 +634,20 @@ def build(code, report):
             b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
         if t == 'Auto' and autogain and b.parent is not None and any(x.get_text().strip() == 'Δ' for x in b.parent.find_all('button', recursive=False)):
             b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue   # the panel's Auto next to the Δ button = the common Auto gain
+        if re.fullmatch(r'[124]\s*[×x]\s*OS', t, re.I):     # the EVO bar's "2× OS": the product's oversampling setting (`<code>.os`, 1x / 2x / 4x): a click steps to the next one
+            osp = next((p for p in params if p['id'].endswith('.os') and not p['id'].startswith('common.') and p['curve'] == 'step' and p.get('labels') == ['1x', '2x', '4x']), None)   # not MS04's own Oversample (4x / 8x / 16x)
+            if osp is not None:
+                b['data-p'] = str(osp['i']); b['data-cycle'] = ''; b['data-fmt'] = 'os'
+                b['title'] = 'Oversampling of the nonlinear stages: 1x / 2x / 4x (click to step; a change while playing makes one click)'
+                nbt += 1; nbb += 1; continue
+            if any(p['id'] == 'ms04.os' for p in params):   # MS04 has its own Oversample on the panel; the spec: hide the EVO bar's one
+                b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
+        if t in ('A', 'B', 'C') and b.find_parent(class_='evob') is not None:     # the EVO bar's Unit A / B / C: the product's `<code>.unit` (three options of one parameter)
+            up = next((p for p in params if p['id'].endswith('.unit') and p.get('labels') == ['A', 'B', 'C']), None)
+            if up is not None:
+                b['data-p'] = str(up['i']); b['data-v'] = str(up['steps'][('A', 'B', 'C').index(t)])
+                b['title'] = 'Unit ' + t + (' (the reference)' if t == 'A' else ': a fixed set of component tolerances, a different one on the left and on the right channel')
+                nbt += 1; nbb += 1; continue
         if not t:
             continue
         nbt += 1

@@ -15,7 +15,7 @@
 
 namespace sw::cs03 {
 
-enum ParamId { Gain, Impedance, Low, Mid, High, Thresh, Ratio, Knee, Output, kNumParams };
+enum ParamId { Gain, Impedance, Low, Mid, High, Thresh, Ratio, Knee, Output, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -30,10 +30,11 @@ public:
 
 private:
     void updateEq(int ramp);
+    void updateSplit();
     double fs_ = 48000.0;
     std::array<double, kNumParams> target_{};
     LinearSmoother gain_, hiZ_, low_, mid_, high_;
-    struct Ch { Oversampler2x os; std::array<OnePole, 2> split{}; OnePole dc; Svf load, low, mid, high; LevelDetector det; };
+    struct Ch { OsSwitch os; OnePole split, dc; Svf load, low, mid, high; LevelDetector det; };
     std::array<Ch, 2> ch_{};
     GainComputer gc_;
     Ballistics fast_, slow_;

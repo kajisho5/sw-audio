@@ -19,6 +19,7 @@ const std::vector<ParamSpec>& specs() {
         {"cs01.comp.mix",     "Mix",     0, 100, 100,     Curve::Lin,  1, {}, "%"},
         {"cs01.out",          "Output",  -10, 10, 0,      Curve::Lin,  1, {}, "dB"},
         {"cs01.link",         "Link",    0, 1, 1,         Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("cs01.os"),
     };
     return s;
 }
@@ -39,11 +40,15 @@ void Processor::prepare(double sampleRate, int) {
     order_.reset(fs_, 10.0, 0.0);
     chain_ = {};
     os_ = {};
-    for (auto& c : split_) for (auto& f : c) { f.reset(); f.setup(OnePole::Mode::LowPass, kIronSplitHz, 2.0 * fs_); }
+    for (auto& f : split_) f.reset();
+    updateSplit();
     for (auto& c : chain_) for (auto& d : c.comp.det) d.set(fs_, LevelDetector::Mode::Rms);
     for (int i = 0; i < kNumParams; ++i) setParam(i, target_[static_cast<size_t>(i)]);
     snapToTargets();
 }
+
+// the iron's low split is a filter inside the oversampled loop: its coefficient is for the oversampled rate (the common setting, default 2x)
+void Processor::updateSplit() { for (auto& f : split_) f.setup(OnePole::Mode::LowPass, kIronSplitHz, os_[0].rate(fs_)); }
 
 void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
@@ -60,6 +65,7 @@ void Processor::setParam(int id, double v) {
         case Release: relCoef_ = Ballistics::coef(fs_, v); break;
         case Order: order_.setTarget(v); break;
         case Mix: mix_.setTarget(v / 100.0); break;
+        case Oversample: for (auto& o : os_) o.setFactor(static_cast<int>(v)); updateSplit(); break;
         default: break;  // Output: sw::Shell, Link: per sample
     }
 }
@@ -124,13 +130,11 @@ void Processor::process(float** ch, int numCh, int n) {
             mix_.next();
             double x[2];
             for (int k = 0; k < nch; ++k) {  // pre: iron at 2x, lows driven harder than highs
-                double up[2];
-                os_[static_cast<size_t>(k)].up(ch[k][i], up);
-                for (int h = 0; h < 2; ++h) {
-                    const double lo = split_[static_cast<size_t>(k)][static_cast<size_t>(h)].process(up[h]);
-                    up[h] = ironStage(lo, g) + ironStage(up[h] - lo, g * kIronHighShare + (1.0 - kIronHighShare));
-                }
-                x[k] = os_[static_cast<size_t>(k)].down(up);
+                OnePole& split = split_[static_cast<size_t>(k)];
+                x[k] = os_[static_cast<size_t>(k)].process(ch[k][i], [&](double u) {
+                    const double lo = split.process(u);
+                    return ironStage(lo, g) + ironStage(u - lo, g * kIronHighShare + (1.0 - kIronHighShare));
+                });
             }
             double a[2] = {x[0], x[1]}, b[2] = {x[0], x[1]};
             if (ord < 1.0) runChain(chain_[0], true, a, nch, hpOn);

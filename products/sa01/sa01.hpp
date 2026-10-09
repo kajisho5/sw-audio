@@ -13,7 +13,7 @@
 
 namespace sw::sa01 {
 
-enum ParamId { Speed, Formula, Input, Saturation, Wow, Flutter, Hiss, Output, Repro, kNumParams };
+enum ParamId { Speed, Formula, Input, Saturation, Wow, Flutter, Hiss, Output, Repro, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -38,9 +38,10 @@ private:
     int centre_ = 48, pos_ = 0; unsigned driftCount_ = 0;
     std::array<double, kNumParams> target_{};
     LinearSmoother in_, out_;
-    std::array<Oversampler2x, 2> os_{};
+    std::array<OsSwitch, 2> os_{};
     std::array<double, 2> z_{}, zOs_{};
-    double envC_ = 0;
+    double envC_ = 0;   // the backlash's level follower: 5 ms at the oversampled rate
+    void applyOversample();
     std::array<double, 2> envOs_{};
     std::array<std::vector<float>, 2> ring_;
     double wowPh_[2] = {0, 0}, flPh_[3] = {0, 0, 0}, drift_ = 0, driftTarget_ = 0;

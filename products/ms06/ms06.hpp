@@ -20,7 +20,7 @@ namespace sw::ms06 {
 constexpr int kStages = 5;
 enum Stage { SEq, SComp, SSat, SWidth, SLimit };
 enum ParamId { EqOn, EqTilt, EqLow, EqHigh, EqBell, EqBellFreq, CompOn, CompThresh, CompRatio, CompAttack, CompRelease, CompMix, SatOn, SatDrive, SatMix,
-               WidthOn, Width, MonoBelow, LimitOn, LimitGain, LimitCeiling, LimitRelease, GainMatch, Order, RefAB, kNumParams };
+               WidthOn, Width, MonoBelow, LimitOn, LimitGain, LimitCeiling, LimitRelease, GainMatch, Order, RefAB, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 std::array<int, kStages> orderFromIndex(int index);   // Lehmer code

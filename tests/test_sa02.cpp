@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "sa02/sa02.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::sa02;
 using namespace tu;
@@ -13,7 +14,7 @@ double h(Set s, int k, double f = 1000, double db = -12) { auto p = make(s); ret
 TEST_CASE("SA02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa02.color", "sa02.drive", "sa02.crosstalk", "sa02.noise", "sa02.width", "sa02.output", "sa02.group"};
+    const char* ids[] = {"sa02.color", "sa02.drive", "sa02.crosstalk", "sa02.noise", "sa02.width", "sa02.output", "sa02.group", "sa02.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Color].labels == std::vector<std::string>{"Iron", "Clean", "Punch", "Vint"}); CHECK(s[Color].def == 0);
     CHECK(s[Drive].max == 10); CHECK(s[Drive].def == 2); CHECK(s[Crosstalk].max == 10); CHECK(s[Crosstalk].def == 0);
@@ -72,4 +73,14 @@ TEST_CASE("SA02 extreme input finite, silence silent") {
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
     CHECK(p.latencySamples() == 0);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("SA02: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the shaper follows it") {
+    const auto& s = specs();
+    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{Drive, 10}, {Oversample, static_cast<double>(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 15.0); CHECK(ost::notWorse(a4, a2));
 }

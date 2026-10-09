@@ -12,7 +12,7 @@
 
 namespace sw::sa04 {
 
-enum ParamId { Iron, Gain, Load, LowWeight, TopAir, Output, Pad, kNumParams };
+enum ParamId { Iron, Gain, Load, LowWeight, TopAir, Output, Pad, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

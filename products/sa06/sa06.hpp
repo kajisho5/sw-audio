@@ -15,7 +15,7 @@ namespace sw::sa06 {
 
 enum BandParam { BType, BDrive, BShape, BBias, BDyn, BMix };
 constexpr int band(int n, int k) { return n * 6 + k; }   // n = 0..2
-enum ParamId { Tone = 18, Output, kNumParams };
+enum ParamId { Tone = 18, Output, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 // the shaping function of a band: type 0..4 (Tape, Tube, Diode, Fold, Fuzz), shape 0..2 (Soft, Medium, Hard), u = drive-scaled input
@@ -31,17 +31,7 @@ public:
     int latencySamples() const { return 0; }
 
 private:
-    template <int N> struct OsChain {
-        std::array<Oversampler2x, N> os{};
-        template <class F> double run(int level, double x, F& f) {
-            if (level == N) return f(x);
-            double up[2]; os[static_cast<size_t>(level)].up(x, up);
-            for (double& u : up) u = run(level + 1, u, f);
-            return os[static_cast<size_t>(level)].down(up);
-        }
-        template <class F> double process(double x, F& f) { return run(0, x, f); }
-    };
-    struct BandCh { OsChain<2> x4; OsChain<3> x8; double dc = 0, env = 0; };
+    struct BandCh { OsSwitch os; double dc = 0, env = 0; };   // os: the common setting (default 4x for this product); Fold and Fuzz run one octave higher (8x at the default)
     void updateTone();
     double fs_ = 48000.0, dcA_ = 0, envC_ = 0;
     std::array<double, kNumParams> target_{};

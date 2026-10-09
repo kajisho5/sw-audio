@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include "os_helpers.hpp"
 #include "eq06/eq06.hpp"
 #include <cmath>
 #include <complex>
@@ -48,4 +49,15 @@ TEST_CASE("Glide: a -12 to +12 jump does not click") {
     for (int i = 9601; i < 12000; ++i) tr = std::max(tr, (double)std::abs(l[i] - l[i - 1]));
     for (int i = 18001; i < n; ++i) st = std::max(st, (double)std::abs(l[i] - l[i - 1]));
     CHECK(tr <= 1.2 * st);
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("EQ06: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the Drive stage follows it") {
+    const auto& s = eq06::specs();
+    REQUIRE(s.back().steps == std::vector<double>{1, 2, 4});
+    CHECK(std::string(s.back().id) == "eq06.os"); CHECK(s.back().def == 2.0); CHECK(static_cast<int>(s.size()) - 1 == eq06::Oversample);
+    auto alias = [](int os) { eq06::Processor p; p.setParam(eq06::Drive, 10); p.setParam(eq06::Oversample, os); p.prepare(ost::kFs, 256); p.snapToTargets(); return ost::relDb(p, 15000, 3000, 0.3); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz at Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -45.0); CHECK(a2 < -60.0); CHECK(ost::notWorse(a4, a2));
 }

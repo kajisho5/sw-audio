@@ -12,7 +12,7 @@
 
 namespace sw::eq04 {
 
-enum ParamId { Hpf, LowFreq, LowGain, MidFreq, MidGain, HighFreq, HighGain, Drive, Output, Iron, kNumParams };
+enum ParamId { Hpf, LowFreq, LowGain, MidFreq, MidGain, HighFreq, HighGain, Drive, Output, Iron, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -30,7 +30,7 @@ private:
     double fs_ = 48000.0;
     std::array<double, kNumParams> target_{};
     LinearSmoother hpfF_, hpfOn_, lowF_, lowG_, midF_, midG_, highF_, highG_, iron_;
-    struct Ch { OnePole hp1; Svf hp2, low, mid, high; Oversampler2x osLow, osMid, osHigh; };
+    struct Ch { OnePole hp1; Svf hp2, low, mid, high; OsSwitch osLow, osMid, osHigh; };
     std::array<Ch, 2> ch_{};
     DriveStage drive_;
 };

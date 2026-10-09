@@ -23,6 +23,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq05.drive.pos",  "Drive Pos", 0, 1, 1,          Curve::Step, 1, {0, 1}, "", {"Pre", "Post"}},
         {"eq05.out",        "Output",    -10, 10, 0,       Curve::Lin, 1, {}, "dB"},
         {"eq05.in",         "In",        0, 1, 1,          Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+        oversampleSpec("eq05.os"),
     };
     return s;
 }
@@ -78,6 +79,7 @@ void Processor::setParam(int id, double v) {
             if (pos != drivePos_) { fade_ = ch_; fadePos_ = drivePos_; fadeRemaining_ = fadeLength_; drivePos_ = pos; }
             break;
         }
+        case Oversample: for (Chain* c : {&ch_[0], &ch_[1], &fade_[0], &fade_[1]}) c->os.setFactor(static_cast<int>(v)); break;
         case Output: case In: break;  // handled by sw::Shell (common frame)
         default: break;
     }
@@ -136,11 +138,7 @@ double Processor::eq(Chain& c, double x) const {
 }
 
 double Processor::drive(Chain& c, double x) const {
-    double up[2];
-    c.os.up(x, up);
-    up[0] = sat_.process(up[0]);
-    up[1] = sat_.process(up[1]);
-    return c.os.down(up);
+    return c.os.process(x, [&](double u) { return sat_.process(u); });
 }
 
 double Processor::runChain(Chain& c, double x, int pos) const {

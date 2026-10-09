@@ -14,7 +14,7 @@ namespace sw::eq05 {
 
 enum ParamId {
     HfGain, HfFreq, HfShape, HmfGain, HmfFreq, HmfQ, LmfGain, LmfFreq, LmfQ,
-    LfGain, LfFreq, LfShape, Hpf, Lpf, Drive, DrivePos, Output, In, kNumParams
+    LfGain, LfFreq, LfShape, Hpf, Lpf, Drive, DrivePos, Output, In, Oversample, kNumParams
 };
 
 const std::vector<ParamSpec>& specs();
@@ -33,7 +33,7 @@ private:
     struct Chain {
         Svf hfShelf, hfBell, hmf, lmf, lfShelf, lfBell, hpf2, lpf;
         OnePole hpf1;
-        Oversampler2x os;
+        OsSwitch os;
     };
     struct Ctl {  // smoothed control values shared by both channels
         LinearSmoother hfGain, hfFreqN, hmfGain, hmfFreqN, hmfQN, lmfGain, lmfFreqN, lmfQN,

@@ -14,7 +14,7 @@
 
 namespace sw::gt01 {
 
-enum ParamId { Channel, Gain, Bass, Middle, Treble, Presence, Master, Bright, VolumeMatch, kNumParams };
+enum ParamId { Channel, Gain, Bass, Middle, Treble, Presence, Master, Bright, VolumeMatch, Oversample, kNumParams };
 enum ChannelId { Clean = 0, Crunch = 1, Lead = 2 };
 
 const std::vector<ParamSpec>& specs();
@@ -38,13 +38,8 @@ public:
     bool matchDone() const { return matchDone_; }
 
 private:
-    struct Os4 {
-        Oversampler2x a, b;
-        void up(double x, double out[4]) { double u[2]; a.up(x, u); b.up(u[0], out); b.up(u[1], out + 2); }
-        double down(const double in[4]) { const double u[2] = {b.down(in), b.down(in + 2)}; return a.down(u); }
-    };
     struct Ch {
-        Os4 pre, pow;
+        OsSwitch pre{4}, pow{4};   // the common setting (the spec: 4x for this amp); process() sets it from the parameter
         double hp1 = 0, lp1 = 0, hp2 = 0, lp2 = 0, dc1 = 0, dc2 = 0, sag = 0, pdc = 0;
         double tz[3] = {0, 0, 0};              // tone stack, transposed direct form II
         Svf bright, presence, tHp, tLp, tLp2;  // bright shelf, presence shelf, output transformer

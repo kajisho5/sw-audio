@@ -65,6 +65,7 @@ const std::vector<ParamSpec>& specs() {
             {"ms06.gainmatch",    "Gain match",   0, 1, 1,      Curve::Step, 1, {0, 1}, "", onoff},
             {"ms06.order",        "Order",        0, 119, 0,    Curve::Step, 1, steps, "", labels},
             {"ms06.ref",          "Reference A/B", 0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"A", "B"}},
+            oversampleSpec("ms06.os"),
         };
         v[CompRelease].maxLabel = "Auto"; v[LimitRelease].maxLabel = "Auto";
         v[MonoBelow].minLabel = "Off";
@@ -135,6 +136,7 @@ void Processor::setParam(int id, double v) {
             }
             break;
         case Order: pendingOrder_ = static_cast<int>(v); break;
+        case Oversample: for (auto& d : sat_) d.setOversample(static_cast<int>(v)); break;   // the Saturate stage
         default: break;
     }
 }

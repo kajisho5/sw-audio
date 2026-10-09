@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq06.shape",     "Shape",     0, 1, 0,           Curve::Step, 1, {0, 1}, "", {"Peak", "Shelf"}},
         {"eq06.drive",     "Drive",     0, 10, 2,          Curve::Lin,  1, {}, ""},
         {"eq06.out",       "Output",    -10, 10, 0,        Curve::Lin,  1, {}, "dB"},
+        oversampleSpec("eq06.os"),
     };
     return s;
 }
@@ -50,6 +51,7 @@ void Processor::setParam(int id, double v) {
         case HighGain: highG_.setTarget(v); break;
         case Shape: shelf_.setTarget(v); break;
         case Drive: drive_.setTarget(v * 1.8); break;
+        case Oversample: for (auto& c : ch_) c.os.setFactor(static_cast<int>(v)); break;
         default: break;  // Output: sw::Shell
     }
 }
@@ -90,10 +92,7 @@ void Processor::process(float** chans, int numCh, int n) {
                 x = s.mid.process(x);
                 const double hp = s.highPk.process(x), hs = s.highSh.process(x);
                 x = hp + sh * (hs - hp);
-                double up[2];
-                s.os.up(x, up);
-                up[0] = sat_.process(up[0]); up[1] = sat_.process(up[1]);
-                double y = s.os.down(up);
+                double y = s.os.process(x, [&](double u) { return sat_.process(u); });
                 if (std::abs(y) < 1e-30) y = 0.0;
                 chans[c][i] = static_cast<float>(y);
             }

@@ -1,5 +1,6 @@
 #include "doctest.h"
 #include "eq_helpers.hpp"
+#include "os_helpers.hpp"
 #include "cs03/cs03.hpp"
 #include <cmath>
 #include <vector>
@@ -48,4 +49,23 @@ TEST_CASE("CS03 EQ: EQ06 proportional Q in 2 dB steps") {
 TEST_CASE("CS03 compressor: 0..10 = 0..-40 dBFS, hard knee 4:1") {
     auto p = make({{Thresh, 5}, {Ratio, 4}, {Knee, 0}});
     CHECK(rmsOut(p, -10) == doctest::Approx(-20 + 10.0 / 4).epsilon(0.03));  // feed-forward: -17.5
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("CS03: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the transformer follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "cs03.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{Gain, 60}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.05); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz at Gain 60, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 15.0); CHECK(ost::notWorse(a4, a2));
+}
+TEST_CASE("CS03: the transformer's low split (150 Hz) is at the same frequency at every oversampling setting") {
+    double lo[3], hi[3]; int k = 0;
+    for (int os : {1, 2, 4}) {
+        auto a = make({{Gain, 60}, {Oversample, double(os)}}), b = make({{Gain, 60}, {Oversample, double(os)}});
+        lo[k] = eqt::harmonicDb(a, 60, 3, 0.05); hi[k] = eqt::harmonicDb(b, 1000, 3, 0.05); ++k;
+    }
+    INFO("60 Hz: " << lo[0] << " / " << lo[1] << " / " << lo[2] << " dB, 1 kHz: " << hi[0] << " / " << hi[1] << " / " << hi[2] << " dB");
+    for (int i : {0, 2}) { CHECK(std::abs(lo[i] - lo[1]) < 1.0); CHECK(std::abs(hi[i] - hi[1]) < 1.0); }
 }

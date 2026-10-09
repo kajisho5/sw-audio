@@ -13,7 +13,7 @@
 
 namespace sw::cs01 {
 
-enum ParamId { Drive, Hpf, High, MidFreq, Mid, Low, Thresh, Ratio, Release, Order, Mix, Output, Link, kNumParams };
+enum ParamId { Drive, Hpf, High, MidFreq, Mid, Low, Thresh, Ratio, Release, Order, Mix, Output, Link, Oversample, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -31,6 +31,7 @@ private:
     struct Comp { std::array<LevelDetector, 2> det{}; std::array<double, 2> grDb{}, lastOut{}; };
     struct Chain { std::array<Eq, 2> eq{}; Comp comp; };
     void updateEq(int ramp);
+    void updateSplit();
     double eqSample(Eq& e, double x, double hpOn);
     void compSample(Comp& c, double* x, int nch);
     void runChain(Chain& ch, bool eqFirst, double* x, int nch, double hpOn);
@@ -38,8 +39,8 @@ private:
     std::array<double, kNumParams> target_{};
     LinearSmoother hpfF_, hpfOn_, high_, midF_, mid_, low_, drive_, mix_, order_;
     std::array<Chain, 2> chain_{};  // [0] EQ -> Comp, [1] Comp -> EQ
-    std::array<Oversampler2x, 2> os_{};
-    std::array<std::array<OnePole, 2>, 2> split_{};  // [channel][oversampled half] low split for the iron
+    std::array<OsSwitch, 2> os_{};
+    std::array<OnePole, 2> split_{};  // [channel] low split for the iron, at the oversampled rate
     GainComputer gc_;
     double relCoef_ = 0;
 };

@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy06.mix",    "Mix",       0, 100, 100, Curve::Lin,  1, {}, "%"},
             {"dy06.stereo", "Stereo",    0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Link", "Dual"}},
             {"dy06.evo.on", "Density adapt", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            oversampleSpec("dy06.os"),
         };
         v[Mu].minLabel = "Soft"; v[Mu].maxLabel = "Hard";
         return v;
@@ -84,6 +85,7 @@ void Processor::setParam(int id, double v) {
     if (id == Input) in_.setTarget(inputDb(v));
     else if (id == Mu) buildCurve();
     else if (id == Time) updateTiming();
+    else if (id == Oversample) for (auto& d : tubeCh_) d.setOversample(static_cast<int>(v));
 }
 
 void Processor::process(float** ch, int numCh, int n) {

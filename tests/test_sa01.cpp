@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "sa01/sa01.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::sa01;
 using namespace tu;
@@ -25,7 +26,7 @@ double phaseWobble(const std::vector<float>& y, double f) {
 TEST_CASE("SA01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa01.speed", "sa01.formula", "sa01.input", "sa01.saturation", "sa01.wow", "sa01.flutter", "sa01.hiss", "sa01.output", "sa01.repro"};
+    const char* ids[] = {"sa01.speed", "sa01.formula", "sa01.input", "sa01.saturation", "sa01.wow", "sa01.flutter", "sa01.hiss", "sa01.output", "sa01.repro", "sa01.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Speed].steps == std::vector<double>{7.5, 15, 30}); CHECK(s[Speed].def == 15);
     CHECK(s[Formula].labels == std::vector<std::string>{"A", "B", "C"}); CHECK(s[Formula].def == 0);
@@ -88,4 +89,21 @@ TEST_CASE("SA01 silence stays silent without Hiss; extreme input finite") {
     auto p = make({{Wow, 10}, {Flutter, 10}, {Saturation, 10}});
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("SA01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the tape saturation follows it") {
+    const auto& s = specs();
+    CHECK(std::string(s[Oversample].id) == "sa01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    auto alias = [](int os) { auto p = make({{Wow, 0}, {Flutter, 0}, {Hiss, 0}, {Repro, 0}, {Input, 12}, {Saturation, 10}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.4); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz into the tape, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 10.0); CHECK(ost::notWorse(a4, a2));
+}
+TEST_CASE("SA01: the backlash behaves the same at every oversampling setting (its follower is for the oversampled rate)") {
+    // the odd and even harmonics of a 1 kHz tone at the same level: within 1.5 dB between the settings
+    double h3[3]; int k = 0;
+    for (int os : {1, 2, 4}) { auto p = make({{Wow, 0}, {Flutter, 0}, {Hiss, 0}, {Input, 6}, {Saturation, 8}, {Oversample, double(os)}}); const auto y = run(p, sine(-12, 2, 1000)); h3[k++] = harmDb(y, 1000, 3); }
+    INFO("3rd harmonic at 1x / 2x / 4x: " << h3[0] << " / " << h3[1] << " / " << h3[2] << " dB");
+    CHECK(std::abs(h3[0] - h3[1]) < 1.5); CHECK(std::abs(h3[2] - h3[1]) < 1.5);
 }

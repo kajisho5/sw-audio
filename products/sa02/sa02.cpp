@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa02.width",     "Width",     0, 150, 100,  Curve::Lin,  1, {}, "%"},
             {"sa02.output",    "Output",    -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa02.group",     "Group",     1, 8, 1,      Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, ""},
+            oversampleSpec("sa02.os"),
         };
         v[Noise].minLabel = "Off"; v[Noise].maxLabel = "Max";
         return v;
@@ -66,6 +67,7 @@ void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     out_.reset(fs_, 20.0, std::pow(10.0, target_[Output] / 20.0));
     lf_.prepare(fs_); hf_.prepare(fs_);
+    lf_.setOversample(static_cast<int>(target_[Oversample])); hf_.setOversample(static_cast<int>(target_[Oversample]));
     lp_ = {0, 0}; lpA_ = 1.0 - std::exp(-2.0 * kPi * kLowSplitHz / fs_);
     msC_ = std::exp(-1.0 / (0.1 * fs_)); msSmooth_ = 0; loadDb_ = 0;
     rng_ = static_cast<uint32_t>(seed_) * 747796405u + 2891336453u;
@@ -80,6 +82,7 @@ void Processor::setParam(int id, double v) {
     if (id == Output) out_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Color) applySeed();
     else if (id == Group && slot_.idx >= 0) joinGroup();
+    else if (id == Oversample) { lf_.setOversample(static_cast<int>(v)); hf_.setOversample(static_cast<int>(v)); }
 }
 
 void Processor::process(float** ch, int numCh, int n) {

@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "cr01/cr01.hpp"
 #include "tu.hpp"
+#include "os_helpers.hpp"
 using namespace sw;
 using namespace sw::cr01;
 using namespace tu;
@@ -13,7 +14,7 @@ double gainDb(Set set, double hz, double inDb = -24.0) { set.push_back({EnvAmoun
 TEST_CASE("CR01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"cr01.type", "cr01.mod", "cr01.cutoff", "cr01.res", "cr01.env", "cr01.drive", "cr01.evo.on"};
+    const char* ids[] = {"cr01.type", "cr01.mod", "cr01.cutoff", "cr01.res", "cr01.env", "cr01.drive", "cr01.evo.on", "cr01.os"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Type].labels == std::vector<std::string>{"LP", "BP", "HP", "Notch"}); CHECK(s[Type].def == 0);
     CHECK(s[ModSource].labels == std::vector<std::string>{"Envelope", "LFO", "Sidechain"}); CHECK(s[ModSource].def == 0);
@@ -117,4 +118,26 @@ TEST_CASE("CR01 the response the screen draws (Type, Resonance, Cutoff) is the o
             const double got = gainDb({{Type, static_cast<double>(r.type)}, {Cutoff, r.fc}, {Resonance, r.res * 100.0}, {Drive, 0.0}}, fr[i]);
             if (r.g[i] <= -59.9) CHECK(got < -40.0); else NEAR(got, r.g[i], 0.3);
         }
+}
+
+// the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
+TEST_CASE("CR01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x") {
+    const auto& s = specs();
+    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+}
+TEST_CASE("CR01: the filter is the same filter at every oversampling setting (its coefficients follow the rate)") {
+    for (double hz : {600.0, 1200.0, 2400.0}) {
+        const double g2 = gainDb({{Resonance, 0}, {Drive, 0}, {Cutoff, 1200}, {Oversample, 2}}, hz);
+        for (int os : {1, 4}) {
+            const double g = gainDb({{Resonance, 0}, {Drive, 0}, {Cutoff, 1200}, {Oversample, double(os)}}, hz);
+            INFO(hz << " Hz at " << os << "x: " << g << " dB, at 2x: " << g2 << " dB");
+            CHECK(std::abs(g - g2) < 0.3);
+        }
+    }
+}
+TEST_CASE("CR01: Drive's saturation folds back less with more oversampling") {
+    auto alias = [](int os) { auto p = make({{Type, 0}, {Cutoff, 20000}, {Resonance, 0}, {EnvAmount, 0}, {Drive, 100}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.4); };
+    const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
+    INFO("15 kHz at Drive 100, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");
+    CHECK(a1 > -50.0); CHECK(a2 < a1 - 15.0); CHECK(ost::notWorse(a4, a2));
 }

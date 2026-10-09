@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa01.hiss",       "Hiss",       -90, -50, -90, Curve::Lin, 1, {}, "dBFS"},
             {"sa01.output",     "Output",     -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa01.repro",      "Repro",      0, 1, 1,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            oversampleSpec("sa01.os"),
         };
         v[Hiss].minLabel = "Off"; v[Hiss].maxLabel = "Max";
         return v;
@@ -42,9 +43,10 @@ void Processor::prepare(double sampleRate, int) {
     for (auto& r : ring_) r.assign(kRing, 0.0f);
     pos_ = 0;
     in_.reset(fs_, 20.0, std::pow(10.0, target_[Input] / 20.0)); out_.reset(fs_, 20.0, std::pow(10.0, target_[Output] / 20.0));
-    for (auto& o : os_) o = Oversampler2x{};
+    for (auto& o : os_) o.reset();
     z_ = {0, 0}; zOs_ = {0, 0};
-    envC_ = std::exp(-1.0 / (0.005 * 2.0 * fs_)); envOs_ = {0, 0};
+    envOs_ = {0, 0};
+    applyOversample();
     wowPh_[0] = wowPh_[1] = 0; flPh_[0] = flPh_[1] = flPh_[2] = 0; drift_ = driftTarget_ = 0;
     rng_ = 0x2468ace1u;
     hissA_ = std::exp(-2.0 * kPi * 1500.0 / fs_);   // one-pole high-pass corner for the hiss tilt
@@ -67,6 +69,11 @@ void Processor::updateTone() {
     }
 }
 
+void Processor::applyOversample() {
+    for (auto& o : os_) o.setFactor(static_cast<int>(target_[Oversample]));
+    envC_ = std::exp(-1.0 / (0.005 * os_[0].rate(fs_)));
+}
+
 void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
@@ -74,6 +81,7 @@ void Processor::setParam(int id, double v) {
     if (id == Input) in_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Output) out_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Speed || id == Repro) updateTone();
+    else if (id == Oversample) applyOversample();
 }
 
 void Processor::startCalibrate() { calLeft_ = static_cast<long>(5.0 * fs_); calSum_ = 0; calCount_ = 0; calPending_ = false; }
@@ -120,17 +128,14 @@ void Processor::process(float** ch, int numCh, int n) {
             rng_ ^= rng_ << 13; rng_ ^= rng_ >> 17; rng_ ^= rng_ << 5;
             const double white = (rng_ / 4294967296.0 - 0.5) * 3.4641016;   // unit variance
             // simplified hysteresis: the field is passed through a backlash (play operator) whose width grows with the recent level
-            // (small signals see none: the bias linearises them), then through the anhysteretic curve M = tanh(g p) / g; two samples at 2x
-            double up[2];
-            os_[static_cast<size_t>(c)].up(ch[c][i] * gi / ref, up);
+            // (small signals see none: the bias linearises them), then through the anhysteretic curve M = tanh(g p) / g; as many samples as the oversampling setting says (2x by default)
             double& z = zOs_[static_cast<size_t>(c)]; double& env = envOs_[static_cast<size_t>(c)];
-            for (double& u : up) {
+            const double sat1 = os_[static_cast<size_t>(c)].process(ch[c][i] * gi / ref, [&](double u) {
                 env = std::max(std::abs(u), envC_ * env);
                 const double w = widthScale * kCoerc * env * env / (1.0 + env * env);   // grows with the square of the recent level: nothing for small signals
                 if (u > z + w) z = u - w; else if (u < z - w) z = u + w;
-                u = std::tanh(g * z) / g;
-            }
-            const double sat1 = os_[static_cast<size_t>(c)].down(up) * ref;
+                return std::tanh(g * z) / g;
+            }) * ref;
             auto& r = ring_[static_cast<size_t>(c)];
             r[static_cast<size_t>(pos_)] = static_cast<float>(sat1);
             double y = hermite(r, static_cast<double>(pos_) - centre_ - mod);

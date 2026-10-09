@@ -2,7 +2,8 @@
 //   1. every product's screen loads without a script error;
 //   2. Undo / Redo record one step per gesture (a knob drag is one step), and the History button lists them and goes back;
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
-//   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line.
+//   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
+//   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
 const assert = require('assert');
@@ -87,6 +88,18 @@ async function open(code, query = '') {
   // VO03: the EVO line names the chord held on the MIDI track (the preview's read-out holds F A C most of the time)
   await open('VO03'); await pg.waitForFunction(() => /MIDI chord: C F A/.test(document.getElementById('app').shadowRoot.querySelector('.evob .evt').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'VO03 shows the held chord'));
 
+  // ---- 5. the oversampling button of the EVO bar
+  await open('EQ01'); const osb = pg.locator('button[data-fmt="os"]');
+  eq(await osb.count(), 1, 'EQ01 has the oversampling button'); eq((await osb.textContent()).trim(), '2× OS', 'default 2x');
+  await osb.click(); await pg.waitForTimeout(150); eq((await osb.textContent()).trim(), '4× OS', 'a click steps to 4x');
+  await osb.click(); await pg.waitForTimeout(150); eq((await osb.textContent()).trim(), '1× OS', 'then 1x'); await osb.click(); await pg.waitForTimeout(150); eq((await osb.textContent()).trim(), '2× OS', 'and round again to 2x');
+  await pg.waitForTimeout(700); await osb.click(); await pg.waitForTimeout(150); eq((await osb.textContent()).trim(), '4× OS', 'a later click is a new undo step');
+  await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(150); eq((await osb.textContent()).trim(), '2× OS', 'undo takes that step back (quick clicks in a row are one step, like the wheel)');
+  await open('SA03'); eq((await pg.locator('button[data-fmt="os"]').textContent()).trim(), '4× OS', 'SA03 starts at 4x (the spec recommends it)');
+  await open('GT01'); eq((await pg.locator('button[data-fmt="os"]').textContent()).trim(), '4× OS', 'GT01 starts at 4x');
+  await open('DL01'); eq(await pg.locator('button[data-fmt="os"]').count(), 0, 'DL01 has no oversampling button'); ok(await pg.locator('button[data-inert]', { hasText: '2× OS' }).count() === 1, 'DL01: the 2x OS button is dimmed');
+  await open('MS04'); ok(await pg.locator('button', { hasText: '2× OS' }).evaluate(e => getComputedStyle(e).visibility === 'hidden' || e.style.visibility === 'hidden'), 'MS04: the EVO 2x OS is hidden (the panel has its own Oversample)');
+
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });
