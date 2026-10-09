@@ -156,11 +156,11 @@ template <class P> long allocations(const std::vector<sw::ParamSpec>& specs, uns
     if constexpr (HasTempo<P>::value) p.setTempo(97.0);
     p.snapToTargets();
     std::vector<float> l(256), r(256);
-    auto block = [&]() {
+    auto block = [&](int n = 256) {   // (n frames of a 256 buffer: a host may call with 0 frames to flush the parameters, or with a few)
         for (int i = 0; i < 256; ++i) { l[static_cast<size_t>(i)] = static_cast<float>(std::uniform_real_distribution<>(-0.5, 0.5)(rng)); r[static_cast<size_t>(i)] = l[static_cast<size_t>(i)] * 0.5f; }
         float* c[2] = {l.data(), r.data()};
-        if constexpr (HasSc<P>::value) { const float* sc[2] = {r.data(), l.data()}; p.processWithSidechain(c, 2, 256, sc, 2); }
-        else p.process(c, 2, 256);
+        if constexpr (HasSc<P>::value) { const float* sc[2] = {r.data(), l.data()}; p.processWithSidechain(c, 2, n, sc, 2); }
+        else p.process(c, 2, n);
     };
     block(); block();
     allocguard::Scope guard;
@@ -172,6 +172,7 @@ template <class P> long allocations(const std::vector<sw::ParamSpec>& specs, uns
             p.setParam(static_cast<int>(i), v);
         }
         for (int b = 0; b < 4; ++b) block();
+        block(0); block(1); block(3); block(2);
         // what the adapter also does on the audio thread: the write queue, the tail, a reset (the host stopped or jumped)
         if constexpr (HasWrites<P>::value) { int id; double v; while (p.takeParamWrite(id, v) != 0) {} }
         if constexpr (HasTail<P>::value) { volatile double t = p.tailSeconds(); (void)t; }
