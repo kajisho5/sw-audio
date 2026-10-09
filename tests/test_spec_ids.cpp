@@ -26,7 +26,7 @@ TEST_CASE("parameter IDs follow the spec") {
     CHECK(ids(dy07::specs()) == std::vector<std::string>{"dy07.thresh", "dy07.ratio", "dy07.out", "dy07.snap", "dy07.mix", "dy07.knee"});
     CHECK(ids(dy08::specs()) == std::vector<std::string>{"dy08.thresh", "dy08.ratio", "dy08.knee", "dy08.attack", "dy08.release", "dy08.evo.on", "dy08.makeup", "dy08.mix", "dy08.schpf", "dy08.detector", "dy08.lookahead", "dy08.sc"});
     CHECK(ids(ms02::specs()) == std::vector<std::string>{"ms02.gain", "ms02.ceiling", "ms02.release", "ms02.lookahead", "ms02.tp", "ms02.isp", "ms02.link", "ms02.dither"});
-    CHECK(ids(ms04::specs()) == std::vector<std::string>{"ms04.drive", "ms04.ceiling", "ms04.knee", "ms04.mix", "ms04.os", "ms04.gainmatch", "ms04.listen"});
+    CHECK(ids(ms04::specs()) == std::vector<std::string>{"ms04.drive", "ms04.ceiling", "ms04.knee", "ms04.mix", "ms04.os", "ms04.gainmatch", "ms04.listen", "ms04.lowlat"});
 }
 TEST_CASE("DY04 defaults: threshold -80 dBFS (open); Listen is not automatable") {
     CHECK(dy04::specs()[dy04::Threshold].def == -80.0);

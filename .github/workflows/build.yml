@@ -135,10 +135,11 @@ jobs:
           mkdir -p ~/Library/Audio/Plug-Ins/Components
           find build -maxdepth 4 -name "*.component" -not -path "*/cpm/*" -exec cp -R {} ~/Library/Audio/Plug-Ins/Components/ \;
           killall -9 AudioComponentRegistrar || true
-          for SUB in $(auval -a | awk '$3 == "SvWl" {print $2}'); do
-            echo "== auval aufx $SUB SvWl"
-            auval -v aufx "$SUB" SvWl || exit 1
-          done
+          # every SW AUDIO component auval lists, with the type it is registered under (aufx effects; aumf for the ones that take MIDI: CR04, LV25, MD05, VO03)
+          while read -r TYPE SUB; do
+            echo "== auval $TYPE $SUB SvWl"
+            auval -v "$TYPE" "$SUB" SvWl || exit 1
+          done < <(auval -a | awk '$3 == "SvWl" {print $1, $2}')
 
       - name: Collect plugins
         run: |
