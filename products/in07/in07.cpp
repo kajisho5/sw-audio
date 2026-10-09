@@ -951,7 +951,12 @@ void Processor::setNow(int id, double v) {
         return;
     }
     if (id >= kFxEnd && id < PresetSelect) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
-    if (id >= kFxBase) { updateFx(); if (fresh_) fx_.snapSwitches(); return; }
+    if (id >= kFxBase) {
+        updateFx();
+        if (fresh_) fx_.snapSwitches();
+        else if (!active() && fxIdle_ > 0) fx_.snapOrder();   // nothing sounds: a new order needs no dip
+        return;
+    }
     if (id == Level) level_.setTarget(dbToGain(v));
     else if (id == Glide) shared_.glideMs = v;
     else if (id == Bend) shared_.bendSemis = bend_ * v;

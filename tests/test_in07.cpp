@@ -657,6 +657,43 @@ TEST_CASE("IN07 FX: switching an effect fades instead of clicking") {
     CHECK(maxStep < 0.12);   // a 220 Hz sine of amplitude 1..3 moves at most 0.029..0.086 a sample
 }
 
+TEST_CASE("IN07 FX: moving an effect in the order dips instead of clicking (2026-10-09)") {
+    // a 220 Hz sine under the limiter's ceiling, then +12 dB of low shelf: Limit then EQ lets it through boosted, EQ then Limit holds it
+    // at the ceiling; swapped at once, the level would jump by several dB in one sample
+    auto setup = [](Processor& p, bool eqFirst) {
+        plain(p); fxOff(p);
+        p.setParam(lp(0, Wave), Sine);
+        p.setParam(fxOnId(FxEq), 1); p.setParam(FxEqLow, 12);
+        p.setParam(fxOnId(FxLimit), 1); p.setParam(FxLimitCeiling, -12); p.setParam(FxLimitRelease, 500);
+        p.setParam(FxSlot1, eqFirst ? FxEq : FxLimit); p.setParam(FxSlot2, eqFirst ? FxLimit : FxEq);
+        p.noteOn(57, 0.5);
+    };
+    auto maxStep = [](const std::vector<float>& y, size_t from) {
+        double m = 0; for (size_t i = from + 1; i < y.size(); ++i) m = std::max(m, std::abs(static_cast<double>(y[i]) - y[i - 1])); return m;
+    };
+    Processor a; setup(a, false); auto la = render(a, 9600).first;
+    Processor b; setup(b, true); auto lb = render(b, 9600).first;
+    const double steady = std::max(maxStep(la, 4800), maxStep(lb, 4800));
+    const double levelA = tu::rmsDb(la, 4800, 9600), levelB = tu::rmsDb(lb, 4800, 9600);
+    CHECK(std::abs(levelA - levelB) > 3.0);                  // the two orders really differ
+    double worst = 0;
+    for (int k = 0; k < 16; ++k) {                           // swaps at 16 points across one cycle of the sine (a jump is largest at a peak)
+        Processor p; setup(p, false);
+        const float last = render(p, 9600 + static_cast<size_t>(k) * 14).first.back();
+        p.setParam(FxSlot1, FxEq); p.setParam(FxSlot2, FxLimit);   // the screen's < > buttons: two slots swap
+        auto y = render(p, 9600).first;
+        worst = std::max({worst, maxStep(y, 0), std::abs(static_cast<double>(y[0]) - last)});
+        CHECK(p.fxOrder()[0] == FxEq);
+        CHECK(tu::rmsDb(y, 4800, 9600) == doctest::Approx(levelB).epsilon(0.02));   // after the dip (about 8 ms): the new order's level
+    }
+    MESSAGE("order change: levels " << levelA << " / " << levelB << " dB, largest step " << worst << ", steady " << steady);
+    CHECK(worst < 1.1 * steady);
+    // silent (nothing processed yet, or no voice and the tails gone): at once
+    Processor s; plain(s);
+    s.setParam(FxSlot1, FxLimit);
+    CHECK(s.fxOrder()[0] == FxLimit);
+}
+
 TEST_CASE("IN07 FX: the effects go to sleep after their tails, and wake with the next note") {
     Processor p; p.prepare(kFs, 256);                    // the default patch: drive, chorus, delay, reverb and limit on
     p.noteOn(60, 1.0); render(p, 24000); p.noteOff(60);

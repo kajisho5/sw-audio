@@ -61,21 +61,27 @@ public:
         fdn_.setFastModulation(3.0 * fs / 48000.0, 0.27);
         for (int f = 0; f < kFx; ++f) { gain_[static_cast<size_t>(f)] = p.on[static_cast<size_t>(f)] ? 1.0 : 0.0; clear(f); }
         delaySamples_ = -1.0; ctl_ = 0; first_ = true;
+        snapOrder();
         p_ = p;
         control();
     }
     void setTempo(double bpm) { if (bpm > 0.0) bpm_ = std::clamp(bpm, 30.0, 300.0); }
-    void setOrder(const std::array<int, kFx>& o) { order_ = o; }
-    const std::array<int, kFx>& order() const { return order_; }
+    // a new order: the output dips (4 ms down, the order changes, 4 ms up) so the jump between the two chains does not click; while
+    // nothing plays (snapOrder) it changes at once
+    void setOrder(const std::array<int, kFx>& o) { next_ = o; orderPending_ = (o != order_); }
+    void snapOrder() { order_ = next_; orderPending_ = false; outGain_ = og0_ = 1.0; }
+    // the order in use once a pending change is through
+    const std::array<int, kFx>& order() const { return next_; }
     void setParams(const FxParams& p) { p_ = p; }
     // switch states jump (no fade) when nothing has been processed since prepare
-    void snapSwitches() { for (int f = 0; f < kFx; ++f) gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; }
+    void snapSwitches() { for (int f = 0; f < kFx; ++f) gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; snapOrder(); }
     // start again from silence with the current settings (a new patch): every effect's memory cleared, switches, mixes and the delay
     // time at their targets at once. No allocation (audio thread).
     void restart() {
         for (int f = 0; f < kFx; ++f) { gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; clear(f); }
         for (auto& o : osDry_) o.reset();
         delaySamples_ = -1.0; ctl_ = 0; first_ = true;
+        snapOrder();
         control();
         g0_ = gain_;
     }
@@ -90,6 +96,11 @@ public:
             if (ctl_ == 0) { control(); ctl_ = kCtl; }
             const int m = std::min(n - off, ctl_);
             for (int f : order_) run(f, l + off, r + off, m);
+            if (og0_ < 1.0 || outGain_ < 1.0) {   // the dip of an order change
+                const double dg = (outGain_ - og0_) / kCtl;
+                double g = og0_ + dg * (kCtl - ctl_);
+                for (int i = off; i < off + m; ++i) { g += dg; l[i] = static_cast<float>(l[i] * g); r[i] = static_cast<float>(r[i] * g); }
+            }
             ctl_ -= m; off += m;
         }
     }
@@ -121,6 +132,11 @@ private:
     }
 
     void control() {
+        // an order change: down to silence, then the new order, then up (4 ms each way)
+        if (orderPending_ && outGain_ <= 0.0) { order_ = next_; orderPending_ = false; }
+        og0_ = outGain_;
+        { const double os = kCtl / (0.004 * fs_);
+          outGain_ = orderPending_ ? std::max(0.0, outGain_ - os) : std::min(1.0, outGain_ + os); }
         // switches: 5 ms linear fades; an effect switched on from silence starts clean
         const double step = kCtl / (0.005 * fs_);
         for (int f = 0; f < kFx; ++f) {
@@ -262,7 +278,9 @@ private:
 
     double fs_ = 48000.0, bpm_ = 120.0;
     FxParams p_;
-    std::array<int, kFx> order_{FxDrive, FxChorus, FxDelay, FxReverb, FxEq, FxLimit};
+    std::array<int, kFx> order_{FxDrive, FxChorus, FxDelay, FxReverb, FxEq, FxLimit}, next_ = order_;
+    bool orderPending_ = false;
+    double outGain_ = 1.0, og0_ = 1.0;   // the dip of an order change (end and start of this control period)
     std::array<double, kFx> gain_{}, g0_{};
     int ctl_ = 0;
     bool first_ = true;
