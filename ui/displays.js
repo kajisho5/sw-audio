@@ -1119,6 +1119,54 @@
   }
 
 
+  // ---- CR02 stutter grid: the first row is the 16-step pattern (cr02.step01 .. step16; a click on a pad turns the step on or off). The design's other two rows (Reverse, Pitch) are not per-step
+  // in the plug-in: they show what the global Reverse and Pitch do to the steps that are On (lit = that setting is active), and cannot be clicked.
+  function stutterGridDisplay(box, ctx) {
+    const d = box.querySelector('.disp'); if (!d) return null;
+    const rows = [...d.querySelectorAll('div')].filter(r => r.querySelectorAll(':scope > div').length === 16), pads = rows.map(r => [...r.querySelectorAll(':scope > div')]);
+    if (rows.length < 3) return null;
+    const idx = ctx.params.filter(q => /^Step \d+$/.test(q.name)).sort((a, b) => parseInt(a.name.slice(5)) - parseInt(b.name.slice(5))).map(q => q.i); if (idx.length !== 16) return null;
+    const off = i => (((i >> 2) & 1) ? '#1d1e22' : '#24262a'), ON = 'var(--acc)'; let last = '';
+    pads[0].forEach((p, i) => { p.style.cursor = 'pointer'; p.title = 'Step ' + (i + 1); p.addEventListener('click', () => { const v = ctx.get(idx[i]) > 0.5 ? 0 : 1; ctx.begin(idx[i]); ctx.set(idx[i], v); ctx.end(idx[i]); }); });
+    pads[1].forEach(p => { p.title = 'Reverse (a setting for every step that is on)'; }); pads[2].forEach(p => { p.title = 'Pitch (a setting for every step that is on)'; });
+    return { update() {
+      const on = idx.map(i => ctx.get(i) > 0.5), rev = ctx.value('Reverse') > 0.5, pit = Math.abs(ctx.value('Pitch') || 0) > 1e-9, key = on.join('') + rev + pit; if (key === last) return; last = key;
+      for (let i = 0; i < 16; i++) { pads[0][i].style.background = on[i] ? ON : off(i); pads[1][i].style.background = on[i] && rev ? ON : off(i); pads[2][i].style.background = on[i] && pit ? ON : off(i); }
+    } };
+  }
+
+
+  // ---- LO03 low focus: the two bells the plug-in applies (the Focus bell, Q 1.2, at the gain the core has right now; the Mud cut bell, Q 1.0, cut 6 dB x Tight) on 20 Hz - 2 kHz,
+  // and the "Mono below" corner as a dashed line. Drag a numbered dot sideways to move its frequency (1 = Focus, 2 = Mud cut). readouts: [the Focus bell's gain (dB, <= 0)]
+  function lowFocusDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const grid = [...svg.querySelectorAll(':scope > line')], paths = [...svg.querySelectorAll(':scope > path')], dots = [...svg.querySelectorAll(':scope > circle')], nums = [...svg.querySelectorAll(':scope > text')].filter(t => t.getAttribute('text-anchor') === 'middle');
+    const [area, glow, line] = paths; if (paths.length < 3 || dots.length < 2 || nums.length < 2 || grid.length < 6) return null;
+    const P = n => ctx.params.find(q => q.name === n), pf = P('Focus'), pm = P('Mud cut'); if (!pf || !pm) return null;
+    const [, , W, H] = vbOf(svg), Y0 = 100, PXDB = 8, F0 = 20, F1 = 2000, N = 220, xOf = f => Math.log10(f / F0) / Math.log10(F1 / F0) * W, fOf = x => F0 * Math.pow(F1 / F0, x / W);
+    // grid at 50, 100, 200, 500, 1000 Hz
+    [50, 100, 200, 500, 1000].forEach((f, i) => { const l = grid[i]; l.setAttribute('x1', xOf(f).toFixed(1)); l.setAttribute('x2', xOf(f).toFixed(1)); });
+    const caption = [...svg.querySelectorAll(':scope > text')].find(t => t.getAttribute('text-anchor') === 'start'), roleText = ['Kick: the tail is tightened', 'Bass: ducked by the key input', "Kick and bass in one track: tail and ducking from its own lows"];
+    const mono = mkEl('line', { y1: 0, y2: H, stroke: '#f2f2f2', 'stroke-opacity': 0.35, 'stroke-dasharray': '3 4' }), monoT = mkEl('text', { fill: '#8d8d8d', 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 10, y: H - 8 }); svg.append(mono, monoT);
+    const yOf = db => clamp(Y0 - db * PXDB, 4, H - 4); let last = '', drag = null;
+    dots.slice(0, 2).forEach((c, k) => {
+      c.style.cursor = 'ew-resize'; nums[k].style.pointerEvents = 'none';
+      c.addEventListener('pointerdown', e => { c.setPointerCapture(e.pointerId); drag = k; const p = k ? pm : pf; ctx.begin(p.i); });
+      c.addEventListener('pointermove', e => { if (drag !== k) return; const r = svg.getBoundingClientRect(), p = k ? pm : pf, f = fOf(clamp((e.clientX - r.left) / r.width * W, 0, W)); ctx.set(p.i, p.c.value(p.c.norm(clamp(f, p.p.min, p.p.max)))); });
+      const end = () => { if (drag !== k) return; drag = null; ctx.end((k ? pm : pf).i); }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    });
+    return { update(info) {
+      const r = info && info.readouts, fcut = r && r.length >= 1 && Number.isFinite(r[0]) ? Math.min(0, r[0]) : 0, ff = ctx.value('Focus'), fm = ctx.value('Mud cut'), tight = ctx.value('Tight') / 100, fmono = ctx.value('Mono below');
+      if (![ff, fm, tight, fmono].every(Number.isFinite)) return; const key = [Math.round(fcut * 20), ff, fm, tight, fmono, ctx.value('Role')].join('|'); if (key === last) return; last = key;
+      const mud = -6 * tight; let d = ''; const role = Math.round(ctx.value('Role')); if (caption && roleText[role]) caption.textContent = roleText[role];
+      for (let i = 0; i <= N; i++) { const f = F0 * Math.pow(F1 / F0, i / N), db = biquadMag('bell', ff, fcut, 1.2, f) + biquadMag('bell', fm, mud, 1.0, f), x = (i / N * W).toFixed(1); d += (i ? ' L' : 'M') + x + ' ' + yOf(db).toFixed(1); }
+      glow.setAttribute('d', d); line.setAttribute('d', d); area.setAttribute('d', d + ' L' + W + ' ' + Y0 + ' L0 ' + Y0 + ' Z');
+      [[ff, fcut], [fm, mud]].forEach(([f, g], k) => { const x = xOf(f), y = yOf(g); dots[k].setAttribute('cx', x.toFixed(1)); dots[k].setAttribute('cy', y.toFixed(1)); nums[k].setAttribute('x', x.toFixed(1)); nums[k].setAttribute('y', (y + 3.5).toFixed(1)); });
+      const mx = xOf(clamp(fmono, F0, F1)).toFixed(1); mono.setAttribute('x1', mx); mono.setAttribute('x2', mx); monoT.setAttribute('x', (+mx + 4).toFixed(1)); monoT.textContent = 'Mono below ' + Math.round(fmono) + ' Hz';
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1166,6 +1214,8 @@
     VO03: harmonyGraphDisplay,
     VO08: breathDisplay,
     CR01: filterResponseDisplay,
+    CR02: stutterGridDisplay,
+    LO03: lowFocusDisplay,
     RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
