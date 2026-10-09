@@ -344,9 +344,9 @@
       const m = info && info.meters; if (!m) return;
       const bi = bars(inC), bo = bars(outC); if (bi[0]) { setBar(bi[0], m[0]); setBar(bi[1], m[1]); } if (bo[0]) { setBar(bo[0], m[2]); setBar(bo[1], m[3]); }
       const ri = ro(inC), rO = ro(outC); if (ri) ri.textContent = Math.max(m[0], m[1]) > -99 ? Math.max(m[0], m[1]).toFixed(1) : '-∞'; if (rO) rO.textContent = outDb(m) > -99 ? outDb(m).toFixed(1) : '-∞';
-      const rd = info.readouts, g = rd ? Math.max(0, -(rd[1] + rd[2])) : Math.max(0, peakDb(m) + (ctx.get(gainI) || 0) - outDb(m)), gv = rd ? Math.min(30, g) : (peakDb(m) > -70 ? Math.min(30, g) : 0);   // the core's own gain reduction (slow + limiter) when it is sent
+      const rd = info.readouts && info.readouts.length >= 3 ? info.readouts : null, g = rd ? Math.max(0, -(rd[1] + rd[2])) : Math.max(0, peakDb(m) + (ctx.get(gainI) || 0) - outDb(m)), gv = rd ? Math.min(30, g) : (peakDb(m) > -70 ? Math.min(30, g) : 0);   // the core's own gain reduction (slow + limiter) when it is sent
       shown += (gv - shown) * 0.4; if (grFill) grFill.style.height = (clamp(shown / 25, 0, 1) * 100).toFixed(1) + '%'; const rg = ro(grC); if (rg) rg.textContent = shown.toFixed(1);
-      if (intE && info.readouts) intE.lastElementChild.textContent = info.readouts[0] > -150 ? info.readouts[0].toFixed(1) + ' LUFS' : '—';
+      if (intE && rd) intE.lastElementChild.textContent = rd[0] > -150 ? rd[0].toFixed(1) + ' LUFS' : '—';
       maxGr = Math.max(maxGr, gv); if (maxE) maxE.lastElementChild.textContent = (maxGr > 0.05 ? '-' : '') + maxGr.toFixed(1) + ' dB';
       if (hp.length >= 3 && ++tick % 4 === 0) {
         lvl.push(peakDb(m)); gr.push(gv); let up = '', dn = '', gg = '';
@@ -539,7 +539,7 @@
     if (svg) { const ps = [...svg.querySelectorAll(':scope > path')]; hpath = ps[ps.length - 1]; const rs = svg.querySelectorAll(':scope > rect'); band = rs[0]; dash = svg.querySelector(':scope > line'); ps.slice(0, -1).forEach(p => p.remove()); }
     const dots = [...box.querySelectorAll('.stat .dot')];
     return { update(info) {
-      const r = info && info.readouts; if (!r) return;
+      const r = info && info.readouts; if (!r || r.length < 8) return;
       big.textContent = fm(r[2]); if (tgtT) tgtT.textContent = 'Target ' + r[5].toFixed(1) + ' ' + unitName;
       if (delta) { delta.textContent = r[2] > -150 ? (r[6] >= 0 ? '+' : '') + r[6].toFixed(1) + ' LU' : '— LU'; delta.style.color = r[2] <= -150 ? '#8d8d8d' : (r[7] ? '#2bd14a' : (Math.abs(r[6]) > 3 ? '#e0443e' : '#f0c93d')); }
       val(minis[0], fm(r[0])); val(minis[1], fm(r[1])); val(minis[2], r[3] > 0 ? r[3].toFixed(1) + ' LU' : '—'); val(minis[3], r[4] > -150 ? r[4].toFixed(1) + (/dBTP/.test(minis[3].textContent) ? ' dBTP' : '') : '—');
@@ -566,7 +566,7 @@
     const svg = box.querySelector('.disp svg'), hp = svg && svg.querySelector(':scope > path'), band = svg && svg.querySelector(':scope > rect'), txt = svg && svg.querySelector(':scope > text');
     const hist = Ring(600, null); let last = 0;
     return { update(info) {
-      const r = info && info.readouts; if (!r) return; const fm = v => v > -150 ? v.toFixed(1) : '—', t = r[3];
+      const r = info && info.readouts; if (!r || r.length < 4) return; const fm = v => v > -150 ? v.toFixed(1) : '—', t = r[3];
       big.textContent = fm(r[0]); if (tgtT) tgtT.textContent = 'Target ' + t.toFixed(1);
       if (delta) { const d = r[0] - t; delta.textContent = r[0] > -150 ? (d >= 0 ? '+' : '') + d.toFixed(1) + ' LU' : '— LU'; delta.style.color = r[0] <= -150 ? '#8d8d8d' : (Math.abs(d) <= 1 ? '#2bd14a' : Math.abs(d) > 4 ? '#e0443e' : '#f0c93d'); }
       val(minis[0], (r[1] >= 0 ? '+' : '') + r[1].toFixed(1) + ' dB'); val(minis[1], r[2].toFixed(1) + ' dB'); val(minis[2], r[0] > -150 ? (r[0] + r[1]).toFixed(1) : '—');
@@ -585,7 +585,7 @@
     if (ps.length < 3 || !dash) return null;
     const N = 50, W = 704, inH = Ring(N, null), gH = Ring(N, 0); let last = 0;
     return { update(info) {
-      const r = info && info.readouts; if (!r) return; const t = ctx.value('Target'); if (t === undefined) return;
+      const r = info && info.readouts; if (!r || r.length < 2) return; const t = ctx.value('Target'); if (t === undefined) return;
       const y = v => clamp(63 - (v - t) * 4, 6, 134); dash.setAttribute('y1', '63'); dash.setAttribute('y2', '63'); if (tt) tt.textContent = 'Target ' + t + ' LUFS';
       const now = Date.now(); if (now - last < 400) return; last = now; inH.push(r[0] > -150 ? r[0] : null); gH.push(r[1]);
       let di = '', dout = '', oi = false; for (let k = 0; k < N; k++) { const v = inH.a[k]; if (v === null) { oi = false; continue; } const x = (k / (N - 1) * W).toFixed(1); di += (oi ? ' L' : ' M') + x + ' ' + y(v).toFixed(1); dout += (oi ? ' L' : ' M') + x + ' ' + y(v + gH.a[k]).toFixed(1); oi = true; }
@@ -655,7 +655,7 @@
     const music = box.querySelector('[data-readout] span');
     const N = 120, W = 732, ride = Ring(N, 0), lvl = Ring(N, -90); let last = 0;
     return { update(info) {
-      const r = info && info.readouts, m = info && info.meters; if (!r) return;
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 1) return;
       if (music && r.length >= 2) music.textContent = r[1] > 0.5 ? 'Listening' : 'Not listening';
       const now = Date.now(); if (now - last < 100) return; last = now; ride.push(r[0]); lvl.push(m ? outDb(m) : -90);
       const R = Math.max(6, ctx.value('Range') || 6), y = v => 100 - clamp(v / R, -1, 1) * 80; let d = '', up = 'M0 100';
@@ -666,7 +666,7 @@
   // the guitar tuner read-out of GT03 (the design's part has no parameter): readouts = Hz, MIDI note, cents
   function tunerReadout(box, ctx) {
     const el = box.querySelector('[data-readout] span'); if (!el) return null;
-    return { update(info) { const r = info && info.readouts; if (!r) return; el.textContent = r[0] > 20 ? NOTE[((Math.round(r[1]) % 12) + 12) % 12] + (Math.floor(Math.round(r[1]) / 12) - 1) + ' ' + (r[2] >= 0 ? '+' : '') + r[2].toFixed(0) + '¢ ' + r[0].toFixed(1) + ' Hz' : '—'; } };
+    return { update(info) { const r = info && info.readouts; if (!r || r.length < 3) return; el.textContent = r[0] > 20 ? NOTE[((Math.round(r[1]) % 12) + 12) % 12] + (Math.floor(Math.round(r[1]) / 12) - 1) + ' ' + (r[2] >= 0 ? '+' : '') + r[2].toFixed(0) + '¢ ' + r[0].toFixed(1) + ' Hz' : '—'; } };
   }
 
 
@@ -678,7 +678,7 @@
     const t = mkEl('text', { x: 14, y: 22, 'text-anchor': 'start', 'font-family': 'Space Mono, monospace', 'font-size': 13, fill: '#e6e6e6' }); svg.append(t);
     let a = 0;
     return { update(info) {
-      const r = info && info.readouts; if (!r) return; a += (r[1] - a) * 0.3; const th = clamp(a, -1, 1) * Math.PI / 2;
+      const r = info && info.readouts; if (!r || r.length < 3) return; a += (r[1] - a) * 0.3; const th = clamp(a, -1, 1) * Math.PI / 2;
       needle.setAttribute('x2', (x0 + len * Math.sin(th)).toFixed(1)); needle.setAttribute('y2', (y0 - len * Math.cos(th)).toFixed(1));
       t.textContent = 'r ' + (r[1] >= 0 ? '+' : '') + r[1].toFixed(2) + (Math.abs(r[2]) > 0.001 ? '   lag ' + r[2].toFixed(2) + ' ms' : '');
     } };
@@ -692,7 +692,7 @@
     [...svg.querySelectorAll(':scope > text')].filter(t => /gap held/i.test(t.textContent)).forEach(t => t.remove());
     const N = 150, gain = Ring(N, 0), key = Ring(N, 0); let last = 0;
     return { update(info) {
-      const r = info && info.readouts; if (!r) return; const now = Date.now(); if (now - last < 200) return; last = now; gain.push(r[0]); key.push(r[1] > 0.5 ? 1 : 0);
+      const r = info && info.readouts; if (!r || r.length < 2) return; const now = Date.now(); if (now - last < 200) return; last = now; gain.push(r[0]); key.push(r[1] > 0.5 ? 1 : 0);
       let d = '', rects = ''; for (let k = 0; k < N; k++) d += (k ? ' L' : 'M') + (k / (N - 1) * W).toFixed(1) + ' ' + cfg.y(gain.a[k]).toFixed(1);
       for (let k = 0; k < N;) { if (!key.a[k]) { k++; continue; } let e = k; while (e < N && key.a[e]) e++; rects += '<rect x="' + (k / (N - 1) * W).toFixed(1) + '" y="' + ry + '" width="' + Math.max(2, (e - k) / (N - 1) * W).toFixed(1) + '" height="' + rh + '" rx="' + rx + '"/>'; k = e; }
       path.setAttribute('d', d); g.innerHTML = rects;
