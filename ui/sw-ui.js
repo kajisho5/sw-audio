@@ -291,6 +291,11 @@
         t.addEventListener('click', () => { const other = h.p.steps.find(v => Math.abs(v - up) > 1e-9), isUp = Math.abs(vals[i] - up) < 1e-9; bridge.begin(i); setValue(i, isUp ? other : up); bridge.end(i); });
         reg(i, () => t.classList.toggle('dn', Math.abs(vals[i] - up) > 1e-9));
       });
+      // buttons that call a method of the core (ui/actions.json): Randomize, Ring out, Learn noise, Reset, Tap ...
+      skinBox.querySelectorAll('button[data-call]').forEach(b => {
+        const name = b.dataset.call, arg = b.dataset.arg === undefined ? '' : b.dataset.arg, tog = !!b.dataset.calltoggle; let on = false;
+        b.addEventListener('click', () => { if (tog) { on = !on; b.classList.toggle('on', on); bridge.call(name, on ? '1' : '0'); } else { bridge.call(name, arg); b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 150); } });
+      });
       // GT03 "Add pedal": the first empty slot becomes a Comp pedal and is scrolled into view
       skinBox.querySelectorAll('button[data-addslot]').forEach(b => b.addEventListener('click', () => {
         const slots = JSON.parse(b.dataset.addslot), k = slots.findIndex(i => Math.round(vals[i]) === 0); if (k < 0) return; const i = slots[k];

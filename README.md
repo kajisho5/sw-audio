@@ -1056,6 +1056,11 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 
 仕様書の共通機能「In（パネルの電源トグル）＝製品内バイパス、ホストのバイパスと連動、遅延は変えず 10 ms のクロスフェード」の部分は、`sw::Shell` に `setIn()`（10 ms のクロスフェード、遅延はそのまま）まであったが、**アダプターが公開しておらず、画面の「In」トグル（43 製品）とヘッダーの電源ボタンは動かなかった**。共通パラメータ `common.bypass`（名前 Bypass、Off／On、既定 Off）を Delta の後ろに足し、`CLAP_PARAM_IS_BYPASS` を付けた（ホストのバイパスと連動。VST3 ラッパーも bypass として扱う）。`P::kInParam` を持つ製品（EQ05 など 2 製品）は自前の In パラメータを使うので足さない（画面は In を反転して電源ボタンに結び付ける）。古い状態の読み込みは従来どおり（足りない分は既定のまま）。画面の立体トグル（`.tog`）は、「In」「Power」＝上が In、2 つの名前の間のトグル（Link／Solo、Sync／Free、Hard／Soft …）は同じ名前の 2 択パラメータ（名前が 1 つだけ一致するときは上＝On）に結び付けた。**対応するパラメータが仕様書にない 4 つ（SA02 Group／Bus、GT05 Lift／Ground、DY02 Limit／Comp、DY01 SC HPF のスイッチ）は、動かない部品を残さないよう非表示（場所は空けたまま）にした**。必要なら仕様のほうにパラメータを足す（保存済みの設定を壊さないため末尾に追加）。
 
+### 画面のボタン：コアを呼ぶもの、まだ無い機能
+
+- **コアのメソッドを呼ぶボタン**（Randomize・Clear・Ring out・Lock filters・Clear live・Learn noise・Flat・Clap sync・Output・Reset・Tap・Lock all・Mark の 12 製品。`ui/actions.json`）は、**共通の画面（デザインなし）にだけ繋がっていて、デザインの画面では動いていなかった**。`tools/gen_skins.py` が名前で `data-call` を付け、ランタイムが `bridge.call` で呼ぶようにした（トグルは画面側で On／Off を持つ）。デザインにないボタン（LV08 Forget、LV21 Arm、LV30 Record、UT01 Remember gain）、LV23 Export log（ファイルへの書き出しのアダプタ側が未実装）、DL01 Tap は繋がっていない。
+- **機能がまだ製品に無い部品**（EVO バーの Low lat・2× OS・Unit A／B／C・履歴ボタン・拡大率の「100%」、LIVE の Main show・Remote・Lock）は、動いているふりをしないよう**薄く表示して「Not available yet」の説明を付けた**（仕様書の共通機能で、DSP 側の実装が要る：Low lat＝低遅延版への切り替え、2× OS＝オーバーサンプリングの選択、Unit A／B／C＝部品公差の個体差）。プリセットのメニューも「Presets are not available yet」の説明のみ（クリックしても何も起きない）。
+
 ### A／B のモーフのスライダー
 
 デザインの A と B の間のスライダー（`.morph`、105 製品）は絵だけだった。ドラッグすると A の設定と B の設定の間を補間する：連続値はそれぞれの目盛り（`ParamSpec` の曲線）の上で線形、段階値は中央で切り替わる。補間は自動化できる製品パラメータだけ（Auto gain・Delta・Bypass は動かさない）。補間の間もスロット自体は変わらない（A／B のボタンはつまみを放した位置に近い方が点灯）。A／B の切り替えはスライダーの位置も動かす。画面側の機能で、DSP の「モーフ」とは別（ホストの 1 本のオートメーションにはならず、個々のパラメータの動きとして書かれる）。

@@ -25,6 +25,9 @@ def toks(t):
     return [w for w in norm(t).split() if w not in UNITS]
 
 
+ACTIONS = json.load(open(os.path.join(ROOT, 'ui/actions.json'), encoding='utf-8')) if os.path.exists(os.path.join(ROOT, 'ui/actions.json')) else {}
+
+
 def host_params(code):
     sp = SPECS['specs'][code.lower()]
     tr = SPECS['traits'][code.lower()]
@@ -341,6 +344,52 @@ def bind_toggles(root, params, report, code):
     return n
 
 
+def bind_actions(root, code, report):
+    """Buttons that call a method of the core (Randomize, Ring out, Learn noise, Reset, Tap ... ui/actions.json): data-call (+ data-arg, data-calltoggle).
+    A design label that begins with the action's label is that action (LV21 "Output off" = Output)."""
+    acts = ACTIONS.get(code, [])
+    done = set()
+    for b in root.select('button'):
+        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call'):
+            continue
+        tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None
+        t = (tl.get_text() if tl is not None else b.get_text()).strip()
+        n = norm(t)
+        if not n:
+            continue
+        for a in acts:
+            la = norm(a['label'])
+            if n == la or n.startswith(la + ' '):
+                b['data-call'] = a['call']
+                if 'arg' in a:
+                    b['data-arg'] = str(a['arg'])
+                if a.get('toggle'):
+                    b['data-calltoggle'] = '1'
+                done.add(a['label']); break
+    for a in acts:
+        if a['label'] not in done:
+            report.setdefault(code, []).append('action-unmatched:' + a['label'])
+
+
+def mark_inert(root):
+    """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
+    shown dimmed with a title instead of pretending to work."""
+    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock'}
+    bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call')
+    n = 0
+    for b in root.select('button'):
+        if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
+            continue
+        t = b.get_text().strip().lower()
+        in_evo = b.find_parent(class_='evob') is not None
+        if t in inert or (b.get('aria-label') or '').lower() == 'history' or (in_evo and t in ('a', 'b', 'c')):
+            b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'
+            b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1
+        elif b.find_parent(class_='tb') is not None and b.select_one('svg') and t and not b.get('aria-label'):
+            b['title'] = 'Presets are not available yet'
+    return n
+
+
 def build(code, report):
     src = open(os.path.join(CANVAS, code + '.dc.html'), encoding='utf-8').read()
     soup = BeautifulSoup(src, 'html.parser')
@@ -393,6 +442,7 @@ def build(code, report):
             if k is not None:
                 b['data-band'] = str(k); nbt += 1; nbb += 1
     bind_toggles(root, params, report, code)
+    bind_actions(root, code, report)
     # buttons: an option of a stepped parameter, or the on/off of a 2-step parameter
     opts = {}
     for p in params:
@@ -414,7 +464,7 @@ def build(code, report):
             elif t in ('A', 'B') and not b.get('data-act'):
                 b['data-act'] = t
     for b in root.select('button, .btn, .chip, .bigbtn'):
-        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.find_parent(attrs={'data-p': True}):
+        if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.get('data-call') or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip()
         tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None   # the LIVE line's tiles: <b>label</b> + <span class="tv">value</span>
@@ -449,6 +499,7 @@ def build(code, report):
             if len(hit) == 1:
                 b['data-pb'] = json.dumps(hit[0][0]); b['data-v'] = str(hit[0][1]); nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
+    mark_inert(root)
     for ctl in root.select('.ctl, .rc'):
         if ctl.select_one('.dk, .knob, .rk') and ctl.select_one('.lbl, .rl') and not ctl.get('data-p') and not ctl.get('data-pb'):
             st = alias.get('_static', {}).get(norm(ctl.select_one('.lbl, .rl').get_text()))
