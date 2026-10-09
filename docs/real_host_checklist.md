@@ -47,6 +47,7 @@ CI の成果物（Actions の実行結果の「Artifacts」）にビルド済み
 | 2-11 | **Unit A／B／C** | EVO バーに A／B／C があり、Unit を持つ製品（EQ03〜EQ06・EQ09、CS01〜CS03、DY06・DY07、GT01・GT04・GT05、SA01〜SA04 など 42 製品） | 押すと切り替わる。B・C にすると左右の音が **ごくわずかに** 違う（EQ の山や谷の位置が左右で 3 ％以内ずれる、左右のレベルが 0.3 dB 以内違う、飽和の入り方が 0.5 dB 以内違う）。A は左右がそろう。Mix や In のオフでは原音のまま。再生中に切り替えても、プチッと鳴らない（20 ms でなめらかに動く） |
 | 2-12 | **Learn／Set input／Auto** | DY04・CS02・RV08 の Learn、CS03 の Set input（EVO バーの文の隣）、DY10 の Auto（パネルのボタン） | **DY04・CS02・RV08：** ドラムのトラックで Learn を押して叩く（最長 30 秒。もう一度押すと止まる）。字が「Listening: 12 hits (press to finish)」になり、終わると Gate／Threshold と（DY04 は Key HPF／LPF の周波数、CS02 は内部のキーフィルター、RV08 は Snare key が On）が書かれる。**ホストのオートメーションに値の変化が記録される**。結果が使えない素材（打撃と被りが同じ大きさ）では何も変わらない。**DY10 の Auto：** 押して再生中のミックスを 10 秒以上聴かせる（「Listening 42 %」。聴いている間にもう一度押すと取り消し）。終わると Crossover 1〜3 が動く。**Undo を 1 回押すと 3 つとも戻る**（Redo で再び）。**CS03：** Set input を押して 5 秒鳴らすと Gain のつまみが動く（平均 −18 dBFS RMS・ピーク −6 dBFS を目標。ピークの鋭い音は RMS が低く残る） |
 | 2-13 | **Truncation check** | MS07 のパネルのボタン | 押して 5 秒以上、信号を通す（無音は数えない）。「Checking 42 %」→「Input: 16 bit grid」などになる。**16 ビットの WAV をそのままの音量で通すと 16 bit**、音量を変えたり処理したりしたものや、32 bit float の素材は「float」。ツールチップに Bits との関係が出る |
+| 2-14 | **Suggest order** | CS04 の EVO バーのボタン | 押すと音源の種類（Voice／Vocal／Drums／Bass／Mix bus）のメニューが出る。選ぶとモジュールのカードが並び替わり、音も切り替わる（5 ms で下げて入れ替え、戻す）。Undo で戻る。**規則表（README）の並びが実際の素材で妥当か、耳で** |
 
 ## 3. 音（耳で）
 

@@ -4,7 +4,7 @@
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
 //   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
-//   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step); MS07's Truncation check (the design's own button: it shows its progress and what it found).
+//   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step); MS07's Truncation check (the design's own button: it shows its progress and what it found); CS04's Suggest order (a menu of kinds: the order of the six modules, one undo step).
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -149,8 +149,28 @@ async function open(code, query = '') {
   await trc.click(); await pg.waitForFunction(() => /Checking \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('button[data-call="check"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'MS07: while listening the button shows how far it is'));
   await pg.waitForFunction(() => /Input: 16 bit grid/.test(document.getElementById('app').shadowRoot.querySelector('button[data-call="check"]').textContent), null, { timeout: 15000 }).then(() => ok(true), () => ok(false, 'MS07: the button says what it found'));
   ok(/16 bit/.test(await trc.getAttribute('title')) && /Bits is 16/.test(await trc.getAttribute('title')), 'and the tooltip puts it beside Bits: ' + await trc.getAttribute('title'));
+  // CS04 Suggest order: a menu of kinds in the EVO bar; a choice sets the order of the six modules (one undo step)
+  await open('CS04'); const sug = pg.locator('.evob button[data-suggest]');
+  eq(await sug.count(), 1, 'CS04 has the Suggest order button'); eq((await sug.textContent()).trim(), 'Suggest order', 'its label');
+  const cardOrder = () => pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot; const cards = [...sh.querySelectorAll('.disp')].map(d => d.firstElementChild).find(h => h && h.children.length === 6); return cards ? [...cards.children].map(c => [+c.style.order || 0, c.querySelector('.lbl') ? c.querySelector('.lbl').textContent.trim() : '']).sort((a, b) => a[0] - b[0]).map(x => x[1]).join(' > ') : null; });
+  eq(await cardOrder(), 'Gate > EQ > Comp > Saturate > De-ess > Limit', 'the default order');
+  await sug.click(); await pg.waitForTimeout(150);
+  const kinds = await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-kind]')].map(r => r.dataset.kind));
+  eq(kinds.join(','), 'Voice (speech),Vocal (singing),Drums,Bass,Mix bus', 'the menu lists the kinds');
+  await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-kind]')].find(r => r.dataset.kind === 'Mix bus').click()); await pg.waitForTimeout(400);
+  eq(await cardOrder(), 'EQ > Comp > Saturate > Limit > Gate > De-ess', 'Mix bus puts the modules in the bus order');
+  eq(await pg.evaluate(() => !!document.getElementById('app').shadowRoot.querySelector('[data-kind]')), false, 'the menu closed');
+
+  await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(400);
+  eq(await cardOrder(), 'Gate > EQ > Comp > Saturate > De-ess > Limit', 'one Undo takes the order back');
+  for (const [kind, ord] of [['Voice (speech)', 'Gate > EQ > De-ess > Comp > Saturate > Limit'], ['Vocal (singing)', 'Gate > EQ > Comp > De-ess > Saturate > Limit'], ['Drums', 'Gate > EQ > Comp > Saturate > Limit > De-ess'], ['Bass', 'Gate > Comp > EQ > Saturate > Limit > De-ess']]) {
+    await sug.click(); await pg.waitForTimeout(100);
+    await pg.evaluate(k => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-kind]')].find(r => r.dataset.kind === k).click(), kind); await pg.waitForTimeout(350);
+    eq(await cardOrder(), ord, kind + ': the table\'s order');
+  }
+
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto and MS07 Truncation check: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check and CS04 Suggest order: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

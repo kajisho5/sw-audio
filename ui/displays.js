@@ -1613,6 +1613,43 @@
   }
 
 
+  // ---- CS04 "Suggest order" (the spec's EVO, class A: choose the kind of source and a table of rules gives the order of the six modules; the table is a design value, README): a menu of kinds in the EVO
+  // bar; a choice sets the Order parameter (one gesture = one undo step). Only the order changes, not which modules are on.
+  const CS04_RULES = [
+    { kind: 'Voice (speech)', order: ['Gate', 'EQ', 'De-ess', 'Comp', 'Saturate', 'Limit'], why: 'Hard compression lifts the sibilants, so the de-esser goes before the compressor; the gate first keeps the room out of both.' },
+    { kind: 'Vocal (singing)', order: ['Gate', 'EQ', 'Comp', 'De-ess', 'Saturate', 'Limit'], why: 'Tone first, then level; the de-esser after the compressor catches the sibilants it raised; colour and the limiter last.' },
+    { kind: 'Drums', order: ['Gate', 'EQ', 'Comp', 'Saturate', 'Limit', 'De-ess'], why: 'The gate first against bleed, tone, punch, then colour; the de-esser has no job here and goes last.' },
+    { kind: 'Bass', order: ['Gate', 'Comp', 'EQ', 'Saturate', 'Limit', 'De-ess'], why: 'Even the level first, shape the tone, then add harmonics; the de-esser has no job here and goes last.' },
+    { kind: 'Mix bus', order: ['EQ', 'Comp', 'Saturate', 'Limit', 'Gate', 'De-ess'], why: 'The usual bus chain: tone, glue, colour, limit; a gate and a de-esser are rarely wanted on a bus and go last.' }];
+  function moduleOrderSuggest(box, ctx) {
+    const btn = box.querySelector('button[data-suggest]'), pOrder = ctx.params.find(q => q.name === 'Order'); if (!btn || !pOrder || !(pOrder.p.labels || []).length) return null;
+    const root = btn.closest('.root') || box; let pop = null;
+    const close = () => { if (pop) { pop.remove(); pop = null; btn.classList.remove('on'); } };
+    const apply = rule => {
+      const idx = (pOrder.p.labels || []).indexOf(rule.order.join(' > ')); if (idx < 0) return;
+      ctx.begin(pOrder.i); ctx.set(pOrder.i, pOrder.p.steps[idx]); ctx.end(pOrder.i);
+    };
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation(); if (pop) { close(); return; }
+      const a = root.getBoundingClientRect(), b = btn.getBoundingClientRect(), k = root.offsetWidth ? a.width / root.offsetWidth : 1;
+      pop = document.createElement('div');
+      pop.style.cssText = 'position:absolute;z-index:70;min-width:230px;background:#1c1d21;border:1px solid #2f3137;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.5);padding:4px 0;font:12px "Barlow Condensed",sans-serif;color:#e8e8e8;'
+        + 'left:' + Math.max(4, (b.left - a.left) / k).toFixed(0) + 'px;bottom:' + ((a.bottom - b.top) / k + 6).toFixed(0) + 'px';
+      const head = document.createElement('div'); head.textContent = 'Order the modules for ...'; head.style.cssText = 'padding:3px 10px;color:#8a8c92;font-size:11px'; pop.append(head);
+      CS04_RULES.forEach(rule => {
+        const row = document.createElement('div'); row.dataset.kind = rule.kind; row.title = rule.order.join(' > ') + '\n' + rule.why;
+        row.textContent = rule.kind; row.style.cssText = 'padding:4px 10px;cursor:pointer;white-space:nowrap';
+        row.onmouseenter = () => { row.style.background = '#2a2c31'; }; row.onmouseleave = () => { row.style.background = ''; };
+        row.onclick = () => { apply(rule); close(); };
+        pop.append(row);
+      });
+      root.append(pop); btn.classList.add('on');
+    });
+    document.addEventListener('pointerdown', e => { if (pop && !(e.target && btn.contains(e.target))) { const p = e.composedPath ? e.composedPath() : []; if (!p.includes(pop)) close(); } });
+    return { update() {}, destroy() { close(); } };
+  }
+
+
   // ---- LV15 auto mixer: the eight mic columns. The instances of the product in one process share their levels (README: this stands in for SW Link), so each one can show the gain every mic of the
   // group gets now (readouts: this instance's mic number, then for mics 1..8 the gain in dB (-999 = not in the group) and 1 / 0 = open). A mic that is not there shows a dash; the column of this instance is marked.
   function autoMixerDisplay(box, ctx) {
@@ -1940,7 +1977,7 @@
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
     RV08: (box, ctx) => combine(textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]), learnButton(box, ctx)),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
-    CS04: modularStripDisplay,
+    CS04: (box, ctx) => combine(modularStripDisplay(box, ctx), moduleOrderSuggest(box, ctx)),
     LV15: autoMixerDisplay,
     ST03: (box, ctx) => combine(phaseAlignDisplay(box, ctx), measureFlow(box, ctx, { call: 'autoalign', state: 0, hint: 'Put this plug-in on the earlier microphone and send the other microphone to the second (sidechain) input, then press: 4 s of both are compared and Delay, Phase and Polarity are set' })),
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
