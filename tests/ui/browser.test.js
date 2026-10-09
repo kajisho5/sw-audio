@@ -1,0 +1,88 @@
+// The screens in a real browser (Playwright), against ui/preview.html with its simulated plug-in: what only a browser can tell.
+//   1. every product's screen loads without a script error;
+//   2. Undo / Redo record one step per gesture (a knob drag is one step), and the History button lists them and goes back;
+//   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
+//   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall).
+// Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
+//   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
+const assert = require('assert');
+const fs = require('fs'), http = require('http'), path = require('path');
+const { chromium } = require('playwright');
+
+const root = path.join(__dirname, '../../ui');
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.woff2': 'font/woff2' };
+const server = http.createServer((req, res) => {
+  const f = path.join(root, decodeURIComponent(req.url.split('?')[0]).replace(/\.\./g, ''));
+  fs.readFile(f, (e, d) => { if (e) { res.writeHead(404); res.end(); } else { res.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' }); res.end(d); } });
+});
+
+let browser, pg; const errors = []; let base = '', checks = 0;
+const ok = (c, m) => { checks++; assert.ok(c, m); };
+const eq = (a, b, m) => { checks++; assert.strictEqual(a, b, m); };
+async function open(code, query = '') {
+  await pg.goto(base + '/preview.html?p=' + code + '&sim=1' + query);
+  await pg.waitForFunction(() => window.ready === true, null, { timeout: 15000 });
+  await pg.waitForTimeout(250);
+}
+
+(async () => {
+  await new Promise(r => server.listen(0, '127.0.0.1', r)); base = 'http://127.0.0.1:' + server.address().port;
+  const launch = process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : { executablePath: process.env.PW_CHROMIUM || '/opt/pw-browsers/chromium' };
+  browser = await chromium.launch({ ...launch, args: ['--no-sandbox'] });
+  pg = await browser.newPage({ viewport: { width: 1100, height: 800 } });
+  pg.on('pageerror', e => errors.push('page error: ' + e));
+  pg.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console error: ' + m.text()); });
+
+  // ---- 1. every screen
+  const specs = JSON.parse(fs.readFileSync(path.join(root, 'specs.json'), 'utf8')).specs;   // the products that exist (products.json also lists the ones that are not built)
+  const codes = Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'products.json'), 'utf8'))).filter(c => specs[c.toLowerCase()]);
+  ok(codes.length >= 100, 'the products that exist: ' + codes.length);
+  for (const c of codes) {
+    errors.length = 0; await open(c);
+    const n = await pg.evaluate(() => document.getElementById('app').shadowRoot ? document.getElementById('app').shadowRoot.querySelectorAll('*').length : document.getElementById('app').querySelectorAll('*').length);
+    ok(n > 30, c + ': the screen has content (' + n + ' elements)'); eq(errors.length, 0, c + ': ' + errors.join(' | '));
+  }
+
+  // ---- 2. undo / redo / history on DY08 (Threshold is the first knob, 0 dB at the top of its range: dragging down lowers it)
+  await open('DY08');
+  const dial = pg.locator('.ctl').first().locator('[data-dial]'), val = pg.locator('.ctl').first().locator('.val');
+  const undoB = pg.locator('[data-act="undo"]'), redoB = pg.locator('[data-act="redo"]');
+  const drag = async dy => { const r = await dial.boundingBox(), x = r.x + r.width / 2, y = r.y + r.height / 2; await pg.mouse.move(x, y); await pg.mouse.down(); for (let k = 1; k <= 10; k++) await pg.mouse.move(x, y + dy * k / 10); await pg.mouse.up(); await pg.waitForTimeout(80); };
+  const v0 = await val.textContent(); await drag(40); const v1 = await val.textContent(); await drag(40); const v2 = await val.textContent();
+  ok(v0 !== v1 && v1 !== v2, 'two drags changed the value'); ok(await undoB.isEnabled(), 'undo is enabled after a drag');
+  await undoB.click(); eq(await val.textContent(), v1, 'one undo = one drag'); await undoB.click(); eq(await val.textContent(), v0, 'two undos'); ok(!(await undoB.isEnabled()), 'nothing left to undo');
+  await redoB.click(); eq(await val.textContent(), v1, 'redo'); await redoB.click(); eq(await val.textContent(), v2, 'redo again');
+  const popRows = () => pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot; const p = [...sh.querySelectorAll('div')].find(d => /Go back to before|Nothing has been changed/.test(d.textContent) && d.style.position === 'absolute'); return p ? [...p.children].map(c => c.textContent) : null; });
+  await pg.locator('button[data-history]').click(); await pg.waitForTimeout(150);
+  let rows = await popRows(); ok(rows && rows.length === 3, 'History lists a header and the two drags: ' + JSON.stringify(rows)); ok(/Threshold/.test(rows[1]) && /→/.test(rows[1]), 'a row says what changed: ' + rows[1]);
+  await pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot; [...sh.querySelectorAll('div')].find(d => /Go back to before/.test(d.textContent) && d.style.position === 'absolute').children[2].click(); });
+  await pg.waitForTimeout(150); eq(await val.textContent(), v0, 'a History row goes back to before that change'); rows = await popRows(); eq(rows, null, 'the list closes');
+  await drag(40); const w1 = await val.textContent(); await dial.dblclick(); await pg.waitForTimeout(80); await undoB.click(); eq(await val.textContent(), w1, 'a double click (reset) is one step'); await undoB.click();
+  const r2 = await dial.boundingBox(); await pg.mouse.move(r2.x + r2.width / 2, r2.y + r2.height / 2); for (let k = 0; k < 4; k++) await pg.mouse.wheel(0, 100); await pg.waitForTimeout(120);
+  ok((await val.textContent()) !== v0, 'the wheel moved the value'); await undoB.click(); eq(await val.textContent(), v0, 'four wheel notches are one step');
+
+  // ---- 3. EQ02 Assist and Unmask (the preview's simulated read-outs: three resonances; two other instances)
+  await open('EQ02');
+  const assist = pg.locator('button[data-call="assist"]'), marks = pg.locator('path[data-k]');
+  eq(await marks.count(), 0, 'no marks before Assist'); await assist.click(); await pg.waitForTimeout(1200); eq(await marks.count(), 3, 'three resonance marks'); ok(/\bon\b/.test(await assist.getAttribute('class')), 'Assist is lit');
+  const onBefore = await pg.locator('button.dbtn.on').count(); await marks.first().dispatchEvent('pointerdown', { bubbles: true }); await pg.waitForTimeout(400);
+  ok(await undoB.isEnabled(), 'placing a Bell is an undo step'); await assist.click(); await pg.waitForTimeout(800); eq(await marks.count(), 0, 'the marks go when Assist is off'); void onBefore;
+  const lamp = pg.locator('.evr[data-link]'), unmask = pg.locator('button[data-call="linkwatch"]'), note = pg.locator('svg text', { hasText: 'Unmask' });
+  ok(/2 other/.test(await lamp.getAttribute('title')), 'the SW Link lamp says how many others: ' + await lamp.getAttribute('title')); eq(await lamp.locator('.evd').getAttribute('style'), '', 'the lamp is lit');
+  await unmask.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelectorAll('svg g rect[fill="#e5484d"]').length > 0, null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'Unmask shades overlapping bands (the simulated spectra move: waited 8 s)')); ok(/overlap/.test((await note.allTextContents()).join()), 'Unmask says how many bands overlap');
+  await unmask.click(); await pg.waitForTimeout(500); eq(await pg.locator('svg g rect[fill="#e5484d"]').count(), 0, 'the shading goes when Unmask is off');
+  await open('EQ02', '&peers=0'); await pg.locator('button[data-call="linkwatch"]').click(); await pg.waitForTimeout(800);
+  ok(/no other SW AUDIO plug-in found/.test((await pg.locator('svg text', { hasText: 'Unmask' }).allTextContents()).join()), 'alone: Unmask says nobody else is there'); ok((await pg.locator('.evr[data-link] .evd').getAttribute('style')).includes('#55575c'), 'alone: the lamp is grey');
+
+  // ---- 4. Low lat, UT01's track line
+  await open('EQ08'); const low = pg.locator('button', { hasText: 'Low lat' });
+  ok(!/\bon\b/.test((await low.getAttribute('class')) || ''), 'EQ08: Low lat is off while Phase is Linear'); await low.click(); await pg.waitForTimeout(300); ok(/\bon\b/.test(await low.getAttribute('class')), 'Low lat lights when Phase is Minimum');
+  ok(/\bon\b/.test(await pg.locator('button', { hasText: 'Minimum' }).first().getAttribute('class')), 'the Minimum button is lit too');
+  await open('UT01'); const evt = pg.locator('.evob .evt');
+  ok(/Vocal track: no Gain remembered/.test(await evt.textContent()), 'UT01 shows the kind of track: ' + await evt.textContent());
+  const d2 = pg.locator('[data-dial]').first(), rb = await d2.boundingBox(); await pg.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2); await pg.mouse.down(); for (let k = 1; k <= 8; k++) await pg.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2 - 6 * k); await pg.mouse.up();
+  await evt.click(); await pg.waitForTimeout(250); ok(/Vocal track: Gain \+[\d.]+ dB remembered/.test(await evt.textContent()), 'a click remembers the Gain: ' + await evt.textContent());
+
+  await browser.close(); server.close();
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line: ' + checks + ' checks passed');
+})().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });
