@@ -1,6 +1,9 @@
 #include "doctest.h"
 #include "lv14/lv14.hpp"
 #include "tu.hpp"
+#include <atomic>
+#include <chrono>
+#include <thread>
 using namespace sw;
 using namespace sw::lv14;
 using namespace tu;
@@ -63,4 +66,25 @@ TEST_CASE("LV14 mono, odd blocks, before prepare") {
     auto p = make({{Delay, 3.0}}); std::vector<float> l = noise(-20, 1.0, 3); for (size_t off = 0; off < l.size(); off += 77) { const int n = static_cast<int>(std::min<size_t>(77, l.size() - off)); float* c[1] = {l.data() + off}; p.process(c, 1, n); }
     for (float v : l) REQUIRE(std::isfinite(v));
     Processor z; std::vector<float> a(256, 0.3f); float* c[1] = {a.data()}; z.process(c, 1, 256); CHECK(a[0] == 0.3f);
+}
+
+TEST_CASE("LV14 Measure as the screen runs it: the analysis on another thread while the audio thread keeps going") {
+    // the audio thread collects; the screen's thread sees "ready" and calls analyse(); the audio thread then picks up the parameter write
+    const double ms = 37.5; const auto ref = noise(-20, 6.0, 8); const size_t lag = static_cast<size_t>(std::lround(ms * 48.0)); std::vector<float> mic(ref.size(), 0.0f); const auto room = noise(-45, 6.0, 9);
+    for (size_t i = 0; i < ref.size(); ++i) mic[i] = room[i] + (i >= lag ? 0.5f * ref[i - lag] : 0.0f);
+    auto p = make(); p.startMeasure();
+    std::atomic<bool> stop{false}, analysed{false};
+    std::thread screen([&] { while (!stop.load()) { if (p.measureState() == Ready) { analysed = p.analyse(); break; } std::this_thread::yield(); } });
+    int id = 0; double v = 0; bool got = false;
+    const auto t0 = std::chrono::steady_clock::now();
+    for (size_t off = 0; !got && std::chrono::steady_clock::now() - t0 < std::chrono::seconds(5); off += 256) {   // the audio thread never stops: after the signal, silence
+        std::vector<float> l(256, 0.0f), r(256, 0.0f), s0(256, 0.0f);
+        if (off + 256 <= mic.size()) { std::copy(mic.begin() + static_cast<std::ptrdiff_t>(off), mic.begin() + static_cast<std::ptrdiff_t>(off) + 256, l.begin()); r = l; std::copy(ref.begin() + static_cast<std::ptrdiff_t>(off), ref.begin() + static_cast<std::ptrdiff_t>(off) + 256, s0.begin()); }
+        float* c[2] = {l.data(), r.data()}; const float* sc[2] = {s0.data(), s0.data()};
+        p.processWithSidechain(c, 2, 256, sc, 2);
+        if (p.measureState() == Done) got = p.takeParamWrite(id, v) != 0;
+        if (off > mic.size()) std::this_thread::sleep_for(std::chrono::microseconds(300));
+    }
+    stop = true; screen.join();
+    CHECK(analysed.load()); CHECK(got); CHECK(id == Delay); CHECK(std::abs(v - ms) < 0.06);
 }

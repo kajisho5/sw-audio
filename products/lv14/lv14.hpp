@@ -5,6 +5,7 @@
 //   startMeasure() collects 3 s of both (mono sums); analyse() (not real time: the screen calls it) takes the lag 0..500 ms with the largest cross-correlation (FFT, refined with a parabola on the peak), needs a normalised peak of 0.1 and
 //   at least 2x the next largest one away from it; on success takeParamWrite() hands the lag to the host as the Delay value (the delay that makes this speaker arrive together with the main system).
 #pragma once
+#include "sw/copy_atomic.hpp"
 #include "sw/param.hpp"
 #include <array>
 #include <vector>
@@ -30,7 +31,7 @@ public:
     double distanceM() const { return target_[Delay] * 0.001 * speedOfSound(target_[AirTemp]); }
     // Measure
     void startMeasure();
-    int measureState() const { return state_; }
+    int measureState() const { return state_.load(); }
     bool analyse();
     double foundMs() const { return foundMs_; }
     double confidence() const { return confidence_; }
@@ -42,9 +43,9 @@ private:
     std::array<double, kNumParams> target_{};
     std::array<std::vector<float>, 2> buf_;
     size_t mask_ = 0, pos_ = 0;
-    int state_ = Idle; size_t collected_ = 0, need_ = 0;
+    CopyAtomic<int> state_{Idle}; size_t collected_ = 0, need_ = 0;   // state_, the results and writePending_ are shared with the screen's thread (analyse() runs there)
     std::vector<float> capRef_, capMic_;
-    double foundMs_ = 0, confidence_ = 0; bool writePending_ = false;
+    CopyAtomic<double> foundMs_{0.0}, confidence_{0.0}; CopyAtomic<bool> writePending_{false};
 };
 
 }  // namespace sw::lv14

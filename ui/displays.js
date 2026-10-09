@@ -1460,6 +1460,38 @@
   }
 
 
+  // ---- ST03 phase align: what the three controls do to the track, shown on a 100 Hz sine over 30 ms: white = the track as it comes in, purple = after Delay (later), Phase (rotation, a constant
+  // angle over the band) and Polarity. The design's dashed "Kick out before" curve (the other microphone, an example offset) is hidden: the plug-in does not know the reference's offset until Auto align has run.
+  function phaseAlignDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const paths = [...svg.querySelectorAll(':scope > path')], texts = [...svg.querySelectorAll(':scope > text')]; if (paths.length < 3 || texts.length < 3) return null;
+    const [inP, refP, outP] = paths, [, , W, H] = vbOf(svg), CY = H / 2, AMP = H * 0.36, F = 100, T = 0.03, N = 240; let last = '';
+    refP.style.display = 'none'; texts[1].style.display = 'none'; texts[0].textContent = 'Track as it comes in (100 Hz sine, for illustration)'; texts[2].textContent = 'After Delay, Phase and Polarity'; texts[2].setAttribute('x', 330);
+    return { update() {
+      const dl = ctx.value('Delay') / 1000, ph = ctx.value('Phase') * Math.PI / 180, pol = ctx.value('Polarity') > 0.5 ? -1 : 1; if (![dl, ph, pol].every(Number.isFinite)) return;
+      const key = [dl, ph, pol].join('|'); if (key === last) return; last = key; let a = '', b = '';
+      for (let i = 0; i <= N; i++) { const t = i / N * T, x = (i / N * W).toFixed(1); a += (i ? ' L' : 'M') + x + ' ' + (CY - AMP * Math.sin(2 * Math.PI * F * t)).toFixed(1); b += (i ? ' L' : 'M') + x + ' ' + (CY - AMP * pol * Math.sin(2 * Math.PI * F * (t - dl) + ph)).toFixed(1); }
+      inP.setAttribute('d', a); outP.setAttribute('d', b);
+    } };
+  }
+
+
+  // ---- the one-click measurements (LV14 Measure, ST03 Auto align): the button starts collecting in the plug-in; when the plug-in says "ready" the screen asks it to analyse (the FFT runs on this thread, not
+  // the audio thread), and the plug-in hands the result to the host as parameter values. readouts[cfg.state]: 0 idle, 1 collecting, 2 ready, 3 done, 4 failed.
+  function measureFlow(box, ctx, cfg) {
+    const btn = box.querySelector('button[data-call="' + cfg.call + '"]'); if (!btn) return null;
+    const orig = btn.textContent; btn.title = cfg.hint; let asked = false, doneAt = 0, lastSt = -1;
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length <= cfg.state) return; const st = Math.round(r[cfg.state]), now = Date.now();
+      if (st !== lastSt) { lastSt = st; if (st === 3 || st === 4) doneAt = now; if (st !== 2) asked = false; }
+      if (st === 1) btn.textContent = 'Collecting…';
+      else if (st === 2) { btn.textContent = 'Analysing…'; if (!asked) { asked = true; ctx.call('analyse'); } }
+      else if ((st === 3 || st === 4) && now - doneAt < 6000) btn.textContent = st === 3 ? 'Done' + (cfg.found !== undefined && r[cfg.found] > 0 ? ': ' + r[cfg.found].toFixed(2) + ' ms' : '') : 'No clear match';
+      else btn.textContent = orig;
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1490,7 +1522,7 @@
     LV17: grHistoryDisplay,
     LV10: xyPadDisplay, VO06: xyPadDisplay,
     RV01: reverbDisplay,
-    LV14: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), alignGraphDisplay(box, ctx)),
+    LV14: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), alignGraphDisplay(box, ctx), measureFlow(box, ctx, { call: 'measure', state: 1, found: 2, hint: 'Send the main system (for example pink noise) to the second (sidechain) input and the measurement microphone to the first, then press: 3 s of both are compared and the delay is set' })),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90))), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
@@ -1502,6 +1534,7 @@
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     CS04: modularStripDisplay,
     LV15: autoMixerDisplay,
+    ST03: (box, ctx) => combine(phaseAlignDisplay(box, ctx), measureFlow(box, ctx, { call: 'autoalign', state: 0, hint: 'Put this plug-in on the earlier microphone and send the other microphone to the second (sidechain) input, then press: 4 s of both are compared and Delay, Phase and Polarity are set' })),
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,

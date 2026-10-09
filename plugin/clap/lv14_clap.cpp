@@ -1,5 +1,6 @@
 // SW LV14 Align — CLAP plugin traits (LIVE line); the measurement reference comes in on the second (sidechain) input
 #include "clap_adapter.hpp"
+#include <cstring>
 #include "lv14/lv14.hpp"
 
 namespace {
@@ -11,6 +12,10 @@ struct Lv14 {
     static constexpr int kMixParam = -1;
     static constexpr int kReadouts = 4;   // distance (m) from the Delay, measure state, found delay (ms), confidence
     static void readouts(const Core& c, double* o) { o[0] = c.distanceM(); o[1] = c.measureState(); o[2] = c.foundMs(); o[3] = c.confidence(); }
+    // the Measure button: collecting runs in the audio thread (3 s), the analysis (an FFT) on the screen's thread when the screen sees the state "ready"; the result is handed to the host as the Delay value
+    static void guiCall(Core& c, const char* n, const char*) { if (!std::strcmp(n, "measure")) c.startMeasure(); }
+    static bool guiOnGui(const char* n) { return !std::strcmp(n, "analyse"); }
+    static void guiCallGui(Core& c, const char*, const char*) { c.analyse(); }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

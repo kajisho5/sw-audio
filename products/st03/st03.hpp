@@ -8,6 +8,7 @@
 //   The largest wins. Note the rotator's phase is that of the Hilbert pair's output (which carries its own all-pass phase), so a plain delayed copy gets Phase 0, never a small odd angle. takeParamWrite() hands the three
 //   values (Delay, Phase, Polarity) to the host as gestures. Failure (silent reference, normalised correlation < 0.1) leaves the parameters alone (state Failed).
 #pragma once
+#include "sw/copy_atomic.hpp"
 #include "sw/hilbert.hpp"
 #include "sw/param.hpp"
 #include <array>
@@ -32,9 +33,9 @@ public:
     int latencySamples() const { return 0; }
     // Auto align
     void startAutoAlign();
-    int alignState() const { return state_; }
+    int alignState() const { return state_.load(); }
     bool analyse();                        // Ready -> Done / Failed
-    double confidence() const { return confidence_; }
+    double confidence() const { return confidence_.load(); }
     double foundDelayMs() const { return foundMs_; }
     double foundPhaseDeg() const { return foundDeg_; }
     bool foundInvert() const { return foundInvert_; }
@@ -49,10 +50,10 @@ private:
     std::array<std::vector<float>, 2> buf_;
     std::array<HilbertIir, 2> hil_{};
     // Auto align
-    int state_ = Idle; size_t collected_ = 0;
+    CopyAtomic<int> state_{Idle}; size_t collected_ = 0;   // state_, the results and pending_ are shared with the screen's thread (analyse() runs there)
     std::vector<float> capMain_, capRef_;
-    double confidence_ = 0.0, foundMs_ = 0.0, foundDeg_ = 0.0; bool foundInvert_ = false;
-    int pending_ = 0;   // parameter writes still to hand out: 3 = Delay, 2 = Phase, 1 = Polarity
+    CopyAtomic<double> confidence_{0.0}; double foundMs_ = 0.0, foundDeg_ = 0.0; bool foundInvert_ = false;
+    CopyAtomic<int> pending_{0};   // parameter writes still to hand out: 3 = Delay, 2 = Phase, 1 = Polarity
 };
 
 }  // namespace sw::st03
