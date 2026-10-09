@@ -106,3 +106,29 @@ TEST_CASE("SW Link: a member that never joined, and a ring without data, are har
     gui::RingView none; CHECK_FALSE(m.join(none, "EQ02")); CHECK_FALSE(m.joined());
     CHECK(link::packCode("EQ02") == (('E' << 24) | ('Q' << 16) | ('0' << 8) | '2'));
 }
+
+TEST_CASE("SW Link: a reference spectrum is shared by the product that has it (UT03) and found by the one that wants it (EQ05); withdrawn with it; torn reads are dropped") {
+    Ring a(300, -20), b(1000, -20);
+    link::Member ut, eq, other;
+    REQUIRE(ut.join(a.view(), "UT03")); REQUIRE(eq.join(b.view(), "EQ05")); REQUIRE(other.join(b.view(), "DY08"));
+    double db[link::kRefBands];
+    CHECK(eq.findReference("UT03", db) == 0u);   // nothing published yet
+    float v[link::kRefBands]; for (int i = 0; i < link::kRefBands; ++i) v[i] = -30.0f + 0.5f * static_cast<float>(i);
+    ut.publishReference(7, v);
+    CHECK(eq.findReference("UT03") == 7u);
+    CHECK(eq.findReference("UT03", db) == 7u); for (int i = 0; i < link::kRefBands; ++i) CHECK(db[i] == doctest::Approx(-30.0 + 0.5 * i));
+    CHECK(eq.findReference("DY08") == 0u);       // another product's reference is asked for by its code
+    CHECK(ut.findReference("UT03") == 0u);       // (an instance does not find itself)
+    ut.publishReference(8, v); CHECK(eq.findReference("UT03") == 8u);   // a new reference: a new serial
+    ut.publishReference(0, nullptr); CHECK(eq.findReference("UT03") == 0u);   // withdrawn
+    ut.publishReference(9, v); CHECK(eq.findReference("UT03") == 9u);
+    ut.leave(); CHECK(eq.findReference("UT03") == 0u);   // it goes away with its owner
+    // a reader against a writer that keeps changing it: what is returned is always one reference, never a mix
+    REQUIRE(ut.join(a.view(), "UT03"));
+    std::atomic<bool> stop{false};
+    std::thread w([&] { float x[link::kRefBands]; uint32_t n = 1; while (!stop) { for (auto& e : x) e = static_cast<float>(n); ut.publishReference(n, x); ++n; } });
+    int mixed = 0, reads = 0;
+    for (int k = 0; k < 20000; ++k) { double d[link::kRefBands]; const uint32_t s = eq.findReference("UT03", d); if (!s) continue; ++reads; for (int i = 1; i < link::kRefBands; ++i) if (d[i] != d[0]) { ++mixed; break; } }
+    stop = true; w.join();
+    INFO(reads << " reads"); CHECK(mixed == 0); CHECK(reads > 0);
+}

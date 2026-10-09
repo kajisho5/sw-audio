@@ -706,6 +706,51 @@ bool linkChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// SW Link reference: UT03 shares the long-term spectrum of the reference the screen loaded into it; EQ05 (another binary, the same process) sees it (info.link[1]) and takes it ("c linkref" -> its
+// read-outs: a reference is in place, a load worked), then Match listens and fits with it (the lows of the UT03 reference are raised: the fit raises the lows in the EQ).
+bool linkReferenceChecks(const std::vector<fs::path>& files) {
+    auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
+    const fs::path fu = find("UT03"), fe = find("EQ05");
+    if (fu.empty() || fe.empty()) return true;   // a partial set of plug-ins: nothing to check
+    bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link reference: %s\n", t.c_str()); ok = false; };
+    Loaded u, e; std::string why;
+    if (!u.open(fu, why)) { fail("UT03 " + why); return false; }
+    if (!e.open(fe, why)) { fail("EQ05 " + why); u.close(); return false; }
+    EventList none;
+    auto linkOf = [&](Loaded& x) { return x.link(); };
+    auto readoutsOf = [&](Loaded& x) { const auto a = updateArrays(x.m->send(x.p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
+    e.run.process(2, 5, none); u.run.process(2, 6, none);
+    { const auto l = linkOf(e); if (l.size() != 2 || l[0] != 1.0 || l[1] != 0.0) fail("before UT03 has a reference EQ05 should see [1 other, no reference], got " + std::to_string(l.size()) + " values: " + std::to_string(l.empty() ? -9.0 : l[0]) + ", " + std::to_string(l.size() > 1 ? l[1] : -9.0)); }
+    e.m->send(e.p, "c linkref"); e.run.process(2, 5, none); { const auto r = readoutsOf(e); if (r.size() < 9 || r[3] != 0.0) fail("EQ05 took a reference that is not there"); }
+    // UT03 gets a reference from its screen: a file with a low-pass tilt (pieces, as the page sends it), plays on, and shares the spectrum after the next block
+    {
+        const double rate = 48000.0; const size_t n = static_cast<size_t>(6.0 * rate); std::vector<uint8_t> f;
+        auto p32 = [&](uint32_t x) { for (int i = 0; i < 4; ++i) f.push_back(static_cast<uint8_t>(x >> (8 * i))); }; auto p16 = [&](uint16_t x) { f.push_back(static_cast<uint8_t>(x)); f.push_back(static_cast<uint8_t>(x >> 8)); };
+        auto tag = [&](const char* t) { for (int i = 0; i < 4; ++i) f.push_back(static_cast<uint8_t>(t[i])); };
+        tag("RIFF"); p32(static_cast<uint32_t>(36 + n * 2)); tag("WAVE"); tag("fmt "); p32(16); p16(1); p16(1); p32(static_cast<uint32_t>(rate)); p32(static_cast<uint32_t>(rate * 2)); p16(2); p16(16); tag("data"); p32(static_cast<uint32_t>(n * 2));
+        Rng rng(11); double lp = 0; const double k = 1.0 - std::exp(-6.283185307 * 300.0 / rate);
+        for (size_t i = 0; i < n; ++i) { lp += k * (rng.next() * 0.5 - lp); p16(static_cast<uint16_t>(static_cast<int16_t>(std::max(-1.0, std::min(1.0, lp * 2.0)) * 20000.0))); }
+        u.m->send(u.p, "c refbegin 1"); sendPieces(u.m, u.p, "refdata", f); u.m->send(u.p, "c refend");
+    }
+    u.run.process(4, 6, none);
+    { const auto l = linkOf(e); if (l.size() != 2 || l[0] != 1.0 || l[1] != 1.0) { fail("after UT03 loaded a reference EQ05 should see [1 other, a reference]"); e.close(); u.close(); return false; } }
+    e.m->send(e.p, "c linkref"); e.run.process(2, 5, none);   // (the read-outs are copied after a block)
+    { const auto r = readoutsOf(e); if (r.size() < 9 || r[3] != 1.0 || r[7] != 1.0) { fail("EQ05 did not take UT03's reference (a reference " + std::to_string(r.size() > 3 ? r[3] : -1) + ", loads done " + std::to_string(r.size() > 7 ? r[7] : -1) + ")"); e.close(); u.close(); return false; } }
+    // Match with it: 11 s of white noise in EQ05, the reference is low-tilted: the lows go up (LF or LMF gain)
+    e.m->send(e.p, "c match"); e.run.process(static_cast<int>(11.0 * kSr / kBlock) + 20, 99, none);
+    { const auto r = readoutsOf(e); if (r.size() < 9 || r[2] != 1.0) { fail("EQ05 did not hear 10 s of the input"); e.close(); u.close(); return false; } }
+    e.m->send(e.p, "c fit"); e.run.process(4, 99, none);
+    { const auto up = updateArrays(e.m->send(e.p, "p")); const auto r = up.size() > 3 ? up[3] : std::vector<double>{};
+      if (r.size() < 9 || r[6] != 1.0 || !(r[5] < r[4])) fail("EQ05: the fit with UT03's reference was not applied or did not bring the curves closer");
+      else if (up.empty() || up[0].size() < 12 || !(up[0][9] > 1.0 || up[0][6] > 1.0)) fail("EQ05: the lows were not raised for UT03's low-tilted reference"); }
+    // UT03 is gone (destroyed, library unloaded): there is no reference to take any more
+    u.close();
+    { e.run.process(2, 5, none); const auto l = linkOf(e); if (l.size() != 2 || l[1] != 0.0) fail("after UT03 went away EQ05 should see no reference"); }
+    e.close();
+    if (ok) std::printf("ok    SW Link reference: UT03's reference spectrum reaches EQ05 in the same process (taken with linkref, Match fits to it), and goes with UT03\n");
+    return ok;
+}
+
 // The reported latency against what a plug-in really does: an impulse at the defaults, the position of the largest output sample against the latency the plug-in reports. A host delays the
 // other tracks by the reported number (plug-in delay compensation): a wrong number puts the track out of time with the rest and combs against a parallel copy. Only plug-ins whose impulse
 // response has a clear main peak can be judged (a reverb or a delay has none: the peak is then not compared). Differences are WARN lines, not failures: an IIR filter's own group delay is a few samples.
@@ -1211,6 +1256,7 @@ int main(int argc, char** argv) {
         if (!r.fail) ++pass;
     }
     if (!linkChecks(files)) ++fails;
+    if (!linkReferenceChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;

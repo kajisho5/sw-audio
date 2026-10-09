@@ -9,6 +9,8 @@
 //   * Others read the ring from their GUI thread (peers(), others()). To make that safe against the owner going away, a reader first counts itself in the slot (readers), then looks at the pointers; the owner
 //     withdraws the pointers (leave()) and waits until no reader is inside before the ring is destroyed. A slot that changed owner in between is noticed by its id, and the read is dropped.
 //   * "Alive": a slot whose write position has not moved for `timeout` (1.5 s) is an instance that is not processing (stopped, bypassed by the host), and does not count.
+//   * A product that has a reference spectrum to share (UT03: the long-term spectrum of its reference, 60 bands of 1/6 octave, sw/band_spectrum.hpp) publishes it in its slot (publishReference:
+//     only atomic stores, so the audio thread may do it after a block): the values first, then a serial that is not 0; a reader (findReference: EQ05 Match) reads the serial, the values and the serial again and drops the read when it changed.
 //   * Layout: magic, version and sizes are checked; a build of another layout cannot join and sees no peers (the others do not see it either).
 //   Thread rules: join()/leave() on the main thread, peers()/others() on one GUI thread per Member (they keep state), never on the audio thread.
 #pragma once
@@ -40,8 +42,9 @@ __declspec(dllimport) void* __stdcall VirtualAlloc(void*, unsigned long long, un
 
 namespace sw::link {
 
-constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 1;   // "SWLK"
+constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 2;   // "SWLK"
 constexpr int kSlots = 128;
+constexpr int kRefBands = 60;                           // the reference spectrum a product may publish (= sw::BandSpectrum::kBands)
 constexpr const char* kEnv = "SW_AUDIO_LINK";
 
 struct Slot {
@@ -52,6 +55,8 @@ struct Slot {
     std::atomic<size_t> mask{0};
     std::atomic<double> sampleRate{48000.0};
     std::atomic<uint32_t> product{0};                              // the product code, four characters packed (EQ02 -> 'E','Q','0','2')
+    std::atomic<uint32_t> refSerial{0};                            // the shared reference spectrum: 0 = none, otherwise which one it is (changes with every new reference); written last, withdrawn first
+    std::atomic<float> refDb[kRefBands];                           // (dB, 1/6 octave from 20 Hz)
 };
 struct Registry { uint32_t magic = kMagic, version = kVersion, slots = kSlots, slotSize = sizeof(Slot); Slot s[kSlots]; };
 
@@ -141,11 +146,38 @@ public:
     // main thread: withdraw the ring, wait for the readers that are inside, free the slot. Call before the ring is destroyed.
     void leave() {
         if (!slot_) return;
+        slot_->refSerial.store(0);
         slot_->data.store(nullptr); slot_->head.store(nullptr);
         while (slot_->readers.load() != 0) std::this_thread::yield();
         slot_->id.store(0); slot_ = nullptr; reg_ = nullptr;
     }
     bool joined() const { return slot_ != nullptr; }
+    // share a reference spectrum (kRefBands dB values; serial != 0) or withdraw it (serial 0): atomic stores only (not while leave() runs: the owner leaves when it is destroyed)
+    void publishReference(uint32_t serial, const float* db) {
+        if (!slot_) return;
+        slot_->refSerial.store(0);
+        if (!serial || !db) return;
+        for (int i = 0; i < kRefBands; ++i) slot_->refDb[i].store(db[i], std::memory_order_relaxed);
+        slot_->refSerial.store(serial, std::memory_order_release);
+    }
+    // GUI thread: the reference spectrum of another instance of `product` ("UT03"), if one has published one: db[kRefBands] in dB; returns the serial (0: none). With db null it only looks.
+    uint32_t findReference(const char* product, double* db = nullptr) const {
+        Registry* r = reg_ ? reg_ : registry(); if (!r) return 0;
+        const uint32_t code = packCode(product);
+        for (int i = 0; i < kSlots; ++i) {
+            Slot& s = r->s[i];
+            const uint64_t id = s.id.load();
+            if (id == 0 || id == id_ || s.product.load() != code) continue;
+            const uint32_t a = s.refSerial.load(std::memory_order_acquire);
+            if (!a) continue;
+            if (!db) return a;
+            float tmp[kRefBands]; for (int k = 0; k < kRefBands; ++k) tmp[k] = s.refDb[k].load(std::memory_order_relaxed);
+            if (s.refSerial.load(std::memory_order_acquire) != a || s.id.load() != id) continue;   // changed while it was read
+            for (int k = 0; k < kRefBands; ++k) db[k] = tmp[k];
+            return a;
+        }
+        return 0;
+    }
     void setTimeout(double seconds) { timeout_ = seconds; }
     void setSpectrumInterval(double seconds) { specInterval_ = seconds; }   // how often others() looks at the rings again (default 90 ms)
 

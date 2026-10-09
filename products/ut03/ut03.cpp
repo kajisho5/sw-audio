@@ -142,7 +142,13 @@ void Processor::snapToTargets() {
 
 namespace {
 // integrated loudness of the whole file and the start (in samples) of its loudest 20 s (mean square of 100 ms blocks, 1 s steps)
-void measureRef(const std::vector<float>& l, const std::vector<float>& r, double fs, double& lufs, int& chorus) {
+void measureRef(const std::vector<float>& l, const std::vector<float>& r, double fs, double& lufs, int& chorus, std::array<double, BandSpectrum::kBands>& bands, bool& hasBands) {
+    {   // the long-term spectrum (mono) for SW Link
+        BandSpectrum sp; sp.prepare(fs); sp.start();
+        std::vector<float> mono(4096);
+        for (size_t off = 0; off < l.size(); off += 4096) { const size_t n = std::min<size_t>(4096, l.size() - off); for (size_t i = 0; i < n; ++i) mono[i] = 0.5f * (l[off + i] + r[off + i]); sp.process(mono.data(), static_cast<int>(n)); }
+        hasBands = sp.levels(bands.data());
+    }
     IntegratedLoudness m; m.setup(fs, 2, 0.0);
     for (size_t off = 0; off < l.size(); off += 4096) { const int n = static_cast<int>(std::min<size_t>(4096, l.size() - off)); const float* c[2] = {l.data() + off, r.data() + off}; m.process(c, 2, n); }
     lufs = m.integrated();
@@ -158,13 +164,13 @@ std::shared_ptr<const Processor::Ref> Processor::build(Decoded&& d) const {
     auto r = std::make_shared<Ref>();
     if (!prepared_ || std::abs(d.rate - fs_) < 0.5) { r->rate = d.rate; r->l = std::move(d.l); r->r = std::move(d.r); }
     else { r->rate = fs_; r->l = resample(d.l, d.rate, fs_); r->r = resample(d.r, d.rate, fs_); }
-    if (prepared_) { measureRef(r->l, r->r, fs_, r->lufs, r->chorus); r->measured = true; }
+    if (prepared_) { measureRef(r->l, r->r, fs_, r->lufs, r->chorus, r->bands, r->hasBands); r->measured = true; }
     return r;
 }
 std::shared_ptr<const Processor::Ref> Processor::convert(const Ref& o) const {
     auto r = std::make_shared<Ref>();
     r->rate = fs_; r->l = resample(o.l, o.rate, fs_); r->r = resample(o.r, o.rate, fs_);
-    measureRef(r->l, r->r, fs_, r->lufs, r->chorus); r->measured = true;
+    measureRef(r->l, r->r, fs_, r->lufs, r->chorus, r->bands, r->hasBands); r->measured = true;
     return r;
 }
 
@@ -181,6 +187,20 @@ void Processor::publish(int i, std::shared_ptr<const Ref> n) {
 void Processor::reap() {
     const unsigned a = acked_.load();
     for (size_t k = 0; k < retired_.size();) { if (retired_[k].second <= a) retired_.erase(retired_.begin() + static_cast<long>(k)); else ++k; }
+}
+
+// the reference that SW Link shows to the other plug-ins: the one the Source selects, else the first that is loaded
+unsigned Processor::linkSerial() const {
+    const int pick = static_cast<int>(target_[Source]);
+    const Ref* order[2] = {pub_[pick == RefC ? 1 : 0].load(), pub_[pick == RefC ? 0 : 1].load()};
+    for (const Ref* r : order) if (r && r->hasBands) return r->id;
+    return 0;
+}
+bool Processor::linkBands(double* db) const {
+    const int pick = static_cast<int>(target_[Source]);
+    const Ref* order[2] = {pub_[pick == RefC ? 1 : 0].load(), pub_[pick == RefC ? 0 : 1].load()};
+    for (const Ref* r : order) if (r && r->hasBands) { for (int b = 0; b < BandSpectrum::kBands; ++b) db[b] = r->bands[static_cast<size_t>(b)]; return true; }
+    return false;
 }
 
 bool Processor::loadReference(int slot, const uint8_t* data, size_t size) {

@@ -8,6 +8,7 @@
 //   Crossfade: equal-power ramp between the sources. Level trims the reference only. Loop ends and position jumps get a 5 ms fade.
 //   The loaded references are not part of the saved state (they are files); the screen reloads them.
 #pragma once
+#include "sw/band_spectrum.hpp"
 #include "sw/copy_atomic.hpp"
 #include "sw/loudness.hpp"
 #include "sw/param.hpp"
@@ -59,9 +60,13 @@ public:
     double referenceLufs(int slot) const { const Ref* r = (slot >= 1 && slot <= 2) ? pub_[slot - 1].load() : nullptr; return r ? r->lufs : -200.0; }
     double inputLufs() const { return meter_.integrated(); }
     void regionOf(int slot, double& startSec, double& endSec) const;
+    // SW Link (the adapter calls these on the audio thread after a block): the long-term spectrum of the reference the Source selects (B for B, C for C; for A the first one loaded), 60 bands of 1/6 octave
+    // (sw::BandSpectrum, the whole file, mono: what EQ05 Match compares). linkSerial() is 0 without a reference, otherwise it changes with every new one; linkBands() fills db[BandSpectrum::kBands].
+    unsigned linkSerial() const;
+    bool linkBands(double* db) const;
 
 private:
-    struct Ref { std::vector<float> l, r; double rate = 0, lufs = -200; int chorus = 0; unsigned id = 0; bool measured = false; };   // immutable once published; at the host rate when prepared
+    struct Ref { std::vector<float> l, r; double rate = 0, lufs = -200; int chorus = 0; unsigned id = 0; bool measured = false; std::array<double, BandSpectrum::kBands> bands{}; bool hasBands = false; };   // immutable once published; at the host rate when prepared
     std::shared_ptr<const Ref> build(Decoded&& d) const;
     std::shared_ptr<const Ref> convert(const Ref& r) const;   // to the host rate (loudness and chorus again)
     void publish(int i, std::shared_ptr<const Ref> n);

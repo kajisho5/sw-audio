@@ -311,6 +311,14 @@ bool Processor::refCommit() {
     if (ok) refDone_.store(refDone_.load() + 1.0); else refFailed_.store(refFailed_.load() + 1.0);
     return ok;
 }
+bool Processor::refFromBands(const double* db) {
+    if (!db) { refFailed_.store(refFailed_.load() + 1.0); return false; }
+    std::array<double, kBands> v{}; double lo = 1e30, hi = -1e30;
+    for (int b = 0; b < kBands; ++b) { if (!std::isfinite(db[b])) { refFailed_.store(refFailed_.load() + 1.0); return false; } v[static_cast<size_t>(b)] = db[b]; lo = std::min(lo, db[b]); hi = std::max(hi, db[b]); }
+    if (hi - lo < 1e-9 && hi <= -299.0) { refFailed_.store(refFailed_.load() + 1.0); return false; }   // (nothing but the floor)
+    refBands_ = v; refReady_.store(true); refDone_.store(refDone_.load() + 1.0);
+    return true;
+}
 void Processor::refAbort() { refOpen_ = false; refBytes_.clear(); refBytes_.shrink_to_fit(); }
 void Processor::refClear() { refOpen_ = false; refBytes_.clear(); refBytes_.shrink_to_fit(); refReady_.store(false); }
 

@@ -414,6 +414,7 @@ EVO_BUTTONS = {
     'CS03': ('Set input', 'Set input: listen for 5 s, then set the Gain (press again to stop)', {}),
     'CS04': ('Suggest order', 'Suggest a module order for the kind of source', {'data-suggest': '1'}),
     'EQ05': [('Reference', 'Choose the reference: an audio file (or drop one on the window). Shift-click removes it.', {'data-ref': '1'}),
+             ('From UT03', 'Take the reference of the UT03 Reference plug-in in this host (SW Link): its loaded reference, as a long-term spectrum', {'data-linkref': '1'}),
              ('Match', 'Match: play the input for 10 s of playing; the four bands are then set to bring its tone curve to the reference\'s', {})],
 }
 

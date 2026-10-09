@@ -1,4 +1,5 @@
 #include "doctest.h"
+#include "alloc_guard.hpp"
 #include "ut03/ut03.hpp"
 #include "tu.hpp"
 #include <atomic>
@@ -220,4 +221,25 @@ TEST_CASE("UT03 staged upload from text: base64 pieces the screen sends") {
     REQUIRE(b.stageBegin(2)); CHECK_FALSE(b.stageAppendBase64("AB!D")); CHECK_FALSE(b.stageCommit()); CHECK(b.hasReference(2));
     REQUIRE(b.stageBegin(2)); CHECK_FALSE(b.stageAppendBase64("ABC")); CHECK_FALSE(b.stageCommit());
     CHECK(b.stageBegin(1)); CHECK(b.stageAppendBase64("")); CHECK(b.stageAppendBase64("AAAA")); b.stageAbort(); CHECK_FALSE(b.stageAppendBase64("AAAA"));
+}
+
+TEST_CASE("UT03 shares the long-term spectrum of its reference (SW Link): the one the Source selects; a new serial for each new reference; none without one, or from silence") {
+    auto tilted = [](unsigned seed, double a) { auto x = noise(-20, 8.0, seed); double lp = 0; for (auto& v : x) { lp += a * (v - lp); v = static_cast<float>(lp); } return x; };   // a one-pole low-pass: the lows are louder
+    Processor p; p.prepare(kFs, 256); p.snapToTargets();
+    double db[sw::BandSpectrum::kBands];
+    CHECK(p.linkSerial() == 0u); CHECK_FALSE(p.linkBands(db));
+    REQUIRE(load(p, 1, tilted(5, 0.05)));
+    { allocguard::Scope g; (void)p.linkSerial(); (void)p.linkBands(db); CHECK(g.n() == 0); }   // (the adapter asks on the audio thread after a block)
+    const unsigned s1 = p.linkSerial(); CHECK(s1 != 0u);
+    REQUIRE(p.linkBands(db));
+    CHECK(db[16] - db[50] > 10.0);   // 20 x 2^(16.5/6) = 135 Hz against 20 x 2^(50.5/6) = 7.4 kHz: a one-pole at ~380 Hz falls about 26 dB between them
+    REQUIRE(load(p, 1, tilted(6, 0.05))); CHECK(p.linkSerial() != s1);   // a new reference: a new serial
+    // B and C loaded, the Source picks which one is shown
+    REQUIRE(load(p, 2, noise(-20, 8.0, 7)));
+    p.setParam(Source, 2); const unsigned sc = p.linkSerial(); double dc[sw::BandSpectrum::kBands]; REQUIRE(p.linkBands(dc)); CHECK(std::abs(dc[16] - dc[50]) < 3.0);   // C is white
+    p.setParam(Source, 1); const unsigned sb = p.linkSerial(); CHECK(sb != sc); REQUIRE(p.linkBands(db)); CHECK(db[16] - db[50] > 10.0);
+    p.setParam(Source, 0); CHECK(p.linkSerial() == sb);   // A: the first one loaded
+    p.clearReference(1); p.setParam(Source, 1); CHECK(p.linkSerial() == sc);   // (B gone: C is what is left)
+    p.clearReference(2); CHECK(p.linkSerial() == 0u); CHECK_FALSE(p.linkBands(db));
+    REQUIRE(load(p, 1, std::vector<float>(static_cast<size_t>(5 * kFs), 0.0f))); CHECK(p.linkSerial() == 0u);   // silence has no spectrum
 }

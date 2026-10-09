@@ -549,10 +549,10 @@
   // ("fit": it runs on the window's thread) and the core writes the four bands' values (one undo step: ui/actions.json). Pressed without a reference it asks for one.
   const MATCH_SEG_S = 5, MATCH_SEGS = 8;
   function matchReference(box, ctx) {
-    const btn = box.querySelector('button[data-call="match"]'), refBtn = box.querySelector('button[data-ref]'); if (!btn || !refBtn) return null;
+    const btn = box.querySelector('button[data-call="match"]'), refBtn = box.querySelector('button[data-ref]'), linkBtn = box.querySelector('button[data-linkref]'); if (!btn || !refBtn) return null;
     const input = document.createElement('input'); refBtn.parentNode.append(input);
-    const label = btn.textContent.trim(), refLabel = refBtn.textContent.trim(), refTip = refBtn.title, matchTip = btn.title;
-    let r = null, busy = false, pend = null, name = '', sec = 0, stage = 'idle', applied0 = 0, fitAt = 0, refText = '', refTextUntil = 0;
+    const label = btn.textContent.trim(), refLabel = refBtn.textContent.trim(), refTip = refBtn.title, matchTip = btn.title, linkTip = linkBtn ? linkBtn.title : '';
+    let r = null, busy = false, pend = null, name = '', sec = 0, stage = 'idle', applied0 = 0, fitAt = 0, refText = '', refTextUntil = 0, linkAvail = false;
     const short = n => (n.length > 16 ? n.slice(0, 13) + '…' : n);
     const monoOf = d => {
       const seg = Math.round(MATCH_SEG_S * d.rate), all = seg * MATCH_SEGS, mix = i => 0.5 * (d.l[i] + d.r[i]);
@@ -573,6 +573,11 @@
       } catch (e) { busy = false; pend = null; ctx.call('refabort', ''); say('Could not load', 3500); }
     }
     pickFile(input, 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac', load);
+    // "From UT03" (SW Link): the core takes the spectrum of the reference that UT03 shares; the same wait for the answer as a file
+    if (linkBtn) linkBtn.addEventListener('click', () => {
+      if (busy || !linkAvail) return; busy = true; say('Reading …');
+      pend = { done0: r ? r[7] : 0, failed0: r ? r[8] : 0, t: Date.now(), name: 'UT03 reference', sec: 0 }; ctx.call('linkref', '');
+    });
     refBtn.addEventListener('click', e => { if (e.shiftKey) { if (!busy) { ctx.call('refclear', ''); name = ''; sec = 0; stage = 'idle'; paint(); } return; } if (!busy) input.click(); });
     box.addEventListener('dragover', e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
     box.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); load(f); });
@@ -592,9 +597,14 @@
       const tip = stage === 'done' && r ? 'The tone curve of the input differed from the reference\'s by ' + r[4].toFixed(1) + ' dB (RMS over 30 Hz - 16 kHz, level taken out); with the four bands as set now ' + r[5].toFixed(1) + ' dB. Undo (the toolbar) puts the previous settings back. HPF, LPF and Drive were not touched.'
         : stage === 'listen' ? 'Listening to the input: it has to play for 10 s (silence does not count). Press again to cancel.' : has ? matchTip : 'Choose a reference first (press to pick a file)';
       if (btn.title !== tip) btn.title = tip; btn.classList.toggle('on', stage === 'listen' || stage === 'fit');
+      if (linkBtn) {   // dim without a UT03 that has a reference in this host
+        const lt = linkAvail ? linkTip : 'No UT03 Reference with a loaded reference in this host (SW Link): ' + linkTip; if (linkBtn.title !== lt) linkBtn.title = lt;
+        const o = linkAvail ? '' : '.45'; if (linkBtn.style.opacity !== o) linkBtn.style.opacity = o;
+      }
     }
     return { update(info) {
       const ro = info && info.readouts; if (!ro || ro.length < 9) return; r = ro;
+      linkAvail = !!(info.link && info.link[1] > 0.5);
       if (pend) {
         if (r[7] > pend.done0) { name = pend.name; sec = pend.sec; pend = null; busy = false; say('Loaded', 2500); }
         else if (r[8] > pend.failed0) { pend = null; busy = false; say('Could not read it', 3500); }

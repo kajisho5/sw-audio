@@ -40,6 +40,7 @@ public:
     void refBegin(double rate);
     bool refAppendBase64(const char* text);
     bool refCommit();
+    bool refFromBands(const double* db);              // GUI thread: the reference as its long-term spectrum (BandSpectrum::kBands dB: UT03's, over SW Link) instead of a file; false for values that cannot be one
     void refAbort();                                  // the load in progress is dropped (the reference in place stays)
     void refClear();                                  // the reference in place is dropped
     bool hasReference() const { return refReady_.load(); }

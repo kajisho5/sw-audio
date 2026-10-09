@@ -20,6 +20,9 @@ struct Eq05 {
         o[0] = c.matching() ? 1.0 : 0.0; o[1] = c.matchProgress(); o[2] = c.needsFit() ? 1.0 : 0.0; o[3] = c.hasReference() ? 1.0 : 0.0; o[4] = c.matchBefore(); o[5] = c.matchAfter();
         o[6] = c.matchesApplied(); o[7] = c.refLoadsDone(); o[8] = c.refLoadsFailed();
     }
+    // SW Link: the reference can be UT03's (its long-term spectrum), taken when the page sends "linkref"
+    static constexpr const char* kLinkRefFrom = "UT03";
+    static void linkRefUse(Core& c, const double* db) { c.refFromBands(db); }
     static void guiCall(Core& c, const char* n, const char*) { if (!std::strcmp(n, "match")) c.match(); }
     static bool guiOnGui(const char* n) { return !std::strncmp(n, "ref", 3) || !std::strcmp(n, "fit"); }
     static void guiCallGui(Core& c, const char* n, const char* a) {

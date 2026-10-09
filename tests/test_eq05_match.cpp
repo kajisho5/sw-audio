@@ -113,3 +113,23 @@ TEST_CASE("EQ05 Match: a broken or too short reference is refused; the previous 
     CHECK(p.hasReference());   // (the failed one did not take the last one away)
     sendReference(p, noise(-20.0, 6.0, 9), 44100.0); CHECK(p.hasReference());   // another rate is analysed at its own rate
 }
+
+TEST_CASE("EQ05 Match: the reference may be given as its long-term spectrum (UT03's, over SW Link): the same writes as the file it was made from; values that cannot be a spectrum are refused") {
+    const auto input = noise(-20.0, 14.0, 61), plain = noise(-20.0, 14.0, 62);
+    auto trueEq = make({{HfGain, 5.0}, {HfFreq, 7000.0}, {LfGain, -4.0}, {LfFreq, 120.0}, {HmfGain, 3.0}, {HmfFreq, 2500.0}, {HmfQ, 1.4}, {Drive, 0.0}});
+    const auto ref = through(trueEq, plain);
+    auto a = make({{Drive, 0.0}}), b = make({{Drive, 0.0}});
+    sendReference(a, ref, kFs);
+    const auto bands60 = bands(ref);   // what UT03 would share: BandSpectrum of the file
+    CHECK(!b.hasReference());
+    REQUIRE(b.refFromBands(bands60.data())); CHECK(b.hasReference()); CHECK(b.refLoadsDone() == 1);
+    const auto oa = runMatch(a, input), ob = runMatch(b, input);
+    REQUIRE(oa.fit); REQUIRE(ob.fit); REQUIRE(oa.w.size() == ob.w.size());
+    for (size_t i = 0; i < oa.w.size(); ++i) { CHECK(oa.w[i].first == ob.w[i].first); CHECK(oa.w[i].second == doctest::Approx(ob.w[i].second).epsilon(1e-9)); }
+    CHECK(b.matchAfter() < 1.0);
+    // refused: no values, NaN, nothing but the floor; the reference in place stays, and the failures are counted
+    auto c = make(); REQUIRE(c.refFromBands(bands60.data()));
+    CHECK(!c.refFromBands(nullptr)); std::vector<double> bad = bands60; bad[10] = std::nan(""); CHECK(!c.refFromBands(bad.data()));
+    std::vector<double> floor(bands60.size(), -300.0); CHECK(!c.refFromBands(floor.data()));
+    CHECK(c.hasReference()); CHECK(c.refLoadsFailed() == 3); CHECK(c.refLoadsDone() == 1);
+}

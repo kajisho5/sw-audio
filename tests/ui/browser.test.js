@@ -193,6 +193,14 @@ async function open(code, query = '') {
   await mref.click({ modifiers: ['Shift'] }); await pg.waitForTimeout(300);
   eq((await mref.textContent()).trim(), 'Reference', 'shift-click on Reference removes it');
   await pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot, dt = new DataTransfer(); dt.items.add(new File([new Uint8Array(1)], 'x.wav')); sh.querySelector('.evob button[data-ref]').dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  // EQ05 From UT03 (SW Link): enabled while a UT03 in the host shares a reference; pressing it takes that as the reference
+  await open('EQ05', '&utref=0'); const mlk = pg.locator('.evob button[data-linkref]');
+  eq(await mlk.count(), 1, 'EQ05 has the From UT03 button'); ok(/No UT03 Reference/.test(await mlk.getAttribute('title')), 'dim without a UT03 reference: ' + await mlk.getAttribute('title'));
+  await mlk.click(); await pg.waitForTimeout(400); eq((await pg.locator('.evob button[data-ref]').textContent()).trim(), 'Reference', 'a press without a UT03 reference does nothing');
+  await open('EQ05', '&utref=1'); const mlk2 = pg.locator('.evob button[data-linkref]'); ok(!/No UT03 Reference/.test(await mlk2.getAttribute('title')), 'lit with one: ' + await mlk2.getAttribute('title'));
+  await mlk2.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-ref]').textContent.trim() === 'UT03 reference', null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'EQ05: the UT03 reference is the reference'));
+  ok(/Reference: UT03 reference\./.test(await pg.locator('.evob button[data-ref]').getAttribute('title')), 'its tooltip: ' + await pg.locator('.evob button[data-ref]').getAttribute('title'));
+  await pg.locator('.evob button[data-call="match"]').click(); await pg.waitForFunction(() => /Listening \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="match"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'EQ05: Match listens with the UT03 reference'));
   await open('DY04'); eq(await pg.locator('.evob button[data-ref]').count(), 0, 'DY04 has no Reference button');
 
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');

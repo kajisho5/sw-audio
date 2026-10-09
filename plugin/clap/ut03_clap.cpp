@@ -13,6 +13,9 @@ struct Ut03 {
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
     // match (dB), input integrated LUFS, reference 1 / 2 LUFS, then per reference: length (s, 0 = none loaded), loop region start / end (s); loads that worked / failed since the start
+    // SW Link: the long-term spectrum of the reference the Source selects (EQ05 Match takes it)
+    static unsigned linkSerial(const Core& c) { return c.linkSerial(); }
+    static bool linkBands(const Core& c, double* db) { return c.linkBands(db); }
     static constexpr int kReadouts = 12;
     static void readouts(const Core& c, double* o) {
         o[0] = c.matchDb(); o[1] = c.inputLufs(); o[2] = c.referenceLufs(1); o[3] = c.referenceLufs(2);

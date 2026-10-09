@@ -71,6 +71,14 @@ template <class C> struct HasReset<C, std::void_t<decltype(std::declval<C&>().re
 // a core that has work for a background thread (EQ08 / EQ02 Linear: the kernel design, sw/worker.hpp) gets it switched on here, before prepare(); without it (tests, offline) the core does the work itself in process()
 template <class C, class = void> struct HasUseWorker : std::false_type {};
 template <class C> struct HasUseWorker<C, std::void_t<decltype(std::declval<C&>().useWorker(true))>> : std::true_type {};
+// SW Link reference spectrum (plugin/clap/swlink.hpp). The producer (UT03) has static unsigned linkSerial(const Core&) (0: none, otherwise it changes with every new reference) and
+// static bool linkBands(const Core&, double* db): both on the audio thread after a block, copied to atomics; the screen's thread shares them with the other instances. The consumer (EQ05 Match)
+// has static constexpr const char* kLinkRefFrom = "UT03" and static void linkRefUse(Core&, const double* db): called on the screen's thread when the page sends "linkref"; the screen is told in
+// info.link[1] whether a reference is there to take (1 / 0).
+template <class P, class = void> struct HasLinkRef : std::false_type {};
+template <class P> struct HasLinkRef<P, std::void_t<decltype(P::linkSerial(std::declval<const typename P::Core&>())), decltype(P::linkBands(std::declval<const typename P::Core&>(), std::declval<double*>()))>> : std::true_type {};
+template <class P, class = void> struct HasLinkRefUse : std::false_type {};
+template <class P> struct HasLinkRefUse<P, std::void_t<decltype(P::kLinkRefFrom), decltype(P::linkRefUse(std::declval<typename P::Core&>(), std::declval<const double*>()))>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -237,10 +245,15 @@ private:
         void stereo(double* out) { pl.spec_.stereo(out); }
         int numReadouts() { if constexpr (HasReadouts<P>::value) return P::kReadouts; else return 0; }
         double readout(int i) { return pl.ro_[static_cast<size_t>(i)].load(std::memory_order_relaxed); }
-        void call(const std::string& name, const std::string& arg) { if (name == "linkwatch") { pl.link_watch_.store(arg == "1"); return; } pl.guiCall(name, arg); }
+        void call(const std::string& name, const std::string& arg) {
+            if (name == "linkwatch") { pl.link_watch_.store(arg == "1"); return; }
+            if (name == "linkref") { pl.linkRefTake(); return; }
+            pl.guiCall(name, arg);
+        }
         // SW Link for the screen: [the other instances alive, then (only while a screen part asked for it: "linkwatch 1") the sum of their output spectra, 64 dB values]; returns how many values
         int link(double* out) {
             out[0] = pl.link_.joined() ? pl.link_.peers() : -1;   // -1: this instance is not in the registry (no room, or a layout it does not know)
+            if constexpr (HasLinkRefUse<P>::value) { out[1] = out[0] >= 0 && pl.link_.findReference(P::kLinkRefFrom) != 0 ? 1.0 : 0.0; return 2; }   // a reference to take, or not
             if (out[0] < 0 || !pl.link_watch_.load()) return 1;
             pl.link_.others(out + 1); return 1 + gui::kSpecBands;
         }
@@ -440,6 +453,7 @@ private:
         }
         s->measure(ob.data32, nch, frames, 2);
         if constexpr (HasReadouts<P>::value) s->publishReadouts();
+        if constexpr (HasLinkRef<P>::value) s->publishLinkRef();
         s->updateTail();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
@@ -689,6 +703,25 @@ private:
     std::array<std::atomic<double>, gui::kMaxReadouts> ro_{};   // the core's measured values for the screen (trait readouts)
     void publishReadouts() { if constexpr (HasReadouts<P>::value) { static_assert(P::kReadouts <= gui::kMaxReadouts); double v[P::kReadouts > 0 ? P::kReadouts : 1] = {}; P::readouts(shell_.core(), v); for (int i = 0; i < P::kReadouts; ++i) ro_[static_cast<size_t>(i)].store(v[i], std::memory_order_relaxed); } }
     gui::SpectrumTap spec_;   // the output spectrum for the screen (audio thread writes, GUI thread reads)
+    // SW Link reference spectrum: the producer's, shared from the audio thread after a block (publishReference only stores atomics: no lock, no allocation); the consumer takes the one it finds (linkRefTake)
+    void publishLinkRef() {
+        if constexpr (HasLinkRef<P>::value) {
+            static_assert(link::kRefBands == 60, "the reference spectrum is sw::BandSpectrum's 60 bands");
+            uint32_t ser = static_cast<uint32_t>(P::linkSerial(shell_.core()));
+            if (ser == lref_audio_) return;
+            float v[link::kRefBands] = {};
+            if (ser) { double db[link::kRefBands]; if (P::linkBands(shell_.core(), db)) for (int i = 0; i < link::kRefBands; ++i) v[i] = static_cast<float>(db[i]); else ser = 0; }
+            link_.publishReference(ser, v); lref_audio_ = ser;
+        }
+    }
+    void linkRefTake() {
+        if constexpr (HasLinkRefUse<P>::value) {
+            static_assert(link::kRefBands == 60, "the reference spectrum is sw::BandSpectrum's 60 bands");
+            double db[link::kRefBands];
+            if (link_.joined() && link_.findReference(P::kLinkRefFrom, db)) P::linkRefUse(shell_.core(), db);
+        }
+    }
+    uint32_t lref_audio_ = 0;
     link::Member link_;       // SW Link: the other SW AUDIO instances of this process read the ring above (declared after it: leaves before the ring is destroyed)
     std::atomic<bool> link_watch_{false};   // a part of the screen wants the others' spectrum (Unmask)
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
