@@ -31,6 +31,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 2. **テストを先に書く**：`tests/test_<code>.cpp`。仕様表（ID・範囲・既定値・カーブ・Auto 可否）と、DSP の要点を数値で確かめる。空実装でビルドして、**失敗することを確認**してから実装する。
 3. 実装：`products/<code>/<code>.hpp/.cpp`（`specs()`・`ParamId`・`Processor`）。
 4. プラグイン：`plugin/clap/<code>_clap.cpp`（traits：Output/In/Mix の番号、`kAutoGain=false` が必要なら）＋ `SW_CLAP_ENTRY`。`CMakeLists.txt` の `SW_PRODUCTS` と `sw_add_plugin(...)` に1行ずつ。
+4b. **パラメータを足す・変えたら**：`python3 tools/dump_specs.py`（`ui/specs.json` と `tests/ui/curve_samples.json`。全製品を 1 回コンパイル、約 1 分）→ `python3 tools/gen_skins.py` → `python3 tools/check_skins.py` を回して commit する（プレビュー・画面の部品の結び付き・JS の曲線テストがこの表から作られる。古いまま commit すると画面側の表と食い違う。CS02 のキーフィルターで一度やった）。
 5. 検証：`tools/validate_all.sh`（ビルド・単体テスト・全プラグインの両 validator）。ASan／UBSan でも全テストを回す（下のコマンド）。
 6. README（製品表、設計値、仕様との差）と `docs/tasks.md` のチェックを更新して commit。
 
