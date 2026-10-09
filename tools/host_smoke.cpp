@@ -647,6 +647,36 @@ bool stateChecks(const std::vector<fs::path>& files, std::vector<std::string>& p
     return ok;
 }
 
+// Random settings through the real plug-in: every parameter at a random value (three seeds), 0.4 s of noise (plus a loud burst): no NaN / Inf, no error from process(), and nothing absurdly loud.
+bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (int seed = 1; seed <= 3; ++seed) {
+            Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  random settings of " + name + ": " + why); ok = false; break; }
+            const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+            const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+            a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+            if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+            Rng rng(0xD1B54A32D192ED03ull * static_cast<uint64_t>(seed) + 17);
+            EventList ev;
+            for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
+                clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
+                double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                ev.set(pi.id, v);
+            }
+            a.run.process(1, 100 + static_cast<uint64_t>(seed), ev);   // the settings arrive; the next blocks are the audio
+            a.run.process(70, 200 + static_cast<uint64_t>(seed), ev);
+            if (a.run.bad) { problems.push_back("FAIL  random settings of " + name + " (seed " + std::to_string(seed) + "): NaN / Inf in the output or an error from process()"); ok = false; }
+            else if (a.run.peak > 1e4) { char b[200]; std::snprintf(b, sizeof b, "FAIL  random settings of %s (seed %d): peak %.3g", name.c_str(), seed, a.run.peak); problems.push_back(b); ok = false; }
+            a.close();
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    random settings: %d plug-ins x 3 seeds: every parameter at a random value, 0.4 s of noise: finite output, no process() error, peak under 1e4\n", tested);
+    return ok;
+}
+
 }   // namespace
 
 int main(int argc, char** argv) {
@@ -691,6 +721,7 @@ int main(int argc, char** argv) {
         if (!r.fail) ++pass;
     }
     if (!linkChecks(files)) ++fails;
+    { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
     std::printf("\n%zu plug-ins: %d ok, %d FAIL, %d with warnings; Output gain checked on %d, Bypass on %d, Mix 0 %% on %d, In Off on %d; slowest %s (%.1f%% of one core, noisy)\n",
