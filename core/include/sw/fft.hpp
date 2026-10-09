@@ -8,6 +8,12 @@
 #include <complex>
 #include <vector>
 
+#if defined(_MSC_VER)
+#define SW_RESTRICT __restrict
+#else
+#define SW_RESTRICT __restrict__
+#endif
+
 namespace sw {
 
 class Fft {

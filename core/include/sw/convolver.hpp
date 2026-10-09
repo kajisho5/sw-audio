@@ -102,9 +102,13 @@ private:
         for (int p = 0; p < used; ++p) {
             const auto& X = s.fdl[static_cast<size_t>((head_ - p + P_) % P_)];
             const auto& H = K[static_cast<size_t>(p)];
-            for (int k = 0; k <= B_; ++k) {   // by hand (see fft.hpp): complex multiply-accumulate without the NaN-checking library call
-                const cd x = X[static_cast<size_t>(k)], h = H[static_cast<size_t>(k)];
-                acc_[static_cast<size_t>(k)] += cd(x.real() * h.real() - x.imag() * h.imag(), x.real() * h.imag() + x.imag() * h.real());
+            // complex multiply-accumulate on plain doubles through restrict pointers: the compiler can vectorize it (std::complex's operators and the indexing cost about 25 instructions a bin)
+            double* SW_RESTRICT a = reinterpret_cast<double*>(acc_.data());
+            const double* SW_RESTRICT x = reinterpret_cast<const double*>(X.data());
+            const double* SW_RESTRICT h = reinterpret_cast<const double*>(H.data());
+            for (int k = 0; k <= B_; ++k) {
+                const double xr = x[2 * k], xi = x[2 * k + 1], hr = h[2 * k], hi = h[2 * k + 1];
+                a[2 * k] += xr * hr - xi * hi; a[2 * k + 1] += xr * hi + xi * hr;
             }
         }
         rfft_.inverse(acc_.data(), wr_.data());

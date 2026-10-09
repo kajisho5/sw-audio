@@ -84,8 +84,15 @@ public:
 private:
     using cd = std::complex<double>;
     struct Job { enum State { Idle, Mac, Inverse, Done } state = Idle; int part = 0, head = 0; std::vector<cd> acc; };
+    // acc += X * H over the bins 0..B: plain doubles through restrict pointers (std::complex's operators and the vector indexing cost about 25 instructions a bin; this loop the compiler can vectorize)
     static void mac(std::vector<cd>& acc, const std::vector<cd>& X, const std::vector<cd>& H, int B) {
-        for (int k = 0; k <= B; ++k) { const cd x = X[static_cast<size_t>(k)], h = H[static_cast<size_t>(k)]; acc[static_cast<size_t>(k)] += cd(x.real() * h.real() - x.imag() * h.imag(), x.real() * h.imag() + x.imag() * h.real()); }
+        double* SW_RESTRICT a = reinterpret_cast<double*>(acc.data());
+        const double* SW_RESTRICT x = reinterpret_cast<const double*>(X.data());
+        const double* SW_RESTRICT h = reinterpret_cast<const double*>(H.data());
+        for (int k = 0; k <= B; ++k) {
+            const double xr = x[2 * k], xi = x[2 * k + 1], hr = h[2 * k], hi = h[2 * k + 1];
+            a[2 * k] += xr * hr - xi * hi; a[2 * k + 1] += xr * hi + xi * hr;
+        }
     }
     void inverse(const std::vector<cd>& acc, std::vector<double>& out) {
         rfft_.inverse(acc.data(), wr_.data());
