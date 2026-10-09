@@ -950,7 +950,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 | 共通の処理枠 | `core/include/sw/shell.hpp` | 仕様書の順番で、製品の処理を In・Auto gain・Output・Δ で包む。原音側は製品の遅延に合わせてずらす |
 | ラウドネス計測 | `core/include/sw/loudness.hpp` | ITU-R BS.1770 の K 特性、400 ms（Momentary）と 3 秒（Short-term）。Auto gain と、今後の計測系（MT01・LV23・MS01）で使う |
 | モーフ | `core/include/sw/morph.hpp` | A／B の補間規則（周波数は対数、dB は直線、段階式は 0.5 で切替）。画面の A／B 操作と一緒にプラグインへ組み込む |
-| プラグイン層 | `plugin/clap/clap_adapter.hpp` | 製品のパラメータ表と DSP を渡すだけで CLAP になる共通の型。ホストのパラメータ番号は製品分のあとに共通分（Auto gain、Delta）を足す |
+| プラグイン層 | `plugin/clap/clap_adapter.hpp` | 製品のパラメータ表と DSP を渡すだけで CLAP になる共通の型。ホストのパラメータ番号は製品分のあとに共通分（Auto gain、Delta、Bypass）を足す |
 | ダイナミクス | `core/include/sw/dynamics.hpp` | 圧縮カーブ（ニー付き）、アタック/リリース、ピーク/RMS/Program 検出、トゥルーピーク検出、先読みブリックウォール・リミッター |
 | 帯域フィルタ | `core/include/sw/bandfilter.hpp` | 1バンド分の SVF（Bell／シェルフ／Notch／6〜96 dB/oct のカット）、高域の形崩れ補正 |
 | FFT・FIR 設計・畳み込み | `fft.hpp`・`fir_design.hpp`・`convolver.hpp` | 基数2の FFT、アナログ原型の振幅から直線位相／最小位相（ケプストラム法）の FIR、一様分割 overlap-save 畳み込み（新旧カーネルのクロスフェード付き）。EQ02 の Linear でも使う |
@@ -1051,6 +1051,10 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 ### 本物のページの確認（`tools/gui_page_dump.cpp`、`tools/gui_page_check.js`）
 
 プレビュー（`ui/preview.html`）ではなく、プラグインが実際に WebView へ渡す HTML（`gui::page()`：ランタイム＋フォント＋製品のデザイン＋パラメータ表）を書き出し、Chromium に読み込ませる。ネットワークを切り、ホストとの橋渡しを仮の関数に置き換え、本物と同じ引数の `SWHOST.update(値, 遅延, CPU, メーター, スペクトラム, 読み取り値, ステレオ)` を流して、スクリプトのエラー、読み込めたフォント、ホストへ送られたメッセージを確かめる。LV07 で確認（エラーなし、フォント 7 種、つまみ・タイル・中央の表示が動く）。**WKWebView・WebView2 そのものでの確認ではない**。
+
+### 共通の Bypass パラメータ（パネルの「In」トグルと電源ボタン）
+
+仕様書の共通機能「In（パネルの電源トグル）＝製品内バイパス、ホストのバイパスと連動、遅延は変えず 10 ms のクロスフェード」の部分は、`sw::Shell` に `setIn()`（10 ms のクロスフェード、遅延はそのまま）まであったが、**アダプターが公開しておらず、画面の「In」トグル（43 製品）とヘッダーの電源ボタンは動かなかった**。共通パラメータ `common.bypass`（名前 Bypass、Off／On、既定 Off）を Delta の後ろに足し、`CLAP_PARAM_IS_BYPASS` を付けた（ホストのバイパスと連動。VST3 ラッパーも bypass として扱う）。`P::kInParam` を持つ製品（EQ05 など 2 製品）は自前の In パラメータを使うので足さない（画面は In を反転して電源ボタンに結び付ける）。古い状態の読み込みは従来どおり（足りない分は既定のまま）。画面の立体トグル（`.tog`）は、「In」「Power」＝上が In、2 つの名前の間のトグル（Link／Solo、Sync／Free、Hard／Soft …）は同じ名前の 2 択パラメータ（名前が 1 つだけ一致するときは上＝On）に結び付けた。**結び付かなかった 4 つ（SA02 Group／Bus、GT05 Lift／Ground、DY02 Limit／Comp、DY01 SC HPF）は絵のまま動かない**（対応するパラメータの見直しが要る）。
 
 ### LIVE 製品の画面の不具合の修正（つまみ・タイル）
 

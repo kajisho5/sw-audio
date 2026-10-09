@@ -13,7 +13,7 @@
   const useSkin = new URLSearchParams(location.search).get('skin') !== '0';
   const [S, P, K] = await Promise.all([fetch('specs.json').then(r => r.json()), fetch('products.json').then(r => r.json()), useSkin ? fetch('skins.json').then(r => r.json()) : Promise.resolve({})]);
   const params = S.specs[code.toLowerCase()], traits = S.traits[code.toLowerCase()];
-  const vals = params.map(p => p.def); if (traits.autoGain) vals.push(0); if (traits.delta) vals.push(0);
+  const vals = params.map(p => p.def); if (traits.autoGain) vals.push(0); if (traits.delta) vals.push(0); if (traits.bypass) vals.push(0);
   const sim = new URLSearchParams(location.search).get('sim') === '1'; let t0 = 0;
   const simMeters = () => { t0 += 1; const a = -30 + 22 * Math.sin(t0 / 9) * Math.sin(t0 / 23), th = vals[0] === undefined ? -20 : vals[0], r = vals[1] || 2, o = a > th ? th + (a - th) / r : a; return [a, a - 1, o + 2, o + 1]; };
   const listeners = [];

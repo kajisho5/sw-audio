@@ -8,7 +8,7 @@
 // Optional on Core: void setTransport(bool playing, double beatsToNextBar) — every block; beatsToNextBar is -1 when the host gives no bar position.
 //   static const clap_plugin_descriptor_t* descriptor();
 // Host-facing values (spec 共通章 2): continuous = normalized 0..1, stepped = step index.
-// Host parameter ids: product params 0..N-1, then common params (Auto gain, Delta) appended, so ids stay stable.
+// Host parameter ids: product params 0..N-1, then common params (Auto gain, Delta, Bypass) appended, so ids stay stable. Bypass (CLAP_PARAM_IS_BYPASS, the host's bypass) is the panel's "In" toggle: products with their own In parameter (kInParam >= 0) do not get it.
 #pragma once
 #include "gui_bridge.hpp"
 #include "gui_view.hpp"
@@ -74,6 +74,7 @@ template <class C, class = void> struct HasSetTempo : std::false_type {};
 template <class C> struct HasSetTempo<C, std::void_t<decltype(std::declval<C&>().setTempo(120.0))>> : std::true_type {};
 
 inline const ParamSpec& autoGainSpec() { static const ParamSpec s{"common.autogain", "Auto gain", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}}; return s; }
+inline const ParamSpec& bypassSpec() { static const ParamSpec s{"common.bypass", "Bypass", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}}; return s; }
 inline const ParamSpec& deltaSpec() { static const ParamSpec s{"common.delta", "Delta", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}}; return s; }
 
 template <class P>
@@ -84,10 +85,14 @@ public:
     static int autoGainId() { return kHasAutoGain ? numProduct() : -1; }
     static constexpr bool kHasDelta = DeltaEnabled<P>::value;
     static int deltaId() { return kHasDelta ? numProduct() + (kHasAutoGain ? 1 : 0) : -1; }
-    static int numParams() { return numProduct() + (kHasAutoGain ? 1 : 0) + (kHasDelta ? 1 : 0); }
+    static constexpr bool kHasBypass = P::kInParam < 0;
+    static int bypassId() { return kHasBypass ? numProduct() + (kHasAutoGain ? 1 : 0) + (kHasDelta ? 1 : 0) : -1; }
+    static int numParams() { return numProduct() + (kHasAutoGain ? 1 : 0) + (kHasDelta ? 1 : 0) + (kHasBypass ? 1 : 0); }
     static const ParamSpec& spec(int id) {
         if (id < numProduct()) return P::specs()[static_cast<size_t>(id)];
-        return id == autoGainId() ? autoGainSpec() : deltaSpec();
+        if (id == autoGainId()) return autoGainSpec();
+        if (id == bypassId()) return bypassSpec();
+        return deltaSpec();
     }
     static bool stepped(int id) { return spec(id).curve == Curve::Step; }
     static double hostToPlain(int id, double h) {
@@ -115,6 +120,7 @@ private:
         else if (id == P::kMixParam) shell_.setMix(plain / 100.0);  // Mix is in percent
         else if (id == autoGainId()) shell_.setAutoGain(plain > 0.5);
         else if (kHasDelta && id == deltaId()) shell_.setDelta(plain > 0.5);
+        else if (kHasBypass && id == bypassId()) shell_.setIn(plain < 0.5);   // Bypass On = the product is out (10 ms crossfade, the delay stays)
         if (id < numProduct()) shell_.core().setParam(id, plain);
     }
     void applyPending() {
@@ -213,7 +219,7 @@ private:
         if (!guiIsApiSupported(p, api, floating)) return false;
         s->guiDestroyView();
         std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
-        const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, init, f.latencyMs(), skin());
+        const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, kHasBypass, init, f.latencyMs(), skin());
         s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_);
         s->view_ = gui::createView(html, [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
         return s->view_ != nullptr;
@@ -387,7 +393,7 @@ private:
         const auto& s = spec(id);
         std::memset(info, 0, sizeof(*info));
         info->id = index;
-        info->flags = (s.automatable ? CLAP_PARAM_IS_AUTOMATABLE : 0) | (stepped(id) ? CLAP_PARAM_IS_STEPPED : 0);
+        info->flags = (s.automatable ? CLAP_PARAM_IS_AUTOMATABLE : 0) | (stepped(id) ? CLAP_PARAM_IS_STEPPED : 0) | (kHasBypass && id == bypassId() ? CLAP_PARAM_IS_BYPASS : 0);
         std::snprintf(info->name, sizeof(info->name), "%s", s.name);
         std::snprintf(info->module, sizeof(info->module), "%s", s.id);
         info->min_value = 0;

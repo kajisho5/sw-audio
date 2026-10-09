@@ -90,6 +90,7 @@
     const host = specs.map((p, i) => ({ p, i, c: makeCurve(p) }));
     if (tr.autoGain) host.push({ p: { id: 'common.autogain', name: 'Auto gain', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
     if (tr.delta) host.push({ p: { id: 'common.delta', name: 'Delta', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
+    if (tr.bypass) host.push({ p: { id: 'common.bypass', name: 'Bypass', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
     host.forEach(h => { if (!h.c) h.c = makeCurve(h.p); });
     const vals = bridge.values().slice();
     const widgets = new Map();       // host index -> update(plain)
@@ -239,10 +240,10 @@
         return draw;
       }
       function attachButton(b, cur) {
-        const toggle = !!b.dataset.toggle, t = +b.dataset.v;
+        const toggle = !!b.dataset.toggle, t = +b.dataset.v, inv = !!b.dataset.inv;   // inv: lit when the parameter is 0 (the power button of a product that has its own In parameter)
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
         const tile = b.dataset.tile, tv = tile && b.querySelector('.tv'), dot = tile && b.querySelector('.dot, .offd');   // LIVE tiles: the value text and the lamp follow the parameter
-        return () => { const i = cur(), h = hostOf(i); if (!h) return; const on = toggle ? h.c.norm(vals[i]) > 0.5 : Math.abs(vals[i] - t) < 1e-9; b.classList.toggle('on', on); if (tv && toggle) tv.textContent = (h.p.labels && h.p.labels[on ? 1 : 0]) || (on ? 'On' : 'Off'); if (dot) dot.className = on ? 'dot' : 'offd'; };
+        return () => { const i = cur(), h = hostOf(i); if (!h) return; const on = toggle ? (h.c.norm(vals[i]) > 0.5) !== inv : Math.abs(vals[i] - t) < 1e-9; b.classList.toggle('on', on); if (tv && toggle) tv.textContent = (h.p.labels && h.p.labels[on ? 1 : 0]) || (on ? 'On' : 'Off'); if (dot) dot.className = on ? 'dot' : 'offd'; };
       }
       // switches without a parameter (DY02 meter mode): a setting of the screen only, until the live meters are wired
       skinBox.querySelectorAll('[data-seg]').forEach(seg => {
@@ -264,6 +265,12 @@
       skinBox.querySelectorAll('.ctl[data-pb], .rc[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
       skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
+      // the 3-D toggle switches: lever up = the value in data-up, down = the other one (class dn)
+      skinBox.querySelectorAll('.tog[data-tog]').forEach(t => {
+        const i = +t.dataset.p, up = +t.dataset.up, h = hostOf(i); if (!h) return; t.style.cursor = 'pointer';
+        t.addEventListener('click', () => { const other = h.p.steps.find(v => Math.abs(v - up) > 1e-9), isUp = Math.abs(vals[i] - up) < 1e-9; bridge.begin(i); setValue(i, isUp ? other : up); bridge.end(i); });
+        reg(i, () => t.classList.toggle('dn', Math.abs(vals[i] - up) > 1e-9));
+      });
       const sel = [...skinBox.querySelectorAll('button[data-band]')];
       const drawSel = () => sel.forEach(b => b.classList.toggle('on', +b.dataset.band === band));
       sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; drawSel(); dyn.forEach(f => f()); }));

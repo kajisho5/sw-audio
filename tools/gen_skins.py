@@ -33,6 +33,8 @@ def host_params(code):
         items.append({'id': 'common.autogain', 'name': 'Auto gain', 'curve': 'step', 'steps': [0, 1], 'labels': ['Off', 'On'], 'i': len(items)})
     if tr.get('delta'):
         items.append({'id': 'common.delta', 'name': 'Delta', 'curve': 'step', 'steps': [0, 1], 'labels': ['Off', 'On'], 'i': len(items)})
+    if tr.get('bypass'):
+        items.append({'id': 'common.bypass', 'name': 'Bypass', 'curve': 'step', 'steps': [0, 1], 'labels': ['Off', 'On'], 'i': len(items)})
     return items
 
 
@@ -291,6 +293,48 @@ def geq_faders(root, params):
 HOOKS = {'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
+
+def bind_toggles(root, params, report, code):
+    """The 3-D toggle switches (.tog) and the header's power button: "In" / "Power" = the product is in (the common Bypass parameter, inverted, or the product's own In parameter);
+    two labels (<span>A</span> tog <span>B</span>) = the 2-step parameter with those two labels (up = A) or, if only A names a parameter, A = On."""
+    two = [p for p in params if p['curve'] == 'step' and len(p['steps']) == 2]
+    bypass = next((p for p in params if p['id'] == 'common.bypass'), None)
+    own_in = next((p for p in two if norm(p['name']) == 'in' and not p['id'].startswith('common.')), None)
+    inside = (own_in['i'], own_in['steps'][1]) if own_in else ((bypass['i'], bypass['steps'][0]) if bypass else None)   # (index, value when the product is in)
+    n = 0
+    for tb in root.select('.tb'):
+        for b in tb.select('button[aria-label]'):
+            if (b.get('aria-label') or '').lower() == 'bypass' and inside:
+                b['data-p'] = str(inside[0]); b['data-toggle'] = '1'
+                if own_in:
+                    b['data-inv'] = '1'
+                n += 1
+    for t in root.select('.tog'):
+        par = t.parent
+        spans = [x.get_text(strip=True) for x in par.find_all('span', recursive=False)]
+        if not spans:
+            continue
+        key = [norm(x) for x in spans]
+        hit = None
+        if len(key) == 1 and key[0] in ('in', 'power') and inside:
+            hit = inside
+        elif len(key) >= 2:
+            a, b2 = key[0], key[-1]
+            for p in two:
+                lab = [norm(l) for l in p.get('labels', [])]
+                if set(lab) == {a, b2} and len(lab) == 2:
+                    hit = (p['i'], p['steps'][lab.index(a)]); break
+            if hit is None:
+                for p in two:
+                    if norm(p['name']) == a:
+                        hit = (p['i'], p['steps'][1]); break
+        if hit is None:
+            report.setdefault(code, []).append('tog:' + '/'.join(spans))
+            continue
+        t['data-tog'] = '1'; t['data-p'] = str(hit[0]); t['data-up'] = str(hit[1]); n += 1
+    return n
+
+
 def build(code, report):
     src = open(os.path.join(CANVAS, code + '.dc.html'), encoding='utf-8').read()
     soup = BeautifulSoup(src, 'html.parser')
@@ -342,6 +386,7 @@ def build(code, report):
                     k = int(m.group(1)) - 1
             if k is not None:
                 b['data-band'] = str(k); nbt += 1; nbb += 1
+    bind_toggles(root, params, report, code)
     # buttons: an option of a stepped parameter, or the on/off of a 2-step parameter
     opts = {}
     for p in params:

@@ -44,9 +44,9 @@ TEST_CASE("GUI session: values and gestures reach the plug-in; a poll answers wi
 TEST_CASE("GUI page: the parameter table of a product is in it, valid and safe") {
     const std::string code = gui::codeOf("com.seventh-well.sw-audio.dy08"); CHECK(code == "DY08");
     std::vector<double> init; for (const auto& p : dy08::specs()) init.push_back(p.def);
-    const std::string h = gui::page(code, dy08::specs(), true, true, init, 0.0);
+    const std::string h = gui::page(code, dy08::specs(), true, true, true, init, 0.0);
     CHECK(h.find("<!doctype html>") == 0); CHECK(h.find("var SWBOOT=") != std::string::npos); CHECK(h.find("\"dy08.thresh\"") != std::string::npos); CHECK(h.find("SWUI") != std::string::npos);
-    CHECK(h.find("\"name\":\"Clean\"") != std::string::npos); CHECK(h.find("traits:{autoGain:true,delta:true}") != std::string::npos);
+    CHECK(h.find("\"name\":\"Clean\"") != std::string::npos); CHECK(h.find("traits:{autoGain:true,delta:true,bypass:true}") != std::string::npos);
     // exactly the four script / style blocks and no stray closing tags from the data
     size_t n = 0, pos = 0; while ((pos = h.find("</script>", pos)) != std::string::npos) { ++n; pos += 9; } CHECK(n == 3);
 }

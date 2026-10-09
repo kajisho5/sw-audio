@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
   await pg.route(u => !u.href.startsWith('file:'), r => r.abort());           // no network: fonts must come from the page itself
   await pg.addInitScript(() => { window.__msgs = []; window.chrome = { webview: { postMessage: m => window.__msgs.push(m), addEventListener() {} } }; });
   await pg.goto('file://' + file); await pg.waitForTimeout(800);
-  const nv = await pg.evaluate(() => SWBOOT.params.length + (SWBOOT.traits.autoGain ? 1 : 0) + (SWBOOT.traits.delta ? 1 : 0));
+  const nv = await pg.evaluate(() => SWBOOT.params.length + (SWBOOT.traits.autoGain ? 1 : 0) + (SWBOOT.traits.delta ? 1 : 0) + (SWBOOT.traits.bypass ? 1 : 0));
   for (let t = 0; t < 40; t++) {
     const vals = await pg.evaluate(() => SWBOOT.values.slice());
     const sp = Array.from({ length: 64 }, (_, i) => -30 - i * 0.6 + 6 * Math.sin(i / 4 + t / 3));

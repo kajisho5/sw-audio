@@ -52,7 +52,7 @@ out = json.loads(subprocess.run([str(tmp / "dump")], capture_output=True, text=T
 specs, traits, curves = out["specs"], out["traits"], out["curves"]
 for p in prods:
     t = (root / f"plugin/clap/{p}_clap.cpp").read_text()
-    traits[p].update({"autoGain": "kAutoGain = false" not in t, "delta": "kDelta = false" not in t, "sidechain": "processWithSidechain" in (root / f"products/{p}/{p}.hpp").read_text()})
+    traits[p].update({"autoGain": "kAutoGain = false" not in t, "delta": "kDelta = false" not in t, "bypass": traits[p].get("in", -1) < 0, "sidechain": "processWithSidechain" in (root / f"products/{p}/{p}.hpp").read_text()})
 (root / "ui").mkdir(exist_ok=True)
 (root / "ui/specs.json").write_text(json.dumps({"specs": specs, "traits": traits}, ensure_ascii=False, indent=None, separators=(",", ":")))
 (root / "tests/ui").mkdir(parents=True, exist_ok=True)

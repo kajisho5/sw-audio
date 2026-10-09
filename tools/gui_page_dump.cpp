@@ -9,8 +9,8 @@
 using namespace sw;
 int main() {
     const auto& sp = SW_SPECS();
-    std::vector<double> v; for (auto& p : sp) v.push_back(p.def);
+    std::vector<double> v; for (auto& p : sp) v.push_back(p.def); v.push_back(0.0); v.push_back(0.0); v.push_back(0.0);   // Auto gain, Delta, Bypass
     gui::Skin sk; sk.css = reinterpret_cast<const unsigned char*>(gui_assets::kSkinCss); sk.cssSize = gui_assets::kSkinCssSize; sk.html = reinterpret_cast<const unsigned char*>(gui_assets::kSkinHtml); sk.htmlSize = gui_assets::kSkinHtmlSize;
-    std::string h = gui::page(SW_CODE, sp, true, true, v, 1.5, sk);
+    std::string h = gui::page(SW_CODE, sp, true, true, true, v, 1.5, sk);
     std::fwrite(h.data(), 1, h.size(), stdout);
 }
