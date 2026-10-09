@@ -1,5 +1,6 @@
 // Checks the demo silence in an effect plug-in (the shared effect adapter): with SW_LICENSE_TEST_DEMO=1 the output is silent from
-// 30 s (+ the 10 ms fade) to 33 s; without it (a development build) it is not. Linux / macOS (dlopen).
+// 30 s (+ the 10 ms fade) to 33 s; without it (a development build) it is not; a new activation of the same instance keeps the time
+// played (2026-10-09: the silence does not start over when the host switches the plug-in off and on). Linux / macOS (dlopen).
 //   g++ -std=c++17 -O2 -Ibuild-cmake/_deps/clap-src/include tools/clap_fx_demo_check.cpp -ldl -o build/clap_fx_demo_check
 //   build/clap_fx_demo_check "build-cmake/plugins/SW UT01 Gain.clap"
 #include <clap/clap.h>
@@ -18,7 +19,7 @@ uint32_t noEvents(const clap_input_events_t*) { return 0; }
 const clap_event_header_t* noEvent(const clap_input_events_t*, uint32_t) { return nullptr; }
 bool dropEvent(const clap_output_events_t*, const clap_event_header_t*) { return true; }
 
-// RMS (dBFS) of [a, b) seconds of a 0.25 constant-ish input (a slow sine) through the plug-in
+// RMS (dBFS) of [a, b) seconds of a 0.25 constant-ish input (a slow sine) through the plug-in (one activation, 34 s)
 double run(const clap_plugin_t* p, double a, double b) {
     const double fs = 48000; const uint32_t B = 256;
     p->activate(p, fs, 1, B); p->start_processing(p);
@@ -50,15 +51,28 @@ int main(int argc, char** argv) {
     const auto* entry = static_cast<const clap_plugin_entry_t*>(dlsym(lib, "clap_entry"));
     if (!entry || !entry->init(argv[1])) return 1;
     const auto* fac = static_cast<const clap_plugin_factory_t*>(entry->get_factory(CLAP_PLUGIN_FACTORY_ID));
-    const clap_plugin_t* p = fac->create_plugin(fac, &kHost, fac->get_plugin_descriptor(fac, 0)->id);
-    if (!p || !p->init(p)) return 1;
+    const char* id = fac->get_plugin_descriptor(fac, 0)->id;
+    auto fresh = [&]() { const clap_plugin_t* q = fac->create_plugin(fac, &kHost, id); return q && q->init(q) ? q : nullptr; };
     setenv("SW_LICENSE_TEST_DEMO", "1", 1);
-    const double before = run(p, 25.0, 29.0), gap = run(p, 30.5, 32.5);
+    const clap_plugin_t* p = fresh();
+    if (!p) return 1;
+    const double before = run(p, 25.0, 29.0);   // 0..34 s
+    const double again = run(p, 30.5, 32.5);    // activated again (34..68 s): 30.5 s into it is 64.5 s in all, no gap (it did not start over)
+    const double third = run(p, 22.5, 24.5);    // and again (68..102 s): 90.5..92.5 s, the second gap
+    p->destroy(p);
+    const clap_plugin_t* q = fresh();
+    if (!q) return 1;
+    const double gap = run(q, 30.5, 32.5);
+    q->destroy(q);
     unsetenv("SW_LICENSE_TEST_DEMO");
-    const double clean = run(p, 30.5, 32.5);
-    p->destroy(p); entry->deinit();
-    std::printf("demo: 25..29 s %.1f dBFS, 30.5..32.5 s %.1f dBFS; without the switch 30.5..32.5 s %.1f dBFS\n", before, gap, clean);
-    const bool ok = before > -40.0 && gap < -200.0 && clean > -40.0;
+    const clap_plugin_t* r = fresh();
+    if (!r) return 1;
+    const double clean = run(r, 30.5, 32.5);
+    r->destroy(r);
+    entry->deinit();
+    std::printf("demo: 25..29 s %.1f dBFS, 30.5..32.5 s %.1f dBFS; activated again: 64.5..66.5 s %.1f dBFS, 90.5..92.5 s %.1f dBFS; without the switch 30.5..32.5 s %.1f dBFS\n",
+                before, gap, again, third, clean);
+    const bool ok = before > -40.0 && gap < -200.0 && again > -40.0 && third < -200.0 && clean > -40.0;
     std::printf(ok ? "ok    the demo silence in an effect\n" : "FAIL  the demo silence in an effect\n");
     return ok ? 0 : 1;
 }

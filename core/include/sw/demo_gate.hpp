@@ -1,7 +1,7 @@
 // SW AUDIO core — the demo gate: without a licence the plug-ins play with silence put in (the owner's decision 2026-10-09: 無音を挟む).
-// Design values: 3 s of silence every 60 s, the first from 30 s after activation (a first listen is clean; within a minute the gap is
-// unmistakable), 10 ms linear fades on both sides (no clicks). The schedule counts samples from prepare(), so the block size changes
-// nothing; outside the gaps the gain is exactly 1 (the sound is untouched to the bit). No allocation; audio thread.
+// Design values: 3 s of silence every 60 s, the first from 30 s after the plug-in starts playing (a first listen is clean; within a minute
+// the gap is unmistakable), 10 ms linear fades on both sides (no clicks). The schedule counts samples from the first prepare(); a later
+// prepare(fs, true) (the host activates the plug-in again) keeps the time played (2026-10-09). The block size changes nothing; outside the gaps the gain is exactly 1 (the sound is untouched to the bit). No allocation; audio thread.
 #pragma once
 #include <algorithm>
 #include <cmath>
