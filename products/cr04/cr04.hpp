@@ -4,7 +4,8 @@
 //   (-1)^(k - peak); the peak's frequency comes from the parabolic interpolation, its phase moves by omega x hop (1024) per frame, plus a random step for Drift (Off 0, Slow 0.1 rad, Fast 0.6 rad per frame, and Blur / 100 x 0.2
 //   more). Frames of 4096, Hann synthesis window, hop 1024 (overlap 4, sum 2): a captured sine keeps its level and its phase. Blur 0 .. 100 %: the magnitudes are averaged over +-0 .. 24 bins.
 //   Trigger: Hold / Momentary = the capture is made when Freeze goes On (the texture lasts while it is On); Auto = Freeze On arms it and every onset of the input (a 9 dB rise of the 5 ms level over the 100 ms level,
-//   over -50 dB, 150 ms apart) makes a new capture (a 15 ms cross-fade). MIDI capture (spec) needs MIDI input: not yet.
+//   over -50 dB, 150 ms apart) makes a new capture (a 15 ms cross-fade). MIDI (spec: "MIDI notes can capture too"): while Freeze is On a note-on makes a new capture in every trigger mode,
+//   the same way an onset does in Auto (a 15 ms cross-fade).
 #pragma once
 #include "sw/fft.hpp"
 #include "sw/param.hpp"
@@ -31,6 +32,8 @@ public:
     int latencySamples() const { return 0; }
     bool frozen() const { return a_ > 0.001; }
     int captures() const { return captures_; }
+    // MIDI (audio thread): a note-on while Freeze is On asks for a new capture
+    void noteOn() { if (target_[Freeze] > 0.5) pending_ = true; }
 
 private:
     struct Chan {

@@ -49,6 +49,23 @@ void Processor::setParam(int id, double v) {
     target_[static_cast<size_t>(id)] = v;
 }
 
+void Processor::midiSpeed(int speed) {
+    if (speed < Stop || speed > Fast || speed == static_cast<int>(target_[Speed] + 0.5)) return;   // no change: nothing to write
+    setParam(Speed, speed); pendingSpeed_ = speed;
+}
+void Processor::midiControl(int cc, int value) {
+    if (cc == 64) midiSpeed(value >= 64 ? Fast : Slow);
+    else if (cc == 1) midiSpeed(value < 32 ? Stop : value < 96 ? Slow : Fast);
+}
+void Processor::midiNote(int key, bool on) {
+    if (!on) return;
+    if (key == 36) midiSpeed(Stop); else if (key == 37) midiSpeed(Slow); else if (key == 38) midiSpeed(Fast);
+}
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (pendingSpeed_ < 0) return 0;
+    id = Speed; plain = pendingSpeed_; pendingSpeed_ = -1; return 7;
+}
+
 void Processor::snapToTargets() {
     if (!prepared_) return;
     const int speed = static_cast<int>(target_[Speed] + 0.5);

@@ -73,3 +73,14 @@ TEST_CASE("CR04 loud input stays finite; stereo channels are separate") {
     for (size_t off = 0; off < l.size(); off += 256) { if (off >= 24000) q.setParam(Freeze, 1); if (off >= 48000) { std::fill(l.begin() + static_cast<long>(off), l.end(), 0.0f); std::fill(r.begin() + static_cast<long>(off), r.end(), 0.0f); } const int n = static_cast<int>(std::min<size_t>(256, l.size() - off)); float* c[2] = {l.data() + off, r.data() + off}; q.process(c, 2, n); }
     NEAR(peakHz(l, 280, 320, 96000, 140000), 300.0, 2.0); NEAR(peakHz(r, 680, 720, 96000, 140000), 700.0, 2.0);
 }
+
+TEST_CASE("CR04 MIDI: while Freeze is On a note-on makes a new capture (in every trigger mode); with Freeze Off it does nothing") {
+    for (int trig : {0, 1, 2}) {
+        auto p = make({{Trigger, trig}, {Freeze, 0}});
+        const auto x = sine(-18, 1.0, 440.0); std::vector<float> l = x, r = x;
+        auto go1 = [&](size_t a, size_t b) { for (size_t off = a; off < b; off += 256) { const int n = static_cast<int>(std::min<size_t>(256, b - off)); float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, n); } };
+        go1(0, 12000); p.noteOn(); go1(12000, 24000); CHECK(p.captures() == 0);       // Freeze is Off: the note is ignored
+        p.setParam(Freeze, 1); go1(24000, 36000); const int before = p.captures();
+        p.noteOn(); go1(36000, 48000); CHECK(p.captures() == before + 1);               // one more capture, made through the 15 ms cross-fade
+    }
+}

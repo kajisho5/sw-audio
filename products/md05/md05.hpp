@@ -4,7 +4,9 @@
 //   amplitude g = ((1 - k) + k (1 + cos(theta - phi)) / 2) / (1 - k / 2), k = (horn 0.7, drum 0.45) x (1 - 0.5 Mic distance): the mean over a turn is 1, Far (right end) halves the swing (room).
 //   Speed: Stop 0 Hz, Slow (horn 0.8 / drum 0.67 Hz), Fast (6.7 / 5.7 Hz); each speed follows its target exponentially with the time constant tau_horn = 0.3 + 0.2 Accel seconds,
 //   tau_drum = 3 tau_horn. Horn / Drum volumes (0 .. 10): gain = v / 7 (7 = 1). Cabinet resonances: horn bell 2.5 kHz +1.5 dB (Q 1), drum bell 110 Hz +2 dB (Q 0.9).
-//   The Doppler centre delay is 1 ms and is the reported latency (48 samples at 48 kHz, fixed). MIDI / footswitch control of Speed (EVO) needs the host's note input in the plugin layer: not yet.
+//   The Doppler centre delay is 1 ms and is the reported latency (48 samples at 48 kHz, fixed).
+//   MIDI / footswitch (EVO, spec "CC64, CC1, Note"): CC64 (sustain pedal) >= 64 Fast, below Slow; CC1 (mod wheel) 0-31 Stop, 32-95 Slow, 96-127 Fast; the notes C2 / C#2 / D2 (36 / 37 / 38) Stop / Slow / Fast
+//   (the key numbers are a design value). Speed changes at once, the rotors follow it with their inertia; the change is handed to the host like a parameter written by the plug-in (takeParamWrite).
 #pragma once
 #include "sw/param.hpp"
 #include "sw/saturate.hpp"
@@ -34,11 +36,17 @@ public:
     double hornHz() const { return hornHz_; }
     double drumHz() const { return drumHz_; }
     double dopplerSamples(bool horn, int mic) const { return lastDelay_[horn ? 0 : 1][mic]; }
+    // MIDI (audio thread): a controller / a note sets Speed; takeParamWrite() hands it to the host once (bit 0 begin, bit 1 value, bit 2 end = 7)
+    void midiControl(int cc, int value);
+    void midiNote(int key, bool on);
+    int takeParamWrite(int& id, double& plain);
 
 private:
     double read(int rotor, double delay) const;
     double fs_ = 48000.0, hornHz_ = 0.0, drumHz_ = 0.0, hornAngle_ = 0.0, drumAngle_ = 0.0, lastDelay_[2][2] = {{0, 0}, {0, 0}};
     size_t pos_ = 0, mask_ = 0;
+    void midiSpeed(int speed);
+    int pendingSpeed_ = -1;
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};
     std::array<std::vector<float>, 2> buf_;   // 0 horn (highs), 1 drum (lows)

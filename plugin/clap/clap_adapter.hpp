@@ -23,6 +23,7 @@
 #include "sw/shell.hpp"
 #include "sw/text.hpp"
 #include <clap/clap.h>
+#include <clap/ext/note-ports.h>
 #include <clap/ext/track-info.h>
 #include <algorithm>
 #include <array>
@@ -79,6 +80,10 @@ template <class P> struct HasGuiCall<P, std::void_t<decltype(P::guiCall(std::dec
 // optional trait: static void trackInfo(Core&, const char* name /* "" = the host gave none */, uint64_t flags /* CLAP_TRACK_INFO_* */): the host's track information (main thread; the core's side must be thread-safe)
 template <class P, class = void> struct HasTrackInfo : std::false_type {};
 template <class P> struct HasTrackInfo<P, std::void_t<decltype(P::trackInfo(std::declval<typename P::Core&>(), "", uint64_t(0)))>> : std::true_type {};
+// optional trait: static void midi(Core&, int kind, int channel, int d1, int d2): the plug-in takes MIDI on one note input port (audio thread, at the time of the event within the block).
+// kind 0 note off (d1 key, d2 velocity 0..127), 1 note on (a note on with velocity 0 arrives as a note off), 2 control change (d1 controller, d2 value), 3 a system real-time byte (d1 = 0xF8 clock ...)
+template <class P, class = void> struct HasMidi : std::false_type {};
+template <class P> struct HasMidi<P, std::void_t<decltype(P::midi(std::declval<typename P::Core&>(), 0, 0, 0, 0))>> : std::true_type {};
 template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
 template <class P> struct GuiCallOnGuiThread<P, std::void_t<decltype(P::kGuiCallOnGuiThread)>> : std::bool_constant<P::kGuiCallOnGuiThread> {};
 
@@ -148,6 +153,7 @@ private:
         if (active_ && snap_pending_.exchange(false)) { shell_.core().snapToTargets(); shell_.snap(); }
     }
     void handleEvent(const clap_event_header_t* h) {
+        if constexpr (HasMidi<P>::value) { if (h->space_id == CLAP_CORE_EVENT_SPACE_ID && handleMidi(h)) return; }
         if (h->space_id != CLAP_CORE_EVENT_SPACE_ID || h->type != CLAP_EVENT_PARAM_VALUE) return;
         const auto* ev = reinterpret_cast<const clap_event_param_value_t*>(h);
         if (ev->param_id >= static_cast<clap_id>(numParams())) return;
@@ -155,6 +161,33 @@ private:
         const double v = sanitizeHost(id, ev->value);
         host_values_[static_cast<size_t>(id)].store(v);
         apply(id, hostToPlain(id, v));
+    }
+
+    // ---- MIDI in (the note port): CLAP note events and raw MIDI messages become the trait's midi() calls
+    bool handleMidi(const clap_event_header_t* h) {
+        if constexpr (HasMidi<P>::value) {
+            auto clamp7 = [](double v) { return static_cast<int>(std::clamp(std::lround(v), 0L, 127L)); };
+            switch (h->type) {
+                case CLAP_EVENT_NOTE_ON: case CLAP_EVENT_NOTE_OFF: {
+                    const auto* n = reinterpret_cast<const clap_event_note_t*>(h); if (n->key < 0) return true;   // a note id without a key: not for us
+                    const int vel = clamp7(n->velocity * 127.0); const bool on = h->type == CLAP_EVENT_NOTE_ON && vel > 0;
+                    P::midi(shell_.core(), on ? 1 : 0, std::max<int>(0, n->channel), std::min<int>(127, n->key), on ? vel : 0); return true;
+                }
+                case CLAP_EVENT_MIDI: {
+                    const auto* m = reinterpret_cast<const clap_event_midi_t*>(h); const int st = m->data[0], ch = st & 0x0F, d1 = m->data[1] & 0x7F, d2 = m->data[2] & 0x7F;
+                    if (st >= 0xF8) P::midi(shell_.core(), 3, 0, st, 0);
+                    else switch (st & 0xF0) {
+                        case 0x80: P::midi(shell_.core(), 0, ch, d1, d2); break;
+                        case 0x90: P::midi(shell_.core(), d2 > 0 ? 1 : 0, ch, d1, d2); break;
+                        case 0xB0: P::midi(shell_.core(), 2, ch, d1, d2); break;
+                        default: break;
+                    }
+                    return true;
+                }
+                default: break;
+            }
+        }
+        return false;
     }
 
     // ---- the plug-in window (CLAP gui extension; the platform view is gui_mac.mm / gui_win.cpp, none on Linux)
@@ -396,10 +429,19 @@ private:
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
         if constexpr (HasTrackInfo<P>::value) { static const clap_plugin_track_info_t trackInfoExt = {trackInfoChanged}; if (!std::strcmp(id, CLAP_EXT_TRACK_INFO) || !std::strcmp(id, CLAP_EXT_TRACK_INFO_COMPAT)) return &trackInfoExt; }
+        if constexpr (HasMidi<P>::value) { static const clap_plugin_note_ports_t notePorts = {notePortsCount, notePortsGet}; if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS)) return &notePorts; }
         if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
     }
     static void onMainThread(const clap_plugin_t*) {}
+
+    // ---- note ports: one MIDI input (the plug-in plays no notes), CLAP notes and MIDI both accepted
+    static uint32_t notePortsCount(const clap_plugin_t*, bool isInput) { return isInput ? 1 : 0; }
+    static bool notePortsGet(const clap_plugin_t*, uint32_t index, bool isInput, clap_note_port_info_t* info) {
+        if (!isInput || index != 0) return false;
+        info->id = 0; info->supported_dialects = CLAP_NOTE_DIALECT_CLAP | CLAP_NOTE_DIALECT_MIDI; info->preferred_dialect = CLAP_NOTE_DIALECT_MIDI;
+        std::snprintf(info->name, sizeof info->name, "MIDI"); return true;
+    }
 
     // ---- the host's track information (CLAP track-info; VST3 hosts through clap-wrapper's IInfoListener): asked for at activation and whenever the host says it changed
     static void trackInfoChanged(const clap_plugin_t* p) { self(p)->pullTrackInfo(); }

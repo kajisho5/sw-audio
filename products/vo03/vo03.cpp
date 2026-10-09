@@ -60,10 +60,19 @@ void Processor::apply() {
         s.mask = mask; s.speedMs = 15.0; s.humanize = 0.0; s.vibrato = 1.0;
         const int deg = static_cast<int>(std::lround(target_[static_cast<size_t>(voiceParam(i, Interval))]));
         if (src == Fixed) { s.harmonyMode = 2; s.harmonyFixed = majorDegreeSemitones(deg); } else { s.harmonyMode = 1; s.harmonyDegrees = deg; }
+        s.chordMask = src == Midi ? chord_ : 0;
         s.formantSemis = target_[static_cast<size_t>(voiceParam(i, Formant))]; s.formantFollow = false; s.enabled = true;
         v_[static_cast<size_t>(i)].corr.setSettings(s);
     }
 }
+
+void Processor::chordChanged() {
+    uint16_t m = 0; for (int k = 0; k < 128; ++k) if (held_[static_cast<size_t>(k)]) m = static_cast<uint16_t>(m | (1u << (k % 12)));
+    chord_ = m; if (prepared_) apply();
+}
+void Processor::noteOn(int key) { if (key < 0 || key > 127) return; auto& h = held_[static_cast<size_t>(key)]; if (h < 255) ++h; chordChanged(); }
+void Processor::noteOff(int key) { if (key < 0 || key > 127) return; auto& h = held_[static_cast<size_t>(key)]; if (h > 0) --h; chordChanged(); }
+void Processor::allNotesOff() { held_.fill(0); chordChanged(); }
 
 void Processor::setParam(int id, double v) {
     const auto& sp = specs()[static_cast<size_t>(id)];

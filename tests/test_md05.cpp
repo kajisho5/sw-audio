@@ -91,3 +91,26 @@ TEST_CASE("MD05 extremes stay finite") {
         auto l = noise(0, 2.0, 4), r = l; go(p, l, r); for (float v : l) { CHECK(std::isfinite(v)); CHECK(std::abs(v) < 20.0f); }
     }
 }
+
+TEST_CASE("MD05 MIDI / footswitch: CC64 (>= 64 Fast, below Slow), CC1 (0-31 Stop, 32-95 Slow, 96-127 Fast) and the notes C2 / C#2 / D2 (Stop / Slow / Fast) set Speed, and the change is handed to the host") {
+    auto p = make({{Speed, 0}});
+    int id = -1; double v = -1;
+    CHECK(p.takeParamWrite(id, v) == 0);                                            // nothing yet
+    p.midiControl(64, 127); CHECK(p.takeParamWrite(id, v) == 7); CHECK(id == Speed); CHECK(v == 2.0); CHECK(p.takeParamWrite(id, v) == 0);   // pedal down: Fast, one write (begin + value + end)
+    p.midiControl(64, 0); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 1.0);     // pedal up: Slow
+    p.midiControl(64, 0); CHECK(p.takeParamWrite(id, v) == 0);                      // no change: no write
+    p.midiControl(1, 10); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 0.0);     // mod wheel at the bottom: Stop
+    p.midiControl(1, 64); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 1.0);
+    p.midiControl(1, 100); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 2.0);
+    p.midiControl(7, 100); CHECK(p.takeParamWrite(id, v) == 0);                     // another controller: ignored
+    p.midiNote(36, true); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 0.0);
+    p.midiNote(38, true); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 2.0);
+    p.midiNote(37, true); CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == 1.0);
+    p.midiNote(38, false); CHECK(p.takeParamWrite(id, v) == 0);                     // a note off changes nothing
+    p.midiNote(60, true); CHECK(p.takeParamWrite(id, v) == 0);                      // other notes: ignored
+}
+TEST_CASE("MD05 MIDI: the rotors really follow the switch (Fast is faster than Slow, with the Accel ramp)") {
+    auto p = make({{Speed, 1}}); run0(p, 6.0); const double slowH = p.hornHz();
+    p.midiControl(64, 127); run0(p, 6.0); const double fastH = p.hornHz();
+    CHECK(slowH == doctest::Approx(hornTargetHz(Slow)).epsilon(0.05)); CHECK(fastH == doctest::Approx(hornTargetHz(Fast)).epsilon(0.05)); CHECK(fastH > 4 * slowH);
+}

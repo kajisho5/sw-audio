@@ -43,6 +43,7 @@ public:
         // harmony voices: the target is the note `degrees` scale steps from the singer's note (harmonyDegrees) or a fixed interval above it (harmonyFixed, semitones); extraSemis: a drift added to the output
         int harmonyMode = 0;        // 0 off (correction), 1 degrees, 2 fixed
         int harmonyDegrees = 0; double harmonyFixed = 0.0, extraSemis = 0.0;
+        uint16_t chordMask = 0;     // harmony voices: when not 0 (bit k = pitch class k is in the chord), the harmony note moves to the nearest chord tone (a tie: the lower one)
     };
     void setSettings(const Settings& s) { s_ = s; }
     const Settings& settings() const { return s_; }
@@ -59,7 +60,8 @@ public:
         if (!haveN_ || std::abs(m - cn_) > 1.5) cn_ = m; else cn_ += kn * (m - cn_);
         haveN_ = true;
         const int nSinger = nearestNote(cn_);
-        const int n = s_.harmonyMode == 1 ? stepScale(s_.mask, nSinger, s_.harmonyDegrees) : s_.harmonyMode == 2 ? nSinger + static_cast<int>(std::lround(s_.harmonyFixed)) : nSinger;
+        int n = s_.harmonyMode == 1 ? stepScale(s_.mask, nSinger, s_.harmonyDegrees) : s_.harmonyMode == 2 ? nSinger + static_cast<int>(std::lround(s_.harmonyFixed)) : nSinger;
+        if (s_.chordMask != 0 && s_.harmonyMode != 0) n = nearestInMask(n, s_.chordMask);
         if (nSinger != lastN_) { if (lastN_ != -1000) c_ = cn_; lastN_ = nSinger; }   // a new note: the slow centre starts from where the singer is, so the step is not mistaken for vibrato
         const double tau = s_.speedMs * 0.001;
         if (tau <= 1e-6) cc_ = n; else cc_ += (n - cc_) * (1.0 - std::exp(-dt / tau));
@@ -93,6 +95,13 @@ public:
     }
 
 private:
+    static int nearestInMask(int n, uint16_t mask) {
+        for (int d = 0; d <= 6; ++d) {
+            if ((mask >> ((((n - d) % 12) + 12) % 12)) & 1) return n - d;   // the lower one first: a tie goes down
+            if ((mask >> ((((n + d) % 12) + 12) % 12)) & 1) return n + d;
+        }
+        return n;
+    }
     int nearestNote(double c) {
         const int base = static_cast<int>(std::floor(c));
         int best = -1; double bd = 1e9;

@@ -122,3 +122,27 @@ TEST_CASE("VO03 reports the singer's pitch and each voice's note for the screen"
     auto q = make(); runLR(q, std::vector<float>(48000, 0.0f));
     CHECK(!q.voiced());
 }
+
+TEST_CASE("VO03 MIDI: the held notes are the chord (pitch classes, counted per key)") {
+    auto p = make(); CHECK(p.chordMask() == 0);
+    p.noteOn(52); p.noteOn(55); p.noteOn(59);                                             // E3 G3 B3
+    CHECK(p.chordMask() == ((1u << 4) | (1u << 7) | (1u << 11)));
+    p.noteOff(55); CHECK(p.chordMask() == ((1u << 4) | (1u << 11)));
+    p.noteOn(64); p.noteOff(52); CHECK(p.chordMask() == ((1u << 4) | (1u << 11)));        // E4 still holds the pitch class E
+    p.noteOff(64); p.noteOff(59); CHECK(p.chordMask() == 0);
+    p.noteOn(60); p.noteOn(60); p.noteOff(60); CHECK(p.chordMask() == 1u); p.noteOff(60); CHECK(p.chordMask() == 0);   // the same key twice (two channels): held until both are off
+    p.noteOn(200); p.noteOn(-5); CHECK(p.chordMask() == 0);                                // not MIDI keys: ignored
+    p.noteOn(60); p.noteOn(64); p.allNotesOff(); CHECK(p.chordMask() == 0);
+}
+TEST_CASE("VO03 MIDI: with Source MIDI each voice's Scale note moves to the nearest chord tone; without a chord, or with another Source, it stays the Scale note") {
+    // 235 Hz = 58.1: B (59) in C major; voice 1 = +3rd (2 degrees) = D (62), voice 2 = +5th (4 degrees) = F (65)
+    auto notes = [&](const std::vector<int>& chord, double src) {
+        auto p = make(only({0, 1}, {{Source, src}, {voiceParam(0, Humanize), 0}, {voiceParam(1, Humanize), 0}}));
+        for (int n : chord) p.noteOn(n);
+        runLR(p, voice(235.0, 2.0)); return std::make_pair(p.voiceSemitones(0), p.voiceSemitones(1));
+    };
+    { const auto f = notes({53, 57, 60}, Midi); NEAR(f.first, 60.0, 0.25); NEAR(f.second, 65.0, 0.25); }   // F major (F A C): D -> C (2 away; E is not in the chord, F is 3 away), F stays
+    { const auto g = notes({55, 59, 62}, Midi); NEAR(g.first, 62.0, 0.25); NEAR(g.second, 67.0, 0.25); }   // G major (G B D): D stays, F -> G (2 away; B is 6 away)
+    { const auto s = notes({}, Midi); NEAR(s.first, 62.0, 0.25); NEAR(s.second, 65.0, 0.25); }            // nothing held: like Scale
+    { const auto s = notes({53, 57, 60}, ScaleSrc); NEAR(s.first, 62.0, 0.25); NEAR(s.second, 65.0, 0.25); }   // Source Scale: the chord is ignored
+}

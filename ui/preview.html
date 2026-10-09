@@ -24,7 +24,7 @@
   // VO01: a sung line with vibrato (steps through a few notes, a breath now and then) and what a major scale would make of it
   const simPitch = () => { const notes = [64, 65, 67, 69, 67, 65, 64, 62], k = Math.floor(t0 / 60), i = k % notes.length, rest = (k % 11) === 10, vib = 0.35 * Math.sin(t0 / 3.2), sung = notes[i] + vib + 0.15 * Math.sin(t0 / 1.3 + k);
     return [rest ? 0 : 1, sung, notes[i]]; };
-  const simHarmony = () => { const p = simPitch(), n = Math.round(p[2]); return [p[0], p[1], p[2] + 4, p[2] + 7, p[2] - 3, p[2] + 12]; };
+  const simHarmony = () => { const p = simPitch(), n = Math.round(p[2]); return [p[0], p[1], p[2] + 4, p[2] + 7, p[2] - 3, p[2] + 12, (t0 % 200) < 150 ? 545 : 0]; };   // the last value: a chord held on the MIDI track (F A C) part of the time
   const simDeclip = () => { const c = Math.pow(10, (vals[0] === undefined ? -0.5 : vals[0]) / 20), a = [], b = []; for (let k = 0; k < 64; k++) { const x = 1.25 * Math.sin((k + t0 * 0.7) / 64 * 2 * Math.PI * 2.5); a.push(Math.max(-c, Math.min(c, x))); b.push(Math.abs(x) > c ? x * 1.02 : x); } return [Math.floor(t0 / 3), 20 * Math.log10(c), 21.3, ...a, ...b]; };
   const simGrains = () => { const o = [0.5, 0]; for (let i = 0; i < 4; i++) { const ph = ((t0 / 1.3 + i * 0.25) % 1), up = (vals[0] || 0) > 0.5; o.push(i % 2 === 0 || ph < 0.8 ? 1 : 0, up ? 0.5 : Math.min(1, 2 * ((t0 * 0.03 + i * 0.1) % 0.5)), up ? 1 : -1, ph, 0.08); } return o; };
   const simGranular = () => { const o = [18, 0, 12]; for (let i = 0; i < 24; i++) { const ph = (t0 / 2.1 + i * 0.37) % 1, st = [0, 5, 7, 12, -5, -12][(i * 7 + Math.floor(t0 / 20)) % 6]; o.push(i < 12 ? 0.2 + 1.6 * ((i * 0.31 + t0 * 0.004) % 1) : 0, i < 12 ? Math.pow(2, st / 12) * (i % 5 === 0 ? -1 : 1) : 0, ph, 0.07, 0); } return o; };

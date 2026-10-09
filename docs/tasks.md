@@ -204,7 +204,8 @@
 - SW Link の残り（最初の部分＝誰がいるか・出力スペクトルは `plugin/clap/swlink.hpp` で済）：ラウドネスとトラック種別の共有、LV05 の Key 選択・LV15/LV11 の他製品との連携・EQ05 Match の参照元（UT03）・MT05 の 0 VU 基準の共有を、この登録簿の上に載せる。
 - 解析・学習系の EVO（区分 B／C：EQ02 Assist／Unmask と EQ07 Auto thresh は済。残り：CS02 被り学習、CS03 入力レベル合わせ、DY04 Learn など）。
 - SW AUDIO for OBS（GPL の薄い OBS フィルタ＋非公開エンジン、共有メモリ、フェイルオープン。公開前に弁護士確認）。
-- MIDI・フットスイッチ入力（ホストのノート入力をプラグイン層に通す）：MD05 Rotary の Speed 切替（CC64・CC1・Note）、VO03 Harmony、CR04 Freeze、IN04 Bass、LV25 Live Delay など。
+- MIDI・フットスイッチ入力：MD05・VO03・CR04・LV25 は済（アダプターにノートポート）。残りは、MIDI を使う製品（IN04 Bass など。IN01〜IN06 は作らない決定）。
+- VO03 Source MIDI の細部：和音の選び方は「Scale の音に最も近い和音の音」の簡易版（声部ごとの動きの履歴は見ていない）。
 - EQ08・EQ02 Linear のカーネル再計算を別スレッドへ（仕様書どおり）。
 - [x] UI: CR02 の Randomize／Clear ボタン
 

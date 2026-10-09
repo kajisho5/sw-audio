@@ -601,6 +601,18 @@
     } };
   }
 
+  // ---- VO03 EVO "Harmony follows chords from a MIDI track" (core: noteOn / noteOff; readouts[6] = the chord held on the MIDI track, bit k = pitch class k): the line says which notes are held
+  function chordLine(box, ctx) {
+    const evt = box.querySelector('.evob .evt'); if (!evt) return null;
+    const base = evt.textContent, names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 7) return;
+      const m = Math.round(r[6]), midi = ctx.value('Source') === 0;
+      const t = m ? 'MIDI chord: ' + names.filter((_, k) => m & (1 << k)).join(' ') + (midi ? '' : ' (Source is not MIDI: the chord is not used)') : base;
+      if (evt.textContent !== t) evt.textContent = t;
+    } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1925,7 +1937,7 @@
     RS04: (box, ctx) => combine(spectrumCells(box, ctx), textRules(box, ctx, [{ re: /^Repaired \d+ events$/, text: info => 'Repaired ' + (info.readouts && info.readouts.length >= 1 ? Math.round(info.readouts[0]) : '—') + ' events' }])),
     RV04: (box, ctx) => { const cu = {}; return combine(convolutionDisplay(box, ctx, cu), irLoader(box, ctx, cu)); },
     VO01: (box, ctx) => combine(pitchGraphDisplay(box, ctx), keyChips(box, ctx, 'VO01')),
-    VO03: (box, ctx) => combine(harmonyGraphDisplay(box, ctx), keyChips(box, ctx, 'VO03')),
+    VO03: (box, ctx) => combine(harmonyGraphDisplay(box, ctx), keyChips(box, ctx, 'VO03'), chordLine(box, ctx)),
     VO08: breathDisplay,
     CR01: filterResponseDisplay,
     CR02: stutterGridDisplay,

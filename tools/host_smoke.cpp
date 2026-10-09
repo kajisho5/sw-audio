@@ -14,6 +14,7 @@
 #include "sw_message.h"
 
 #include <clap/clap.h>
+#include <clap/ext/note-ports.h>
 #include <clap/ext/track-info.h>
 
 #include <dlfcn.h>
@@ -47,16 +48,17 @@ const void* hostGetExtension(const clap_host_t*, const char* id) { return id && 
 void hostNop(const clap_host_t*) {}
 clap_host_t gHost = {CLAP_VERSION_INIT, nullptr, "sw-host-smoke", "SEVENTHWELL", "", "1", hostGetExtension, hostNop, hostNop, hostNop};
 
-// ---- events
+// ---- events (parameter values and MIDI / note events, in the order they were added; all at time 0)
 struct EventList {
-    std::vector<clap_event_param_value_t> ev;
+    struct Ev { alignas(8) unsigned char bytes[64]; };
+    std::vector<Ev> ev;
     clap_input_events_t in{};
     EventList() {
         in.ctx = this;
         in.size = [](const clap_input_events_t* l) { return static_cast<uint32_t>(static_cast<EventList*>(l->ctx)->ev.size()); };
         in.get = [](const clap_input_events_t* l, uint32_t i) -> const clap_event_header_t* {
             auto* self = static_cast<EventList*>(l->ctx);
-            return i < self->ev.size() ? &self->ev[i].header : nullptr;
+            return i < self->ev.size() ? reinterpret_cast<const clap_event_header_t*>(self->ev[i].bytes) : nullptr;
         };
     }
     void set(clap_id id, double value) {
@@ -64,8 +66,24 @@ struct EventList {
         e.header.size = sizeof(e); e.header.time = 0; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
         e.header.type = CLAP_EVENT_PARAM_VALUE; e.header.flags = 0;
         e.param_id = id; e.cookie = nullptr; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = value;
-        ev.push_back(e);
+        push(&e, sizeof e);
     }
+    // a raw MIDI message (status, data1, data2) on note port 0
+    void midi(uint8_t status, uint8_t d1, uint8_t d2) {
+        clap_event_midi_t e{};
+        e.header.size = sizeof(e); e.header.time = 0; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_MIDI; e.header.flags = 0;
+        e.port_index = 0; e.data[0] = status; e.data[1] = d1; e.data[2] = d2;
+        push(&e, sizeof e);
+    }
+    // a CLAP note event (note on / off) on channel 0
+    void note(bool on, int16_t key, double velocity = 0.8) {
+        clap_event_note_t e{};
+        e.header.size = sizeof(e); e.header.time = 0; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = on ? CLAP_EVENT_NOTE_ON : CLAP_EVENT_NOTE_OFF; e.header.flags = 0;
+        e.note_id = -1; e.port_index = 0; e.channel = 0; e.key = key; e.velocity = velocity;
+        push(&e, sizeof e);
+    }
+private:
+    void push(const void* p, size_t n) { Ev x{}; std::memcpy(x.bytes, p, n); ev.push_back(x); }
 };
 bool outTryPush(const clap_output_events_t*, const clap_event_header_t*) { return true; }
 
@@ -258,6 +276,37 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c remember");
         const auto a = readouts(2);
         if (a.size() < 3 || a[1] != 1.0) fail("UT01: Remember gain did not reach the audio thread");
+    } else if (code == "MD05" || code == "VO03" || code == "CR04") {   // MIDI in: the plug-in has a note input, and MIDI / note events reach the core (sample-accurate, on the audio thread)
+        const auto* np = static_cast<const clap_plugin_note_ports_t*>(p->get_extension(p, CLAP_EXT_NOTE_PORTS));
+        const auto* pe = static_cast<const clap_plugin_params_t*>(p->get_extension(p, CLAP_EXT_PARAMS));
+        if (!np || np->count(p, true) != 1 || np->count(p, false) != 0) { fail(code + ": expected one MIDI input port and no output port"); return; }
+        clap_note_port_info_t ni{}; if (!np->get(p, 0, true, &ni) || !(ni.supported_dialects & CLAP_NOTE_DIALECT_MIDI) || !(ni.supported_dialects & CLAP_NOTE_DIALECT_CLAP)) { fail(code + ": the note port takes neither MIDI nor CLAP notes"); return; }
+        auto idOf = [&](const char* name, clap_id& id) { for (uint32_t i = 0; pe && i < pe->count(p); ++i) { clap_param_info_t pi{}; if (pe->get_info(p, i, &pi) && std::string(pi.name) == name) { id = pi.id; return true; } } return false; };
+        auto value = [&](clap_id id) { double v = -1; pe->get_value(p, id, &v); return v; };
+        if (code == "MD05") {   // CC64 (sustain pedal) and CC1 (mod wheel) and the notes C2 / C#2 / D2 set Speed (Stop 0, Slow 1, Fast 2); the value is the host's too
+            clap_id sp = CLAP_INVALID_ID; if (!idOf("Speed", sp)) { fail("MD05 has no Speed"); return; }
+            if (value(sp) != 1.0) fail("MD05: Speed should start at Slow");
+            ev.midi(0xB0, 64, 127); run.process(2, 99, ev); if (value(sp) != 2.0) fail("MD05: the sustain pedal (CC64 = 127) did not set Speed to Fast: " + std::to_string(value(sp)));
+            ev.midi(0xB0, 64, 0); run.process(2, 99, ev); if (value(sp) != 1.0) fail("MD05: the pedal up (CC64 = 0) did not set Slow");
+            ev.midi(0xB0, 1, 5); run.process(2, 99, ev); if (value(sp) != 0.0) fail("MD05: the mod wheel at the bottom (CC1 = 5) did not stop the rotors");
+            ev.note(true, 38); run.process(2, 99, ev); if (value(sp) != 2.0) fail("MD05: the note D2 (a CLAP note event) did not set Fast");
+            ev.midi(0x90, 37, 90); run.process(2, 99, ev); if (value(sp) != 1.0) fail("MD05: the note C#2 (a MIDI note on) did not set Slow");
+            ev.midi(0x90, 36, 0); run.process(2, 99, ev); if (value(sp) != 1.0) fail("MD05: a note on with velocity 0 is a note off: it must not change Speed");
+        } else if (code == "VO03") {   // the held notes are the chord (pitch classes): readouts[6] = the 12-bit mask (after voiced, the singer's pitch and the four voices' pitches)
+            auto chord = [&](int blocks) { const auto r = readouts(blocks); return r.size() > 6 ? r[6] : -1.0; };
+            if (chord(2) != 0.0) { fail("VO03: read-outs missing or a chord is held at the start"); return; }
+            ev.note(true, 53); ev.note(true, 57); ev.midi(0x90, 60, 100); run.process(2, 99, ev);
+            double a = chord(1); if (a != double((1 << 5) | (1 << 9) | (1 << 0))) fail("VO03: F A C were not taken as the chord (mask " + std::to_string(a) + ")");
+            ev.midi(0x80, 57, 0); run.process(2, 99, ev); a = chord(1); if (a != double((1 << 5) | (1 << 0))) fail("VO03: the note off (MIDI) did not take A out of the chord");
+            ev.note(false, 53); ev.note(false, 60); run.process(2, 99, ev); a = chord(1); if (a != 0.0) fail("VO03: the chord should be empty after every note off");
+        } else {   // CR04: with Freeze On a note-on makes a new capture (readouts[0] = the number of captures)
+            clap_id fz = CLAP_INVALID_ID; if (!idOf("Freeze", fz)) { fail("CR04 has no Freeze"); return; }
+            const auto base = readouts(2); if (base.empty()) { fail("CR04: read-outs missing"); return; }
+            ev.note(true, 60); run.process(8, 99, ev); const auto idle = readouts(1); if (idle.empty() || idle[0] != base[0]) fail("CR04: a note with Freeze Off must not capture");
+            ev.set(fz, 1.0); run.process(40, 99, ev); const auto on = readouts(1);
+            ev.note(true, 62); run.process(40, 99, ev); const auto after = readouts(1);
+            if (on.empty() || after.empty() || after[0] != on[0] + 1) fail("CR04: a note-on with Freeze On did not make one new capture (" + std::to_string(on.empty() ? -1 : on[0]) + " -> " + std::to_string(after.empty() ? -1 : after[0]) + ")");
+        }
     } else if (code == "RV04") {
         const auto base = readouts(2);
         if (base.size() < 3) { fail("RV04 read-outs missing"); return; }

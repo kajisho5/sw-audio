@@ -2,7 +2,8 @@
 //   the harmonies are added to it); the track is mono (a stereo input is summed).
 //   One sw::PitchAnalyzer, one sw::PsolaSynth and one sw::PitchCorrector per voice. The singer's note is the nearest note of the scale (Key + Scale: appended parameters, the table has none);
 //   Source Scale: the voice sings `Interval` degrees of that scale above / below it (-7 .. +7, "3rd" = +2); Fixed: the same degrees as a major-scale interval in semitones, whatever the key
-//   (+2 = +4 semitones); MIDI (chords from a MIDI track): not connected yet, it plays like Scale. The singer's vibrato is kept. Per voice: On, Interval, Level (-60 .. 0 dB), Pan (constant power),
+//   (+2 = +4 semitones); MIDI (chords from a MIDI track): the notes held on the MIDI track are the chord (pitch classes), and each voice's Scale note moves to the nearest tone of that chord (a tie: the lower one),
+//   i.e. the smallest step from where the Scale note would be; with no note held it plays like Scale. The singer's vibrato is kept. Per voice: On, Interval, Level (-60 .. 0 dB), Pan (constant power),
 //   Formant (-3 .. +3 semitones: the voice's vowel only), Humanize (a slow random drift of the pitch, +-30 cents x Humanize) and Delay (0 .. 100 ms).
 //   Reported delay 1450 samples (the engine's lookahead: 2 x the longest period + ...).
 #pragma once
@@ -37,6 +38,11 @@ public:
     bool voiced() const { return an_.currentVoiced(); }
     double leadSemitones() const { return v_[0].corr.lastMeasuredSemitones(); }
     double voiceSemitones(int v) const { return v_[static_cast<size_t>(v)].corr.lastOutputSemitones(); }
+    // MIDI (audio thread): the held notes are the chord of Source MIDI; chordMask bit k = pitch class k (C = 0) is held
+    void noteOn(int key);
+    void noteOff(int key);
+    void allNotesOff();
+    uint16_t chordMask() const { return chord_; }
 
 private:
     struct Voice {
@@ -44,6 +50,9 @@ private:
         double drift = 0.0, ph1 = 0.0, ph2 = 0.0, noise = 0.0; unsigned rng = 1;
     };
     void apply();
+    void chordChanged();
+    std::array<uint8_t, 128> held_{};
+    uint16_t chord_ = 0;
     double fs_ = 48000.0;
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};
