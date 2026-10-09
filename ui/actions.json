@@ -147,6 +147,13 @@
    "call": "mark"
   }
  ],
+ "MS07": [
+  {
+   "label": "Truncation check",
+   "call": "check",
+   "exact": true
+  }
+ ],
  "MT01": [
   {
    "label": "Reset",

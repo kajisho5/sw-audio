@@ -4,7 +4,7 @@
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
 //   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
-//   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step).
+//   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step); MS07's Truncation check (the design's own button: it shows its progress and what it found).
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -143,8 +143,14 @@ async function open(code, query = '') {
   eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(32, 35)), '[600,1800,5200]', 'and Redo brings them again');
   await aut.click(); await pg.waitForTimeout(300); await aut.click(); await pg.waitForTimeout(300);   // started, then cancelled: back to Auto, nothing written
   eq((await aut.textContent()).trim(), 'Auto', 'a second press while it listens cancels');
+  // MS07 Truncation check: a button of the panel; it shows how far it is and then what it found
+  await open('MS07'); const trc = pg.locator('button[data-call="check"]');
+  eq(await trc.count(), 1, 'MS07 has the Truncation check button'); eq((await trc.textContent()).trim(), 'Truncation check', 'MS07 idle: it says Truncation check');
+  await trc.click(); await pg.waitForFunction(() => /Checking \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('button[data-call="check"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'MS07: while listening the button shows how far it is'));
+  await pg.waitForFunction(() => /Input: 16 bit grid/.test(document.getElementById('app').shadowRoot.querySelector('button[data-call="check"]').textContent), null, { timeout: 15000 }).then(() => ok(true), () => ok(false, 'MS07: the button says what it found'));
+  ok(/16 bit/.test(await trc.getAttribute('title')) && /Bits is 16/.test(await trc.getAttribute('title')), 'and the tooltip puts it beside Bits: ' + await trc.getAttribute('title'));
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input and DY10 Auto: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto and MS07 Truncation check: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

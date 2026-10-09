@@ -26,6 +26,7 @@ void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     gain_.reset(fs_, 20.0, std::pow(10.0, target_[Output] / 20.0));
     ch_ = {};
+    probe_.prepare(fs_);
 }
 
 void Processor::setParam(int id, double v) {
@@ -49,6 +50,7 @@ void Processor::process(float** chans, int numCh, int n) {
     const double fadeStep = 1.0 / std::max(1.0, fs_ * 0.002);  // 2 ms
     for (int i = 0; i < n; ++i) {
         const double g = gain_.next();
+        if (probe_.listening()) probe_.add(chans[0][i], nch > 1 ? chans[1][i] : chans[0][i]);   // the input as it comes in (Truncation check)
         for (int c = 0; c < nch; ++c) {
             Ch& s = ch_[static_cast<size_t>(c)];
             const float in = chans[c][i];
@@ -69,5 +71,7 @@ void Processor::process(float** chans, int numCh, int n) {
         }
     }
 }
+
+void Processor::check() { if (probe_.listening()) probe_.cancel(); else probe_.start(); }
 
 }  // namespace sw::ms07

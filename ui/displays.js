@@ -529,6 +529,20 @@
     return { update(info) { const r = info && info.readouts; if (!r || r.length < 2) return; const t = r[0] > 0.5 ? (r.length >= 3 ? 'Listening: ' + Math.round(r[2]) + ' hits (press to finish)' : 'Listening ' + Math.round(r[1] * 100) + ' %') : label; if (btn.textContent !== t) btn.textContent = t; btn.classList.toggle('on', r[0] > 0.5); } };
   }
 
+  // ---- MS07 "Truncation check" (core: check / checkedBits; readouts = listening, progress, the grid the input lies on: 8 / 12 / 16 / 20 / 24, 32 = float, 0 = none yet): the button listens for 5 s of signal and then
+  // says what it found; the tooltip puts it beside the Bits setting
+  function truncationCheck(box, ctx) {
+    const btn = box.querySelector('button[data-call="check"]'); if (!btn) return null; const label = btn.textContent.trim(), tip = btn.title;
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 3) return;
+      const g = r[2], bits = ctx && ctx.value ? ctx.value('Bits') : NaN;
+      const t = r[0] > 0.5 ? 'Checking ' + Math.round(r[1] * 100) + ' %' : g >= 31 ? 'Input: float, no coarser grid' : g > 0 ? 'Input: ' + g + ' bit grid' : label;
+      let title = tip; if (r[0] <= 0.5 && g > 0) title = g >= 31 ? 'The samples are on no grid of 24 bit or coarser: a float signal, or one processed after it was quantized (a gain, an effect) - the check cannot see an earlier truncation in it.'
+        : 'Every sample lies on a ' + g + ' bit grid: the signal was truncated to ' + g + ' bit before (or came from a ' + g + ' bit file at unity gain).' + (Number.isFinite(bits) ? (g < bits ? ' Bits is ' + bits + ': dither at ' + bits + ' bit does not undo that.' : ' Bits is ' + bits + ': this stage is where it is truncated, and the dither belongs here.') : '');
+      if (btn.textContent !== t) btn.textContent = t; if (btn.title !== title) btn.title = title; btn.classList.toggle('on', r[0] > 0.5);
+    } };
+  }
+
   // ---- EQ02 "Assist" (core: setAssist, resonances; readouts = assist on, then 6 x [Hz, dB it sticks out]): the button switches the listening; the resonances are marked on the EQ graph (small triangles
   // with their frequency); pressing a mark puts a narrow Bell there on the first band that is off, cutting a part of what sticks out (Q 6, -0.7 x the excess, at most -12 dB)
   function assistMarks(box, ctx, eq) {
@@ -1894,6 +1908,7 @@
       { re: /^LRA \d|^LRA —$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[3] > 0 ? 'LRA ' + r[3].toFixed(1) : 'LRA —') : null; } }]), meterReset(box, ctx)),
     LV01: voiceStripDisplay,
     DY04: learnButton, CS02: learnButton, CS03: learnButton,
+    MS07: truncationCheck,
     DY09: transientDisplay,
     RS05: declipDisplay,
     DL05: grainDelayDisplay,
