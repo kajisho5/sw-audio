@@ -8,6 +8,7 @@
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
 #include <array>
+#include <cmath>
 #include <vector>
 
 namespace sw::dy09 {
@@ -24,6 +25,10 @@ public:
     void snapToTargets() {}
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    // what the screen shows (audio thread; the Attack / Sustain part is held ~80 ms so a 60 ms screen refresh does not miss a hit)
+    double attackPartDb() const { return widest(&Env::aPk); }    // the Attack part of the gain in dB (signed; Split bands: the largest of the three)
+    double sustainPartDb() const { return widest(&Env::sPk); }   // the Sustain part
+    double gainDb() const { return widest(&Env::gain); }         // the gain applied now (smoothed; Split bands: the largest of the three)
 
 private:
     struct Lr4 {
@@ -32,13 +37,19 @@ private:
         double process(double x) { return b.process(a.process(x)); }
     };
     struct Env {
-        double fast = 0, slow = 0, slowest = 0, gain = 0;
-        void reset() { fast = slow = slowest = gain = 0; }
+        double fast = 0, slow = 0, slowest = 0, gain = 0, aPk = 0, sPk = 0;   // aPk / sPk: the two parts of the gain, held ~80 ms (for the screen)
+        void reset() { fast = slow = slowest = gain = aPk = sPk = 0; }
     };
     struct Split { Lr4 lp150, hp150, lpA, hpA, lpB, hpB; };
     double shapeDb(Env& e, double level, double att, double sus) const;
+    // the value with the largest magnitude of the envelopes in use (Smooth: the first; Split bands: the three bands)
+    double widest(double Env::*m) const {
+        if (target_[Mode] < 0.5) return env_[0].*m;
+        double v = 0; for (size_t b = 1; b < 4; ++b) if (std::abs(env_[b].*m) > std::abs(v)) v = env_[b].*m;
+        return v;
+    }
     void updateSpeed();
-    double fs_ = 48000.0, cF_ = 0, cS_ = 0, cSS_ = 0, cG_ = 0;
+    double fs_ = 48000.0, cF_ = 0, cS_ = 0, cSS_ = 0, cG_ = 0, cPk_ = 0;
     std::array<double, kNumParams> target_{};
     std::array<Env, 4> env_{};
     std::array<Split, 2> split_{};

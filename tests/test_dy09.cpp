@@ -80,3 +80,28 @@ TEST_CASE("DY09 silence stays silent, extreme input finite, latency 0") {
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
     CHECK(p.latencySamples() == 0);
 }
+
+namespace {
+void feed(Processor& p, const std::vector<float>& x, size_t from, size_t to) {
+    std::vector<float> l(x.begin() + static_cast<long>(from), x.begin() + static_cast<long>(to)), r = l;
+    for (size_t off = 0; off < l.size(); off += 256) { float* b[2] = {l.data() + off, r.data() + off}; p.process(b, 2, static_cast<int>(std::min<size_t>(256, l.size() - off))); }
+}
+}
+TEST_CASE("DY09 reports the Attack and Sustain parts and the gain (screen read-outs)") {
+    const auto x = hit(200, 0.5, 0.1, 1.0);
+    { auto p = make(); feed(p, x, 0, 9600 + 480); CHECK(p.attackPartDb() == 0.0); CHECK(p.sustainPartDb() == 0.0); CHECK(std::abs(p.gainDb()) < 0.01); }
+    {   // Attack +12: the hit raises the Attack part (held after the hit), the Sustain part stays 0
+        auto p = make({{Attack, 12}}); feed(p, x, 0, 9600 + 1200);
+        CHECK(p.attackPartDb() > 3.0); CHECK(p.attackPartDb() <= 12.0); CHECK(p.sustainPartDb() == 0.0);
+        feed(p, x, 9600 + 1200, 9600 + 1200 + 48000 / 2);   // half a second later the held peak is gone
+        CHECK(std::abs(p.attackPartDb()) < 0.5);
+    }
+    {   // Sustain -12: the decay lowers the tail; the Attack part stays 0
+        auto p = make({{Sustain, -12}}); feed(p, x, 0, 9600 + 14400);
+        CHECK(p.sustainPartDb() < -0.5); CHECK(p.sustainPartDb() >= -12.0); CHECK(p.attackPartDb() == 0.0); CHECK(p.gainDb() <= 0.0);
+    }
+    {   // Split bands: the screen sees the largest band; a hit in the high band moves it
+        auto p = make({{Mode, 1}, {B3Attack, 12}}); const auto h = hit(8000, 0.5, 0.05, 1.0); feed(p, h, 0, 9600 + 1200);
+        CHECK(p.attackPartDb() > 3.0);
+    }
+}

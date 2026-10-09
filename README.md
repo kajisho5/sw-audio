@@ -1157,6 +1157,7 @@ LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`�
 | MS05・VO05 | ゲインライダー | オレンジ＝ライドの履歴（コアの `rideDb()`、12 秒。縦軸は ±Range、最小 ±6 dB）、灰色＝出力ピークの履歴。VO05 の Music 欄はコアの `listening()`（Listening／Not listening） |
 | GT03 | チューナーの読み取り表示 | コアの `tunerHz／tunerNote／tunerCents`（例 A2 +6¢ 110.4 Hz。音が無いと「—」） |
 | LV22 | 極性ゲージ | 針はコアの相関（−1〜+1、左端〜右端）、左上に r と遅れ（ms） |
+| DY09 | トランジェントの波形 | **デザインの静かな波形と 5 組の帯（オレンジの縦帯と白い箱）は例だった**ので、直近 約 7 秒の実測に置き換えた。灰色の面＝入力のピークレベル（左右対称）、**オレンジ＝Attack が実際に足した・引いた量、白＝Sustain の量**（コアが持つ値。`attackPartDb()`・`sustainPartDb()`・`gainDb()`、約 80 ms ピークを保持して画面の更新間隔で取りこぼさない。Split bands のときは 3 帯域のうち最も大きいもの）。高さは ±15 dB が上限。左上に Attack／Sustain の設定値（Split では Low／Mid／High）、右上に今かかっているゲイン。符号は設定値のほうで見る（量は大きさだけ描く）。**測っていないもの：実際のドラム素材での見え方（試験は合成の減衰音）** |
 | LV05・LV29 | ダッキングのゲイン履歴とブロック | コアのゲイン（LV05 は BGM、LV29 は Floor）と、キーの有無（声／通訳の発話）を 30 秒分。デザインの見本の線・ブロックは置き換え |
 | MD02・MD04 | LFO の波形 | 直近 1.5 秒（右端が「いま」）。周期は実際に使われている Rate（Sync ではノート長から。コアの `rateHz()`）、振幅は Depth、MD04 は Shape（Sine／Triangle／Square／Ramp）、MD02 はコアの LFO 位相に同期して流れる。Through zero・Feedback の影響は描かない |
 | CR05 | テープストップの速度曲線 | Action（Stop＝1−w、Start＝w、Spin back＝1−3w）と Curve（Lin／Exp／Log）から、`products/cr05` と同じ式で描く（時間軸は動作の長さ全体。実際の秒数・いまの位置は出さない） |

@@ -36,6 +36,7 @@ void Processor::prepare(double sampleRate, int) {
     for (auto& e : env_) e.reset();
     for (auto& c : os_[0]) c = Oversampler2x{};
     cG_ = coefMsFs(fs_, 0.5);
+    cPk_ = coefMsFs(fs_, 80.0);
     for (int i = 0; i < kNumParams; ++i) setParam(i, target_[static_cast<size_t>(i)]);
 }
 
@@ -65,7 +66,9 @@ double Processor::shapeDb(Env& e, double level, double att, double sus) const {
     e.slowest = level + cSS_ * (e.slowest - level);
     const double r1 = 20.0 * std::log10((e.fast + kEps) / (e.slow + kEps));      // > 0 on an onset
     const double r2 = 20.0 * std::log10((e.slow + kEps) / (e.slowest + kEps));   // < 0 while decaying
-    const double want = att * std::clamp(r1 / kRefDb, 0.0, 1.0) + sus * std::clamp(-r2 / kRefDb, 0.0, 1.0);
+    const double a = att * std::clamp(r1 / kRefDb, 0.0, 1.0), s = sus * std::clamp(-r2 / kRefDb, 0.0, 1.0), want = a + s;
+    e.aPk *= cPk_; if (std::abs(a) > std::abs(e.aPk)) e.aPk = a;      // held peaks of the two parts (screen only)
+    e.sPk *= cPk_; if (std::abs(s) > std::abs(e.sPk)) e.sPk = s;
     e.gain = want + cG_ * (e.gain - want);
     return e.gain;
 }

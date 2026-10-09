@@ -1500,12 +1500,40 @@
     if (!hit.length) return null;
     return { update(info) { hit.forEach(h => h.els.forEach(e => { const t = h.r.text(info || {}, ctx, e.textContent.trim().match(h.r.re)); if (t !== null && t !== undefined && e.textContent !== t) e.textContent = t; })); } };
   }
+  // ---- transient shaper (DY09): readouts = the Attack part, the Sustain part, the gain applied (dB). Grey = the measured input level (mirrored), orange = what Attack did (held peaks), white = what Sustain did; the last ~7 s
+  function transientDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const grey = svg.querySelector(':scope > path'), rects = [...svg.querySelectorAll(':scope > rect')], txt = [...svg.querySelectorAll(':scope > text')];
+    if (!grey || rects.length < 2 || txt.length < 2) return null;
+    rects.forEach(r => r.remove());
+    const [, , W, H] = vbOf(svg), C = H / 2, N = 122, dx = W / (N - 1), AMP = C - 6, FULL = 15;
+    const atk = mkEl('path', { fill: '#f0ad3d', 'fill-opacity': 0.42 }), sus = mkEl('path', { fill: '#ffffff', 'fill-opacity': 0.14 });
+    grey.after(sus, atk);
+    const gain = mkEl('text', { x: W - 10, y: 16, 'text-anchor': 'end', 'font-family': 'Space Mono, monospace', 'font-size': 11, fill: '#e6e6e6' }); svg.append(gain);
+    txt[1].setAttribute('x', 190);
+    const lvl = Ring(N, -90), a = Ring(N, 0), s = Ring(N, 0); let last = 0;
+    const sg = v => (v < -0.05 ? '−' : '+') + Math.abs(v).toFixed(1);
+    const area = (arr, f) => { let top = '', bot = ''; for (let k = 0; k < N; k++) { const x = (k * dx).toFixed(1), h = f(arr[k]).toFixed(1); top += (k ? ' L' : 'M') + x + ' ' + (C - h); bot = ' L' + x + ' ' + (C + +h) + bot; } return top + bot + ' Z'; };
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 3) return;
+      const now = Date.now(); if (now - last < 55) return; last = now;
+      lvl.push(m ? peakDb(m) : -90); a.push(r[0]); s.push(r[1]);
+      grey.setAttribute('d', area(lvl.a, v => clamp((v + 60) / 60, 0, 1) * AMP * 0.9));
+      atk.setAttribute('d', area(a.a, v => clamp(Math.abs(v) / FULL, 0, 1) * AMP));
+      sus.setAttribute('d', area(s.a, v => clamp(Math.abs(v) / FULL, 0, 1) * AMP * 0.7));
+      const split = ctx.value('Mode') > 0.5, at = split ? ['Low', 'Mid', 'High'].map(b => ctx.value(b + ' Attack')) : [ctx.value('Attack')], su = split ? ['Low', 'Mid', 'High'].map(b => ctx.value(b + ' Sustain')) : [ctx.value('Sustain')];
+      txt[0].textContent = 'Attack ' + (split ? at.map((v, i) => 'LMH'[i] + ' ' + sg(v || 0)).join('  ') : sg(at[0] || 0) + ' dB');
+      txt[1].textContent = 'Sustain ' + (split ? su.map((v, i) => 'LMH'[i] + ' ' + sg(v || 0)).join('  ') : sg(su[0] || 0) + ' dB');
+      gain.textContent = 'Gain ' + sg(r[2]) + ' dB';
+    } };
+  }
   const lufs = v => (v > -150 ? v.toFixed(1) : '—');
   const combine = (...ds) => { const l = ds.filter(Boolean); return l.length ? { update(i) { l.forEach(d => d.update && d.update(i)); }, destroy() { l.forEach(d => d.destroy && d.destroy()); } } : null; };
 
   const registry = {
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
     LV01: voiceStripDisplay,
+    DY09: transientDisplay,
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
     LV03: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV03'), miniEqCurve(box, ctx)),
     LV04: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }])),

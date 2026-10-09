@@ -9,6 +9,8 @@ struct Dy09 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = sw::dy09::Mix;
+    static constexpr int kReadouts = 3;   // the Attack part, the Sustain part and the gain applied (dB), for the screen
+    static void readouts(const Core& c, double* o) { o[0] = c.attackPartDb(); o[1] = c.sustainPartDb(); o[2] = c.gainDb(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_COMPRESSOR, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.dy09", "SW DY09 Transient", "SEVENTHWELL",
