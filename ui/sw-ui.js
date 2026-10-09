@@ -94,6 +94,7 @@
     host.forEach(h => { if (!h.c) h.c = makeCurve(h.p); });
     const vals = bridge.values().slice();
     const widgets = new Map();       // host index -> update(plain)
+    const addWidget = (i, f) => { const prev = widgets.get(i); widgets.set(i, prev ? v => { prev(v); f(v); } : f); };   // several widgets may show one parameter (the design's control and the all-parameters drawer)
     const undo = [], redo = []; let ab = 'A'; const slots = { A: null, B: null };
 
     root.classList.add('p');
@@ -186,34 +187,34 @@
           const down = e => { b.setPointerCapture(e.pointerId); bridge.begin(i); setValue(i, p.steps[1], false); b.classList.add('on'); };
           const up = () => { setValue(i, p.steps[0], false); bridge.end(i); b.classList.remove('on'); };
           b.addEventListener('pointerdown', down); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); w.append(b);
-          widgets.set(i, v => b.classList.toggle('on', v > 0.5)); return w;
+          addWidget(i, v => b.classList.toggle('on', v > 0.5)); return w;
         }
         if (n === 2 && isOnOff(p)) {
-          const w = el('div', 'ctl tog'); const b = el('button', 'dbtn', label); w.append(b);
+          const w = el('div', skinBox ? 'ctl onoff' : 'ctl tog'); const b = el('button', 'dbtn', label); w.append(b);   // (the designs' own .tog is the 3-D switch)
           b.onclick = () => { bridge.begin(i); setValue(i, vals[i] > 0.5 ? p.steps[0] : p.steps[1]); bridge.end(i); };
-          widgets.set(i, v => b.classList.toggle('on', c.norm(v) > 0.5)); b.classList.toggle('on', c.norm(vals[i]) > 0.5); return w;
+          addWidget(i, v => b.classList.toggle('on', c.norm(v) > 0.5)); b.classList.toggle('on', c.norm(vals[i]) > 0.5); return w;
         }
         if (n <= 6) {
           const w = el('div', 'ctl'); const seg = el('div', 'seg'); const bs = [];
           p.steps.forEach((s, k) => { const b = el('button', 'dbtn', (p.labels && p.labels[k]) || String(s)); b.onclick = () => { bridge.begin(i); setValue(i, s); bridge.end(i); }; seg.append(b); bs.push(b); });
           w.append(seg, el('div', 'lbl', label));
-          const upd = v => { const k = Math.round(c.norm(v) * (n - 1)); bs.forEach((b, j) => b.classList.toggle('on', j === k)); }; widgets.set(i, upd); upd(vals[i]); return w;
+          const upd = v => { const k = Math.round(c.norm(v) * (n - 1)); bs.forEach((b, j) => b.classList.toggle('on', j === k)); }; addWidget(i, upd); upd(vals[i]); return w;
         }
         const w = el('div', 'ctl sel'); const b = el('button', 'dbtn'); const t = el('span'), ar = el('span', '', '▾'); b.append(t, ar); w.append(b, el('div', 'lbl', label));
         b.onclick = e => {
-          e.stopPropagation(); const m = el('div', 'menu'); const r = b.getBoundingClientRect(), rr = root.getBoundingClientRect();
+          e.stopPropagation(); const m = el('div', 'menu'); const host_ = skinBox || root, r = b.getBoundingClientRect(), rr = host_.getBoundingClientRect();
           p.steps.forEach((s, k) => { const d = el('div', Math.abs(vals[i] - s) < 1e-9 ? 'cur' : '', (p.labels && p.labels[k]) || String(s)); d.onclick = () => { bridge.begin(i); setValue(i, s); bridge.end(i); m.remove(); }; m.append(d); });
-          m.style.left = (r.left - rr.left) + 'px'; m.style.top = (r.bottom - rr.top + 2) + 'px'; root.append(m);
-          const close = () => { m.remove(); document.removeEventListener('pointerdown', close, true); }; setTimeout(() => document.addEventListener('pointerdown', close, true), 0);
+          m.style.left = (r.left - rr.left) + 'px'; m.style.top = (r.bottom - rr.top + 2) + 'px'; host_.append(m);
+          const close = e => { if (e && e.composedPath && e.composedPath().includes(m)) return; m.remove(); document.removeEventListener('pointerdown', close, true); }; setTimeout(() => document.addEventListener('pointerdown', close, true), 0);   // a press inside the menu is the choice itself
         };
-        const upd = v => { t.textContent = format(p, v, c); }; widgets.set(i, upd); upd(vals[i]); return w;
+        const upd = v => { t.textContent = format(p, v, c); }; addWidget(i, upd); upd(vals[i]); return w;
       }
       // continuous: a digital arc knob
       const w = el('div', 'ctl'); const dk = el('div', 'dk'); dk.style.setProperty('--s', '56px'); const ptr = el('div', 'ptr'); ptr.append(el('i')); dk.append(ptr);
       const val = el('div', 'val'), lbl = el('div', 'lbl', label); w.append(dk, val, lbl);
       if (p.auto === false) dk.classList.add('dis');
       const upd = v => { const x = c.norm(v), deg = x * 270; dk.style.setProperty('--v', deg + 'deg'); ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; val.textContent = format(p, v, c); };
-      widgets.set(i, upd); upd(vals[i]);
+      addWidget(i, upd); upd(vals[i]);
       let drag = null;
       dk.addEventListener('pointerdown', e => { dk.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: c.norm(vals[i]) }; bridge.begin(i); });
       dk.addEventListener('pointermove', e => { if (!drag) return; const k = e.shiftKey ? 1000 : 180; setValue(i, c.value(clamp(drag.x0 + (drag.y - e.clientY) / k, 0, 1)), false); });
@@ -232,7 +233,7 @@
     function fader(it) {
       const p = it.p, i = it.i, c = it.c; const w = el('div', 'fader'); const ft = el('div', 'ft'), cap = el('i'); ft.append(cap);
       const val = el('div', 'val'), lbl = el('div', 'lbl', p.name.replace(/^(Band|R)\s+/, '')); w.append(ft, val, lbl);
-      const upd = v => { cap.style.top = ((1 - c.norm(v)) * 100) + '%'; val.textContent = format(p, v, c).replace(/ dB$/, ''); }; widgets.set(i, upd); upd(vals[i]);
+      const upd = v => { cap.style.top = ((1 - c.norm(v)) * 100) + '%'; val.textContent = format(p, v, c).replace(/ dB$/, ''); }; addWidget(i, upd); upd(vals[i]);
       const move = e => { const r = ft.getBoundingClientRect(); setValue(i, c.value(clamp(1 - (e.clientY - r.top) / r.height, 0, 1)), false); };
       ft.addEventListener('pointerdown', e => { ft.setPointerCapture(e.pointerId); bridge.begin(i); move(e); ft._d = true; });
       ft.addEventListener('pointermove', e => { if (ft._d) move(e); });
@@ -401,6 +402,39 @@
     }
     refreshInfo(); const timer = setInterval(refreshInfo, 60);
     bridge.onChange((i, v) => { if (i < host.length) { vals[i] = v; const w = widgets.get(i); if (w) w(v); } });
+    // ---- all parameters: a drawer with a generic control for every parameter. The designs show a part of the parameters; the rest (a band's slope or placement, the FFT length, the order of modules ...)
+    // could only be reached from the host's parameter list. The button sits at the right end of the EVO bar; the search box filters by name.
+    if (skinBox) {
+      const evob = skinBox.querySelector('.evob, .evobar') || skinBox.querySelector('.tb');   // (five rack-style designs have no EVO bar: the top bar then)
+      if (evob) {
+        const btn = el('button', '', 'All parameters'); btn.title = 'Every parameter of this plug-in'; btn.style.cssText = 'margin-left:8px;height:22px;padding:0 9px;border:1px solid #34363b;border-radius:4px;background:#1a1b1e;color:#cfcfcf;font:500 11px "Barlow Condensed",sans-serif;letter-spacing:.06em;cursor:pointer;white-space:nowrap';
+        evob.append(btn);
+        const st = document.createElement('style');
+        // the generic controls' own rules (.p .dk, .p .ctl ...) copied for the drawer, because the designs' styles do not define them (and the shadow DOM does not see the page's)
+        let gen = ''; for (const sh of document.styleSheets) { try { for (const r of sh.cssRules) { if (r.cssText && r.cssText.startsWith('.p ')) gen += r.cssText.replace(/\.p /g, '.allp ') + '\n'; } } catch (e) { /* a sheet from another origin */ } }
+        st.textContent = gen + '.allp{position:absolute;inset:0;z-index:9999;isolation:isolate;background:#0c0c0d;display:flex;flex-direction:column;color:#e6e6e6;font-family:"Barlow Condensed",sans-serif}.allp-hd{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid #2a2a2e}.allp-hd b{font-size:13px;letter-spacing:.14em;text-transform:uppercase}.allp-hd .sp{flex:1}.allp-hd input{flex:1;max-width:260px;height:26px;background:#141416;border:1px solid #34363b;border-radius:4px;color:#e6e6e6;padding:0 8px;font:12px "Space Mono",monospace}.allp-hd button{height:26px;padding:0 12px;border:1px solid #34363b;border-radius:4px;background:#1a1b1e;color:#cfcfcf;cursor:pointer;font:500 12px "Barlow Condensed",sans-serif}.allp-body{overflow:auto;padding:12px 14px;flex:1;display:flex;flex-direction:column;gap:16px}.allp .menu{z-index:10000}';
+        skinBox.parentNode.append(st);
+        skinBox.style.position = skinBox.style.position || 'relative';
+        let drawer = null;
+        const build = () => {
+          drawer = el('div', 'allp'); const hd = el('div', 'allp-hd'), q = el('input'), x = el('button', '', 'Close'), body2 = el('div', 'allp-body'); q.placeholder = 'Search'; hd.append(el('b', '', 'All parameters'), q, el('span', 'sp'), x); drawer.append(hd, body2);
+          const secs = [];
+          // parameters of one band / tap / voice share their names ("Freq" x 24): the id says which ("eq08.b3.freq" -> Band 3), so they are grouped by that
+          const kinds = { b: 'Band', t: 'Tap', v: 'Voice', f: 'Filter', s: 'Step', m: 'Module', c: 'Channel', n: 'Node' }, byId = new Map(), rest = [];
+          host.filter(h => !h.extra).forEach(h => { const seg = (h.p.id || '').split('.'), g = seg.length >= 3 && /^[a-z]\d+$/.test(seg[1]) ? seg[1] : null; if (g) { if (!byId.has(g)) byId.set(g, []); byId.get(g).push(h); } else rest.push(h); });
+          const idSecs = [...byId.entries()].map(([g, items]) => ({ key: 'id:' + g, kind: 'row', title: (kinds[g[0]] || g[0].toUpperCase()) + ' ' + parseInt(g.slice(1), 10), items, byId: true }));
+          const secList = groupParams(rest).concat(idSecs);
+          secList.forEach(s => {
+            const sec = el('div', 'sec'); if (s.title) sec.append(el('div', 'sect', s.title)); const row = el('div', 'row'); sec.append(row); body2.append(sec);
+            const ctls = s.items.map(it => { const w = s.kind === 'faders' ? fader(it) : control(it, s.byId ? it.p.name : s.title && it.p.name.startsWith(s.title + ' ') ? it.p.name.slice(s.title.length + 1) : it.p.name); w.dataset.name = (s.title + ' ' + it.p.name).toLowerCase(); row.append(w); return w; });
+            secs.push({ sec, ctls });
+          });
+          q.addEventListener('input', () => { const t = q.value.trim().toLowerCase(); secs.forEach(s => { let any = false; s.ctls.forEach(w => { const show = !t || w.dataset.name.includes(t); w.style.display = show ? '' : 'none'; if (show) any = true; }); s.sec.style.display = any ? '' : 'none'; }); });
+          x.onclick = () => { drawer.style.display = 'none'; }; skinBox.append(drawer);
+        };
+        btn.onclick = () => { if (!drawer) build(); else drawer.style.display = drawer.style.display === 'none' ? 'flex' : 'none'; };
+      }
+    }
     return { destroy() { clearInterval(timer); root.innerHTML = ''; }, values: () => vals.slice(), host };
   }
 
