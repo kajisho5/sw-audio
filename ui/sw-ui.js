@@ -172,6 +172,15 @@
       morphed = false; applyAll(next);
     };
     const presetBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-preset]');
+    // Lock (the LIVE header): a see-through sheet over everything below the header takes the presses, so a stray touch during a show changes nothing; the host's own automation still moves the parameters
+    const lockBtn = skinBox && skinBox.querySelector('button[data-lock]');
+    if (lockBtn) {
+      const hdr = lockBtn.closest('.tb'), sheet = document.createElement('div'); let locked = false;
+      sheet.style.cssText = 'position:absolute;left:0;right:0;bottom:0;z-index:60;display:none;cursor:not-allowed;background:rgba(0,0,0,.12)'; sheet.title = 'Locked: press Lock to unlock';
+      skinBox.append(sheet);
+      const place = () => { const a = skinBox.getBoundingClientRect(), h = hdr.getBoundingClientRect(); sheet.style.top = Math.max(0, h.bottom - a.top) + 'px'; };
+      lockBtn.addEventListener('click', () => { locked = !locked; lockBtn.classList.toggle('on', locked); if (locked) place(); sheet.style.display = locked ? 'block' : 'none'; });
+    }
     // copy / paste (LV03): the settings of this product as a text kept by the plug-in for the next window of the same product
     const copyBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-copy]'), pasteBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-paste]');
     if (copyBtn || pasteBtn) {
