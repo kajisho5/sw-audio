@@ -34,6 +34,7 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
+    void reset();                 // the host stopped or jumped: forget the audio (filters, detectors, convolver history), keep the kernels, the parameters and the worker thread
     int latencySamples() const;
     // Assist: the resonances of the input, strongest first: Hz and how many dB they stick out (averaged over seconds). Audio thread (the screen's button is queued to it); the analysis only runs while it is on.
     void setAssist(bool on) { if (on && !assist_) res_.reset(); assist_ = on; }

@@ -44,7 +44,11 @@ int main(int argc, char** argv) {
     auto* entry = static_cast<const clap_plugin_entry_t*>(dlsym(lib, "clap_entry")); if (!entry || !entry->init(argv[1])) return 2;
     auto* fac = static_cast<const clap_plugin_factory_t*>(entry->get_factory(CLAP_PLUGIN_FACTORY_ID)); const clap_plugin_descriptor_t* d = fac->get_plugin_descriptor(fac, 0);
     const clap_plugin_t* p = fac->create_plugin(fac, &gHost, d->id);
-    if (!p || !p->init(p) || !p->activate(p, kSr, 16, kBlock) || !p->start_processing(p)) { std::fprintf(stderr, "create failed\n"); return 2; }
+    if (!p || !p->init(p)) { std::fprintf(stderr, "create failed\n"); return 2; }
+    if (std::string(d->id).find(".eq02") != std::string::npos) {   // EQ02 in Linear mode (the phase mode is read at activation; the kernels are then designed on the worker thread): Phase mode = 2, parameter 216
+        if (const auto* m0 = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE))) m0->send(p, "s 216 2");
+    }
+    if (!p->activate(p, kSr, 16, kBlock) || !p->start_processing(p)) { std::fprintf(stderr, "create failed\n"); return 2; }
     const auto* pe = static_cast<const clap_plugin_params_t*>(p->get_extension(p, CLAP_EXT_PARAMS));
     const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(p->get_extension(p, CLAP_EXT_AUDIO_PORTS));
     const auto* msg = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE));

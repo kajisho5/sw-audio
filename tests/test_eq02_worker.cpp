@@ -82,3 +82,22 @@ TEST_CASE("EQ02 worker: a state load (snapToTargets) wins over a design on its w
     for (int k = 0; k < 6; ++k) { setBands(b, k % 2 ? 5.0 : -5.0, 1000.0 + 100.0 * k); float* d[2] = {tmp.data(), t2.data()}; b.process(d, 2, 256); }
     // (destroyed with a design possibly running: the destructor joins the thread)
 }
+
+TEST_CASE("EQ02 reset(): the host stopped - the audio is forgotten in every phase mode (filters, detectors, convolver), the settings and the kernels stay, nothing is allocated") {
+    for (const int mode : {ZeroLatency, Natural, Linear}) {
+        Processor p; p.setParam(PhaseMode, mode); setBands(p, 9.0, 3000.0); p.setParam(band(4, On), 1); p.setParam(band(4, DynRange), -6.0); p.setParam(band(4, Freq), 1200.0);
+        p.prepare(kFs, 256); p.snapToTargets();
+        Processor fresh = p;
+        const auto l = noise(-12.0, 2.0, 3), r = noise(-12.0, 2.0, 4);
+        through(p, l, r, [] {});
+        { allocguard::Scope g; p.reset(); CHECK(g.n() == 0); }
+        const auto sil = through(p, std::vector<float>(9600, 0.0f), std::vector<float>(9600, 0.0f), [] {});
+        double worst = 0; for (size_t i = 0; i < sil.first.size(); ++i) worst = std::max({worst, static_cast<double>(std::abs(sil.first[i])), static_cast<double>(std::abs(sil.second[i]))});
+        INFO("mode " << mode << ": loudest sample after reset " << worst);
+        CHECK(worst < 1e-6);
+        // and it still does what it did: the same input gives what a fresh one gives
+        const auto a = through(p, l, r, [] {}), b = through(fresh, l, r, [] {});
+        double diff = 0; for (size_t i = a.first.size() / 2; i < a.first.size(); ++i) diff = std::max(diff, static_cast<double>(std::abs(a.first[i] - b.first[i])));
+        CHECK(diff < 1e-4);
+    }
+}

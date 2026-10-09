@@ -174,6 +174,16 @@ void Processor::buildLinear(bool immediate) {
     sinceKernel_ = 0;
 }
 
+void Processor::reset() {
+    if (!prepared_) return;
+    for (auto& c : conv_) c.reset();
+    for (auto& b : band_) { for (auto& f : b.f) f.reset(); for (auto& d : b.det) d.reset(); b.env = {}; b.offset = {}; }
+    for (int p = 0; p < 2; ++p) std::fill(natHist_[static_cast<size_t>(p)].begin(), natHist_[static_cast<size_t>(p)].end(), 0.0);
+    natPos_ = 0;
+    if (assist_) res_.reset();
+    configure(0);   // (the band filters: new state, the coefficients of the static settings)
+}
+
 void Processor::snapToTargets() {
     if (!prepared_) return;
     configure(0);
