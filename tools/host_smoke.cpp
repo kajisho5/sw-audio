@@ -284,7 +284,7 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c match");
         const auto none = readouts(2);
         if (none.size() < 9 || none[0] != 0.0) fail("EQ05: Match listened without a reference");
-        std::vector<float> ref(static_cast<size_t>(12.0 * kSr)); { Rng rng(7); double lp = 0; for (auto& v : ref) { const double x = rng.next() * 0.1732; lp += 0.05 * (x - lp); v = static_cast<float>(x + 6.0 * lp); } }   // noise with a low-frequency tilt
+        std::vector<float> ref(static_cast<size_t>(12.0 * kSr)); { Rng rng(7); double lp = 0; const double k = 1.0 - std::exp(-6.283185307 * 400.0 / kSr); for (auto& v : ref) { const double x = rng.next() * 0.1732; lp += k * (x - lp); v = static_cast<float>(x + 6.0 * lp); } }   // noise with a low-frequency tilt (a one-pole low-pass at 400 Hz added: the same tilt at every sample rate)
         std::vector<uint8_t> bytes(ref.size() * sizeof(float)); std::memcpy(bytes.data(), ref.data(), bytes.size());
         m->send(p, (std::string("c refbegin ") + std::to_string(static_cast<int>(kSr))).c_str()); sendPieces(m, p, "refdata", bytes); m->send(p, "c refend");
         const auto a = readouts(2);
@@ -302,7 +302,7 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         const auto vals = updateArrays(m->send(p, "p"));
         if (e.size() < 9 || e[6] != base[6] + 1 || e[2] != 0.0) fail("EQ05: the fitted values were not applied (fits applied " + std::to_string(e.size() > 6 ? e[6] : -1) + ")");
         else if (!(e[5] < e[4])) fail("EQ05: the fit did not bring the tone curves closer (before " + std::to_string(e[4]) + ", after " + std::to_string(e[5]) + " dB)");
-        else if (vals.empty() || vals[0].size() < 12 || !(vals[0][9] > 1.0)) fail("EQ05: the low band was not raised on a low-tilted reference (LF Gain " + std::to_string(vals.empty() || vals[0].size() < 12 ? -99.0 : vals[0][9]) + ")");
+        else if (vals.empty() || vals[0].size() < 12 || !(vals[0][9] > 1.0 || vals[0][6] > 1.0)) fail("EQ05: the lows were not raised on a low-tilted reference (LF Gain " + std::to_string(vals.empty() || vals[0].size() < 12 ? -99.0 : vals[0][9]) + ", LMF Gain " + std::to_string(vals.empty() || vals[0].size() < 12 ? -99.0 : vals[0][6]) + ")");
     } else if (code == "MS07") {   // Truncation check: the button call starts the listening on the audio thread; a second call while it listens cancels
         const auto base = readouts(2);
         if (base.size() < 3 || base[0] != 0.0 || base[2] != 0.0) { fail("MS07 read-outs missing, already listening, or a result before any check"); return; }
