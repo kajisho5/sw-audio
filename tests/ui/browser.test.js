@@ -52,6 +52,7 @@ async function open(code, query = '') {
   ok(v0 !== v1 && v1 !== v2, 'two drags changed the value'); ok(await undoB.isEnabled(), 'undo is enabled after a drag');
   await undoB.click(); eq(await val.textContent(), v1, 'one undo = one drag'); await undoB.click(); eq(await val.textContent(), v0, 'two undos'); ok(!(await undoB.isEnabled()), 'nothing left to undo');
   await redoB.click(); eq(await val.textContent(), v1, 'redo'); await redoB.click(); eq(await val.textContent(), v2, 'redo again');
+  await pg.keyboard.press('Control+z'); eq(await val.textContent(), v1, 'Ctrl+Z undoes'); await pg.keyboard.press('Control+Shift+z'); eq(await val.textContent(), v2, 'Ctrl+Shift+Z redoes'); await pg.keyboard.press('Control+z'); await pg.keyboard.press('Control+y'); eq(await val.textContent(), v2, 'Ctrl+Y redoes');
   const popRows = () => pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot; const p = [...sh.querySelectorAll('div')].find(d => /Go back to before|Nothing has been changed/.test(d.textContent) && d.style.position === 'absolute'); return p ? [...p.children].map(c => c.textContent) : null; });
   await pg.locator('button[data-history]').click(); await pg.waitForTimeout(150);
   let rows = await popRows(); ok(rows && rows.length === 3, 'History lists a header and the two drags: ' + JSON.stringify(rows)); ok(/Threshold/.test(rows[1]) && /→/.test(rows[1]), 'a row says what changed: ' + rows[1]);

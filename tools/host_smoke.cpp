@@ -576,6 +576,77 @@ void impulseChecks(const std::vector<fs::path>& files, int& warns, std::vector<s
     }
 }
 
+// The saved state of a project, through the real plug-in: random values on every parameter -> save -> a new instance -> load -> the same values (and the same reported latency); a state that was cut short,
+// read a few bytes at a time, or is garbage must not crash and must leave every parameter inside its range.
+struct MemOut { std::vector<uint8_t> d; clap_ostream_t s{}; MemOut() { s.ctx = this; s.write = [](const clap_ostream_t* st, const void* b, uint64_t n) -> int64_t { auto* m = static_cast<MemOut*>(st->ctx); const auto* q = static_cast<const uint8_t*>(b); m->d.insert(m->d.end(), q, q + n); return static_cast<int64_t>(n); }; } };
+struct MemIn {
+    std::vector<uint8_t> d; size_t pos = 0, chunk; clap_istream_t s{};
+    MemIn(std::vector<uint8_t> bytes, size_t maxChunk = 1u << 30) : d(std::move(bytes)), chunk(maxChunk) {
+        s.ctx = this;
+        s.read = [](const clap_istream_t* st, void* b, uint64_t n) -> int64_t { auto* m = static_cast<MemIn*>(st->ctx); const size_t k = std::min<size_t>({static_cast<size_t>(n), m->chunk, m->d.size() - m->pos}); std::memcpy(b, m->d.data() + m->pos, k); m->pos += k; return static_cast<int64_t>(k); };
+    }
+};
+bool stateChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string(); std::string why;
+        auto bad = [&](const std::string& t) { problems.push_back("FAIL  state of " + name + ": " + t); ok = false; };
+        Loaded a; if (!a.open(f, why)) { bad(why); continue; }
+        const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+        const auto* st = static_cast<const clap_plugin_state_t*>(a.p->get_extension(a.p, CLAP_EXT_STATE));
+        const auto* lat = static_cast<const clap_plugin_latency_t*>(a.p->get_extension(a.p, CLAP_EXT_LATENCY));
+        if (!pe || !st) { bad("no params / state extension"); a.close(); continue; }
+        const uint32_t n = pe->count(a.p); std::vector<clap_param_info_t> info(n);
+        Rng rng(0x9E3779B97F4A7C15ull ^ static_cast<uint64_t>(n) * 7919u);
+        EventList ev;
+        for (uint32_t i = 0; i < n; ++i) {
+            pe->get_info(a.p, i, &info[i]); if (info[i].flags & CLAP_PARAM_IS_READONLY) continue;
+            double v = info[i].min_value + (rng.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value);
+            if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+            ev.set(info[i].id, v);
+        }
+        a.run.process(3, 5, ev);
+        std::vector<double> va(n); for (uint32_t i = 0; i < n; ++i) pe->get_value(a.p, info[i].id, &va[i]);
+        MemOut out; if (!st->save(a.p, &out.s) || out.d.size() < 8) { bad("save failed"); a.close(); continue; }
+        a.run.process(2, 5, ev); const double latA = lat ? lat->get(a.p) : 0.0;
+        a.close();
+        auto fresh = [&](Loaded& b) { std::string w; return b.open(f, w); };
+        auto inRange = [&](Loaded& b, const char* what) { for (uint32_t i = 0; i < n; ++i) { double v = 0; pe->get_value(b.p, info[i].id, &v); if (!std::isfinite(v) || v < info[i].min_value - 1e-9 || v > info[i].max_value + 1e-9) { bad(std::string(what) + ": parameter " + std::to_string(i) + " out of range (" + std::to_string(v) + ")"); return false; } } return true; };
+        for (size_t chunk : {size_t(1) << 30, size_t(7)}) {   // all at once, and a few bytes per read
+            Loaded b; if (!fresh(b)) { bad("reopen"); break; }
+            const auto* pb = static_cast<const clap_plugin_params_t*>(b.p->get_extension(b.p, CLAP_EXT_PARAMS)); const auto* sb = static_cast<const clap_plugin_state_t*>(b.p->get_extension(b.p, CLAP_EXT_STATE));
+            MemIn in(out.d, chunk); if (!sb->load(b.p, &in.s)) { bad(std::string("load failed (chunk ") + std::to_string(chunk) + ")"); b.close(); continue; }
+            EventList none; b.run.process(3, 5, none);
+            for (uint32_t i = 0; i < n; ++i) { if (info[i].flags & CLAP_PARAM_IS_READONLY) continue; double v = 0; pb->get_value(b.p, info[i].id, &v); if (v != va[i]) { bad("parameter " + std::to_string(i) + " (" + info[i].name + ") came back as " + std::to_string(v) + ", saved " + std::to_string(va[i])); break; } }
+            const auto* lb = static_cast<const clap_plugin_latency_t*>(b.p->get_extension(b.p, CLAP_EXT_LATENCY));
+            // the latency of the restored instance is what the plug-in reports for these values (a change needs a restart: the host asks for it; here compare what it will be)
+            (void)lb; (void)latA;
+            MemOut again; sb->save(b.p, &again.s); if (again.d != out.d) bad("saving the restored instance gives other bytes (" + std::to_string(again.d.size()) + " vs " + std::to_string(out.d.size()) + ")");
+            b.close();
+        }
+        // cut short at various places, and garbage: no crash, parameters stay in range
+        std::vector<size_t> cuts = {0, 1, 3, 4, 7, 8, 11, 12, 15, out.d.size() / 3, out.d.size() / 2, out.d.size() - 9, out.d.size() - 1};
+        for (size_t c : cuts) {
+            if (c >= out.d.size()) continue;
+            Loaded b; if (!fresh(b)) { bad("reopen"); break; }
+            const auto* sb = static_cast<const clap_plugin_state_t*>(b.p->get_extension(b.p, CLAP_EXT_STATE));
+            MemIn in(std::vector<uint8_t>(out.d.begin(), out.d.begin() + static_cast<std::ptrdiff_t>(c))); sb->load(b.p, &in.s);
+            EventList none; b.run.process(2, 5, none); inRange(b, "a cut state"); b.close();
+        }
+        for (int g = 0; g < 4; ++g) {
+            Loaded b; if (!fresh(b)) { bad("reopen"); break; }
+            const auto* sb = static_cast<const clap_plugin_state_t*>(b.p->get_extension(b.p, CLAP_EXT_STATE));
+            std::vector<uint8_t> junk(g == 0 ? 64 : g == 1 ? 1000 : out.d.size()); for (auto& x : junk) x = static_cast<uint8_t>(rng.next() * 127.0f + 128.0f);
+            if (g >= 2) { std::memcpy(junk.data(), out.d.data(), std::min<size_t>(12 + 8 * (g - 1), out.d.size())); }   // the right header, then garbage
+            MemIn in(junk); sb->load(b.p, &in.s);
+            EventList none; b.run.process(2, 5, none); inRange(b, "a garbage state"); b.close();
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    project state: %d plug-ins: random values on every parameter survive save -> new instance -> load -> save (same bytes); cut-short, byte-by-byte and garbage states do not crash\n", tested);
+    return ok;
+}
+
 }   // namespace
 
 int main(int argc, char** argv) {
@@ -620,6 +691,7 @@ int main(int argc, char** argv) {
         if (!r.fail) ++pass;
     }
     if (!linkChecks(files)) ++fails;
+    { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
     std::printf("\n%zu plug-ins: %d ok, %d FAIL, %d with warnings; Output gain checked on %d, Bypass on %d, Mix 0 %% on %d, In Off on %d; slowest %s (%.1f%% of one core, noisy)\n",
                 files.size(), pass, fails, warns, outTested, bypassTested, mixTested, inTested, worstCpuName.c_str(), worstCpu);

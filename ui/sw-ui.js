@@ -160,6 +160,13 @@
     const stepBack = () => { const e = undo.pop(); if (!e) return; redo.push(e); putItems(e.items, 'from'); lastRec = 0; refreshTb(); };
     const stepForward = () => { const e = redo.pop(); if (!e) return; undo.push(e); putItems(e.items, 'to'); lastRec = 0; refreshTb(); };
     bU.onclick = stepBack; bR.onclick = stepForward;
+    // Ctrl / Cmd + Z undoes, Shift + Ctrl / Cmd + Z and Ctrl + Y redo (while the window has the keyboard; a text box keeps its own undo)
+    document.addEventListener('keydown', e => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const t = e.target, tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      if (tag === 'input' || tag === 'textarea' || (t && t.isContentEditable)) return;
+      const k = (e.key || '').toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); stepBack(); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); stepForward(); }
+    });
     let morphed = false, drawMorph = () => {};
     function pickAB(which) {
       if (which === ab && !morphed) return; if (!morphed) slots[ab] = vals.slice(); if (!slots[which]) slots[which] = vals.slice();
