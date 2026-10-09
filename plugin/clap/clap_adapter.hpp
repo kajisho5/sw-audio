@@ -60,6 +60,11 @@ template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&
 
 // optional trait: static void guiCall(Core&, const char* name, const char* arg) -> screen buttons (Randomize, Tap ...).
 // static constexpr bool kGuiCallOnGuiThread = true -> called on the GUI thread (file I/O), otherwise queued and called on the audio thread
+// optional trait: static constexpr int kReadouts = N (<= 16); static void readouts(const Core&, double* out) -> values the core measures (loudness, gain reduction ...) for the screen,
+// copied after every block into atomics (the GUI thread reads them; page: SWHOST.update(..., [readouts]))
+template <class P, class = void> struct HasReadouts : std::false_type {};
+template <class P> struct HasReadouts<P, std::void_t<decltype(P::kReadouts), decltype(P::readouts(std::declval<const typename P::Core&>(), std::declval<double*>()))>> : std::true_type {};
+
 template <class P, class = void> struct HasGuiCall : std::false_type {};
 template <class P> struct HasGuiCall<P, std::void_t<decltype(P::guiCall(std::declval<typename P::Core&>(), "", ""))>> : std::true_type {};
 template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
@@ -142,6 +147,8 @@ private:
         double cpu() { return pl.cpu_.load(); }
         double meter(int k) { const float v = pl.peaks_[static_cast<size_t>(k)].load(); return v > 1e-5f ? 20.0 * std::log10(static_cast<double>(v)) : -100.0; }
         void spectrum(double* out) { pl.spec_.compute(pl.sr_, out); }
+        int numReadouts() { if constexpr (HasReadouts<P>::value) return P::kReadouts; else return 0; }
+        double readout(int i) { return pl.ro_[static_cast<size_t>(i)].load(std::memory_order_relaxed); }
         void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
     };
     // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
@@ -309,6 +316,7 @@ private:
             pos = next;
         }
         s->measure(ob.data32, nch, frames, 2);
+        if constexpr (HasReadouts<P>::value) s->publishReadouts();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))
             if (s->host_ && s->host_->request_restart) s->host_->request_restart(s->host_);
@@ -504,6 +512,8 @@ private:
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
     std::array<std::atomic<float>, 4> peaks_{};
+    std::array<std::atomic<double>, 16> ro_{};   // the core's measured values for the screen (trait readouts)
+    void publishReadouts() { if constexpr (HasReadouts<P>::value) { double v[16] = {}; P::readouts(shell_.core(), v); for (int i = 0; i < P::kReadouts && i < 16; ++i) ro_[static_cast<size_t>(i)].store(v[i], std::memory_order_relaxed); } }
     gui::SpectrumTap spec_;   // the output spectrum for the screen (audio thread writes, GUI thread reads)
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
 };

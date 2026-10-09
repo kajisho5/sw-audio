@@ -1048,6 +1048,10 @@ cmake/             MinGW 用ツールチェーン
 
 Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（400・700）の latin サブセット（woff2、約 156 KB。出典は npm の @fontsource、SIL Open Font License 1.1、ライセンス文は `ui/fonts/LICENSE-*.txt`）。`tools/embed_ui.py` が `data:` URI にして画面の CSS の先頭に入れる（ネットワーク不要、端末にフォントが無くても同じ見た目）。`@font-face` は影の DOM の中では効かないため、ページ本体の `<style>` に置く。これまでプラグインの画面はフォントを読み込んでおらず、端末のフォントに頼っていた（プレビューだけ Google Fonts のリンク）。ネットワークを切ってブラウザで読み込めることを確認（DAW 内の WebView では未確認）。latin 以外の文字（日本語など）は含まない。
 
+### コアが測った値を画面へ渡す口（`readouts`）
+
+製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
+
 ### 画面の中央の表示（`ui/displays.js`）
 
 デザインの絵はそのまま使い、パラメータと、プラグインが測るレベル（入出力のピーク、約 60 ms ごと）から描き直す。**実際の信号処理の中身ではなく、画面側で再計算した表示**である（誤差あり）。
@@ -1059,7 +1063,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 | LV12 | 31 バンドのフェーダー | 縦のドラッグでゲイン（Edit の Left／Right／Both に従って L・R に書き込み）、ダブルクリックで 0 dB。実際の RTA の重ね表示は、デザインの見本のまま |
 | DY10 | 4 バンドの帯とクロスオーバー | 縦線・丸のドラッグで Crossover 1〜3（20 Hz–20 kHz の対数軸）、ダブルクリックで既定値。帯の高さは各バンドの Range（最大の減衰量）。デザインの見本スペクトルは実測ではないため外した |
 | DY11 | 6 バンドの帯 | 各バンドの Freq に丸（ドラッグで Freq）、帯の幅は Width（oct）、高さは Range。帯の入れ替わり（クロスオーバー）はない設計 |
-| MS01 | フェーダー・メーター・GR 履歴 | デザインの Threshold フェーダーは仕様の Gain（0〜24 dB）に結び付け（名前も Gain に変更）。Ceiling フェーダーと合わせてドラッグ可（ダブルクリックで既定値）。In／Out のバーは入出力ピーク、GR は「入力ピーク＋Gain−出力ピーク」、履歴は約 10 秒。Integrated・Short-term・True peak の LUFS 表示は画面では測らないため「—」（Max GR は記録、クリックでリセット） |
+| MS01 | フェーダー・メーター・GR 履歴 | デザインの Threshold フェーダーは仕様の Gain（0〜24 dB）に結び付け（名前も Gain に変更）。Ceiling フェーダーと合わせてドラッグ可（ダブルクリックで既定値）。In／Out のバーは入出力ピーク。**GR はコア自身の値**（slow 段＋リミッター、`readouts`）、履歴は約 10 秒。Integrated はコアの値（10 秒の記憶）。Short-term・True peak はコアが公開していないため「—」（Max GR は記録、クリックでリセット） |
 | RV06・LV24・RS06 | リバーブの減衰 | Decay（RS06 は Tail length）で −60 dB に落ちる直線（dB 軸で直線）、LV24 は Pre-delay だけ右へ。時間軸は 4 s、長いときは自動で広げる。左の初期反射の棒はデザインの見本のまま。実際の残響の形（高域の減衰差など）ではない |
 | DL04・LV25 | ディレイの繰り返しの棒 | DL04 は Tap 1〜6 の On・Time・Level、LV25 は Time の整数倍に Feedback の累乗の高さ。Clock が Tap／MIDI／BPM のときの実際の時間は反映しない（Time の値で描く） |
 | LV16 | ゲート／ダッカー | しきい値の線（上下ドラッグで Threshold）、入力ピークの履歴（同じ目盛り）、Open／Closed（Duck では Ducking／Idle）は入力ピークがしきい値を超えたかで判定。Key HPF 通過後の値ではない |
@@ -1069,6 +1073,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 | MT02・MD06・LV09・LV08・LV02・LO01・SA05 | 出力のスペクトラム（デザインの灰色の面） | **実測**：プラグインが出力の L+R の平均を 4096 サンプルで Hann 窓→FFT し、20 Hz〜20 kHz を対数 64 バンドにまとめて約 50 ms ごとに画面へ渡す（`plugin/clap/gui_spectrum.hpp`。0 dB＝フルスケールの正弦波）。画面で立ち上がり速く・戻りゆっくり平滑化。デザインの他の絵（ハムの線、学習したノイズの面、ノッチの線、ハーモニクスの帯）は見本のまま |
 | LV20 | 1/3 オクターブ 31 本のバー＋ピークホールド | 上と同じ実測（64 バンドから 1/3 オクターブごとの最大）。ピークは 1 更新あたり 0.012 ずつ下がる |
 | MT03・RS04・RS07 | セルのスペクトラム | 上と同じ実測を、列＝周波数・行＝レベル（−80〜0 dB）のセルの点灯で表す。デザインのセルの色は保つ。RS04・RS07 の白い枠（修復範囲）は見本のまま |
+| MT01・LV23 | ラウドネスメーター | **コアの測った値そのもの**（`readouts` トレイト：Momentary・Short-term・Integrated・Range・True peak・Target・差・帯の内外、LV23 は Dead air・TP over も）。M・S・I の 3 本のバー（−36〜−12 LUFS、白線は Target）、巨大な数字、差の色（帯内＝緑、3 LU 超＝赤）、履歴（Short-term を 1 秒ごとに溜める。画面を閉じると消える。最大 10 分）。音がまだ無い間は「—」 |
 | DY03 | GR メーターの針 | デザイン独自の目盛り（右が 0、左が 20 dB）に合わせる。GR は「入力ピーク＋Makeup−出力ピーク」から出す（コア内部の値ではない） |
 | DY01・DY02・DY06・MT05 | VU 針 | 目盛りの角度に合わせる。基準は 0 VU ＝ −15 dBFS（ピーク）の設計値、GR は入出力の差 |
 | DL02・SA01・MD05 | リール・ホーンとドラムの回転 | 音が通っている間（DL02・SA01）、Speed と Accel のモデル（MD05） |

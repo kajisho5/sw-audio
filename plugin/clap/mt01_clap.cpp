@@ -11,6 +11,8 @@ struct Mt01 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 8;   // momentary, short-term, integrated, range, true peak, target, difference, in band (LUFS / LU / dBTP)
+    static void readouts(const Core& c, double* o) { o[0] = c.momentary(); o[1] = c.shortTerm(); o[2] = c.integrated(); o[3] = c.range(); o[4] = c.truePeakDb(); o[5] = c.target(); o[6] = c.difference(); o[7] = c.inBand() ? 1.0 : 0.0; }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static void guiCall(Core& c, const char* n, const char* a) { (void)a; if (!std::strcmp(n, "reset")) c.reset(); }

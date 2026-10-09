@@ -4,6 +4,7 @@
 #include "gui_assets.hpp"
 #include "gui_spectrum.hpp"
 #include "sw/param.hpp"
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -75,13 +76,14 @@ inline std::string page(const std::string& code, const std::vector<ParamSpec>& s
     return h;
 }
 
-inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu, const double* meters, const double* spectrum = nullptr) {
+inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu, const double* meters, const double* spectrum = nullptr, const double* readouts = nullptr, int numReadouts = 0) {
     std::string s = "SWHOST.update([";
     for (size_t i = 0; i < plain.size(); ++i) s += (i ? "," : "") + num(plain[i]);
     s += "]," + num(latencyMs) + "," + num(cpu) + ",[";
     for (int i = 0; i < 4; ++i) s += (i ? "," : "") + num(meters[i]);
     s += "]";
     if (spectrum) { s += ",["; for (int i = 0; i < kSpecBands; ++i) { char b[16]; std::snprintf(b, sizeof b, "%.1f", spectrum[i]); s += (i ? "," : ""); s += b; } s += "]"; }
+    if (spectrum && readouts && numReadouts > 0) { s += ",["; for (int i = 0; i < numReadouts; ++i) s += (i ? "," : "") + num(readouts[i]); s += "]"; }
     return s + ");";
 }
 
@@ -102,7 +104,7 @@ inline bool parseMessage(const std::string& m, Message& out) {
     return true;
 }
 
-// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), spectrum(double* kSpecBands dB), call(name, args).
+// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), spectrum(double* kSpecBands dB), numReadouts(), readout(i), call(name, args).
 template <class F>
 class Session {
 public:
@@ -120,7 +122,7 @@ public:
         }
         return "";
     }
-    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp); }
+    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[16] = {}; const int nro = std::min(16, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro); }
 private:
     F& f_;
 };

@@ -304,8 +304,8 @@
 
 
   // ---- maximizer (MS01): the design's faders are Gain and Ceiling (the design called the first one Threshold; the spec has Gain), the bars are the
-  // measured input / output peaks and the gain reduction (in - out + the gain pushed in), the history is drawn from the same values.
-  // LUFS read-outs (integrated, short-term, true peak) are not measured by the screen: they show a dash. Max GR is tracked; click it to reset.
+  // measured input / output peaks and the gain reduction (the core's own: slow stage + limiter, from the readouts trait; the estimate in - out + gain without it), the history is drawn from the same values.
+  // Integrated is the core's (10 s memory, readouts[0]); short-term and true peak are not published by the core: a dash. Max GR is tracked; click it to reset.
   function maximizerDisplay(box, ctx) {
     const tracks = [...box.querySelectorAll('.track')], cols = [...box.querySelectorAll('.col')];
     const gainI = (ctx.params.find(q => q.name === 'Gain') || {}).i, ceilI = (ctx.params.find(q => q.name === 'Ceiling') || {}).i;
@@ -329,6 +329,7 @@
     const svg = box.querySelector('.disp svg'), hp = svg ? svg.querySelectorAll(':scope > path') : [];
     const stats = [...box.querySelectorAll('.stat')], stat = n => stats.find(e => e.firstElementChild && e.firstElementChild.textContent.trim().toUpperCase() === n);
     ['INTEGRATED', 'SHORT-TERM', 'TRUE PEAK'].forEach(n => { const e = stat(n); if (e) { e.lastElementChild.textContent = '—'; e.title = 'Not measured by the screen'; } });
+    const intE = stat('INTEGRATED');
     const maxE = stat('MAX GR'); let maxGr = 0; if (maxE) { maxE.style.cursor = 'pointer'; maxE.addEventListener('click', () => { maxGr = 0; }); }
     const W = 436, H = 150, N = 42, dx = W / (N - 1), lvl = Ring(N, -90), gr = Ring(N, 0); let tick = 0, shown = 0;
     return { update(info) {
@@ -336,8 +337,9 @@
       const m = info && info.meters; if (!m) return;
       const bi = bars(inC), bo = bars(outC); if (bi[0]) { setBar(bi[0], m[0]); setBar(bi[1], m[1]); } if (bo[0]) { setBar(bo[0], m[2]); setBar(bo[1], m[3]); }
       const ri = ro(inC), rO = ro(outC); if (ri) ri.textContent = Math.max(m[0], m[1]) > -99 ? Math.max(m[0], m[1]).toFixed(1) : '-∞'; if (rO) rO.textContent = outDb(m) > -99 ? outDb(m).toFixed(1) : '-∞';
-      const g = Math.max(0, peakDb(m) + (ctx.get(gainI) || 0) - outDb(m)), gv = peakDb(m) > -70 ? Math.min(30, g) : 0;
+      const rd = info.readouts, g = rd ? Math.max(0, -(rd[1] + rd[2])) : Math.max(0, peakDb(m) + (ctx.get(gainI) || 0) - outDb(m)), gv = rd ? Math.min(30, g) : (peakDb(m) > -70 ? Math.min(30, g) : 0);   // the core's own gain reduction (slow + limiter) when it is sent
       shown += (gv - shown) * 0.4; if (grFill) grFill.style.height = (clamp(shown / 25, 0, 1) * 100).toFixed(1) + '%'; const rg = ro(grC); if (rg) rg.textContent = shown.toFixed(1);
+      if (intE && info.readouts) intE.lastElementChild.textContent = info.readouts[0] > -150 ? info.readouts[0].toFixed(1) + ' LUFS' : '—';
       maxGr = Math.max(maxGr, gv); if (maxE) maxE.lastElementChild.textContent = (maxGr > 0.05 ? '-' : '') + maxGr.toFixed(1) + ' dB';
       if (hp.length >= 3 && ++tick % 4 === 0) {
         lvl.push(peakDb(m)); gr.push(gv); let up = '', dn = '', gg = '';
@@ -512,7 +514,41 @@
     } };
   }
 
+
+  // ======== values the core measures (info.readouts: the product's `readouts` trait) ========
+  // loudness meter (MT01, LV23): readouts = momentary, short-term, integrated, range, true peak, target, difference, in band [, dead air, true peak over]  (-200 = nothing measured yet)
+  function loudnessDisplay(box, ctx) {
+    const minis = [...box.querySelectorAll('.mini')]; if (minis.length < 4) return null;
+    const big = box.querySelector('span[style*="font-size:64px"], span[style*="font-size:54px"]'); if (!big) return null;
+    const unit = big.nextElementSibling, delta = big.parentElement.querySelector('span[style*="margin-left:auto"]');
+    const tgtT = [...box.querySelectorAll('span')].find(e => /^Target\s/.test(e.textContent.trim()));
+    const unitName = (unit && unit.textContent.trim()) || 'LUFS';
+    const fm = v => v > -150 ? v.toFixed(1) : '—', val = (e, t) => { const sp = e.querySelectorAll('span'); sp[sp.length - 1].textContent = t; };
+    // the three bars (M, S, I): -36 .. -12 LUFS; the white line is the target
+    const lbs = [...box.querySelectorAll('.lb')], tick = lbs.map(l => l.parentElement.lastElementChild);
+    const setBar = (b, v) => { const pct = clamp((v + 36) / 24, 0, 1) * 100; b.style.background = 'linear-gradient(to top,transparent 0 ' + pct.toFixed(1) + '%,rgba(22,23,25,.9) ' + pct.toFixed(1) + '%),linear-gradient(to top,#2bd14a 0 54%,#f0c93d 54% 75%,#e0443e 75%)'; };
+    // history of the short-term value, once a second, last 10 minutes
+    const svg = box.querySelector('.disp svg[preserveAspectRatio="none"]'), hist = Ring(600, null); let hpath = null, band = null, dash = null, last = 0;
+    if (svg) { const ps = [...svg.querySelectorAll(':scope > path')]; hpath = ps[ps.length - 1]; const rs = svg.querySelectorAll(':scope > rect'); band = rs[0]; dash = svg.querySelector(':scope > line'); ps.slice(0, -1).forEach(p => p.remove()); }
+    const dots = [...box.querySelectorAll('.stat .dot')];
+    return { update(info) {
+      const r = info && info.readouts; if (!r) return;
+      big.textContent = fm(r[2]); if (tgtT) tgtT.textContent = 'Target ' + r[5].toFixed(1) + ' ' + unitName;
+      if (delta) { delta.textContent = r[2] > -150 ? (r[6] >= 0 ? '+' : '') + r[6].toFixed(1) + ' LU' : '— LU'; delta.style.color = r[2] <= -150 ? '#8d8d8d' : (r[7] ? '#2bd14a' : (Math.abs(r[6]) > 3 ? '#e0443e' : '#f0c93d')); }
+      val(minis[0], fm(r[0])); val(minis[1], fm(r[1])); val(minis[2], r[3] > 0 ? r[3].toFixed(1) + ' LU' : '—'); val(minis[3], r[4] > -150 ? r[4].toFixed(1) + (/dBTP/.test(minis[3].textContent) ? ' dBTP' : '') : '—');
+      [r[0], r[1], r[2]].forEach((v, k) => { if (lbs[k]) setBar(lbs[k], v); });
+      tick.forEach(t => { if (t) t.style.top = ((1 - clamp((r[5] + 36) / 24, 0, 1)) * 200 - 1).toFixed(1) + 'px'; });
+      if (dots.length >= 2) { const set = (d, bad) => { d.style.background = bad ? '#e0443e' : '#2bd14a'; d.style.boxShadow = '0 0 6px ' + (bad ? '#e0443e' : '#2bd14a'); }; if (r.length >= 10) { set(dots[0], r[8] > 0.5); set(dots[1], r[9] > 0.5); dots[0].parentElement.lastChild.textContent = r[8] > 0.5 ? 'Dead air seen' : 'Dead air OK'; dots[1].parentElement.lastChild.textContent = r[9] > 0.5 ? 'TP over' : 'No TP over'; } }
+      const now = Date.now(); if (hpath && now - last >= 1000) { last = now; hist.push(r[1] > -150 ? r[1] : null);
+        const W = 732, H = 160, S = 6, y = v => clamp(80 - (v - r[5]) * S, 4, 156); let d = '', open = false;
+        hist.a.forEach((v, k) => { if (v === null) { open = false; return; } d += (open ? ' L' : ' M') + (k / 599 * W).toFixed(1) + ' ' + y(v).toFixed(1); open = true; });
+        hpath.setAttribute('d', d.trim()); const tol = ctx.value('Tolerance') || 1;
+        if (band) { band.setAttribute('y', (80 - tol * S).toFixed(1)); band.setAttribute('height', (2 * tol * S).toFixed(1)); } }
+    } };
+  }
+
   const registry = {
+    MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),

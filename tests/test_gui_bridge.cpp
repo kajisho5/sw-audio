@@ -13,7 +13,7 @@ struct Fake {
     void begin(int i) { log.push_back("b" + std::to_string(i)); }
     void end(int i) { log.push_back("e" + std::to_string(i)); }
     void set(int i, double x) { v[static_cast<size_t>(i)] = x; log.push_back("s" + std::to_string(i)); }
-    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; }
+    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; } int nro = 0; int numReadouts() { return nro; } double readout(int i) { return -23.5 + i; }
     void call(const std::string& n, const std::string& a) { log.push_back("c:" + n + ":" + a); }
 };
 }
@@ -84,4 +84,10 @@ TEST_CASE("GUI spectrum: a sine reads its own level in the right band, silence i
     CHECK(u.rfind("SWHOST.update([", 0) == 0);
     size_t commas = 0, start = u.rfind(",["); for (size_t i = start; i < u.size(); ++i) commas += u[i] == ',';
     CHECK(commas == gui::kSpecBands);                                // the last array: 64 values -> 63 commas + the one that opens it
+}
+
+TEST_CASE("GUI readouts: the values a core measures follow the spectrum in the update script") {
+    Fake f; f.v = {1.0}; f.nro = 3; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
+    CHECK(u.size() > 30); CHECK(u.substr(u.size() - 18) == ",[-23.5,-22.5,-21.5]);");
+    Fake g; g.v = {1.0}; gui::Session<Fake> t(g); const std::string w = t.onMessage("p"); CHECK(w.substr(w.size() - 3) == "]);"); CHECK(w.find("-23.5") == std::string::npos);
 }

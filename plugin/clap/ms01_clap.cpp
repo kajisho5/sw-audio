@@ -9,6 +9,8 @@ struct Ms01 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 3;   // integrated LUFS (10 s memory), slow gain reduction (dB), fast (limiter) gain reduction (dB)
+    static void readouts(const Core& c, double* o) { o[0] = c.integratedLufs(); o[1] = c.slowReductionDb(); o[2] = c.fastReductionDb(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_LIMITER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.ms01", "SW MS01 Maximizer", "SEVENTHWELL",
