@@ -85,3 +85,16 @@ TEST_CASE("CS04 order matters: EQ boost before the compressor is squashed, after
     const double la = rmsDb(run(a, sine(-24, 2500, 96000)), 48000, 96000), lb = rmsDb(run(b, sine(-24, 2500, 96000)), 48000, 96000);
     CHECK(lb > la + 3.0);
 }
+
+TEST_CASE("CS04 Low lat: the limiter looks ahead by 1 sample (the smallest it can) instead of 1 ms; reported from the next prepare on; the ceiling still holds; Limit Off is unaffected") {
+    CHECK(std::string(specs()[LowLat].id) == "cs04.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 1);
+    { Processor p; p.setParam(LimitOn, 1); CHECK(p.latencySamples() == 48); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 1); p.setParam(LimitOn, 0); CHECK(p.latencySamples() == 0); p.setParam(LowLat, 0); CHECK(p.latencySamples() == 0); }
+    auto q = make({{LimitOn, 1}, {LimitCeiling, -6}, {LowLat, 1}}); CHECK(q.latencySamples() == 1);
+    double pk = 0; for (float v : run(q, sine(0, 1000, 24000))) pk = std::max(pk, (double)std::abs(v));
+    CHECK(20 * std::log10(pk) <= -6.0 + 1e-4);
+    std::vector<float> click(4096, 0.0f); click[1000] = 1.0f; click[1001] = -1.0f; auto c = make({{LimitOn, 1}, {LimitCeiling, -6}, {LowLat, 1}}); pk = 0; for (float v : run(c, click)) pk = std::max(pk, (double)std::abs(v));
+    CHECK(20 * std::log10(pk) <= -6.0 + 1e-4);   // an instant click is held at the ceiling too (no look-ahead: the gain drops on the sample itself)
+    // the Low lat output is the signal one sample later: with the limiter idle (a quiet signal) it passes unchanged
+    auto r = make({{LimitOn, 1}, {LowLat, 1}}); const auto x = sine(-30, 440, 8000); const auto y = run(r, x);
+    for (size_t i = 100; i + 1 < x.size(); i += 53) CHECK(y[i + 1] == doctest::Approx(x[i]).epsilon(1e-5));
+}

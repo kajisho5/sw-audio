@@ -476,5 +476,10 @@
   "btn:low lat": {
    "toggle": "Low lat"
   }
+ },
+ "CS04": {
+  "btn:low lat": {
+   "toggle": "Low lat"
+  }
  }
 }

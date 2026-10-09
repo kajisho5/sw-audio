@@ -1,6 +1,7 @@
 // SW CS04 Modular Strip — six modules (Gate, EQ, Comp, Saturate, De-ess, Limit), each with On, in any order
 // (spec: 仕様書 v1.0「CS04 Modular Strip」). The order is one non-automatable choice among 720 (saved with the state).
-// Latency: 1 ms look-ahead while Limit is on (48 samples at 48 kHz), otherwise 0. Only the EQ module is on screen;
+// Latency: 1 ms look-ahead while Limit is on (48 samples at 48 kHz), otherwise 0. Low lat (the last parameter, spec: common function): the limiter looks ahead by 1 sample, the smallest it can (reported 1).
+//   Like every setting that changes the delay it applies at the next prepare(); latencySamples() already gives the value for it. Only the EQ module is on screen;
 // the other modules' controls are spec proposals. EVO order suggestion (by source type) comes with the UI.
 #pragma once
 #include "sw/dynamics.hpp"
@@ -16,7 +17,7 @@
 namespace sw::cs04 {
 
 enum ParamId { GateOn, GateThresh, GateRange, GateRelease, EqOn, EqLow, EqMidFreq, EqMid, EqHigh, EqOut, CompOn, CompThresh, CompRatio, CompAttack, CompRelease, CompMakeup,
-               SatOn, SatDrive, SatMix, DeessOn, DeessFreq, DeessThresh, DeessRange, LimitOn, LimitCeiling, LimitRelease, Order, kNumParams };
+               SatOn, SatDrive, SatMix, DeessOn, DeessFreq, DeessThresh, DeessRange, LimitOn, LimitCeiling, LimitRelease, Order, LowLat, kNumParams };
 enum Module { MGate, MEq, MComp, MSat, MDeess, MLimit, kModules };
 
 const std::vector<ParamSpec>& specs();

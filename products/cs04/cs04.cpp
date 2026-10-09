@@ -75,6 +75,7 @@ const std::vector<ParamSpec>& specs() {
             {"cs04.limit.ceiling", "Ceiling",       -12, 0, -0.3, Curve::Lin,  1, {}, "dBFS"},
             {"cs04.limit.release", "Limit Release", 1, 1000, 50,  Curve::Log,  1, {}, "ms"},
             {"cs04.order",         "Order",         0, 719, 0,    Curve::Step, 1, steps, "", labels},
+            {"cs04.lowlat",        "Low lat",       0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         };
         v[Order].automatable = false;  // spec: order is dragged and saved with presets, not automated
         return v;
@@ -84,7 +85,7 @@ const std::vector<ParamSpec>& specs() {
 
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
-int Processor::latencySamples() const { return target_[LimitOn] > 0.5 ? static_cast<int>(std::lround(fs_ * 0.001)) : 0; }
+int Processor::latencySamples() const { return target_[LimitOn] > 0.5 ? (target_[LowLat] > 0.5 ? 1 : static_cast<int>(std::lround(fs_ * 0.001))) : 0; }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
     fs_ = sampleRate;
