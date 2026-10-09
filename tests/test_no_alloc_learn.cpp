@@ -6,6 +6,7 @@
 #include "drums.hpp"
 #include "dy04/dy04.hpp"
 #include "dy10/dy10.hpp"
+#include "eq05/eq05.hpp"
 #include "ms07/ms07.hpp"
 #include "rv08/rv08.hpp"
 #include "tu.hpp"
@@ -45,6 +46,23 @@ TEST_CASE("the audio thread does not allocate while a Set input, an Auto, a Trun
       sw::ms07::Processor p; p.prepare(kFs, 256); p.snapToTargets();
       { allocguard::Scope g; p.check(); for (size_t k = 0; k < run.l.size(); ++k) { float* c[2] = {run.l[k].data(), run.r[k].data()}; p.process(c, 2, 256); } CHECK(g.n() == 0); }
       CHECK(p.checkedBits() == 16); }
+}
+
+TEST_CASE("the audio thread does not allocate while an EQ05 Match listens and while the fitted values are applied and handed out") {
+    const auto plain = noise(-20.0, 12.0, 8); auto ref = plain; double lp = 0; for (auto& v : ref) { lp += 0.2 * (v - lp); v = static_cast<float>(0.6 * v + 0.8 * lp); }
+    sw::eq05::Processor p; p.prepare(kFs, 256); p.snapToTargets();
+    // the reference arrives on the GUI thread (it may allocate): as base64 pieces
+    p.refBegin(kFs);
+    { const unsigned char* d = reinterpret_cast<const unsigned char*>(ref.data()); const size_t n = ref.size() * 4; static const char* t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; std::string o;
+      for (size_t i = 0; i < n; i += 3) { const unsigned v = (d[i] << 16) | (i + 1 < n ? d[i + 1] << 8 : 0) | (i + 2 < n ? d[i + 2] : 0); o += t[v >> 18]; o += t[(v >> 12) & 63]; o += i + 1 < n ? t[(v >> 6) & 63] : '='; o += i + 2 < n ? t[v & 63] : '='; }
+      p.refAppendBase64(o.c_str()); }
+    REQUIRE(p.refCommit());
+    auto run = blocks(plain);
+    { allocguard::Scope g; p.match(); for (size_t k = 0; k < run.l.size(); ++k) { float* c[2] = {run.l[k].data(), run.r[k].data()}; p.process(c, 2, 256); } CHECK(g.n() == 0); }
+    REQUIRE(p.needsFit());
+    p.fit();   // the GUI thread
+    { allocguard::Scope g; float* c[2] = {run.l[0].data(), run.r[0].data()}; p.process(c, 2, 256); int id; double v; int n = 0; while (p.takeParamWrite(id, v) == 7) ++n; CHECK(n == 12); CHECK(g.n() == 0); }
+    { allocguard::Scope g; p.match(); p.match(); CHECK(g.n() == 0); }   // (pressed twice: starts and cancels)
 }
 
 TEST_CASE("the allocation guard counts what happens while it is on, and only on its own thread") {
