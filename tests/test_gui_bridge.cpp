@@ -13,7 +13,7 @@ struct Fake {
     void begin(int i) { log.push_back("b" + std::to_string(i)); }
     void end(int i) { log.push_back("e" + std::to_string(i)); }
     void set(int i, double x) { v[static_cast<size_t>(i)] = x; log.push_back("s" + std::to_string(i)); }
-    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; } int nro = 0; int numReadouts() { return nro; } double readout(int i) { return -23.5 + i; }
+    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; } int nro = 0; int numReadouts() { return nro; } double readout(int i) { return -23.5 + i; } void stereo(double* o) { o[0] = 0.5; for (int i = 1; i < 1 + 2 * gui::kGonioPts; ++i) o[i] = 0.25; }
     void call(const std::string& n, const std::string& a) { log.push_back("c:" + n + ":" + a); }
 };
 }
@@ -82,12 +82,22 @@ TEST_CASE("GUI spectrum: a sine reads its own level in the right band, silence i
       double out[gui::kSpecBands]; tap.compute(fs, out); int pk = 0; for (int i = 1; i < gui::kSpecBands; ++i) if (out[i] > out[pk]) pk = i; CHECK(std::abs(gui::specBandFreq(pk) / 2000.0 - 1.0) < 0.12); }
     Fake f; f.v = {1.0, 2.0}; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
     CHECK(u.rfind("SWHOST.update([", 0) == 0);
-    size_t commas = 0, start = u.rfind(",["); for (size_t i = start; i < u.size(); ++i) commas += u[i] == ',';
+    size_t commas = 0, start = u.find(",[-80.0"), stop = u.find(']', start); for (size_t i = start; i < stop; ++i) commas += u[i] == ',';
     CHECK(commas == gui::kSpecBands);                                // the last array: 64 values -> 63 commas + the one that opens it
 }
 
 TEST_CASE("GUI readouts: the values a core measures follow the spectrum in the update script") {
     Fake f; f.v = {1.0}; f.nro = 3; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
-    CHECK(u.size() > 30); const std::string tail = ",[-23.5,-22.5,-21.5]);"; CHECK(u.substr(u.size() - tail.size()) == tail);
-    Fake g; g.v = {1.0}; gui::Session<Fake> t(g); const std::string w = t.onMessage("p"); CHECK(w.substr(w.size() - 3) == "]);"); CHECK(w.find("-23.5") == std::string::npos);
+    CHECK(u.size() > 30); CHECK(u.find(",[-23.5,-22.5,-21.5],[0.5,0.25,0.25,") != std::string::npos);
+    Fake g; g.v = {1.0}; gui::Session<Fake> t(g); const std::string w = t.onMessage("p"); CHECK(w.substr(w.size() - 3) == "]);"); CHECK(w.find("-23.5") == std::string::npos); CHECK(w.find("],[],[0.5,") != std::string::npos);   // no readouts: an empty array keeps the place of the stereo values
+}
+
+TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independent signals; the points are the recent samples") {
+    gui::SpectrumTap tap; const int n = 6000; std::vector<float> l(n), r(n), r2(n);
+    for (int i = 0; i < n; ++i) { l[i] = static_cast<float>(0.5 * std::sin(0.05 * i)); r[i] = l[i]; r2[i] = -l[i]; }
+    double o[1 + 2 * gui::kGonioPts];
+    { float* ch[2] = {l.data(), r.data()}; tap.pushStereo(ch, 2, n); tap.stereo(o); CHECK(o[0] > 0.999); CHECK(o[1 + 2 * (gui::kGonioPts - 1)] == doctest::Approx(l[n - 8]).epsilon(1e-6)); }
+    { gui::SpectrumTap t2; float* ch[2] = {l.data(), r2.data()}; t2.pushStereo(ch, 2, n); t2.stereo(o); CHECK(o[0] < -0.999); }
+    { gui::SpectrumTap t3; std::vector<float> q(n); for (int i = 0; i < n; ++i) q[i] = static_cast<float>(0.5 * std::sin(0.05 * i + 1.5708)); float* ch[2] = {l.data(), q.data()}; t3.pushStereo(ch, 2, n); t3.stereo(o); CHECK(std::abs(o[0]) < 0.1); }
+    { gui::SpectrumTap t4; double z[1 + 2 * gui::kGonioPts]; t4.stereo(z); CHECK(z[0] == 0.0); }
 }

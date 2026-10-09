@@ -14,6 +14,7 @@ namespace sw::gui {
 
 constexpr int kSpecBands = 64;
 constexpr int kSpecFft = 4096;
+constexpr int kGonioPts = 160;   // stereo scope: correlation, then L, R of 160 recent samples (every 8th)
 
 // in-place radix-2 FFT (n a power of two)
 inline void fft(std::vector<std::complex<double>>& a) {
@@ -65,6 +66,21 @@ public:
         for (uint32_t i = 0; i < frames; ++i) { const float v = nch > 1 ? 0.5f * (d[0][i] + d[1][i]) : d[0][i]; ring_[h & (kRing - 1)].store(v, std::memory_order_relaxed); ++h; }
         head_.store(h, std::memory_order_release);
     }
+    // audio thread: the stereo pair for the scope (called with the output, like push)
+    void pushStereo(float* const* d, uint32_t nch, uint32_t frames) {
+        if (!nch) return;
+        size_t h = sh_.load(std::memory_order_relaxed);
+        for (uint32_t i = 0; i < frames; ++i) { const float l = d[0][i], r = nch > 1 ? d[1][i] : l; sl_[h & (kRing - 1)].store(l, std::memory_order_relaxed); sr_[h & (kRing - 1)].store(r, std::memory_order_relaxed); ++h; }
+        sh_.store(h, std::memory_order_release);
+    }
+    // GUI thread: out[0] = correlation of the last 2048 samples (-1 .. +1, 0 for silence), then L, R of kGonioPts samples every 8th, oldest first
+    void stereo(double* out) const {
+        const size_t h = sh_.load(std::memory_order_acquire);
+        double ll = 0, rr = 0, lr = 0;
+        for (size_t i = 0; i < 2048; ++i) { const double l = sl_[(h - 1 - i) & (kRing - 1)].load(std::memory_order_relaxed), r = sr_[(h - 1 - i) & (kRing - 1)].load(std::memory_order_relaxed); ll += l * l; rr += r * r; lr += l * r; }
+        out[0] = (ll > 1e-12 && rr > 1e-12) ? lr / std::sqrt(ll * rr) : 0.0;
+        for (int k = 0; k < kGonioPts; ++k) { const size_t idx = (h - 8 * static_cast<size_t>(kGonioPts - k)) & (kRing - 1); out[1 + 2 * k] = sl_[idx].load(std::memory_order_relaxed); out[2 + 2 * k] = sr_[idx].load(std::memory_order_relaxed); }
+    }
     // GUI thread
     void compute(double sampleRate, double* out) const {
         std::vector<float> x(kSpecFft);
@@ -76,6 +92,8 @@ private:
     static constexpr size_t kRing = 8192;
     std::atomic<float> ring_[kRing] = {};
     std::atomic<size_t> head_{0};
+    std::atomic<float> sl_[kRing] = {}, sr_[kRing] = {};
+    std::atomic<size_t> sh_{0};
 };
 
 }  // namespace sw::gui

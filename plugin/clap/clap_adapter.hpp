@@ -147,6 +147,7 @@ private:
         double cpu() { return pl.cpu_.load(); }
         double meter(int k) { const float v = pl.peaks_[static_cast<size_t>(k)].load(); return v > 1e-5f ? 20.0 * std::log10(static_cast<double>(v)) : -100.0; }
         void spectrum(double* out) { pl.spec_.compute(pl.sr_, out); }
+        void stereo(double* out) { pl.spec_.stereo(out); }
         int numReadouts() { if constexpr (HasReadouts<P>::value) return P::kReadouts; else return 0; }
         double readout(int i) { return pl.ro_[static_cast<size_t>(i)].load(std::memory_order_relaxed); }
         void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
@@ -330,7 +331,7 @@ private:
     // peak meters of the screen: block peak with a ~0.3 s fall (slot 0/1 input L/R, 2/3 output L/R)
     void measure(float* const* d, uint32_t nch, uint32_t frames, int slot) {
         if (frames == 0) return;
-        if (slot == 2) spec_.push(d, nch, frames);
+        if (slot == 2) { spec_.push(d, nch, frames); spec_.pushStereo(d, nch, frames); }
         const float fall = std::exp(-static_cast<float>(frames) / static_cast<float>(0.3 * sr_));
         for (uint32_t c = 0; c < 2; ++c) {
             const float* x = d[std::min(c, nch - 1)]; float pk = 0.f;

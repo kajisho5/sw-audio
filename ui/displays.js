@@ -586,7 +586,29 @@
     } };
   }
 
+
+  // ---- stereo scope (MT04, ST01, UT02, LV26): the dots are 160 recent output samples (L, R) on the diamond: up = both channels together, sideways = difference.
+  // info.stereo = [correlation of the last 2048 samples, L0, R0, L1, R1, ...]; MT04's correlation bar follows the correlation.
+  function stereoScope(box, ctx) {
+    const svgs = [...box.querySelectorAll('.disp svg')], svg = svgs.find(v => v.querySelectorAll(':scope > circle').length >= 100); if (!svg) return null;
+    const dots = [...svg.querySelectorAll(':scope > circle')], dia = svg.querySelector(':scope > path');
+    const nums = (dia.getAttribute('d') || '').match(/-?\d+(\.\d+)?/g).map(Number);   // M cx cy-h  L cx+h cy ...
+    const cx = nums[0], cy = nums[3], h = nums[2] - nums[0];
+    const bar = box.querySelector('div[style*="linear-gradient(90deg,#5a1f1d"]'), mark = bar && bar.firstElementChild;
+    let corr = 0;
+    return { update(info) {
+      const st = info && info.stereo; if (!st) return; const zm = clamp(ctx.value('Zoom') || 1, 1, 8);   // MT04 Zoom: 1x .. 8x
+      for (let k = 0; k < dots.length && 2 + 2 * k < st.length; k++) {
+        const l = clamp(st[1 + 2 * k], -1.2, 1.2), r = clamp(st[2 + 2 * k], -1.2, 1.2);
+        dots[k].setAttribute('cx', (cx + clamp((r - l) / 2 * zm, -1, 1) * h).toFixed(1)); dots[k].setAttribute('cy', (cy - clamp((l + r) / 2 * zm, -1, 1) * h).toFixed(1));
+        dots[k].style.opacity = (0.25 + 0.75 * k / dots.length).toFixed(2);                    // older dots fade
+      }
+      corr += (st[0] - corr) * 0.3; if (mark) mark.style.left = ((corr + 1) / 2 * 100).toFixed(1) + '%';
+    } };
+  }
+
   const registry = {
+    MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
@@ -597,7 +619,6 @@
     DL04: (box, ctx) => delayTapsDisplay(box, ctx, 'taps'),
     LV25: (box, ctx) => delayTapsDisplay(box, ctx, 'fb'),
     LV16: gateDisplay,
-    ST01: (box, ctx) => stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']),
     MS04: clipperDisplay,
     MS01: maximizerDisplay,
     DY10: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
