@@ -962,6 +962,50 @@
   }
 
 
+  // ---- RV07 early reflections: the room from above (back wall at the bottom, the listener faces up). The circle is the listener, the square the source at Distance and Angle (+ = right);
+  // the room is the one the plug-in uses (products/rv07/rv07.cpp geometry(): the same shape, grown when the source is farther than the room allows). Press or drag in the room to place the source (sets Distance and Angle).
+  // The design drew two squares; the plug-in has one source, so the second square and its line are hidden.
+  const RV07_ROOMS = [{ n: 'Small', d: [4.0, 3.0, 2.6] }, { n: 'Medium', d: [8.0, 6.0, 3.5] }, { n: 'Large', d: [20.0, 14.0, 6.0] }];
+  function rv07Geometry(room, dist, angleDeg) {
+    const r = RV07_ROOMS[clamp(room, 0, 2)].d, th = angleDeg * Math.PI / 180;
+    const k = Math.max(1, dist * Math.max(Math.cos(th), 0) / (0.65 * r[0]), dist * Math.abs(Math.sin(th)) / (0.45 * r[1]));
+    return { lx: r[0] * k, ly: r[1] * k, lis: 0.3 * r[0] * k, fwd: dist * Math.cos(th), right: dist * Math.sin(th) };
+  }
+  function earlyRoomDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const rects = [...svg.querySelectorAll(':scope > rect')], room = rects.find(r => r.getAttribute('rx') === '10'), sqs = rects.filter(r => r !== room), lis = svg.querySelector(':scope > circle');
+    const lines = [...svg.querySelectorAll(':scope > line')], label = svg.querySelector(':scope > text');
+    const P = n => ctx.params.find(q => q.name === n); const pd = P('Distance'), pa = P('Angle'); if (!room || !lis || sqs.length < 2 || lines.length < 2 || !pd || !pa) return null;
+    const [, , W, H] = vbOf(svg), TOP = 10, BOT = H - 10, CX = W / 2, SZ = [16, 18]; let last = '', scale = 1, lisY = 0;
+    sqs[1].style.display = 'none'; lines[1].style.display = 'none';
+    const layout = () => {
+      const n = Math.round(ctx.value('Room size')), d = ctx.value('Distance'), a = ctx.value('Angle'); if (![n, d, a].every(Number.isFinite)) return null;
+      const g = rv07Geometry(n, d, a); scale = (BOT - TOP) / g.lx; return { n, d, a, g };
+    };
+    const set = (e, s0) => {
+      const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+      const right = (x - CX) / s0, fwd = (lisY - y) / s0;
+      const ang = clamp(Math.atan2(right, Math.max(fwd, 0)) * 180 / Math.PI, pa.p.min, pa.p.max), dist = clamp(Math.hypot(right, Math.max(fwd, 0)), pd.p.min, pd.p.max);
+      ctx.set(pd.i, pd.c.value(pd.c.norm(dist))); ctx.set(pa.i, pa.c.value(pa.c.norm(ang)));
+    };
+    let on = false, s0 = 1;
+    svg.addEventListener('pointerdown', e => { if (!layout()) return; svg.setPointerCapture(e.pointerId); on = true; s0 = scale; ctx.begin(pd.i); ctx.begin(pa.i); set(e, s0); });
+    svg.addEventListener('pointermove', e => { if (on) set(e, s0); });
+    const end = () => { if (!on) return; on = false; ctx.end(pd.i); ctx.end(pa.i); }; svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+    svg.style.cursor = 'crosshair';
+    return { update() {
+      const L = layout(); if (!L) return; const key = [L.n, L.d, L.a].join('|'); if (key === last) return; last = key;
+      const { g } = L, w = g.ly * scale, h = g.lx * scale; lisY = BOT - g.lis * scale;
+      room.setAttribute('x', (CX - w / 2).toFixed(1)); room.setAttribute('width', w.toFixed(1)); room.setAttribute('y', TOP); room.setAttribute('height', h.toFixed(1));
+      lis.setAttribute('cx', CX); lis.setAttribute('cy', lisY.toFixed(1)); lis.setAttribute('r', 9);
+      const sx = CX + g.right * scale, sy = lisY - g.fwd * scale;
+      sqs[0].setAttribute('width', SZ[0]); sqs[0].setAttribute('height', SZ[1]); sqs[0].setAttribute('x', (sx - SZ[0] / 2).toFixed(1)); sqs[0].setAttribute('y', (sy - SZ[1] / 2).toFixed(1));
+      lines[0].setAttribute('x1', sx.toFixed(1)); lines[0].setAttribute('y1', sy.toFixed(1)); lines[0].setAttribute('x2', CX); lines[0].setAttribute('y2', lisY.toFixed(1));
+      if (label) { label.setAttribute('x', 20); label.textContent = RV07_ROOMS[clamp(L.n, 0, 2)].n + ' room, ' + g.lx.toFixed(1) + ' × ' + g.ly.toFixed(1) + ' m (listener faces up)'; }
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1005,6 +1049,7 @@
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV04: convolutionDisplay,
+    RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
     RS06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Tail length' }),
