@@ -133,11 +133,31 @@
     function refreshTb() { bU.disabled = !undo.length; bR.disabled = !redo.length; if (skinBox) { bU.style.opacity = undo.length ? '' : '.4'; bR.style.opacity = redo.length ? '' : '.4'; } }
     bU.onclick = () => { const e = undo.pop(); if (!e) return; redo.push(e); vals[e.i] = e.from; bridge.begin(e.i); bridge.set(e.i, e.from); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.from); refreshTb(); };
     bR.onclick = () => { const e = redo.pop(); if (!e) return; undo.push(e); vals[e.i] = e.to; bridge.begin(e.i); bridge.set(e.i, e.to); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.to); refreshTb(); };
+    let morphed = false, drawMorph = () => {};
     function pickAB(which) {
-      if (which === ab) return; slots[ab] = vals.slice(); if (!slots[which]) slots[which] = vals.slice();
-      ab = which; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); applyAll(slots[which]);
+      if (which === ab && !morphed) return; if (!morphed) slots[ab] = vals.slice(); if (!slots[which]) slots[which] = vals.slice();
+      morphed = false; ab = which; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); applyAll(slots[which]); drawMorph(ab === 'A' ? 0 : 1);
     }
     bA.onclick = () => pickAB('A'); bB.onclick = () => pickAB('B'); if (skinBox) { bA.classList.add('on'); bB.classList.remove('on'); } refreshTb();
+    // ---- morph slider of the design: between the A and B settings (continuous parameters move in their own scale, stepped ones switch at the middle); the slots themselves stay as they were
+    const mph = skinBox && skinBox.querySelector('.morph');
+    if (mph && mph.firstElementChild) {
+      const knob = mph.firstElementChild, hit = document.createElement('span'); hit.style.cssText = 'position:absolute;inset:-9px -6px;cursor:ew-resize;touch-action:none'; mph.append(hit);
+      drawMorph = t => { knob.style.left = (t * 100).toFixed(1) + '%'; }; drawMorph(0);
+      let base = null, active = [];
+      const put = e => {
+        const r = mph.getBoundingClientRect(), t = clamp((e.clientX - r.left) / r.width, 0, 1); drawMorph(t);
+        active.forEach(i => { const h = host[i], a = base.A[i], b = base.B[i]; const v = h.p.curve === 'step' ? (t < 0.5 ? a : b) : h.c.value(h.c.norm(a) + (h.c.norm(b) - h.c.norm(a)) * t); if (vals[i] !== v) { vals[i] = v; bridge.set(i, v); const w = widgets.get(i); if (w) w(v); } });
+        return t;
+      };
+      hit.addEventListener('pointerdown', e => {
+        hit.setPointerCapture(e.pointerId); if (!morphed) slots[ab] = vals.slice(); if (!slots.A) slots.A = vals.slice(); if (!slots.B) slots.B = slots.A.slice();
+        base = { A: slots.A, B: slots.B }; active = host.filter(h => !h.extra && base.A[h.i] !== base.B[h.i] && h.p.auto !== false).map(h => h.i); active.forEach(i => bridge.begin(i)); morphed = true; hit.dataset.on = '1'; put(e);
+      });
+      hit.addEventListener('pointermove', e => { if (hit.dataset.on) put(e); });
+      const end = e => { if (!hit.dataset.on) return; delete hit.dataset.on; const t = put(e); active.forEach(i => bridge.end(i)); ab = t < 0.5 ? 'A' : 'B'; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); };
+      hit.addEventListener('pointerup', end); hit.addEventListener('pointercancel', end);
+    }
 
     // ---- body
     const body = el('div', 'body'); if (!skinBox) box.appendChild(body);
