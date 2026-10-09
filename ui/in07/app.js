@@ -86,7 +86,7 @@
     lic.querySelector('.t').textContent = ok ? 'LICENSED' : 'TRIAL';
     lic.title = ok ? 'Licensed' : 'Trial: 3 s of silence every 60 s until it is activated';
   };
-  SW.on('reply:licence', d => { Object.assign(SW.licence, d); showLic(); SW.emit('licence'); });
+  SW.on('reply:licence', d => { SW.licence = Object.assign({ state: 'none' }, d); showLic(); SW.emit('licence'); });
 
   // ---- screens
   const screens = [];
@@ -112,11 +112,22 @@
   app.appendChild(el('div', { id: 'swtoast', class: 'toast', role: 'status' }));
 
   // ---- the save dialog: name, category, author, comment; an existing name asks before it is replaced
-  const dialog = (title, body, buttons) => {
+  // a dialog: closed by Escape, a press outside it or its own buttons (scrim.close()); onClose runs once, however it closes.
+  // Tab stays inside it.
+  const dialog = (title, body, buttons, onClose) => {
     const box = el('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, el('h2', { text: title }), body, el('div', { class: 'row end' }, buttons));
     const scrim = el('div', { class: 'scrim' }, box);
-    scrim.addEventListener('pointerdown', e => { if (e.target === scrim) scrim.remove(); });
-    scrim.addEventListener('keydown', e => { if (e.key === 'Escape') scrim.remove(); });
+    let open = true;
+    scrim.close = () => { if (!open) return; open = false; scrim.remove(); if (onClose) onClose(); };
+    scrim.addEventListener('pointerdown', e => { if (e.target === scrim) scrim.close(); });
+    scrim.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { scrim.close(); return; }
+      if (e.key !== 'Tab') return;
+      const f = [...box.querySelectorAll('input:not([type=file]),select,textarea,button')].filter(x => !x.disabled && x.offsetParent !== null);
+      if (!f.length) return;
+      const i = f.indexOf(document.activeElement);
+      if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+    });
     app.appendChild(scrim);
     const f = box.querySelector('input,textarea,button'); if (f) setTimeout(() => f.focus(), 0);
     return scrim;
@@ -135,7 +146,8 @@
     const body = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
       el('label', { class: 'cap2', text: 'NAME' }), name, el('label', { class: 'cap2', text: 'CATEGORY' }), cat,
       el('label', { class: 'cap2', text: 'AUTHOR' }), author, el('label', { class: 'cap2', text: 'COMMENT' }), comment, msg);
-    const scrim = dialog('SAVE PRESET', body, [cancel, save]);
+    let off = () => {};
+    const scrim = dialog('SAVE PRESET', body, [cancel, save], () => off());
     let overwrite = false;
     const send = () => {
       const n = (name.value || name.placeholder).trim();
@@ -143,17 +155,18 @@
       if (author.value !== (SW.settings.author || '')) SW.setSetting('author', author.value);
       SW.call('save', SW.b64(JSON.stringify({ name: n, category: cat.value, author: author.value, comment: comment.value, overwrite })));
     };
-    const off = SW.on('reply:saved', d => {
+    off = SW.on('reply:saved', d => {
       if (d.exists && !overwrite) { overwrite = true; msg.className = 'msg err'; msg.textContent = '同じ名前のプリセットがあります。もう一度 SAVE で上書きします。'; save.textContent = 'REPLACE'; return; }
       if (!d.ok) { msg.className = 'msg err'; msg.textContent = d.error || '保存できませんでした'; return; }
-      off(); scrim.remove();
+      scrim.close();
       SW.current = { kind: 'user', path: d.path, name: d.name, category: d.category || '' };
       SW.emit('preset'); SW.call('users'); SW.toast('SAVED · ' + d.name);
     });
     name.addEventListener('input', () => { overwrite = false; save.textContent = 'SAVE'; msg.textContent = ''; });
-    name.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+    // Enter saves, but not the Enter that ends a Japanese (IME) conversion
+    name.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) send(); });
     save.addEventListener('click', send);
-    cancel.addEventListener('click', () => { off(); scrim.remove(); });
+    cancel.addEventListener('click', () => scrim.close());
   };
 
   // ---- the licence dialog: the state, this computer's code, activation with the key (online, when the plug-in knows the server)
@@ -168,21 +181,38 @@
     const copy = el('button', { type: 'button', class: 'btn', text: 'COPY CODE', style: { height: '32px', fontSize: '11px' } });
     const close = el('button', { type: 'button', class: 'btn', text: 'CLOSE' });
     const server = BOOT.server || '';
+    // the plug-in's reasons are short English (core/src/license.cpp statusText): said here in Japanese
+    const reason = m => {
+      const t = {
+        'not a licence file': 'ライセンスファイルではありません。',
+        'the licence was changed or damaged': 'ライセンスファイルが壊れているか、書き換えられています。',
+        'the licence is for another product': '別の製品のライセンスです。',
+        'the licence is for an earlier major version': '前のメジャーバージョンのライセンスです。',
+        'the licence is bound to another computer': '別のパソコン用のライセンスです。このパソコンの THIS COMPUTER のコードで作ったファイルを読み込んでください。',
+        'the licence folder is full': 'ライセンスフォルダーがいっぱいです。',
+        'no licence folder': 'ライセンスフォルダーが見つかりません。'
+      };
+      const a = /^activated: (.*)$/.exec(m || '');
+      if (a) return '有効化しました（' + a[1] + '）。';
+      if (/^licence from an unknown key/.test(m || '')) return 'この版のプラグインでは読めないライセンスです。プラグインを最新の版にしてください。';
+      return t[m] || ('ライセンスを読み込めませんでした（' + m + '）。');
+    };
     const show = () => {
       const L = SW.licence;
       state.textContent = L.state === 'licensed' ? 'このパソコンで有効化されています。' + (L.id ? '（' + L.id + '）' : '')
         : '体験版です。ライセンスがない間は、起動から 30 秒後、そのあと 60 秒ごとに 3 秒の無音が入ります。';
       code.textContent = L.machine || '—';
-      if (L.message) { msg.className = 'msg ' + (L.ok === false ? 'err' : 'ok'); msg.textContent = L.message; }
+      if (L.message) { msg.className = 'msg ' + (L.ok === false ? 'err' : 'ok'); msg.textContent = reason(L.message); }
     };
     show();
     const off = SW.on('licence', show);
+    const manage = server ? server.replace(/\/$/, '') + '/manage' : '';
     const body = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } }, state,
       el('label', { class: 'cap2', text: 'THIS COMPUTER' }), el('div', { class: 'row' }, code, copy),
       server ? el('label', { class: 'cap2', text: 'LICENCE KEY' }) : null, server ? key : null,
-      el('p', { style: { fontSize: '13px' }, text: server ? 'ライセンスキーを入れて ACTIVATE。ネットのないパソコンは、別のパソコンでこのコードとキーから受け取ったライセンスファイルを LICENCE FILE で読み込みます。' : 'ライセンスファイル（.swlicense）を LICENCE FILE で読み込みます。' }),
+      el('p', { style: { fontSize: '13px' }, text: server ? 'ライセンスキーを入れて ACTIVATE。ネットのないパソコンは、別のパソコンで ' + server.replace(/\/$/, '') + '/activate を開き、このコードとキーからライセンスファイルを作って LICENCE FILE で読み込みます。使わなくなったパソコンの解除は ' + server.replace(/\/$/, '') + '/manage。' : 'ライセンスファイル（.swlicense）を LICENCE FILE で読み込みます。' }),
       msg, file);
-    const scrim = dialog('LICENCE', body, server ? [close, fromFile, activate] : [close, fromFile]);
+    const scrim = dialog('LICENCE', body, server ? [close, fromFile, activate] : [close, fromFile], () => off());
     // the clipboard API may be refused in a plug-in's web view (a page from a string has no secure origin): then a hidden text field
     // and the old copy command, and when that fails too the code is selected for the user's own Ctrl+C / Cmd+C
     copy.addEventListener('click', () => {
@@ -201,20 +231,34 @@
     });
     fromFile.addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
-      const f = file.files && file.files[0]; if (!f) return;
-      if (f.size > 16384) { msg.className = 'msg err'; msg.textContent = 'ライセンスファイルではありません'; return; }
-      f.text().then(t => SW.call('licfile', SW.b64(t)));
+      const f = file.files && file.files[0];
+      file.value = '';   // the same file chosen again still counts
+      if (!f) return;
+      if (!f.size || f.size > 16384) { msg.className = 'msg err'; msg.textContent = 'ライセンスファイルではありません。'; return; }
+      f.text().then(t => SW.call('licfile', SW.b64(t)), () => { msg.className = 'msg err'; msg.textContent = 'ファイルを読めませんでした。'; });
     });
+    // the server's answers by their code (server/license/src/worker.js), in Japanese
+    const serverError = (status, j) => ({
+      input: 'ライセンスキーの形が違います（SWL- で始まる 4 組 5 文字）。',
+      not_found: 'このライセンスキーは見つかりません。購入完了のページに出たキーを確かめてください。',
+      refunded: '返金されたライセンスです。',
+      max: 'このライセンスは上限の台数で有効化されています。使わなくなったパソコンの分を ' + manage + ' で解除するか、お問い合わせください。'
+    })[j && j.code] || ('有効化できませんでした（' + status + (j && j.error ? '：' + j.error : '') + '）。');
+    let busy = false;
     activate.addEventListener('click', () => {
+      if (busy) return;
       const k = key.value.trim();
-      if (!k) { msg.className = 'msg err'; msg.textContent = 'ライセンスキーを入れてください'; return; }
+      if (!k) { msg.className = 'msg err'; msg.textContent = 'ライセンスキーを入れてください。'; return; }
+      busy = true; activate.disabled = true;
       msg.className = 'msg'; msg.textContent = '有効化しています…';
+      const done = () => { busy = false; activate.disabled = false; };
       fetch(server.replace(/\/$/, '') + '/api/activate', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ key: k, machine: SW.licence.machine }) })
-        .then(r => r.json().then(j => ({ ok: r.ok, j })))
-        .then(({ ok, j }) => { if (ok && j.license) SW.call('licfile', SW.b64(j.license)); else { msg.className = 'msg err'; msg.textContent = j.error || '有効化できませんでした'; } })
-        .catch(() => { msg.className = 'msg err'; msg.textContent = 'サーバーにつながりません。ネットの接続を確かめるか、ライセンスファイルを使ってください。'; });
+        .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, status: r.status, j })))
+        .then(({ ok, status, j }) => { done(); if (ok && j.license) SW.call('licfile', SW.b64(j.license)); else { msg.className = 'msg err'; msg.textContent = serverError(status, j); } })
+        .catch(() => { done(); msg.className = 'msg err'; msg.textContent = 'サーバーにつながりません。ネットの接続を確かめるか、ライセンスファイルを使ってください。'; });
     });
-    close.addEventListener('click', () => { off(); scrim.remove(); });
+    key.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) activate.click(); });
+    close.addEventListener('click', () => scrim.close());
   };
 
   // ---- start
@@ -226,4 +270,11 @@
   setInterval(() => { if (!document.hidden) SW.post('p'); }, 50);
   SW.post('r');
   document.addEventListener('contextmenu', e => e.preventDefault());
+  // a button pressed with the pointer (detail > 0) lets go of the focus: a Space or Enter typed afterwards (meant for the host's
+  // transport) must not press it again. Keyboard use (Tab, then Space) is unchanged. Dialogs keep their focus.
+  document.addEventListener('click', e => {
+    if (!e.detail) return;
+    const b = e.target && e.target.closest ? e.target.closest('button') : null;
+    if (b && !b.closest('.dialog')) b.blur();
+  }, true);
 })();

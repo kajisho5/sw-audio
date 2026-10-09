@@ -885,8 +885,9 @@ void Processor::swapPatch() {
         const Slot* ms = monoSlot_ >= 0 ? &slots_[static_cast<size_t>(monoSlot_)] : nullptr;
         if (ms && (ms->key < 0 || ms->stolen)) ms = nullptr;
         for (size_t k = 0; k < held_.size(); ++k) {   // the keys held, in order; the sounding one keeps its slot's id
-            const bool top = ms && ms->key == held_[k];
-            again[static_cast<size_t>(na++)] = {held_[k], top ? ms->channel : 0, top ? ms->noteId : -1, top ? monoSlot_ : -1, top ? ms->vel : lastVel_, true};
+            const int hk = heldKey(held_[k]), hc = heldChannel(held_[k]);
+            const bool top = ms && ms->key == hk && ms->channel == hc;
+            again[static_cast<size_t>(na++)] = {hk, hc, top ? ms->noteId : -1, top ? monoSlot_ : -1, top ? ms->vel : lastVel_, true};
         }
         if (held_.empty() && ms && ms->sustained)   // only the pedal holds it
             again[static_cast<size_t>(na++)] = {ms->key, ms->channel, ms->noteId, monoSlot_, ms->vel, false};
@@ -931,12 +932,12 @@ void Processor::swapPatch() {
             if (!g.held) release(*s);   // the pedal holds it
         }
     } else {
-        for (int a = 0; a + 1 < na; ++a) if (again[static_cast<size_t>(a)].held && held_.size() < held_.capacity()) held_.push_back(again[static_cast<size_t>(a)].key);
+        for (int a = 0; a + 1 < na; ++a) if (again[static_cast<size_t>(a)].held && held_.size() < held_.capacity()) held_.push_back(heldCode(again[static_cast<size_t>(a)].key, again[static_cast<size_t>(a)].channel));
         const Again& g = again[static_cast<size_t>(na - 1)];
         Slot* s = allocate();
         start(*s, g.key, g.vel, g.channel, g.noteId, -1.0);
         monoSlot_ = static_cast<int>(s - slots_.data());
-        if (g.held) { if (held_.size() < held_.capacity()) held_.push_back(g.key); }
+        if (g.held) { if (held_.size() < held_.capacity()) held_.push_back(heldCode(g.key, g.channel)); }
         else release(*s);
     }
     lastKey_ = again[static_cast<size_t>(na - 1)].key;
@@ -1021,6 +1022,7 @@ void Processor::modWheel(double v) { wheel_ = std::clamp(v, 0.0, 1.0); }
 void Processor::aftertouch(double v) { after_ = std::clamp(v, 0.0, 1.0); }
 
 void Processor::pushEnded(int key, int channel, int noteId) {
+    if (channel == kArpChannel) return;   // the arp's own notes: the host never sent them
     if (endHead_ - endTail_ >= kEnded) ++endTail_;   // full: the oldest report is dropped
     ended_[endHead_ % kEnded] = {key, channel, noteId};
     ++endHead_;
@@ -1126,7 +1128,7 @@ void Processor::noteOff(int key, int channel) {
 
 void Processor::playOff(int key, int channel) {
     shared_.gridLeft = gctl_;
-    if (mode_ != Poly) { monoOff(key); return; }
+    if (mode_ != Poly) { monoOff(key, channel); return; }
     for (auto& s : slots_)
         if (s.key >= 0 && !s.stolen && s.held && (key < 0 || s.key == key) && (channel < 0 || s.channel == channel)) release(s);
 }
@@ -1146,8 +1148,9 @@ void Processor::choke(int key, int channel) {
 // mono / legato: one slot, last-note priority
 void Processor::monoOn(int key, double vel, int channel, int noteId) {
     const bool legatoHeld = !held_.empty();
-    held_.erase(std::remove(held_.begin(), held_.end(), key), held_.end());
-    if (held_.size() < held_.capacity()) held_.push_back(key);
+    const int code = heldCode(key, channel);
+    held_.erase(std::remove(held_.begin(), held_.end(), code), held_.end());
+    if (held_.size() < held_.capacity()) held_.push_back(code);
     Slot* s = monoSlot_ >= 0 ? &slots_[static_cast<size_t>(monoSlot_)] : nullptr;
     if (s && (s->stolen || s->key < 0 || !s->sounding())) s = nullptr;
     if (s) {
@@ -1172,20 +1175,20 @@ void Processor::monoOn(int key, double vel, int channel, int noteId) {
     lastKey_ = key;
 }
 
-void Processor::monoOff(int key) {
-    const bool top = !held_.empty() && (key < 0 || held_.back() == key);
-    if (key < 0) held_.clear();
-    else held_.erase(std::remove(held_.begin(), held_.end(), key), held_.end());
+void Processor::monoOff(int key, int channel) {
+    const auto match = [&](int c) { return key < 0 || (heldKey(c) == key && (channel < 0 || heldChannel(c) == channel)); };
+    const bool top = !held_.empty() && match(held_.back());
+    held_.erase(std::remove_if(held_.begin(), held_.end(), match), held_.end());
     if (!top || monoSlot_ < 0) return;
     Slot& s = slots_[static_cast<size_t>(monoSlot_)];
     if (s.key < 0 || s.stolen) return;
     if (held_.empty()) { release(s); return; }
     // back to the key still held
-    const int k = held_.back();
+    const int k = heldKey(held_.back()), kc = heldChannel(held_.back());
     double cur = -1.0;
     for (const auto& x : s.v) if (x.active()) { cur = x.keyInUse(); break; }
-    if (s.key != k) pushEnded(s.key, s.channel, s.noteId);
-    s.key = k; s.noteId = -1; s.held = true; s.age = ++clock_;
+    if (s.key != k || s.channel != kc) pushEnded(s.key, s.channel, s.noteId);
+    s.key = k; s.channel = kc; s.noteId = -1; s.held = true; s.age = ++clock_;
     if (mode_ == Legato) { for (auto& x : s.v) if (x.active()) x.legato(k, cur); }
     else for (int l = 0; l < kLayers; ++l) if (layerOn_[static_cast<size_t>(l)]) s.v[static_cast<size_t>(l)].noteOn(k, lastVel_, cur);
     lastKey_ = k;
@@ -1299,19 +1302,25 @@ void Processor::arpSwitch(bool on) {
             for (auto& s : slots_)
                 if (s.key >= 0 && !s.stolen && !s.arp && (s.held || s.sustained)) {
                     if (arpN_ < static_cast<int>(arpKeys_.size())) arpKeys_[static_cast<size_t>(arpN_++)] = {s.key, s.channel, s.noteId, s.vel, ++arpOrder_, s.held};
-                    s.noteId = -1;   // the host's note goes on in the arp: the voice's end is not its end
+                    s.noteId = -1; s.channel = kArpChannel;   // the host's note goes on in the arp: the voice's end is not its end
                     s.held = false; s.sustained = false;
                     for (auto& x : s.v) x.noteOff();
                 }
         } else {
-            for (int k : held_) if (arpN_ < static_cast<int>(arpKeys_.size())) arpKeys_[static_cast<size_t>(arpN_++)] = {k, 0, -1, lastVel_, ++arpOrder_, true};
+            Slot* ms = monoSlot_ >= 0 ? &slots_[static_cast<size_t>(monoSlot_)] : nullptr;
+            if (ms && (ms->key < 0 || ms->stolen)) ms = nullptr;
+            for (int k : held_) {   // the sounding key keeps its note id in the arp (its end is reported when the host lets go of it)
+                const bool top = ms && ms->key == heldKey(k) && ms->channel == heldChannel(k);
+                if (arpN_ < static_cast<int>(arpKeys_.size())) arpKeys_[static_cast<size_t>(arpN_++)] = {heldKey(k), heldChannel(k), top ? ms->noteId : -1, top ? ms->vel : lastVel_, ++arpOrder_, true};
+            }
+            if (ms) { ms->noteId = -1; ms->channel = kArpChannel; }   // the voice's end is not the host's note's end
             playOff(-1, -1);
         }
         arpOn_ = true;
         if (playing_) resyncSteps();
     } else {
         arpOn_ = false;
-        if (arpNoteOn_) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+        if (arpNoteOn_) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
         const int n = arpN_;
         arpN_ = 0;
         for (int i = 0; i < n; ++i) {
@@ -1333,7 +1342,7 @@ int Processor::arpSamplesToNext() const {
 
 void Processor::arpEvents() {
     const double eps = 0.5 * beatsPerSample();
-    if (arpNoteOn_ && beat_ >= arpOffBeat_ - eps) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+    if (arpNoteOn_ && beat_ >= arpOffBeat_ - eps) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
     if (arpN_ == 0) return;
     int guard = 0;
     while (stepStart(arpK_ + 1) <= beat_ + eps && guard++ < 64) arpStep(++arpK_);
@@ -1345,7 +1354,7 @@ void Processor::arpStep(long k) {
     const int steps = std::clamp(static_cast<int>(std::lround(p(ArpSteps))), 1, kArpSteps);
     const int idx = static_cast<int>(k % steps);
     const double sv = std::clamp(p(arpVel(idx)), 0.0, 100.0) / 100.0;
-    if (arpNoteOn_) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+    if (arpNoteOn_) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
     if (sv <= 0.0 || arpN_ == 0) return;
     // the keys, sorted (Order: as played), then their octaves
     std::array<int, 128> ord{};
@@ -1365,7 +1374,7 @@ void Processor::arpStep(long k) {
     const ArpKey& a = arpKeys_[static_cast<size_t>(ord[static_cast<size_t>(i % arpN_)])];
     const int key = std::clamp(a.key + 12 * static_cast<int>(i / arpN_) + static_cast<int>(std::lround(p(arpPitch(idx)))), 0, 127);
     arpStarting_ = true;
-    playOn(key, a.vel * sv, 0, -1);
+    playOn(key, a.vel * sv, kArpChannel, -1);
     arpStarting_ = false;
     arpNoteOn_ = true; arpNoteKey_ = key;
     arpOffBeat_ = stepStart(k) + std::clamp(p(ArpLength), 10.0, 100.0) / 100.0 * stepBeats();

@@ -42,7 +42,7 @@
         ui.onButton(mid(s, 'on'), { style: { width: '52px', height: '28px', padding: '0', borderRadius: '14px', fontFamily: "'Space Mono', monospace", fontSize: '9px', letterSpacing: '.06em' } }),
         ui.dropdown(mid(s, 'src'), { glyphs: SRC_G, label: 'Slot ' + (s + 1) + ' source' }), arrow,
         ui.dropdown(mid(s, 'dst'), { glyphs: DST_G, label: 'Slot ' + (s + 1) + ' target' }),
-        ui.slider(mid(s, 'amount'), { label: '', compact: true, labelWidth: 0, valWidth: 40, fmt: v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)) }));
+        ui.slider(mid(s, 'amount'), { label: '', compact: true, labelWidth: 0, valWidth: 40, fmt: v => (v > 0 ? '+' : v < 0 ? '−' : '') + (v !== 0 && Math.abs(v) < 0.95 ? Math.abs(v).toFixed(1) : Math.abs(Math.round(v))) }));   // a small amount still shows (+0.4, not +0)
       // a slot that moves nothing (off, no source, no target or no amount) is drawn faint, as in the design
       ui.watch([mid(s, 'on'), mid(s, 'src'), mid(s, 'dst'), mid(s, 'amount')], () => {
         const live = P.get(mid(s, 'on')) > 0.5 && P.stepIndex(mid(s, 'src')) > 0 && P.stepIndex(mid(s, 'dst')) > 0 && P.get(mid(s, 'amount')) !== 0;

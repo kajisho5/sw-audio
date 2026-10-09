@@ -27,9 +27,40 @@
       let lx = e.clientX, ly = e.clientY;
       h.begin(e);
       const mv = ev => { h.move(ev.clientX - lx, ev.clientY - ly, ev); lx = ev.clientX; ly = ev.clientY; };
-      const up = () => { target.removeEventListener('pointermove', mv); target.removeEventListener('pointerup', up); target.removeEventListener('pointercancel', up); h.end(); };
-      target.addEventListener('pointermove', mv); target.addEventListener('pointerup', up); target.addEventListener('pointercancel', up);
+      let done = false;
+      const up = () => {
+        if (done) return;
+        done = true;
+        target.removeEventListener('pointermove', mv); target.removeEventListener('pointerup', up); target.removeEventListener('pointercancel', up); target.removeEventListener('lostpointercapture', up);
+        h.end();
+      };
+      target.addEventListener('pointermove', mv); target.addEventListener('pointerup', up); target.addEventListener('pointercancel', up); target.addEventListener('lostpointercapture', up);
     });
+  };
+  // the wheel: how far it turned, in notches (a mouse notch is about 100 px in Chromium, 3 lines elsewhere; a trackpad sends small
+  // amounts often). Up = positive. Shift+wheel arrives sideways on Windows, so with Shift a sideways turn counts; without, it is ignored.
+  // Stepped controls collect the turn until it makes a whole notch.
+  const notches = e => {
+    const k = e.deltaMode === 1 ? 1 / 3 : e.deltaMode === 2 ? 1 : 1 / 100;
+    const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : (e.shiftKey ? e.deltaX : 0);
+    return SW.clamp(-d * k, -4, 4);
+  };
+  ui.notches = notches;
+  const wheel = (target, s, apply) => {
+    let acc = 0, at = 0;
+    target.addEventListener('wheel', e => {
+      e.preventDefault();
+      const n = notches(e);
+      if (!n) return;
+      if (s.curve === 'step') {
+        if (performance.now() - at > 400) acc = 0;
+        at = performance.now(); acc += n;
+        const whole = acc >= 0 ? Math.floor(acc + 1e-9) : Math.ceil(acc - 1e-9);
+        if (!whole) return;
+        acc -= whole;
+        apply(whole / Math.max(1, s.steps.length - 1));
+      } else apply(n * (e.shiftKey ? 0.002 : 0.01));
+    }, { passive: false });
   };
   const zoomOf = node => { const r = node.getBoundingClientRect(); return r.width / (node.offsetWidth || r.width || 1) || 1; };
 
@@ -62,7 +93,7 @@
       end: () => P.end(id)
     });
     tr.addEventListener('dblclick', () => { P.tap(id, s.def); show(); });
-    tr.addEventListener('wheel', e => { e.preventDefault(); P.begin(id); P.set(id, P.fromNorm(id, P.norm(id) + (e.deltaY < 0 ? 1 : -1) * (s.curve === 'step' ? 1 / Math.max(1, s.steps.length - 1) : (e.shiftKey ? 0.002 : 0.01)))); P.end(id); show(); }, { passive: false });
+    wheel(tr, s, dn => { P.tap(id, P.fromNorm(id, P.norm(id) + dn)); show(); });
     tr.addEventListener('keydown', e => {
       const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
       if (!d) return;
@@ -173,7 +204,7 @@
       end: () => P.end(id)
     });
     kb.addEventListener('dblclick', () => { P.tap(id, s.def); show(); });
-    kb.addEventListener('wheel', e => { e.preventDefault(); P.tap(id, P.fromNorm(id, P.norm(id) + (e.deltaY < 0 ? 0.01 : -0.01))); show(); }, { passive: false });
+    wheel(kb, s, dn => { P.tap(id, P.fromNorm(id, P.norm(id) + dn)); show(); });
     kb.addEventListener('keydown', e => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (d) { e.preventDefault(); P.tap(id, P.fromNorm(id, P.norm(id) + d * 0.01)); show(); } });
     return root;
   };

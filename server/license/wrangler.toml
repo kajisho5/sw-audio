@@ -8,6 +8,7 @@ compatibility_date = "2026-09-01"
 LICENSE_KEY_ID = "1"      # the id of the public key built into the plug-ins (core/src/license_state.cpp)
 LICENSE_MAJOR = "1"       # the major version a new licence covers (perpetual: every 1.x)
 MAX_ACTIVATIONS = "3"     # computers per licence
+MAX_DEACTIVATIONS = "3"   # computers the owner may free per licence in 365 days (/manage); more: support (a design value)
 
 [[d1_databases]]
 binding = "DB"

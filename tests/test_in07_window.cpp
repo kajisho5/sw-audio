@@ -223,10 +223,17 @@ TEST_CASE("IN07 WINDOW: the licence and the window settings") {
     p.guiMessage("c set theme " + b64("light"));
     p.guiMessage("c set theme " + b64("pink"));
     p.guiMessage("c set author " + b64("Kai Sato"));
+    p.guiMessage("c set motion " + b64("60"));
     p.guiSize(w, h);
     CHECK(w == 1472); CHECK(h == 989);
     const ig::Settings s = ig::loadSettings(ig::settingsPath("SWINGBY"));
     CHECK(s.zoom == "115"); CHECK(s.theme == "light"); CHECK(s.author == "Kai Sato");
+    {   // an author cleared to nothing arrives as "-" (a message has no empty words) and is kept empty
+        Plug e(&kHost);
+        e.guiMessage("c set author -");
+        CHECK(ig::loadSettings(ig::settingsPath("SWINGBY")).author.empty());
+        e.guiMessage("c set author " + b64("Kai Sato"));
+    }
     CHECK(ig::settingsPath("SWINGBY").rfind(env.dir.u8string(), 0) == 0);
     Plug q(&kHost);
     CHECK(q.guiPage().find("\"settings\":{\"motion\":\"60\",\"theme\":\"light\",\"zoom\":\"115\",\"author\":\"Kai Sato\"}") != std::string::npos);
@@ -301,6 +308,70 @@ TEST_CASE("IN07 MIDI: Program Change picks a factory preset, a learned controlle
     CHECK(hostValue(p, sw::in07::Macro1 + 4) == doctest::Approx(64.0 / 127.0));   // no longer moved
     CHECK(p.guiMessage("c learn 9").empty());
     CHECK(p.guiMessage("p").find("\"learn\":-1") != std::string::npos);
+    p.clap()->deactivate(p.clap());
+}
+// what a bug check found (2026-10-09): a state from an older version (fewer values) leaves the rest at their defaults; the selector sent
+// again at the same step keeps the edits; a program loaded while the window was closed is the preset in use (page, state); a note held in
+// the window ends when the window closes; nothing thrown by a file name reaches the host.
+TEST_CASE("IN07 WINDOW: older states, the selector sent twice, programs while closed, notes when the window closes (2026-10-09)") {
+    Env env;
+    const int n = sw::in07::kNumParams, last = n - 1;
+    auto param = [](In& in, int id, double v) {
+        clap_event_param_value_t e{}; e.header.size = sizeof(e); e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE;
+        e.param_id = static_cast<clap_id>(id); e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = v; in.push(e);
+    };
+    {   // a state with one value fewer: the value it lacks goes back to its default, whatever it was before
+        Plug a(&kHost);
+        Stream st;
+        REQUIRE(stateExt(a)->save(a.clap(), &st.os));
+        uint32_t count = 0; std::memcpy(&count, st.b.data() + 4, 4);
+        REQUIRE(count == static_cast<uint32_t>(n));
+        Stream older;
+        older.b.assign(st.b.begin(), st.b.begin() + 8 + 8 * (n - 1));
+        const uint32_t fewer = count - 1; std::memcpy(older.b.data() + 4, &fewer, 4);
+        Plug b(&kHost);
+        REQUIRE(b.clap()->activate(b.clap(), 48000, 32, 256));
+        const auto& sp = sw::in07::specs()[static_cast<size_t>(last)];
+        const double other = Plug::plainToHost(last, sp.def == sp.max ? sp.min : sp.max);
+        In in; param(in, last, other);
+        Out o; block(b, o, &in);
+        REQUIRE(hostValue(b, last) == doctest::Approx(other));
+        REQUIRE(stateExt(b)->load(b.clap(), &older.is));
+        CHECK(hostValue(b, last) == doctest::Approx(Plug::plainToHost(last, sp.def)));
+        b.clap()->deactivate(b.clap());
+    }
+    Plug p(&kHost);
+    REQUIRE(p.clap()->activate(p.clap(), 48000, 32, 256));
+    Out o;
+    {   // the selector moved to step 6 loads preset 6; the same step again keeps an edit made since
+        In a; param(a, sw::in07::PresetSelect, 6); block(p, o, &a);
+        const int cut = sw::in07::lp(0, sw::in07::Cutoff);
+        In b; param(b, cut, 0.123); block(p, o, &b);
+        In c; param(c, sw::in07::PresetSelect, 6); block(p, o, &c);
+        CHECK(hostValue(p, cut) == doctest::Approx(0.123));
+        In d; param(d, sw::in07::PresetSelect, 7); block(p, o, &d);   // another step loads
+        CHECK(hostValue(p, cut) != doctest::Approx(0.123));
+    }
+    {   // Program Change while no window is open: the page and the state know the preset in use
+        In pc; pc.midi(0xC0, 9, 0); block(p, o, &pc);
+        CHECK(p.guiPage().find("\"current\":{\"kind\":\"factory\",\"index\":9") != std::string::npos);
+        In pc2; pc2.midi(0xC0, 11, 0); block(p, o, &pc2);
+        Stream st;
+        REQUIRE(stateExt(p)->save(p.clap(), &st.os));
+        const std::string all(st.b.begin(), st.b.end());
+        CHECK(all.find("\"kind\":\"factory\",\"index\":11") != std::string::npos);
+    }
+    {   // a note held in the window ends when the window closes
+        p.guiMessage("n 60 0.8");
+        double pk = 0;
+        for (int k = 0; k < 40; ++k) pk = block(p, o);
+        CHECK(pk > 1e-3);
+        p.closeWindow();
+        for (int k = 0; k < 2000; ++k) pk = block(p, o);   // ~10 s: the longest release of the preset in use
+        CHECK(pk < 1e-5);
+    }
+    // an empty argument is "-" (the author cleared); garbage paths are refused without an exception
+    CHECK(p.guiMessage("c user " + b64(std::string("\xff\xfe/../x.swpreset"))).find("not a preset of the user folder") != std::string::npos);
     p.clap()->deactivate(p.clap());
 }
 #endif

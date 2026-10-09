@@ -152,9 +152,14 @@
   - [x] 配布の形：`tools/package_in07.py`（プラグイン・日英マニュアル・同梱物のライセンス）、`.github/workflows/release-in07.yml`（Windows・macOS、販売用は鍵のないビルドを止める、macOS の署名・公証は secrets があるときだけ）
   - [ ] macOS の署名・公証（Apple Developer Program の登録と Developer ID 証明書は依頼者。secrets を入れれば release-in07 が行う）
   - [ ] 製品版の公開鍵を `core/src/license_state.cpp` に（依頼者の PC で `sw-license-tool keygen`。秘密鍵はリポジトリにも CI にも入れない）、ライセンスサーバーの公開と `In07::kActivationServer`
-  - [ ] 128 種の試聴ページ（LP 用）
+  - [x] 128 種の試聴ページ（Artifact「SWINGBY Preset Gallery」、`tools/in07_audition_page.py`）
   - [ ] 実際の DAW での確認（Live・Logic・Cubase・Studio One・FL Studio・Bitwig・Reaper）。いまは検証ツールと自作ホストだけ
-  - [ ] 取扱説明書。AAX（Pro Tools）とスタンドアロンを出すか決める
+  - [x] 取扱説明書（`docs/dist/in07/manual_*.md`、実装に合わせて見直し 2026-10-09）
+  - [ ] AAX（Pro Tools）とスタンドアロンを出すか決める
+  - [x] バグチェック（2026-10-09、依頼者「いろんな観点から」）：画面・ネイティブ・ライセンス・文書・販売物。README「IN07 のバグチェック」
+  - [ ] 販売前に埋める（販売用パッケージはどれかが空だと止まる）：`kActivationServer`（ライセンスのサイト）、`docs/dist/in07/release_info.json`（問い合わせ先・確かめた DAW）、版を 1.0.0 に（`CMakeLists.txt` と各 `*_clap.cpp`）
+  - [ ] 窓にキーボードの焦点があるときに Space などをホストへ渡すか（実機の DAW で確かめてから）
+  - [ ] アルペジエーター・トランスゲートを使うファクトリープリセット（今は 0 種）
 
 ### MT
 - [x] MT01 Loudness — Loudness presets for Japanese broadcast and streaming
@@ -240,7 +245,8 @@
 ## 販売ページ（SWINGBY）
 
 - [x] LP（Design キャンバス「SWINGBY LP」）と販売文の原稿 `docs/marketing/in07_swingby_copy.md`（日英。海外の製品ページの構成と書き方を参考に改稿、2026-10-09）
-- [ ] LP の空欄：価格、Stripe の購入リンク、体験版のリンク、対応する Windows の版、特定商取引法に基づく表記・プライバシーポリシー・利用規約・お問い合わせ
+- [x] LP を今の製品に合わせる（2026-10-09：画面写真 10 枚と試聴動画を今の画面から作り直し `tools/in07_marketing_media.py`、ARP・ゲート・MIDI、Windows 10／11、解除の方法）。画面を変えたら同じツールで作り直す
+- [ ] LP の空欄：価格、Stripe の購入リンク、体験版のリンク、特定商取引法に基づく表記・プライバシーポリシー・利用規約・お問い合わせ
 - [x] 特定商取引法に基づく表記・プライバシーポリシー・使用許諾の下書き（`docs/legal/`、専門家の確認前。〔 〕は依頼者が埋める）
 - [ ] 英語版の LP（原稿の English から）
 
@@ -253,7 +259,8 @@
 - [ ] Stripe Managed Payments（販売者・税の代行、＋3.5 %）を使うか（推奨：使う）。署名の名前を SEVENTHWELL にするための法人化をするか（個人事業なら署名は氏名）
 - [x] ライセンスファイルの検証（Ed25519、Monocypher 4.0.3、署名の道具、テスト。OpenSSL と相互に検証できることを確認）
 - [x] ライセンス：全プラグインへの組み込み（ライセンスフォルダー、無音を挟む、開発版は挟まない、テスト用スイッチ）、発行サーバー（`server/license/`：Stripe Webhook・キー・有効化 3 台・返金）
-- [ ] ライセンス：本番の鍵、サーバーの設置（Cloudflare・Stripe）、画面での有効化、キーのメール送付
+- [x] ライセンス：画面での有効化、ネットのない PC 用のフォーム `/activate`、購入者の解除ページ `/manage`（1 年 3 回まで。無制限の解除で 1 本のキーを何台にも使えた不具合を直した、2026-10-09）
+- [ ] ライセンス：本番の鍵、サーバーの設置（Cloudflare・Stripe。既存の D1 には `schema.sql` をもう一度）、キーのメール送付（送信サービスを決めてから）
 - [ ] macOS：Developer ID 署名・Hardened Runtime・公証・staple を CI へ（Apple Developer Program の登録が要る）
 - [ ] Windows：OV コード署名証明書（クラウド署名）と signtool を CI へ
 - [ ] 配布：インストーラー（pkg・exe）の署名、SHA-256 の公開、署名付きの更新情報

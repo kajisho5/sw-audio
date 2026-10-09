@@ -88,3 +88,23 @@ TEST_CASE("DEMO GATE: the block size, the sample rate and the channel count chan
     g.prepare(96000.0);
     CHECK(g.position() == 0);
 }
+
+// a new activation (the host changed the sample rate, or switched the plug-in off and on) keeps the time played: the first 30 s are not
+// clean again. prepare(fs) without keepTime starts over.
+TEST_CASE("DEMO GATE: a new activation keeps the time played (at the new rate) (2026-10-09)") {
+    sw::DemoGate g;
+    g.prepare(48000.0, true);   // the first one: nothing to keep
+    CHECK(g.position() == 0);
+    std::vector<float> a(4800), b(4800);
+    float* ch[2] = {a.data(), b.data()};
+    for (int k = 0; k < 400; ++k) g.process(ch, 2, 4800);   // 40 s
+    CHECK(g.position() == 400 * 4800);
+    g.prepare(48000.0, true);
+    CHECK(g.position() == 400 * 4800);
+    g.prepare(96000.0, true);   // the same 40 s at the new rate
+    CHECK(g.position() == 800 * 4800);
+    CHECK(g.gainAt(g.position()) == 1.0f);
+    CHECK(g.gainAt(static_cast<int64_t>(90.5 * 96000)) == 0.0f);   // the gaps at 90 s at the new rate
+    g.prepare(44100.0);
+    CHECK(g.position() == 0);
+}

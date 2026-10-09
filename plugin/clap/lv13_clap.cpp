@@ -12,7 +12,7 @@ struct Lv13 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv13", "SW LV13 Live Peq", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.0", "6-band live parametric EQ with RTA suggestions", f};
+                                                   "https://seventh-well.com", "", "", "0.14.1", "6-band live parametric EQ with RTA suggestions", f};
         return &d;
     }
 };

@@ -22,8 +22,11 @@ export class D1Store {
     await this.db.prepare('UPDATE licenses SET refunded = 1 WHERE payment_intent = ?').bind(paymentIntent).run();
   }
   async activations(licenseId) {
-    const r = await this.db.prepare('SELECT machine FROM activations WHERE license_id = ?').bind(licenseId).all();
-    return (r.results ?? []).map((x) => x.machine);
+    return (await this.activationList(licenseId)).map((x) => x.machine);
+  }
+  async activationList(licenseId) {   // [{machine, created_at}], oldest first
+    const r = await this.db.prepare('SELECT machine, created_at FROM activations WHERE license_id = ? ORDER BY created_at').bind(licenseId).all();
+    return r.results ?? [];
   }
   async addActivation(licenseId, machine) {
     await this.db.prepare('INSERT OR IGNORE INTO activations (license_id, machine, created_at) VALUES (?, ?, ?)').bind(licenseId, machine, new Date().toISOString()).run();
@@ -32,16 +35,28 @@ export class D1Store {
     const r = await this.db.prepare('DELETE FROM activations WHERE license_id = ? AND machine = ?').bind(licenseId, machine).run();
     return (r.meta?.changes ?? 0) > 0;
   }
+  async deactivationsSince(licenseId, isoSince) {
+    const r = await this.db.prepare('SELECT COUNT(*) AS n FROM deactivations WHERE license_id = ? AND created_at >= ?').bind(licenseId, isoSince).first();
+    return Number(r?.n ?? 0);
+  }
+  async addDeactivation(licenseId, machine, iso) {
+    await this.db.prepare('INSERT INTO deactivations (license_id, machine, created_at) VALUES (?, ?, ?)').bind(licenseId, machine, iso).run();
+  }
 }
 
 export class MemoryStore {
-  constructor() { this.events = new Set(); this.licenses = []; this.acts = []; }
+  constructor() { this.events = new Set(); this.licenses = []; this.acts = []; this.deacts = []; this.clock = 0; }
   async seenEvent(id) { if (this.events.has(id)) return true; this.events.add(id); return false; }
   async licenseBySession(s) { return this.licenses.find((l) => l.session_id === s) ?? null; }
   async licenseByKeyHash(h) { return this.licenses.find((l) => l.key_hash === h) ?? null; }
   async insertLicense(l) { if (!this.licenses.some((x) => x.session_id === l.session_id || x.id === l.id)) this.licenses.push({ ...l, refunded: 0 }); }
   async markRefunded(pi) { for (const l of this.licenses) if (l.payment_intent === pi) l.refunded = 1; }
-  async activations(id) { return this.acts.filter((a) => a.license_id === id).map((a) => a.machine); }
-  async addActivation(id, m) { if (!this.acts.some((a) => a.license_id === id && a.machine === m)) this.acts.push({ license_id: id, machine: m }); }
+  async activations(id) { return (await this.activationList(id)).map((a) => a.machine); }
+  async activationList(id) { return this.acts.filter((a) => a.license_id === id).map((a) => ({ machine: a.machine, created_at: a.created_at })); }
+  async addActivation(id, m) {
+    if (!this.acts.some((a) => a.license_id === id && a.machine === m)) this.acts.push({ license_id: id, machine: m, created_at: new Date(Date.UTC(2026, 9, 1) + this.clock++ * 1000).toISOString() });
+  }
   async removeActivation(id, m) { const n = this.acts.length; this.acts = this.acts.filter((a) => !(a.license_id === id && a.machine === m)); return this.acts.length < n; }
+  async deactivationsSince(id, iso) { return this.deacts.filter((d) => d.license_id === id && d.created_at >= iso).length; }
+  async addDeactivation(id, m, iso) { this.deacts.push({ license_id: id, machine: m, created_at: iso }); }
 }

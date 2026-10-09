@@ -5,7 +5,7 @@
   'use strict';
   const SW = window.SW, P = SW.P, el = SW.el, ui = SW.ui;
   const lid = (l, k) => 'in07.l' + (l + 1) + '.' + k;
-  let orbit = null;
+  let orbit = null, refresh = null;
 
   const build = root => {
     const caption = el('span', { class: 'cap', style: { position: 'absolute', left: '28px', top: '72px' } });
@@ -127,11 +127,12 @@
       fltTags[f].textContent = P.label(lid(f, 'flt.type')).replace(' ', '');
       orbit.set(Object.assign(SW.orbitProps(), { view: 'close' }));
     };
+    refresh = show;
     const soon = SW.throttle(show);
     SW.on('param', soon);
     SW.on('focus-set', soon);
     SW.on('info', () => orbit.set({ noteKey: SW.info.note || 0 }));
     show();
   };
-  SW.screens.push({ id: 'layer', label: 'LAYER', build, show: on => { if (orbit) { orbit.show(on); if (on) orbit.set(Object.assign(SW.orbitProps(), { view: 'close' })); } } });
+  SW.screens.push({ id: 'layer', label: 'LAYER', build, show: on => { if (orbit) { orbit.show(on); if (on) { if (refresh) refresh(); orbit.set(Object.assign(SW.orbitProps(), { view: 'close' })); } } } });
 })();

@@ -2,7 +2,8 @@
    The native side (plugin/clap/inst_gui.hpp, instrument_adapter.hpp) loads the page with SWBOOT = {params, values, presets, settings, licence, assets, version}
    and answers the page's text messages with scripts it composes:
      page -> native: "s <i> <plain>" value, "b <i>" / "e <i>" gesture, "n <key> <vel>" / "o <key>" a note from the screen, "p" poll,
-                     "r" ready, "c <name> <arg...>" a call (factory, users, user, save, lic, licfile, set, asset; free text as base64)
+                     "r" ready, "c <name> <arg...>" a call (factory, users, user, save, lic, licfile, set, learn, forget, asset; free text
+                     as base64, an empty argument as "-")
      native -> page: SW.update(values, info), SW.asset(...), SW.reply(name, data)
    Without a native side (a browser preview) window.SWMOCK(message) takes the messages. */
 (function () {
@@ -120,15 +121,17 @@
     if (info) { Object.assign(SW.info, info); SW.info._at = performance.now(); SW.emit('info', SW.info); }
   };
   SW.reply = (name, data) => SW.emit('reply:' + name, data);
-  SW.call = (name, ...args) => post(['c', name].concat(args).join(' '));
+  SW.call = (name, ...args) => post(['c', name].concat(args.map(a => (a === '' || a === undefined || a === null) ? '-' : String(a))).join(' '));   // "-": an empty argument (a message has no empty words)
   SW.noteOn = (key, vel) => post('n ' + key + ' ' + (vel || 0.8));
   SW.noteOff = key => post('o ' + key);
 
   // ---- settings (kept by the plug-in in the user folder: the motion, the theme, the size)
-  SW.settings = Object.assign({ motion: '60', theme: 'dark', zoom: '100' }, BOOT.settings || {});
+  SW.settings = Object.assign({ motion: '', theme: 'dark', zoom: '100' }, BOOT.settings || {});
   SW.setSetting = (k, v) => { SW.settings[k] = String(v); SW.call('set', k, SW.b64(String(v))); SW.emit('setting', k, String(v)); };
-  if (!BOOT.settings || !BOOT.settings.motion) {   // the OS asks for less motion: start still
-    try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) SW.settings.motion = 'off'; } catch (e) { /* none */ }
+  if (!SW.settings.motion) {   // never chosen in this window: the OS's "reduce motion" starts it still, otherwise full
+    let still = false;
+    try { still = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* none */ }
+    SW.settings.motion = still ? 'off' : '60';
   }
 
   // ---- pictures and fonts: sent one by one after the page is up (the page itself stays small)

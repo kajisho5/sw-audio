@@ -220,3 +220,37 @@ TEST_CASE("IN07 GATE: the 16-step pattern opens and closes the sound on the beat
     for (size_t i = kStep + kStep / 4; i < kStep * 7 / 4; ++i) b += M[i] * M[i];
     CHECK(std::sqrt(b / a) == doctest::Approx(0.5).epsilon(0.03));
 }
+
+// the arp's own notes are not the host's: no CLAP note end for them; the host's key ends once, with its id, when it is let go (also when
+// the arp took over a key already sounding, poly and mono). Before 2026-10-09 every arp step reported an end on channel 0 with id -1.
+TEST_CASE("IN07 ARP: its own notes report no end; the host's key ends once, with its id, when let go (2026-10-09)") {
+    auto ends = [](Processor& p) { std::vector<std::vector<int>> e; int k = 0, c = 0, i = 0; while (p.takeEnded(k, c, i)) e.push_back({k, c, i}); return e; };
+    {
+        Processor p; simple(p); p.prepare(kFs, 256); p.setTempo(120);
+        p.setParam(ArpOn, 1); p.setParam(ArpOctaves, 2);
+        p.noteOn(60, 0.8, 3, 77);
+        const auto h = run(p, 4 * kStep);
+        CHECK(h.size() >= 3);                 // it played (60 and 72)
+        CHECK(ends(p).empty());
+        p.noteOff(60, 3);
+        run(p, 2 * kStep);
+        const auto e = ends(p);
+        REQUIRE(e.size() == 1);
+        CHECK(e[0] == std::vector<int>{60, 3, 77});
+    }
+    for (const int mode : {static_cast<int>(Poly), static_cast<int>(Mono)}) {   // the arp switched on while the host's key sounds
+        CAPTURE(mode);
+        Processor p; simple(p); p.setParam(Mode, mode); p.prepare(kFs, 256); p.setTempo(120);
+        p.noteOn(62, 0.8, 2, 55);
+        run(p, kStep);
+        CHECK(ends(p).empty());
+        p.setParam(ArpOn, 1);
+        run(p, 4 * kStep);
+        CHECK(ends(p).empty());
+        p.noteOff(62, 2);
+        run(p, 2 * kStep);
+        const auto e = ends(p);
+        REQUIRE(e.size() == 1);
+        CHECK(e[0] == std::vector<int>{62, 2, 55});
+    }
+}

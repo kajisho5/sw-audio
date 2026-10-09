@@ -2,7 +2,7 @@
 
 SW IN07 SWINGBY — the orbital preset synth (SEVENTHWELL)
 
-〔VERSION〕 This guide covers plug-in version 〔VERSION〕.
+This guide covers plug-in version 〔VERSION〕.
 
 ---
 
@@ -29,7 +29,7 @@ The sound is drawn as a planetary system: the star in the middle is the sound it
 | Formats | CLAP, VST3 (Windows, macOS), Audio Units (macOS) |
 | Host | Any DAW that loads instruments in one of these formats |
 
-〔The DAWs and versions it has been tested with will be listed here.〕
+Tested with: 〔TESTED HOSTS〕
 
 ## 3. Installation
 
@@ -50,7 +50,7 @@ Unzip the download and copy the format you use to the folder below. Restart your
 | VST3 | `SW IN07 SWINGBY.vst3` | `/Library/Audio/Plug-Ins/VST3/` |
 | CLAP | `SW IN07 SWINGBY.clap` | `/Library/Audio/Plug-Ins/CLAP/` |
 
-**Uninstalling**: delete the files you copied. Your presets (section 6), the window settings and licence files (section 4) are kept elsewhere; delete those folders too if you no longer need them.
+**Uninstalling**: delete the files you copied. Your presets (section 6), licence files (section 4) and the window settings are kept elsewhere; delete them too if you no longer need them. The window settings are `%APPDATA%\SEVENTHWELL\SWINGBY\window.txt` on Windows and `~/Library/Application Support/SEVENTHWELL/SWINGBY/window.txt` on macOS.
 
 ## 4. Trial and licence
 
@@ -60,14 +60,15 @@ The trial is the full plug-in, with every feature and preset. Without a licence 
 
 Click the licence chip at the top right ("TRIAL" while unlicensed) to open the licence window.
 
-1. **This computer**: a 64-character code (derived from the computer's ID, not the ID itself).
-2. **Activate with your key**: enter the licence key you received (it starts with `SWL-`) and press ACTIVATE. This needs an internet connection.
-3. **Activate with a licence file**: on a computer without internet, open 〔the activation page〕 on another computer, enter your key and this computer's code to get a licence file (`.swlicense`), and load it with LICENCE FILE.
+1. **THIS COMPUTER**: this computer's code, 64 characters (derived from the computer's ID, not the ID itself). COPY CODE copies it.
+2. **Activate with your key**: enter the licence key from the purchase confirmation page (it starts with `SWL-`) in LICENCE KEY and press ACTIVATE. This needs an internet connection.
+3. **Activate with a licence file**: on a computer without internet, open 〔LICENCE SITE〕/activate on another computer, enter your key and this computer's code to get a licence file (`.swlicense`), and load it with LICENCE FILE.
 
 The silence stops as soon as the licence is accepted. After activation SWINGBY works offline.
 
+- The licence key is shown on the purchase confirmation page (it is not sent by e-mail): note it before you close the page. Reloading the page shows it again. If you lose it, contact 〔CONTACT〕 with the e-mail address you bought with.
 - One licence activates up to 3 computers. Activating the same computer again does not count twice.
-- To move to another computer, contact 〔support〕.
+- **Freeing a computer you no longer use**: enter your key at 〔LICENCE SITE〕/manage to see the computers it is active on, and press "解除" (free) on the one to release; you can then activate another computer. Up to 3 times a year; for more, contact 〔CONTACT〕. Delete the licence file on the computer you freed.
 - The licence is perpetual: no subscription, no expiry. Updates within version 1.x are free.
 
 Licence files (placed there for you on activation):
@@ -78,6 +79,8 @@ Licence files (placed there for you on activation):
 ## 5. The window
 
 Five pages — PLAY, LAYER, ARP, MOD, FX — selected in the top bar.
+
+Knobs and sliders: drag (Shift for fine), double-click for the default, the mouse wheel, or the arrow keys (after clicking or tabbing to one).
 
 **Top bar (right)**
 
@@ -91,21 +94,21 @@ Motion, theme and size are remembered per user (the same in every project).
 ### 5.1 PLAY
 
 - **Preset name and ‹ ›**: the current preset; step back and forth.
-- **CONSTELLATIONS (left)**: the preset list, filtered by ALL, LEAD, PAD, BASS, PLUCK, KEYS, SEQ, FX or USER (your own). Click a name to load it. Even with keys held, the change is joined over 8 ms, without a step.
+- **CONSTELLATIONS (left)**: the preset list, filtered by ALL, LEAD, PAD, BASS, PLUCK, KEYS, SEQ, FX or USER (your own). Click a name to load it. With keys held, the sound dips for 8 ms, the new preset comes in and the held keys play again with it (no click; the old preset's tail ends there).
 - **SAVE PRESET**: save the current sound (section 6).
 - **The system (middle)**: the star is the sound, the orbits are the layers. Cutoff opens the halo, resonance lights its ring, drive throws sparks; unison voices are small moons, detune spreads them.
-- **ORBITS (right)**: the four layers and their levels; click to select one. Below: the selected layer's cutoff, resonance, drive, unison, detune and amp envelope. EDIT LAYER opens the LAYER page.
+- **ORBITS (right)**: the four layers and their levels; click to select one (double-click opens it on the LAYER page). Below: the selected layer's cutoff, resonance, drive, unison, detune and amp envelope. EDIT LAYER opens the LAYER page.
 - **8 macros**: BRIGHT, RESO, ATTACK, RELEASE, DRIVE, WIDTH, DELAY, REVERB. 50 leaves the preset as it is. Drag (Shift for fine), double-click for 50, or use the wheel. Right-click for MIDI learn (section 7).
-- **RIBBON**: press and slide to play C1 to C6 without a keyboard.
-- **ARP**: arpeggiator on / off.
+- **RIBBON**: press and slide to play C1 to C6 without a keyboard. Tab to it and press Space or Enter for C4.
+- **ARP ON / OFF**: arpeggiator on / off.
 
 ### 5.2 LAYER
 
 - **Layer cards (left)**: L1 to L4. Click to select; LAYER ON switches it.
 - **Close-up (middle)** and **PLAY NOTE**: hear the selected layer.
-- **ENVELOPE**: AMP and FILTER attack, decay, sustain, release.
-- **LFO 1 / 2**: shape (Orbit, triangle, saw, square, random), RATE, SYNC (tempo-synced; Off uses RATE), ORBIT (how flat the ellipse is: 0 is a circle; the flatter, the slower far away and the faster near the planet), START (Free runs all the time, Note restarts with each note).
-- **OSCILLATOR**: TYPE selects the source.
+- **ENVELOPE**: AMP and FILTER attack, decay, sustain, release. The FILTER envelope (Env 2) moves the cutoff by the filter's ENV amount and is also the mod source "Env 2".
+- **LFO 1 / 2** (shared by all layers; what they move is set in the MOD page's matrix, nothing by default): shape (ORBIT, TRI = triangle, SAW, SQR = square, S&H = random steps), RATE, SYNC (tempo-synced; Off uses RATE), ORBIT (how flat the ellipse is: 0 is a circle; the flatter, the slower far away and the faster near the planet), START (Free runs all the time, Note restarts with each note).
+- **OSCILLATOR**: TYPE selects the source (VA = Analog, WT = Wavetable, FM, SMP = Sample).
   - Analog: sine, triangle, saw, square, PULSE W (square width)
   - Wavetable: 8 tables (CLASSIC to GLASS), POSITION
   - FM: two operators — RATIO, INDEX, DECAY, FEEDBACK
@@ -115,15 +118,15 @@ Motion, theme and size are remembered per user (the same in every project).
 
 ### 5.3 ARP (arpeggiator and trance gate)
 
-- **ARPEGGIATOR**: MODE (Up, Down, Up-Down, Order = the order you pressed, Random), RATE (1/8, 1/16, 1/16 T, 1/32), OCTAVES (1–4), LENGTH (note length), SWING (delays the off-beats), STEPS (1–16).
+- **ARPEGGIATOR**: ON at the top right switches it. MODE (UP, DOWN, UP-DN, ORDER = the order you pressed, RANDOM), RATE (1/8, 1/16, 1/16 T, 1/32), OCTAVES (1–4), LENGTH (note length), SWING (delays the off-beats), STEPS (1–16).
   - Bars: each step's velocity. Drag to set, double-click for 0 / 100. 0 is a rest.
   - Row below: each step's pitch (0, +12, +7, −12). Click to step through, right-click for 0.
-- **TRANCE GATE**: 16 on/off steps chop the sound. RATE (1/8, 1/16, 1/32), DEPTH.
+- **TRANCE GATE**: 16 on/off steps chop the sound. ON at the top right switches it; RATE (1/8, 1/16, 1/32), DEPTH.
 - While the host plays, both follow its beat; when it is stopped, they count from the first key you press.
 
 ### 5.4 MOD
 
-- **8 mod slots**: ON, SOURCE (LFO 1, LFO 2, Env 2, Velocity, Mod wheel, Aftertouch, Key, macros M1–M8) → TARGET (Cutoff, Resonance, Pitch, Drive, Pan, Level, L1–L4 level, LFO 1/2 rate, Pulse width, Detune, Gravity, WT position, FM index), AMOUNT (±100).
+- **8 mod slots**: ON, SOURCE (LFO 1, LFO 2, Env 2 (the FILTER envelope), Velocity, Mod wheel, Aftertouch, Key, macros M1–M8) → TARGET (Cutoff, Resonance, Pitch, Drive, Pan, Level, L1–L4 level, LFO 1/2 rate, Pulse width, Detune, Gravity, WT position, FM index), AMOUNT (±100).
 - Each slot is drawn as a gravity line in the system: thicker for more, flowing from source to target (dots flowing back for a negative amount).
 - **FLYBY**: every note approaches, passes or leaves. MODE (Off, Arrive, Pass, Leave), DEPTH, TIME, NEAR (how close it passes), SIDE (left to right, right to left, alternate). Pitch (Doppler), level, pan and air absorption move together.
 - **VOICE**: PLAY (Poly, Mono, Legato), VOICES (1–32), GLIDE (0–2000 ms), BEND (pitch bend range, 0–24 semitones), LEVEL (master level).
@@ -134,7 +137,7 @@ The signal path on top (voice → effects → OUT), six cards below. Their order
 
 - **ON / OFF**: an effect that is off is not processed (it costs nothing). Switching is joined over 5 ms.
 - **‹ ›**: move an effect one place earlier or later. The output dips for 4 ms while the order changes.
-- Drive (AMOUNT, TONE, MIX), Chorus (RATE, DEPTH, MIX), Delay (TIME: tempo-synced 1/16 to 1/2, FEEDBACK, MIX), Reverb (SIZE = decay time, DAMP, MIX), EQ (LOW, MID, HIGH ±12 dB), Limit (GAIN, CEILING, RELEASE; the output never goes over CEILING).
+- Drive (AMOUNT, TONE, MIX), Chorus (RATE, DEPTH, MIX), Delay (TIME: tempo-synced 1/16 to 1/2, FEEDBACK, MIX), Reverb (SIZE = decay time, DAMP, MIX), EQ (LOW, MID, HIGH ±12 dB), Limit (GAIN, CEILING, RELEASE; the Limit's output never goes over CEILING in sample peaks — LEVEL after it can still raise it above 0 dB).
 
 ## 6. Presets
 
@@ -143,7 +146,7 @@ The signal path on top (voice → effects → OUT), six cards below. Their order
 - **Where they go** (a CLAP host's preset browser lists them too):
   - Windows: `Documents\SEVENTHWELL\SWINGBY\Presets\`
   - macOS: `~/Library/Audio/Presets/SEVENTHWELL/SWINGBY/`
-- Preset files (`.swpreset`) are text: copy them to another computer to use them there.
+- Preset files (`.swpreset`) are text: copy them to another computer to use them there. To delete a preset, delete its file from this folder (the list updates when the window opens again).
 - A saved project remembers the name of the preset in use.
 - In a host's generic parameter list, parameters are grouped ("Layer 1/Filter", "Effects/Delay" ...). Write automation from there or by moving the controls in the window.
 
@@ -160,7 +163,7 @@ The signal path on top (voice → effects → OUT), six cards below. Their order
 | CC 120, 123 | stops all notes |
 | A learned CC | moves its macro |
 
-**MIDI learn**: right-click a macro on the PLAY page → MIDI LEARN → move a control on your controller. Its CC number appears above the knob. Right-click → FORGET removes it. Assignments are saved with the project. CC 0, 1, 32, 64 and 120–127 cannot be learned.
+**MIDI learn**: right-click a macro on the PLAY page → MIDI LEARN → move a control on your controller. Its CC number appears below the knob. Right-click → FORGET CC (number) removes it. Assignments are saved with the project. CC 0, 1, 32, 64 and 120–127 cannot be learned.
 
 Note: some hosts do not pass program changes or CCs to plug-ins, or only when set to.
 
@@ -173,9 +176,10 @@ Note: some hosts do not pass program changes or CCs to plug-ins, or only when se
 | The window feels heavy | Set MOTION to 30 or OFF |
 | High CPU load | Fewer VOICES, less UNISON, switch unused layers and effects off |
 | Your presets are not in the host's browser | Are they in the preset folder (section 6)? Rescan the host's browser |
+| Activation says the licence is on its maximum number of computers | Free one you no longer use at 〔LICENCE SITE〕/manage (section 4) |
 | A licence file is refused | Was it made with this computer's code? (A file for another computer does not work.) Is the file intact? |
 
-〔support contact〕
+Support: 〔CONTACT〕
 
 ## 9. Specifications
 

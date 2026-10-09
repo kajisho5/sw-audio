@@ -32,10 +32,13 @@ LP（Design キャンバス「SWINGBY LP」）と販売サイト・ストアの�
 | LFO 2（楕円軌道を含む）、変調マトリクス 8、マクロ 8（Bright・Reso・Attack・Release・Drive・Width・Delay・Reverb）、重力、フライバイ（Arrive・Pass・Leave） | 同上 |
 | FX 6（Drive・Chorus・Delay・Reverb・EQ・Limit）、順番入れ替え可、Off の FX は計算しない | 同上（fx.hpp） |
 | ユーザープリセットの保存、CLAP のプリセットブラウザ対応 | README「IN07 のユーザープリセット」 |
-| CLAP・VST3・AU（macOS）、macOS 11 以降（ユニバーサル）、Windows 64 ビット | CMakeLists.txt、CI |
-| 買い切り、3 台まで、1.x のアップデート無料、最初の有効化のあとはオフライン | `docs/security.md`、`server/license/README.md` |
+| アルペジエーター（5 モード・1/8〜1/32・1〜4 オクターブ・16 ステップの強さと音程・スイング）、トランスゲート（16 ステップ・1/8〜1/32・深さ）。ホストの拍に合わせる | README「IN07 のアルペジエーターとトランスゲート」、`tests/test_in07_arp.cpp` |
+| MIDI：プログラムチェンジでファクトリープリセット 1〜128、マクロ 8 つに MIDI ラーン（曲と一緒に保存） | README、`tests/test_in07_window.cpp` |
+| CLAP・VST3・AU（macOS）、macOS 11 以降（ユニバーサル）、Windows 10／11（64 ビット、画面に Microsoft Edge WebView2 ランタイム） | CMakeLists.txt、CI、`plugin/clap/gui_win.cpp`。実機の DAW での確認はまだ |
+| 買い切り、3 台まで、1.x のアップデート無料、最初の有効化のあとはオフライン。使わなくなったパソコンの解除は購入者用のページで 1 年に 3 回まで（それ以上は問い合わせ） | `server/license/README.md`（`MAX_ACTIVATIONS`・`MAX_DEACTIVATIONS`） |
+| ライセンスキーは購入完了のページに表示（メールでは送らない） | `server/license/src/worker.js` |
 | 体験版：機能制限なし、起動から 30 秒後とその後 60 秒ごとに 3 秒の無音 | `core/include/sw/demo_gate.hpp`、`tests/test_demo_gate.cpp` |
-| 画面：ダーク／ライト、動き 60・30・OFF | `docs/design/in07/README.md`（画面は開発中。画面のことを書くときは「開発中のデザイン」と添える） |
+| 画面：PLAY・LAYER・ARP・MOD・FX の 5 つ、ダーク／ライト、動き 60・30・OFF、大きさ 75〜130 % | `ui/in07/`。LP の画面写真と試聴動画は `tools/in07_marketing_media.py` で今の画面から作る（手で描かない） |
 
 ## 日本語
 
@@ -49,7 +52,8 @@ LP（Design キャンバス「SWINGBY LP」）と販売サイト・ストアの�
   - **ORBIT LFO｜揺れに、緩急をつける。** 遠くではゆっくり、惑星のそばで一気に。楕円を細くするほど、長い溜めと短い通過のリズムに。
   - **4 OSCILLATORS｜4 つの音源を、1 つの音に。** アナログ・ウェーブテーブル・FM・サンプルをレイヤーごとに。サンプルライブラリの置き場所はいらない。
   - **FX × 6｜並べ替えるだけで、音が変わる。** ドライブ・コーラス・ディレイ・リバーブ・EQ・リミッター。Off のエフェクトは計算しない。
-  - **MACRO × 8｜8 つのマクロで、すぐ自分の音に。** 明るさ・アタック・リリース・広がり・リバーブなどを PLAY 画面に。
+  - **MACRO × 8｜8 つのマクロで、すぐ自分の音に。** 明るさ・アタック・リリース・広がり・リバーブなどを PLAY 画面に。MIDI ラーンで手元のつまみにも。
+  - **ARP ・ GATE｜押さえるだけで、フレーズになる。** 16 ステップのアルペジエーター（強さと音程の行）と、音を刻むトランスゲート。ホストのテンポに合わせて動く。
 - **プリセット**：128 SOUNDS, ONE LEVEL ／ 選ぶのは、音量ではなく音色。
 - **購入**：買い切り。使用期限なし。／月額なし・3 台まで・1.x は無料・オフライン・お支払いは Stripe（カード番号は SEVENTHWELL に届かない）
 - **体験版**：無料で、全部試せる。体験版は製品版と同じプラグイン。機能もプリセットも制限なし。ライセンスがない間は、起動から 30 秒後、そのあと 60 秒ごとに 3 秒の無音。
@@ -65,9 +69,10 @@ LP（Design キャンバス「SWINGBY LP」）と販売サイト・ストアの�
   - **Gravity — Tighten a wide sound.** Unison voices pull toward each other until their phases line up. Go from a thick supersaw to a focused single tone with one knob.
   - **Flyby — Hear every note fly in.** Notes approach, pass and leave, with pitch (Doppler), level, pan and air absorption moving together.
   - **Orbit LFO — Give your modulation a pulse.** Slow when far, fast near the planet. The flatter the orbit, the longer the build and the shorter the pass.
-  - **4 oscillators — Four sources, one sound.** Analog, wavetable, FM and sample on every layer. Waveforms are generated at startup, so there is no sample library to install.
+  - **4 oscillators — Four sources, one sound.** Choose analog, wavetable, FM or sample for each of the four layers. Waveforms are generated at startup, so there is no sample library to install.
   - **FX × 6 — Reorder to reshape.** Drive, chorus, delay, reverb, EQ and limiter in any order. Effects that are off are not processed.
-  - **8 macros — Make it yours, fast.** Brightness, attack, release, width, reverb and more, right on the Play page.
+  - **8 macros — Make it yours, fast.** Brightness, attack, release, width, reverb and more, right on the Play page. MIDI learn puts them on your controller.
+  - **Arp and gate — Hold a chord, get a phrase.** A 16-step arpeggiator with velocity and pitch rows, and a trance gate that chops the sound, both locked to your host's tempo.
 - **Presets**: 128 sounds, one level. Every factory preset is measured with BS.1770 loudness and set to −16 LUFS.
 - **Buy**: Buy once. No subscription. Up to 3 computers. Free 1.x updates. Works offline after the first activation. Secure checkout by Stripe.
 - **Trial**: Try everything free. The trial is the full plug-in, with every feature and preset. Without a licence, it inserts 3 seconds of silence 30 seconds after start and every 60 seconds after that.
@@ -75,7 +80,11 @@ LP（Design キャンバス「SWINGBY LP」）と販売サイト・ストアの�
 
 ## まだ決まっていない欄
 
-価格、Stripe の購入リンク、体験版のリンク、対応する Windows の版、特定商取引法に基づく表記・プライバシーポリシー・利用規約・お問い合わせ（LP の [ ] の箇所）。
+価格、Stripe の購入リンク、体験版のリンク、ライセンスのサイトの URL、特定商取引法に基づく表記・プライバシーポリシー・利用規約・お問い合わせ（LP の [ ] の箇所）、動作を確かめた DAW。
+
+## LP を今の製品に合わせた記録（2026-10-09）
+
+依頼者の指摘（「紹介ページの画像とか今と全然違うやろ」）で LP を見直した。直したもの：画面写真 6 枚と試聴動画（古いデザイン案の画面で、今の製品にない EVO FIND SIMILAR・SW LINK が写っていた）を今の画面から作り直した（`tools/in07_marketing_media.py`）／SCREENS に ARP を足し「画面は開発中のデザイン」を削った／特長と仕様に ARP・トランスゲート・MIDI を足した／Windows の版（10／11、WebView2）を入れた／「解除すれば別のパソコンへ」を、実装した購入者用ページ（1 年に 3 回まで）に合わせた／試聴の説明に「つなぎ目の短いフェード」を足した。
 
 ## 参考（構成と書き方だけを見たページ、2026-10-09）
 

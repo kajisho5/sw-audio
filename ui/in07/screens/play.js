@@ -123,8 +123,8 @@
       const b = el('button', { type: 'button', role: 'radio', style: { height: '44px', display: 'flex', alignItems: 'center', gap: '10px', padding: '0 8px', borderRadius: '10px', textAlign: 'left', border: '1px solid transparent', background: 'none' } },
         el('span', { style: { margin: '0 4px', display: 'block' } }, th),
         el('span', { style: { flex: '1', minWidth: '0', display: 'flex', flexDirection: 'column', gap: '1px' } }, name, el('span', { style: { position: 'relative', height: '2px', background: 'var(--track)' } }, bar)), type);
-      b.addEventListener('click', () => { SW.focus = l; showLayer(); });
-      b.addEventListener('dblclick', () => { SW.focus = l; SW.go('layer'); });
+      b.addEventListener('click', () => { SW.focus = l; SW.emit('focus-set'); });   // every screen follows (LAYER's cards and its panel)
+      b.addEventListener('dblclick', () => { SW.focus = l; SW.emit('focus-set'); SW.go('layer'); });
       lchips.appendChild(b);
       return { b, th, name, bar, type };
     });
@@ -211,7 +211,8 @@
     const stop = () => { if (note >= 0) SW.noteOff(note); note = -1; mark.style.display = 'none'; };
     ribbon.addEventListener('pointerdown', e => { e.preventDefault(); ribbon.setPointerCapture(e.pointerId); play(keyAt(e)); });
     ribbon.addEventListener('pointermove', e => { if (note >= 0) play(keyAt(e)); });
-    ribbon.addEventListener('pointerup', stop); ribbon.addEventListener('pointercancel', stop);
+    ribbon.addEventListener('pointerup', stop); ribbon.addEventListener('pointercancel', stop); ribbon.addEventListener('lostpointercapture', stop);
+    window.addEventListener('blur', stop);
     ribbon.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); play(60); setTimeout(stop, 400); } });
     const arp = ui.onButton('in07.arp.on', { on: 'ARP ON', off: 'ARP OFF', style: { width: '112px' } });
     root.appendChild(el('div', { style: { position: 'absolute', left: '24px', right: '24px', bottom: '14px', height: '44px', display: 'flex', alignItems: 'center', gap: '14px' } },

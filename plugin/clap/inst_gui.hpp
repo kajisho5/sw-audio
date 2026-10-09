@@ -58,9 +58,11 @@ inline std::string base64(const unsigned char* d, size_t n) {
     }
     return o;
 }
-// base64 (strict, padded) to bytes, at most maxBytes; false otherwise
+// base64 (strict, padded) to bytes, at most maxBytes; false otherwise. "-" is the empty text (a message has no empty words: the page
+// sends "-" for an empty argument, e.g. an author cleared to nothing)
 inline bool unbase64(std::string_view s, std::string& out, size_t maxBytes) {
     out.clear();
+    if (s == "-") return true;
     if (s.size() > (maxBytes + 2) / 3 * 4) return false;
     std::vector<uint8_t> b;
     if (!s.empty() && !license::decodeBase64(s, b)) return false;
@@ -157,7 +159,7 @@ inline bool readFlatJson(std::string_view s, std::map<std::string, std::string>&
 
 // ---- the window's settings (per user)
 struct Settings {
-    std::string motion = "60", theme = "dark", zoom = "100", author;
+    std::string motion, theme = "dark", zoom = "100", author;   // motion: empty until chosen (the page follows the OS's reduce-motion)
     static constexpr const char* kZooms[] = {"75", "90", "100", "115", "130"};
     // a known key with an allowed value: kept (true); anything else changes nothing (false)
     bool set(std::string_view k, std::string_view v) {

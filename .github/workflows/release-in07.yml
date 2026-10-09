@@ -2,7 +2,8 @@
 # manuals and the licences (tools/package_in07.py). Run by hand: Actions -> release-in07 -> Run workflow.
 #   release = false (default): a test package (licences not checked: it never inserts the trial's silence). Not for sale.
 #   release = true: a package for sale. Built with SW_LICENSE_ENFORCE=ON and stopped when the build would not check licences (no
-#                   production public key in core/src/license_state.cpp yet).
+#                   production public key in core/src/license_state.cpp yet), when the manuals have blanks (the licence site, the
+#                   contact, the tested hosts: tools/package_in07.py) or when the version is still 0.x.
 # macOS signing and notarization run only when their secrets are set (Settings -> Secrets and variables -> Actions):
 #   MACOS_CERT_P12_BASE64   the "Developer ID Application" certificate with its private key (.p12, base64)
 #   MACOS_CERT_PASSWORD     the .p12's password
@@ -127,7 +128,8 @@ jobs:
       - name: Package
         run: |
           python3 -m pip install --quiet markdown==3.10.3 || python3 -m pip install --quiet --break-system-packages markdown==3.10.3
-          python3 tools/package_in07.py build dist "${{ matrix.plat }}" "$SW_VERSION"
+          R=""; if [ "${{ inputs.release }}" = "true" ]; then R="--release"; fi   # for sale: no blanks in the manuals, version 1.x
+          python3 tools/package_in07.py build dist "${{ matrix.plat }}" "$SW_VERSION" $R
           N="SWINGBY-$SW_VERSION-${{ matrix.plat }}"
           [ "${{ inputs.release }}" = "true" ] || N="$N-TEST"
           if [ "$RUNNER_OS" = "macOS" ]; then

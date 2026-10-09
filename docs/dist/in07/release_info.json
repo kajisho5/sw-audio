@@ -1,0 +1,5 @@
+{
+  "_": "SWINGBY: what the shipped manuals need that only the owner knows. tools/package_in07.py puts these into the manuals (with the licence site from plugin/clap/in07_traits.hpp kActivationServer); a package for sale (--release) stops while any is empty.",
+  "contact": "",
+  "testedHosts": {"ja": "", "en": ""}
+}

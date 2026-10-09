@@ -31,10 +31,18 @@
       const bar = el('div', { role: 'slider', tabindex: '0', 'aria-label': 'Step ' + (i + 1) + ' velocity', style: { position: 'relative', height: '70px', borderRadius: '6px', background: 'var(--groove)', boxShadow: 'var(--groove-shadow)', cursor: 'ns-resize', touchAction: 'none' } }, fill);
       // press and drag up / down: the velocity (a press at the bottom = a rest)
       const setFromY = e => { const r = bar.getBoundingClientRect(); const v = SW.clamp(Math.round((1 - (e.clientY - r.top) / r.height) * 100 / 5) * 5, 0, 100); P.set(vid, v); };
-      bar.addEventListener('pointerdown', e => { e.preventDefault(); bar.setPointerCapture(e.pointerId); P.begin(vid); setFromY(e); });
-      bar.addEventListener('pointermove', e => { if (bar.hasPointerCapture(e.pointerId)) setFromY(e); });
-      bar.addEventListener('pointerup', () => P.end(vid)); bar.addEventListener('pointercancel', () => P.end(vid));
-      bar.addEventListener('dblclick', () => P.tap(vid, P.get(vid) > 0 ? 0 : 100));
+      let down = false, before = 0, beforeAt = 0;
+      bar.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        e.preventDefault(); bar.setPointerCapture(e.pointerId);
+        if (performance.now() - beforeAt > 500) before = P.get(vid);   // the value before a double click's first press
+        beforeAt = performance.now();
+        down = true; P.begin(vid); setFromY(e);
+      });
+      bar.addEventListener('pointermove', e => { if (down && bar.hasPointerCapture(e.pointerId)) setFromY(e); });
+      const up = () => { if (down) { down = false; P.end(vid); } };
+      bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up); bar.addEventListener('lostpointercapture', up);
+      bar.addEventListener('dblclick', e => { if (e.button === 0) P.tap(vid, before > 0 ? 0 : 100); });
       bar.addEventListener('keydown', e => { const d = { ArrowUp: 5, ArrowRight: 5, ArrowDown: -5, ArrowLeft: -5 }[e.key]; if (d) { e.preventDefault(); P.tap(vid, SW.clamp(P.get(vid) + d, 0, 100)); } });
       velBars.appendChild(bar);
       const pb = el('button', { type: 'button', class: 'mono', 'aria-label': 'Step ' + (i + 1) + ' pitch', style: { height: '30px', padding: '0', borderRadius: '8px', border: '1px solid var(--chip-line)', background: 'var(--chip)', boxShadow: 'var(--chip-shadow)', fontSize: '10px', color: 'var(--label)' } });

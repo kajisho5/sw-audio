@@ -2,6 +2,7 @@
    the control kit (grooves cut into the glass, the moon bead as the handle, jewel lamps). Light from the top left, one direction.
    Colours: the category teal only (Creative / Instrument); the state colours (green, yellow, red) only for states (the licence chip). */
 :root { color-scheme: dark; }
+:root:has(body.sw-light), body.sw-light, .sw-light { color-scheme: light; }   /* the day screen: light scroll bars and lists */
 .sw-dark {
   --bg: radial-gradient(ellipse 60% 60% at 50% 46%, #0e1516 0, #070a0b 50%, #030405 100%);
   --text: #e8e8e8; --strong: #f2f2f2; --sub: #8e8e8e; --label: #a8a8a8; --label2: #cacaca;

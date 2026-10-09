@@ -246,7 +246,7 @@ private:
         // the licence (main thread: reads the user's licence folder); without one, the demo silence (sw/demo_gate.hpp)
         const auto lv = sw::license::productState(gui::codeOf(P::descriptor()->id), std::atoi(P::descriptor()->version));
         s->demo_ = !lv.licensed || sw::license::forcedDemo();
-        s->gate_.prepare(sr);
+        s->gate_.prepare(sr, true);   // a new activation keeps the time played (the demo silence does not start over)
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -478,8 +478,9 @@ private:
         std::vector<double> vals(count);              // read whole before anything changes: a cut state changes nothing
         for (uint32_t i = 0; i < count; ++i) if (!readAll(s, &vals[i], 8)) return false;
         Plugin* pl = self(p);
-        for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
-            pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
+        for (int i = 0; i < numParams(); ++i) {   // values the state lacks (saved by an older version) take their defaults, not the last ones
+            const double h = static_cast<uint32_t>(i) < count ? vals[static_cast<size_t>(i)] : plainToHost(i, spec(i).def);
+            pl->host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, h)); pl->dirty_[static_cast<size_t>(i)].store(true);
         }
         if constexpr (HasExtraState<typename P::Core>::value) {   // optional: states saved before the extra block existed end here
             char xm[4]; uint32_t len = 0;

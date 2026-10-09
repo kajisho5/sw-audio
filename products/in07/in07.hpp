@@ -243,7 +243,10 @@ public:
     std::array<int, kFx> fxOrder() const { return fx_.order(); }
     double limiterPeak() const { return fx_.limiterPeak(); }   // the peak into the Limit effect since the last reset (linear)
     void resetLimiterPeak() { fx_.resetLimiterPeak(); }
-    // velocity 0..1; channel and noteId are only carried to the end report (CLAP); channel -1 / key -1 in noteOff = any
+    // velocity 0..1; channel and noteId are only carried to the end report (CLAP); channel -1 / key -1 in noteOff = any.
+    // Channels 0..15 are the host's (MIDI), 16 the plug-in window's; the arpeggiator plays its notes on kArpChannel, and their ends are
+    // never reported (the host did not send them: the key it holds ends when it lets go of it).
+    static constexpr int kArpChannel = 17;
     void noteOn(int key, double velocity, int channel = 0, int noteId = -1);
     void noteOff(int key, int channel = -1);
     void choke(int key, int channel = -1);              // stop at once (3 ms)
@@ -288,7 +291,11 @@ private:
     Slot* allocate();
     void pushEnded(int key, int channel, int noteId);
     void monoOn(int key, double vel, int channel, int noteId);
-    void monoOff(int key);
+    void monoOff(int key, int channel);
+    // mono / legato keep the keys held as (channel, key): the window's key and the host's same key are two keys
+    static int heldCode(int key, int channel) { return std::clamp(channel, 0, 31) * 128 + std::clamp(key, 0, 127); }
+    static int heldKey(int code) { return code % 128; }
+    static int heldChannel(int code) { return code / 128; }
     void playOn(int key, double vel, int channel, int noteId);   // a note to the voices (poly, mono, legato)
     void playOff(int key, int channel);
     // the arpeggiator: the keys it plays, its clock and its steps
@@ -322,7 +329,7 @@ private:
     std::array<bool, kLayers> layerOn_{};
     Shared shared_;
     std::vector<Slot> slots_;                           // kSlots, on the heap (40 x 4 voices are about 750 kB: too big for a stack)
-    std::vector<int> held_;                             // mono / legato: the keys held, in order
+    std::vector<int> held_;                             // mono / legato: the keys held (heldCode), in order
     int monoSlot_ = -1;
     struct Ended { int key, channel, noteId; };
     static constexpr size_t kEnded = 256;

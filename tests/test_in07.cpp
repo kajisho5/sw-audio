@@ -390,6 +390,29 @@ TEST_CASE("IN07: mono re-triggers, legato glides without a new attack") {
     CHECK(v0(p, 60).ampEnv().stage() == Adsr::Sustain);
 }
 
+// mono / legato keep the keys held as (channel, key): the window (channel 16) and the host pressing the same key are two keys. Before
+// 2026-10-09 letting go of the window's key silenced the note the host still held.
+TEST_CASE("IN07: mono — the window's key and the host's same key are two keys (2026-10-09)") {
+    for (const int mode : {static_cast<int>(Mono), static_cast<int>(Legato)}) {
+        CAPTURE(mode);
+        Processor p; plain(p); p.setParam(Mode, mode);
+        p.noteOn(60, 1.0, 0, 9); render(p, 4800);
+        p.noteOn(60, 1.0, 16, -1); render(p, 480);
+        p.noteOff(60, 16); render(p, 4800);
+        CHECK(p.keyHeld(60));                  // the host still holds it: it sounds on
+        CHECK(p.find(60) != nullptr);
+        p.noteOff(60, 0); render(p, 4800);
+        CHECK_FALSE(p.keyHeld(60));
+        // the other way round: the host lets go first, the window's key goes on
+        p.noteOn(64, 1.0, 16, -1); render(p, 480);
+        p.noteOn(64, 1.0, 1, 4); render(p, 480);
+        p.noteOff(64, 1); render(p, 4800);
+        CHECK(p.keyHeld(64));
+        p.noteOff(64, 16); render(p, 4800);
+        CHECK_FALSE(p.keyHeld(64));
+    }
+}
+
 TEST_CASE("IN07: poly glide starts from the previous note while one is held") {
     Processor p; plain(p); p.setParam(Glide, 200);
     p.noteOn(57, 1.0); render(p, 4800);

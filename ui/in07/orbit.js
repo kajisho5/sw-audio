@@ -25,7 +25,8 @@
     const c01 = clamp(Math.log(v.cutoff / 20) / Math.log(1000), 0, 1), res01 = clamp(v.res / 100, 0, 1), det01 = clamp(v.detune / 100, 0, 1);
     const dep01 = clamp(v.lfoDepth / 100, 0, 1), drv01 = clamp(v.drive / 100, 0, 1), rel01 = clamp(Math.log(v.release / 10) / Math.log(400), 0, 1);
     if (p.noteKey !== undefined && p.noteKey !== self._nk) { if (self._nk !== undefined) self._noteT = t; self._nk = p.noteKey; }
-    const nT = self._noteT === undefined ? -10 : self._noteT, dn = t - nT;
+    // a still picture (MOTION OFF) shows no note wave: its time stands still, so a wave would never fade
+    const nT = self._noteT === undefined || p.still ? -10 : self._noteT, dn = t - nT;
     let env = 0;
     if (dn >= 0) env = dn < 0.02 ? dn / 0.02 : Math.exp(-(dn - 0.02) / Math.max(0.01, v.release / 1000 / 3));
     const back = [], front = [], backB = [], frontB = [], midB = [], labels = [];
@@ -229,26 +230,39 @@
         }
       };
       SW.on('image', () => this.drawSoon());
-      SW.on('setting', k => { if (k === 'motion') { if (SW.settings.motion === 'off') this.draw(); else this.run(); } });
+      SW.on('font', () => this.drawSoon());
+      SW.on('setting', k => {
+        if (k === 'motion') { this._k = ''; if (SW.settings.motion === 'off') this.draw(); else this.run(); }
+        if (k === 'theme' || k === 'zoom') { this._k = ''; this.drawSoon(); }   // a still picture is drawn again in the new colours / size
+      });
       this.run();
     }
-    set(props) { Object.assign(this.props, props); if (SW.settings.motion === 'off' || !this.raf) this.drawSoon(); }
+    // new values; a still picture (or a hidden view) is drawn again only when something it shows changed (the plug-in reports 20 times a second)
+    set(props) {
+      Object.assign(this.props, props);
+      if (!this.visible) { this._k = ''; return; }   // drawn when shown
+      if (SW.settings.motion !== 'off' && this.raf) return;
+      const k = JSON.stringify(this.props);
+      if (k === this._k) return;
+      this._k = k;
+      this.drawSoon();
+    }
     show(on) { this.visible = on; if (on) this.run(); }
     run() { if (!this.raf && this.alive) { if (SW.settings.motion === 'off') this.draw(); else this.raf = requestAnimationFrame(this._tick); } }
     drawSoon() { if (this._soon) return; this._soon = true; requestAnimationFrame(() => { this._soon = false; this.draw(); }); }
     draw() {
       if (!this.visible) return;
+      // the canvas's pixels: its size on the screen (the window's size setting scales the page) times the display's density
       const r = this.host.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-      const w = Math.max(1, Math.round(this.host.clientWidth * dpr)), h = Math.max(1, Math.round(this.host.clientHeight * dpr));
+      const w = Math.max(1, Math.round((r.width || this.host.clientWidth) * dpr)), h = Math.max(1, Math.round((r.height || this.host.clientHeight) * dpr));
       if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
       const sx = w / 820, sy = h / 740, s = Math.min(sx, sy);
       this.ctx.setTransform(1, 0, 0, 1, 0, 0); this.ctx.clearRect(0, 0, w, h);
       this.ctx.setTransform(s, 0, 0, s, (w - 820 * s) / 2, (h - 740 * s) / 2);
       const t = SW.settings.motion === 'off' ? 2.6 : this.t;
-      const p = Object.assign({ theme: SW.settings.theme }, this.props);
+      const p = Object.assign({ theme: SW.settings.theme, still: SW.settings.motion === 'off' }, this.props);
       if (SW.info && SW.info.playing) p.beat = SW.info.beat + (performance.now() - (SW.info._at || performance.now())) / 1000 * (SW.info.bpm || 120) / 60;
       paint(this.ctx, frame(p, t, this));
-      void r;
     }
   }
   SW.OrbitView = OrbitView;

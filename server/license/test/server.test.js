@@ -112,9 +112,12 @@ test('activation: a licence file bound to the computer, signed so the plug-in ac
   assert.equal((await activate(s, key, MACHINE('a'))).status, 200);
   assert.equal((await activate(s, key, MACHINE('b'))).status, 200);
   assert.equal((await activate(s, key, MACHINE('c'))).status, 200);
-  assert.equal((await activate(s, key, MACHINE('d'))).status, 409);
+  const full = await activate(s, key, MACHINE('d'));
+  assert.equal(full.status, 409);
+  assert.equal(full.body.code, 'max');
+  assert.match(full.body.error, /\/manage/);
   const d = await handle(post('/api/deactivate', JSON.stringify({ key, machine: MACHINE('b') })), s.env, s.deps);
-  assert.deepEqual(await d.json(), { removed: true });
+  assert.deepEqual(await d.json(), { removed: true, remaining: 2 });
   assert.equal((await activate(s, key, MACHINE('d'))).status, 200);
   // wrong inputs
   assert.equal((await activate(s, 'SWL-00000-00000-00000-00000', MACHINE('a'))).status, 404);
@@ -172,4 +175,61 @@ test('the plug-in window may call /api/* from its page (CORS: any origin, no cre
   assert.equal(health.headers.get('access-control-allow-origin'), null);
   const form = await handle(new Request('https://licence.example/activate', { method: 'OPTIONS' }), s.env, s.deps);
   assert.equal(form.status, 404);
+});
+
+test('freeing computers: at most MAX_DEACTIVATIONS a year (a licence file keeps working offline), then support; a year later again', async () => {
+  const s = await setup(['in07']);
+  await webhook(s, checkoutEvent('evt_1', 'cs_test_cycle00001'));
+  const key = await licenseKeyFor(s.env.LICENSE_KEY_SECRET, 'cs_test_cycle00001');
+  const free = async (m) => { const r = await handle(post('/api/deactivate', JSON.stringify({ key, machine: m })), s.env, s.deps); return { status: r.status, body: await r.json() }; };
+  // activate -> free -> activate elsewhere: three times, then the fourth free is refused
+  for (const c of ['a', 'b', 'c']) {
+    assert.equal((await activate(s, key, MACHINE(c))).status, 200);
+    assert.equal((await free(MACHINE(c))).status, 200);
+  }
+  assert.equal((await activate(s, key, MACHINE('d'))).status, 200);
+  const no = await free(MACHINE('d'));
+  assert.equal(no.status, 429);
+  assert.equal(no.body.code, 'limit');
+  assert.deepEqual(await s.store.activations(s.store.licenses[0].id), [MACHINE('d')]);
+  // freeing a computer that is not in the list costs nothing
+  const none = await free(MACHINE('e'));
+  assert.deepEqual(none.body, { removed: false, remaining: 0 });
+  // a year later the count starts again
+  s.deps.now = () => NOW + 366 * 86400;
+  assert.equal((await free(MACHINE('d'))).status, 200);
+  assert.equal((await free('nope')).status, 400);
+});
+
+test('the pages: /activate (a form for a computer without the internet), /manage (the computers, a button to free each)', async () => {
+  const s = await setup(['in07']);
+  await webhook(s, checkoutEvent('evt_1', 'cs_test_manage0001'));
+  const key = await licenseKeyFor(s.env.LICENSE_KEY_SECRET, 'cs_test_manage0001');
+  const form = (path, fields) => handle(post(path, new URLSearchParams(fields).toString(), { 'content-type': 'application/x-www-form-urlencoded' }), s.env, s.deps);
+  const a = await handle(new Request('https://licence.example/activate'), s.env, s.deps);
+  assert.equal(a.status, 200);
+  const at = await a.text();
+  assert.match(at, /<form method="post" action="\/activate">/);
+  assert.match(at, /name="key"/);
+  assert.match(at, /name="machine"/);
+  assert.equal((await handle(new Request('https://licence.example/manage'), s.env, s.deps)).status, 200);
+  // a machine code typed in capitals is the same computer
+  assert.equal((await form('/activate', { key, machine: MACHINE('A') })).status, 200);
+  await activate(s, key, MACHINE('b'));
+  const list = await form('/manage', { key });
+  assert.equal(list.status, 200);
+  const lt = await list.text();
+  assert.ok(lt.includes('aaaaaaaa…aaaa') && lt.includes('bbbbbbbb…bbbb'));
+  assert.equal((lt.match(/action="\/deactivate"/g) || []).length, 2);
+  assert.ok(lt.includes('あと 3 回'));
+  const freed = await form('/deactivate', { key, machine: MACHINE('a') });
+  assert.equal(freed.status, 200);
+  const ft = await freed.text();
+  assert.ok(ft.includes('解除しました'));
+  assert.ok(!ft.includes('aaaaaaaa…aaaa'));
+  assert.ok(ft.includes('あと 2 回'));
+  assert.equal((await form('/manage', { key: 'SWL-00000-00000-00000-00000' })).status, 404);
+  const xss = await form('/manage', { key: '<script>' });
+  assert.equal(xss.status, 400);
+  assert.ok(!(await xss.text()).includes('<script>'));
 });

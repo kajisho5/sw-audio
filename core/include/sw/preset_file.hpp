@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <locale>
@@ -255,10 +256,11 @@ inline bool read(std::string_view text, const char* product, const std::vector<P
     return true;
 }
 
-// ---- files (UTF-8 paths)
+// ---- files (UTF-8 paths). A path that is not valid UTF-8 (or, on Windows, a file name with a lone surrogate) makes the standard
+// library throw (MSVC's u8path / u8string): these functions catch it and fail like any other unreadable file, so nothing reaches the host.
 inline std::filesystem::path pathOf(const std::string& utf8) { return std::filesystem::u8path(utf8); }
 
-inline bool readFile(const std::string& path, std::string& out, std::string& error, size_t maxBytes = kMaxFileBytes) {
+inline bool readFile(const std::string& path, std::string& out, std::string& error, size_t maxBytes = kMaxFileBytes) try {
     namespace fs = std::filesystem;
     out.clear(); error.clear();
     std::error_code ec;
@@ -274,10 +276,13 @@ inline bool readFile(const std::string& path, std::string& out, std::string& err
     out.resize(static_cast<size_t>(in.gcount()));
     if (in.peek() != std::ifstream::traits_type::eof()) { out.clear(); error = "the file changed while it was read"; return false; }
     return true;
+} catch (const std::exception&) {
+    out.clear(); error = "the file could not be read";
+    return false;
 }
 
 // the whole text or nothing: a temporary file next to the target, then a rename. overwrite = false refuses an existing file.
-inline bool writeFileAtomic(const std::string& path, const std::string& text, bool overwrite, std::string& error) {
+inline bool writeFileAtomic(const std::string& path, const std::string& text, bool overwrite, std::string& error) try {
     namespace fs = std::filesystem;
     error.clear();
     std::error_code ec;
@@ -299,6 +304,9 @@ inline bool writeFileAtomic(const std::string& path, const std::string& text, bo
     fs::rename(tmp, p, ec);   // replaces an existing file (POSIX rename, MoveFileEx with REPLACE_EXISTING)
     if (ec) { fs::remove(tmp, ec); error = "the preset could not be saved"; return false; }
     return true;
+} catch (const std::exception&) {
+    error = "the file could not be written";
+    return false;
 }
 
 // the files with the extension in dir and its subfolders (maxDepth levels), sorted, at most maxFiles; links are not followed
@@ -306,7 +314,8 @@ inline std::vector<std::string> listFiles(const std::string& dir, const char* ex
     namespace fs = std::filesystem;
     std::vector<std::string> out;
     const std::string dotExt = std::string(".") + ext;
-    std::vector<std::pair<fs::path, int>> todo = {{pathOf(dir), 1}};
+    std::vector<std::pair<fs::path, int>> todo;
+    try { todo.push_back({pathOf(dir), 1}); } catch (const std::exception&) { return out; }
     std::error_code ec;
     while (!todo.empty() && out.size() < maxFiles) {
         const auto [d, depth] = todo.back();
@@ -319,9 +328,11 @@ inline std::vector<std::string> listFiles(const std::string& dir, const char* ex
             if (e.is_symlink(ec)) continue;
             if (e.is_directory(ec)) { if (depth < maxDepth) todo.push_back({e.path(), depth + 1}); continue; }
             if (!e.is_regular_file(ec)) continue;
-            std::string ex = e.path().extension().u8string();
-            for (auto& c : ex) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            if (ex == dotExt) out.push_back(e.path().u8string());
+            try {   // a name that cannot be said in UTF-8 (Windows: a lone surrogate) is skipped
+                std::string ex = e.path().extension().u8string();
+                for (auto& c : ex) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                if (ex == dotExt) out.push_back(e.path().u8string());
+            } catch (const std::exception&) { continue; }
         }
     }
     std::sort(out.begin(), out.end());

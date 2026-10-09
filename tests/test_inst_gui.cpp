@@ -86,6 +86,9 @@ TEST_CASE("INST GUI: base64 both ways (strict), the flat JSON reader") {
     CHECK(back == t);
     CHECK(ig::base64(reinterpret_cast<const unsigned char*>("ab"), 2) == "YWI=");
     CHECK_FALSE(ig::unbase64("YWI", back, 100));        // no padding
+    back = "x";
+    CHECK(ig::unbase64("-", back, 100));                 // "-": the empty text (the page's empty argument)
+    CHECK(back.empty());
     CHECK_FALSE(ig::unbase64("YW*=", back, 100));
     CHECK_FALSE(ig::unbase64(b, back, 3));               // larger than allowed
     std::map<std::string, std::string> m;
@@ -143,7 +146,8 @@ TEST_CASE("INST GUI: window settings keep only known keys and allowed values, an
     d.read("motion=30\r\ntheme=\nzoom=1000\ngarbage\n=x\nauthor=A=B\n");
     CHECK(d.motion == "30"); CHECK(d.theme == "dark"); CHECK(d.zoom == "100"); CHECK(d.author == "A=B");
     CHECK(d.json() == "{\"motion\":\"30\",\"theme\":\"dark\",\"zoom\":\"100\",\"author\":\"A=B\"}");
-    CHECK(ig::loadSettings((dir / "none.txt").u8string()).motion == "60");   // no file: the defaults
+    CHECK(ig::loadSettings((dir / "none.txt").u8string()).motion.empty());   // no file: motion unchosen (the page follows the OS)
+    CHECK(ig::loadSettings((dir / "none.txt").u8string()).theme == "dark");
     std::error_code ec;
     fs::remove_all(dir, ec);
     CHECK(ig::settingsPath("SWINGBY").find("SWINGBY") != std::string::npos);

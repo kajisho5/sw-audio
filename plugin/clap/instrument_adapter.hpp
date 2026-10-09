@@ -147,10 +147,14 @@ private:
                 if (ev->param_id >= static_cast<clap_id>(numParams())) return;
                 const int id = static_cast<int>(ev->param_id);
                 const double v = sanitizeHost(id, ev->value);
+                const double before = host_values_[static_cast<size_t>(id)].load();
                 host_values_[static_cast<size_t>(id)].store(v);
                 core_.setParam(id, hostToPlain(id, v));
+                (void)before;
                 if constexpr (HasProgram<P>::value)
-                    if (id == P::kProgramParam) {
+                    // the selector loads its preset when it moves to another step; the same step sent again (automation that holds it, a
+                    // host that sends every value) keeps the edits made since
+                    if (id == P::kProgramParam && std::lround(v) != std::lround(before)) {
                         if constexpr (HasPatch<typename P::Core>::value) core_.beginPatch();
                         P::loadProgram(core_, static_cast<int>(std::lround(v)));
                         if constexpr (HasPatch<typename P::Core>::value) core_.endPatch();
@@ -279,15 +283,21 @@ public:
     // ---- the plug-in window (CLAP gui; main thread). A message from the page and the script that answers it (also the tests' way in).
     std::string guiMessage(const std::string& m) {
         if constexpr (HasUi<P>::value && HasPresetFiles<P>::value) {
-            if (!facade_) { facade_ = std::make_unique<GuiFacade>(GuiFacade{*this}); session_ = std::make_unique<instgui::Session<GuiFacade>>(*facade_); }
-            return session_->onMessage(m);
+            try {   // nothing thrown (a file name the standard library cannot convert, memory) may reach the host's message loop
+                if (!facade_) { facade_ = std::make_unique<GuiFacade>(GuiFacade{*this}); session_ = std::make_unique<instgui::Session<GuiFacade>>(*facade_); }
+                return session_->onMessage(m);
+            } catch (const std::exception&) {
+                return {};
+            }
         }
         (void)m;
         return {};
     }
     // the page as the window loads it (the boot data: the parameters and their values, the presets, the preset in use, the settings,
     // the licence, the pictures' names, the activation server)
+    void closeWindow() { guiDestroyView(); }   // the window goes (CLAP gui destroy; also the tests' way: no platform view here)
     std::string guiPage() {
+        catchUpLoads(); currentChanged_ = false;   // the page starts with the preset in use (a program loaded while the window was closed too)
         if constexpr (HasUi<P>::value && HasPresetFiles<P>::value) {
             std::string b = "{\"params\":" + instgui::specsJson(P::specs()) + ",\"values\":[";
             for (int i = 0; i < numParams(); ++i) { if (i) b += ","; b += instgui::jsNum(hostToPlain(i, host_values_[static_cast<size_t>(i)].load())); }
@@ -383,6 +393,7 @@ private:
     }
     // notes from the window (GUI thread -> audio thread), played at the start of the next block
     void screenNote(bool on, int key, double vel) {
+        if (key >= 0 && key < 128) screenHeld_[static_cast<size_t>(key)] = on;   // main thread: what the window holds
         const size_t h = note_head_.load(std::memory_order_relaxed), t = note_tail_.load(std::memory_order_acquire);
         if (h - t >= kNoteQueue) return;
         note_ops_[h % kNoteQueue] = {on, static_cast<uint8_t>(key), static_cast<float>(vel)};
@@ -505,7 +516,11 @@ private:
                 if (settings_.zoom != oldZoom && view_ && host_) {   // the window's size follows (the host is asked; it calls set_size)
                     uint32_t w = 0, h = 0; guiSize(w, h);
                     const auto* hg = static_cast<const clap_host_gui_t*>(host_->get_extension(host_, CLAP_EXT_GUI));
-                    if (hg && hg->request_resize) hg->request_resize(host_, w, h);
+                    if (!hg || !hg->request_resize || !hg->request_resize(host_, w, h)) {   // refused: the size stays, and so does the setting
+                        settings_.zoom = oldZoom;
+                        instgui::saveSettings(settingsPath_, settings_);
+                        return "SW.settings.zoom=" + instgui::jsonString(oldZoom) + ";SW.emit('setting','zoom'," + instgui::jsonString(oldZoom) + ");SW.toast('THE HOST KEEPS THIS SIZE');";
+                    }
                 }
                 return {};
             }
@@ -535,9 +550,14 @@ private:
         }
         return j + "]";
     }
-    std::string pollExtra() {   // the preset in use changed outside the window (the host's program, its browser, a state): the window follows
+    // a program the audio thread loaded (the host's selector, MIDI Program Change) becomes the preset in use: when the window polls, when
+    // it opens and when the state is saved (so a change made while the window was closed is not lost)
+    void catchUpLoads() {
         const uint32_t loads = programLoads_.load();
         if (loads != seenLoads_) { seenLoads_ = loads; const int st = programStep_.load(); current_ = Current::factory(st - 1); currentChanged_ = true; }
+    }
+    std::string pollExtra() {   // the preset in use changed outside the window (the host's program, its browser, a state): the window follows
+        catchUpLoads();
         if (!currentChanged_) return {};
         currentChanged_ = false;
         return instgui::replyScript("loaded", current_.json());
@@ -571,11 +591,13 @@ private:
         s->guiDestroyView();
         s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s});
         s->session_ = std::make_unique<instgui::Session<GuiFacade>>(*s->facade_);
-        s->seenLoads_ = s->programLoads_.load(); s->currentChanged_ = false;
-        s->view_ = gui::createView(s->guiPage(), [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
+        s->view_ = gui::createView(s->guiPage(), [s](const std::string& m) { return s->guiMessage(m); }, s->scale_);
         return s->view_ != nullptr;
     }
-    void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); }
+    void guiDestroyView() {
+        view_.reset(); session_.reset(); facade_.reset();
+        for (int k = 0; k < 128; ++k) if (screenHeld_[static_cast<size_t>(k)]) screenNote(false, k, 0.0);   // a note held in the window ends with it
+    }
     static void guiDestroy(const clap_plugin_t* p) { self(p)->guiDestroyView(); }
     static bool guiSetScale(const clap_plugin_t* p, double scale) { self(p)->scale_ = scale > 0.0 ? scale : 1.0; return true; }
     static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { self(p)->guiSize(*w, *h); return *w > 0; }
@@ -610,7 +632,7 @@ private:
         const std::string pid = P::descriptor()->id;
         const auto lv = sw::license::productState(pid.substr(pid.rfind('.') + 1), std::atoi(P::descriptor()->version));
         s->demo_.store(!lv.licensed || sw::license::forcedDemo());
-        s->gate_.prepare(sr);
+        s->gate_.prepare(sr, true);   // a new activation (the host changed the rate, or switched it off and on) keeps the time played
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->applyPending();
         s->active_ = true;
@@ -831,7 +853,7 @@ private:
             const uint32_t n = static_cast<uint32_t>(data.size());
             return writeAll(s, tag, 4) && writeAll(s, &n, 4) && writeAll(s, data.data(), n);
         };
-        if constexpr (HasPresetFiles<P>::value) if (!chunk("SWNM", self(p)->current_.json())) return false;   // the preset in use (the window shows its name)
+        if constexpr (HasPresetFiles<P>::value) { self(p)->catchUpLoads(); if (!chunk("SWNM", self(p)->current_.json())) return false; }   // the preset in use (the window shows its name)
         if constexpr (HasMacros<P>::value) {   // MIDI learn
             std::string cc(128, '\0');
             for (size_t i = 0; i < 128; ++i) cc[i] = static_cast<char>(self(p)->ccMacro_[i].load());
@@ -863,8 +885,9 @@ private:
             pl->learn_.store(-1);
         }
         pl->patch_.store(true);
-        for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
-            pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
+        for (int i = 0; i < numParams(); ++i) {   // values the state lacks (saved by an older version) take their defaults, not the last ones
+            const double h = static_cast<uint32_t>(i) < count ? vals[static_cast<size_t>(i)] : plainToHost(i, spec(i).def);
+            pl->host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, h)); pl->dirty_[static_cast<size_t>(i)].store(true);
         }
         if (!pl->active_) pl->applyPending();
         if (pl->host_) {  // CLAP: values changed -> tell the host (main thread)
@@ -893,6 +916,7 @@ private:
     struct NoteOp { bool on = false; uint8_t key = 0; float vel = 0.f; };
     static constexpr size_t kNoteQueue = 256;
     std::array<NoteOp, kNoteQueue> note_ops_{};
+    std::array<bool, 128> screenHeld_{};   // main thread: the keys the window holds down (let go when it closes)
     std::atomic<size_t> note_head_{0}, note_tail_{0};
     std::atomic<double> bpm_{120.0}, beat_{0.0};
     std::atomic<bool> playing_{false}, held_{false};
@@ -957,8 +981,12 @@ struct PresetDiscovery {
         // the user folder: made here (empty) so a host that keeps the declaration finds the first preset the user saves
         const std::string dir = sw::userpresets::folder(P::kPresetVendor, P::kPresetProduct);
         std::error_code ec;
-        if (!dir.empty()) std::filesystem::create_directories(sw::presetfile::pathOf(dir), ec);
-        if (!dir.empty() && std::filesystem::is_directory(sw::presetfile::pathOf(dir), ec)) {
+        bool haveDir = false;
+        try {   // a home folder the standard library cannot convert: no user location (nothing thrown into the host)
+            if (!dir.empty()) std::filesystem::create_directories(sw::presetfile::pathOf(dir), ec);
+            haveDir = !dir.empty() && std::filesystem::is_directory(sw::presetfile::pathOf(dir), ec);
+        } catch (const std::exception&) { haveDir = false; }
+        if (haveDir) {
             static const std::string userName = std::string(P::kPresetProduct) + " user";
             const clap_preset_discovery_location_t usr = {CLAP_PRESET_DISCOVERY_IS_USER_CONTENT, userName.c_str(), CLAP_PRESET_DISCOVERY_LOCATION_FILE, dir.c_str()};
             ix->declare_location(ix, &usr);
@@ -988,7 +1016,9 @@ struct PresetDiscovery {
             return false;
         }
         std::string name = meta.name;
-        if (name.empty()) name = sw::presetfile::cleanText(sw::presetfile::pathOf(location).stem().u8string(), sw::presetfile::kMaxNameChars);
+        if (name.empty()) {
+            try { name = sw::presetfile::cleanText(sw::presetfile::pathOf(location).stem().u8string(), sw::presetfile::kMaxNameChars); } catch (const std::exception&) { name = "Preset"; }
+        }
         if (!r->begin_preset(r, name.c_str(), nullptr)) return true;
         r->add_plugin_id(r, &pid);
         if (!meta.author.empty()) r->add_creator(r, meta.author.c_str());

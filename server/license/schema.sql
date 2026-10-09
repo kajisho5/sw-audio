@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS activations (
   created_at TEXT NOT NULL,
   PRIMARY KEY (license_id, machine)
 );
+CREATE TABLE IF NOT EXISTS deactivations (   -- the computers freed by the owner (self-service: a few a year, see MAX_DEACTIVATIONS)
+  license_id TEXT NOT NULL,
+  machine TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS deactivations_license ON deactivations (license_id, created_at);
 CREATE TABLE IF NOT EXISTS events (  -- Stripe event ids already handled (webhooks can arrive twice)
   id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
