@@ -18,6 +18,8 @@ constexpr int band(int n, int k) { return n * 6 + k; }   // n = 0..2
 enum ParamId { Tone = 18, Output, kNumParams };
 
 const std::vector<ParamSpec>& specs();
+// the shaping function of a band: type 0..4 (Tape, Tube, Diode, Fold, Fuzz), shape 0..2 (Soft, Medium, Hard), u = drive-scaled input
+double shapeFn(int type, int shape, double u);
 
 class Processor {
 public:

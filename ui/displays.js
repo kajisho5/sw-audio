@@ -892,6 +892,47 @@
   }
 
 
+  // ---- SA06 saturator: the transfer curve and a test sine through it, for the band that is selected. shapeFn is the core's own function (products/sa06/sa06.cpp), ported
+  const sa06Tape = (u, k) => u / Math.pow(1 + Math.pow(Math.abs(u), k), 1 / k);
+  function sa06Shape(type, shape, u) {
+    switch (type) {
+      case 0: { const k = [2, 4, 8][shape], c = [1, 0.7, 0.5][shape]; return c * sa06Tape(u / c, k); }
+      case 1: { const h = [2, 1.4, 1][shape], b = 0.3, tb = Math.tanh(b), s = 1 / (1 - tb * tb); return h * s * (Math.tanh(u / h + b) - tb); }
+      case 2: { const a = [1, 3, 8][shape]; return u >= 0 ? Math.log1p(a * u) / a : -Math.log1p(0.5 * a * -u) / (0.5 * a); }
+      case 3: { const k = [1, 2, 4][shape]; return Math.sin(k * u) / k; }
+      default: { const k = [2, 4, 12][shape]; return u >= 0 ? sa06Tape(u, k) : 0.6 * sa06Tape(u / 0.6, k); }
+    }
+  }
+  // out(x) for the band's settings: x + mix * (shaped - x), the shape taken at its operating point (bias) with a small-signal gain of 1
+  function sa06Transfer(type, shape, drive, bias, mix) {
+    const g = Math.pow(10, clamp(drive, -12, 36) / 20), off = 0.5 * bias; let f0 = 0, slope = 1;
+    if (off !== 0) { f0 = sa06Shape(type, shape, off); slope = (sa06Shape(type, shape, off + 1e-4) - sa06Shape(type, shape, off - 1e-4)) / 2e-4; if (Math.abs(slope) < 0.05) slope = 0.05; }
+    return { g, wet: x => (sa06Shape(type, shape, g * x + off) - f0) / slope, out(x) { return x + mix * (this.wet(x) - x); } };
+  }
+  function saturatorDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')]; if (ps.length < 5) return null;
+    const [glowC, curve, , glowW, wave] = ps; let last = '';
+    const X0 = 14, Y0 = 14, S = 202, WX = 232, WW = 694, CY = 115, AMP = 85, A_IN = 0.9;
+    return { update() {
+      const n = (ctx.band ? ctx.band() : 0) + 1, v = k => ctx.value('Band ' + n + ' ' + k);
+      const type = Math.round(v('Type')), drive = v('Drive'), shape = Math.round(v('Shape')), bias = v('Bias'), mix = v('Mix') / 100;
+      if ([type, drive, shape, bias, mix].some(x => !Number.isFinite(x))) return;
+      const key = [n, type, drive, shape, bias, mix].join('|'); if (key === last) return; last = key;
+      const t = sa06Transfer(type, shape, drive, bias, mix);
+      let d = ''; for (let i = 0; i <= 100; i++) { const x = -1 + i / 50, y = clamp(t.out(x), -1, 1); d += (i ? ' L' : 'M') + (X0 + (x + 1) / 2 * S).toFixed(1) + ' ' + (Y0 + S - (y + 1) / 2 * S).toFixed(1); }
+      glowC.setAttribute('d', d); curve.setAttribute('d', d);
+      // the test sine (4 periods): the shaped wave minus its mean (the core removes the DC the shape adds), then the mix
+      const N = 240, xs = [], wet = []; let mean = 0;
+      for (let i = 0; i < N; i++) { const x = A_IN * Math.sin(2 * Math.PI * 4 * i / N); xs.push(x); const w = t.wet(x); wet.push(w); mean += (w - t.g * x) / N; }
+      d = ''; for (let i = 0; i <= N; i++) { const k = i % N, y = clamp(xs[k] + mix * ((wet[k] - mean) - xs[k]), -1.25, 1.25); d += (i ? ' L' : 'M') + (WX + i / N * WW).toFixed(1) + ' ' + (CY - y * AMP).toFixed(1); }
+      glowW.setAttribute('d', d); wave.setAttribute('d', d);
+      // the input drawn from the same sine (the design's grey line)
+      const grey = ps[2]; let g = ''; for (let i = 0; i <= N; i++) g += (i ? ' L' : 'M') + (WX + i / N * WW).toFixed(1) + ' ' + (CY - A_IN * Math.sin(2 * Math.PI * 4 * (i % N) / N) * AMP).toFixed(1); grey.setAttribute('d', g);
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -914,6 +955,7 @@
     GT02: micPositionDisplay,
     ST05: speakerTriangleDisplay,
     SA08: crusherDisplay,
+    SA06: saturatorDisplay,
     LV18: catcherDisplay,
     LV21: generatorDisplay,
     MS02: ceilingDisplay,
@@ -957,6 +999,6 @@
     DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' }),
   };
 
-  global.SWDISP = { attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
+  global.SWDISP = { sa06Shape, attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
   if (typeof module !== 'undefined') module.exports = global.SWDISP;
 })(typeof window !== 'undefined' ? window : globalThis);

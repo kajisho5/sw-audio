@@ -243,6 +243,7 @@
 
 
     // ---- skin: tie the design's controls to the parameters (data-p, data-v, data-toggle, data-dial)
+    let selBand = 0;                            // the band chip that is on (shared with the displays through ctx.band)
     function bindSkin() {
       let band = 0; const dyn = [];            // dyn: controls whose parameter depends on the chosen band
       const hostOf = i => host[i];
@@ -336,9 +337,9 @@
       });
       const sel = [...skinBox.querySelectorAll('button[data-band]')];
       const drawSel = () => sel.forEach(b => b.classList.toggle('on', +b.dataset.band === band));
-      sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; drawSel(); dyn.forEach(f => f()); }));
+      sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; selBand = band; drawSel(); dyn.forEach(f => f()); }));
       // the band shown first is the one the design marks as selected
-      const first = sel.find(b => b.classList.contains('on')); if (first) band = +first.dataset.band; drawSel();
+      const first = sel.find(b => b.classList.contains('on')); if (first) { band = +first.dataset.band; selBand = band; } drawSel();
       draws.forEach((fs, i) => { const prev = widgets.get(i); widgets.set(i, v => { if (prev) prev(v); fs.forEach(f => f()); }); });
       draws.forEach(fs => fs.forEach(f => f())); dyn.forEach(f => f());
     }
@@ -359,6 +360,7 @@
     const disp = skinBox && global.SWDISP ? global.SWDISP.attach(prod.code, skinBox, {
       value: name => { const h = host.find(x => x.p.name === name); return h ? vals[h.i] : undefined; },
       params: host.map(h => ({ name: h.p.name, i: h.i, p: h.p, c: h.c })), get: i => vals[i], set: (i, v) => setValue(i, v, false), begin: i => bridge.begin(i), end: i => bridge.end(i),
+      band: () => selBand,
       selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); } }) : null;
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;

@@ -70,6 +70,7 @@ jobs:
         run: |
           node tests/ui/curves.test.js
           node tests/ui/traits.test.js
+          node tests/ui/shapes.test.js
 
       - name: Host smoke test (Linux)
         if: matrix.shard == 0 && runner.os == 'Linux'

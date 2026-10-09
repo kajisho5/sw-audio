@@ -33,7 +33,9 @@ const std::vector<ParamSpec>& specs() {
 
 namespace {
 double tapeShape(double u, double k) { return u / std::pow(1.0 + std::pow(std::abs(u), k), 1.0 / k); }
-// the five shapes; every one has slope 1 at 0
+}  // namespace
+
+// the five shapes; every one has slope 1 at 0 (the screen draws the same functions: ui/displays.js sa06Shape, checked against the same numbers)
 double shapeFn(int type, int shape, double u) {
     switch (type) {
         case 0: { static const double k[3] = {2.0, 4.0, 8.0}, c[3] = {1.0, 0.7, 0.5}; return c[shape] * tapeShape(u / c[shape], k[shape]); }   // harder = lower ceiling and a sharper knee
@@ -43,6 +45,7 @@ double shapeFn(int type, int shape, double u) {
         default: { static const double k[3] = {2.0, 4.0, 12.0}; return u >= 0 ? tapeShape(u, k[shape]) : 0.6 * tapeShape(u / 0.6, k[shape]); }
     }
 }
+namespace {
 constexpr double kPi = 3.14159265358979323846;
 }
 
