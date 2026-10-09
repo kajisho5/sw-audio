@@ -875,7 +875,24 @@
     } };
   }
 
+
+  // ---- cabinet and mic (GT02): the mic dot across the speaker cone from Off axis (0 = centre of the dust cap, 90 = the rim), named by the ring it falls in, with Mic distance
+  function micPositionDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const cs = [...svg.querySelectorAll(':scope > circle')]; if (cs.length < 6) return null;
+    const rings = cs.slice(0, 4), dot = cs[4], halo = cs[5], cx = +rings[0].getAttribute('cx'), cy = +rings[0].getAttribute('cy'), R = +rings[0].getAttribute('r');
+    const t = [...svg.querySelectorAll(':scope > text')].find(e => e.getAttribute('fill') === '#e8e8e8'); let last = '';
+    const zones = [[0.22, 'Centre of dust cap'], [0.55, 'Edge of dust cap'], [0.8, 'Cone'], [1.01, 'Surround']];
+    return { update() {
+      const off = ctx.value('Off axis'), dist = ctx.value('Mic distance'); if (off === undefined) return; const key = off + '|' + dist; if (key === last) return; last = key;
+      const f = clamp(off / 90, 0, 1), r = f * R * 0.95, ang = -30 * Math.PI / 180, x = cx + r * Math.cos(ang), y = cy + r * Math.sin(ang);
+      [dot, halo].forEach(c => { c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1)); });
+      if (t) t.textContent = zones.find(z => f < z[0])[1] + ', ' + (dist === undefined ? '' : Math.round(dist * 10) / 10 + ' cm');
+    } };
+  }
+
   const registry = {
+    GT02: micPositionDisplay,
     ST05: speakerTriangleDisplay,
     SA08: crusherDisplay,
     LV18: catcherDisplay,
