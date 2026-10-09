@@ -112,3 +112,13 @@ TEST_CASE("VO03 loud input stays finite; a stereo input is summed") {
     auto p = make({{voiceParam(2, On), 1}, {voiceParam(3, On), 1}}); const auto y = runLR(p, voice(500.0, 1.0, 800.0, 700.0, 1800.0, 0.9)); for (size_t i = 0; i < y.first.size(); ++i) { CHECK(std::isfinite(y.first[i])); CHECK(std::abs(y.first[i]) < 12.0f); }
     const auto n = runLR(p, noise(0, 1.0, 5)); for (float v : n.first) { CHECK(std::isfinite(v)); CHECK(std::abs(v) < 12.0f); }
 }
+
+TEST_CASE("VO03 reports the singer's pitch and each voice's note for the screen") {
+    // 235 Hz = 58.1: B (59) in C major; +3rd (2 degrees) = D (62), +5th (4 degrees) = F (65)
+    auto p = make(only({0, 1}, {{voiceParam(0, Humanize), 0}, {voiceParam(1, Humanize), 0}}));
+    runLR(p, voice(235.0, 2.0));
+    CHECK(p.voiced());
+    NEAR(p.leadSemitones(), 58.1, 0.15); NEAR(p.voiceSemitones(0), 62.0, 0.2); NEAR(p.voiceSemitones(1), 65.0, 0.2);
+    auto q = make(); runLR(q, std::vector<float>(48000, 0.0f));
+    CHECK(!q.voiced());
+}

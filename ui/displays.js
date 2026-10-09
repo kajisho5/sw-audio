@@ -1006,6 +1006,59 @@
   }
 
 
+  // ---- VO01 pitch graph: what the singer sang (grey) and the corrected pitch (pink) over the last ~12 s. Rows are the notes of the chosen scale (Key, Scale; as sw::scaleBits), eight at a time;
+  // the window moves by whole notes when the pitch leaves it. readouts: [voiced (1 / 0), the singer's pitch, the corrected pitch] as MIDI note numbers (the lines break where the voice is unvoiced)
+  const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = m => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+  function scaleNotes(scale, key, custom) {   // every MIDI note (24 .. 108) of the scale, ascending
+    let mask = scale === 2 ? (custom & 0xFFF) : scale === 1 ? 0xFFF : [0, 2, 4, 5, 7, 9, 11].reduce((m, d) => m | (1 << ((d + key) % 12)), 0);
+    if (!mask) mask = 0xFFF; const out = []; for (let n = 24; n <= 108; n++) if ((mask >> (n % 12)) & 1) out.push(n); return out;
+  }
+  function pitchGraphDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const texts = [...svg.querySelectorAll(':scope > text')], paths = [...svg.querySelectorAll(':scope > path')]; if (texts.length < 8 || paths.length < 3) return null;
+    const [, , W, H] = vbOf(svg), ROWS = 8, RH = H / ROWS, N = 200, X0 = 40, X1 = W - 12, [grey, glow, line] = paths, hist = Ring(N, null);
+    let notes = [], lo = 0, key = '', primed = false;
+    const rowOf = m => { const r = notes.slice(lo, lo + ROWS); const k = r.findIndex((n, i) => i === r.length - 1 || m < r[i + 1]); const g = k >= r.length - 1 ? (r[r.length - 1] - r[r.length - 2]) : (r[k + 1] - r[k]); return k + (m - r[k]) / Math.max(1, g); };
+    const yOf = m => clamp(H - RH * (rowOf(m) + 0.5), 2, H - 2);
+    const nearestIdx = m => { let b = 0; notes.forEach((n, i) => { if (Math.abs(n - m) < Math.abs(notes[b] - m)) b = i; }); return b; };
+    const label = () => texts.slice(0, ROWS).forEach((t, i) => { const n = notes[lo + ROWS - 1 - i]; t.textContent = n === undefined ? '' : noteName(n); });
+    return { update(info) {
+      const r = info && info.readouts; const sc = Math.round(ctx.value('Scale')), ky = Math.round(ctx.value('Key')), cu = ctx.value('Custom scale');
+      if (![sc, ky].every(Number.isFinite)) return;
+      const k = [sc, ky, cu].join('|'); if (k !== key) { key = k; notes = scaleNotes(sc, ky, cu || 0); lo = Math.max(0, Math.min(notes.length - ROWS, nearestIdx(60))); primed = false; label(); }
+      if (!r || r.length < 3) return;
+      const voiced = r[0] > 0.5 && r[1] > 20 && r[1] < 120; hist.push(voiced ? { m: r[1], c: r[2] } : null);
+      if (voiced) {   // centre the rows on the first pitch heard, then only when the pitch leaves them
+        const top = notes[lo + ROWS - 1], bot = notes[lo];
+        if (!primed || r[1] < bot - 0.5 || r[1] > top + 0.5) { primed = true; lo = Math.max(0, Math.min(notes.length - ROWS, nearestIdx(r[1]) - 3)); label(); }
+      }
+      const poly = f => { let d = '', pen = false; hist.a.forEach((h, i) => { if (!h) { pen = false; return; } d += (pen ? ' L' : ' M') + (X0 + i / (N - 1) * (X1 - X0)).toFixed(1) + ' ' + yOf(f(h)).toFixed(1); pen = true; }); return d.trim() || 'M0 0'; };
+      grey.setAttribute('d', poly(h => h.m)); const pd = poly(h => h.c); glow.setAttribute('d', pd); line.setAttribute('d', pd);
+    } };
+  }
+
+
+  // ---- VO03 harmony: the singer's pitch (white), the selected voice (pink) and the next voice that is On (dim pink) over the last ~12 s, on a window of 24 semitones that moves in steps of 6
+  // readouts: [voiced, the singer's pitch, voices 1 - 4] as MIDI note numbers (the lines break where the voice is unvoiced)
+  function harmonyGraphDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const paths = [...svg.querySelectorAll(':scope > path')]; if (paths.length < 3) return null;
+    const [, , W, H] = vbOf(svg), N = 200, X0 = 14, X1 = W - 14, SPAN = 24, hist = Ring(N, null); let centre = null;
+    const yOf = m => clamp(H / 2 - (m - centre) / SPAN * H, 3, H - 3);
+    const poly = f => { let d = '', pen = false; hist.a.forEach((h, i) => { const m = h && f(h); if (m === null || m === undefined) { pen = false; return; } d += (pen ? ' L' : ' M') + (X0 + i / (N - 1) * (X1 - X0)).toFixed(1) + ' ' + yOf(m).toFixed(1); pen = true; }); return d.trim() || 'M0 0'; };
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 6) return;
+      const voiced = r[0] > 0.5 && r[1] > 20 && r[1] < 120, sel = clamp(ctx.band ? ctx.band() : 0, 0, 3), on = v => ctx.value('Voice ' + (v + 1) + ' On') > 0.5;
+      const other = [0, 1, 2, 3].find(v => v !== sel && on(v));
+      hist.push(voiced ? { lead: r[1], a: on(sel) ? r[2 + sel] : null, b: other === undefined ? null : r[2 + other] } : null);
+      if (voiced && (centre === null || Math.abs(r[1] - centre) > 7)) centre = Math.round(r[1] / 6) * 6;
+      if (centre === null) return;
+      paths[0].setAttribute('d', poly(h => h.lead)); paths[1].setAttribute('d', poly(h => h.a)); paths[2].setAttribute('d', poly(h => h.b));
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1049,6 +1102,8 @@
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV04: convolutionDisplay,
+    VO01: pitchGraphDisplay,
+    VO03: harmonyGraphDisplay,
     RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),

@@ -31,6 +31,8 @@ public:
     int latencySamples() const;
     int suggestedKey(double* confidence = nullptr) const { return corr_.suggestedKey(confidence); }
     double lastNoteSemitones() const { return corr_.lastOutputSemitones(); }
+    double measuredSemitones() const { return corr_.lastMeasuredSemitones(); }   // the singer's pitch at the last mark (MIDI note number, fractional)
+    bool voiced() const { return an_.currentVoiced(); }                           // the newest analysis frame is voiced (the two values above are only meaningful then)
     const PitchAnalyzer& analyzer() const { return an_; }
 
 private:

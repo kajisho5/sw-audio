@@ -33,6 +33,10 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     int latencySamples() const;
+    // for the screen: the newest analysis frame is voiced; the singer's pitch and the pitch each voice is made to sing (MIDI note numbers, meaningful while voiced)
+    bool voiced() const { return an_.currentVoiced(); }
+    double leadSemitones() const { return v_[0].corr.lastMeasuredSemitones(); }
+    double voiceSemitones(int v) const { return v_[static_cast<size_t>(v)].corr.lastOutputSemitones(); }
 
 private:
     struct Voice {

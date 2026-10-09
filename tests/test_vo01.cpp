@@ -120,3 +120,14 @@ TEST_CASE("VO01 loud input at the extremes stays finite") {
     auto p = make({{Speed, 0}, {Transpose, 12}, {Formant, 1}}); auto x = voice(500.0, 1.0, 800.0, 700.0, 1800.0, 0.9); const auto y = run1(p, x); for (float v : y) { CHECK(std::isfinite(v)); CHECK(std::abs(v) < 8.0f); }
     auto q = make({{Transpose, -12}}); const auto z = run1(q, noise(0, 1.0, 5)); for (float v : z) { CHECK(std::isfinite(v)); CHECK(std::abs(v) < 8.0f); }
 }
+
+TEST_CASE("VO01 reports the singer's pitch and the corrected note for the screen") {
+    // 235 Hz = 58.1 semitones: the singer's pitch 58.1, the corrected note B (59); silence is not voiced
+    auto p = make({{Speed, 0}, {Humanize, 0}, {Vibrato, Flat}});
+    run1(p, voice(235.0, 2.0));
+    CHECK(p.voiced());
+    NEAR(p.measuredSemitones(), 58.1, 0.15);
+    NEAR(p.lastNoteSemitones(), 59.0, 0.15);
+    auto q = make(); run1(q, std::vector<float>(48000, 0.0f));
+    CHECK(!q.voiced());
+}
