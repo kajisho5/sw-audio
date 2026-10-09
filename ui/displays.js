@@ -1620,6 +1620,44 @@
   }
 
 
+  // ---- LV05 "Key" (the design's dropdown button): the key is the host's sidechain or - SW Link - another SW AUDIO instance in the same host process (LV01 Voice ...); the button shows the choice and a dot says
+  // whether that instance is there and playing (readouts[2], written by the plug-in layer); a press lists the choices
+  function linkKeySelect(box, ctx) {
+    const btn = box.querySelector('button.sel'), pk = ctx.params.find(q => q.name === 'Key'); if (!btn || !pk || !(pk.p.labels || []).length) return null;
+    const dot = btn.querySelector('.dot'), root = btn.closest('.root') || box; let pop = null, shown = '', found = -2;
+    const textNode = [...btn.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()) || btn.insertBefore(document.createTextNode(''), btn.querySelector('svg'));
+    const index = () => Math.round(pk.c.norm(ctx.get(pk.i)) * (pk.p.steps.length - 1));
+    const close = () => { if (pop) { pop.remove(); pop = null; btn.classList.remove('on'); } };
+    const choose = k => { ctx.begin(pk.i); ctx.set(pk.i, pk.p.steps[k]); ctx.end(pk.i); };
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation(); if (pop) { close(); return; }
+      const a = root.getBoundingClientRect(), b = btn.getBoundingClientRect(), k = root.offsetWidth ? a.width / root.offsetWidth : 1;
+      pop = document.createElement('div');
+      pop.style.cssText = 'position:absolute;z-index:70;min-width:210px;max-height:260px;overflow:auto;background:#1c1d21;border:1px solid #2f3137;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.5);padding:4px 0;font:12px "Barlow Condensed",sans-serif;color:#d8d8dc;'
+        + 'left:' + Math.max(4, (b.left - a.left) / k).toFixed(0) + 'px;top:' + ((b.bottom - a.top) / k + 4).toFixed(0) + 'px';
+      const head = document.createElement('div'); head.textContent = 'Key: the host\'s sidechain, or another SW AUDIO instance in this host (SW Link)'; head.style.cssText = 'padding:3px 10px;color:#8a8c92;font-size:11px;max-width:300px;white-space:normal'; pop.append(head);
+      pk.p.labels.forEach((lab, j) => {
+        const row = document.createElement('div'); row.dataset.key = String(j); row.textContent = (j === index() ? '\u2713 ' : '') + lab; row.style.cssText = 'padding:4px 10px;cursor:pointer;white-space:nowrap';
+        row.onmouseenter = () => { row.style.background = '#2a2c31'; }; row.onmouseleave = () => { row.style.background = ''; };
+        row.onclick = () => { choose(j); close(); };
+        pop.append(row);
+      });
+      root.append(pop); btn.classList.add('on');
+    });
+    document.addEventListener('pointerdown', e => { if (pop && !(e.target && btn.contains(e.target))) { const p = e.composedPath ? e.composedPath() : []; if (!p.includes(pop)) close(); } });
+    const api = { update(info) {
+      const k = index(), lab = pk.p.labels[k] || '', f = k === 0 ? -1 : (info && info.readouts && info.readouts.length > 2 && info.readouts[2] > 0.5 ? 1 : 0);
+      if (lab !== shown) { shown = lab; textNode.textContent = lab; }
+      if (f !== found) {
+        found = f;
+        btn.title = f < 0 ? 'The key is the host\'s sidechain input (connect one). Press to choose another SW AUDIO instance in this host instead (SW Link).' : f ? lab + ' is in this host and playing: its output is the key.' : lab + ' is not there (or not playing): no key, nothing is ducked. SW Link only sees plug-ins in the same host process.';
+        if (dot) dot.style.background = f > 0 ? '#3ecf8e' : f === 0 ? '#e8a05a' : '#6b6d73';
+      }
+    }, destroy() { close(); } };
+    api.update(null);   // (the label and the tooltip from the start, before the first poll)
+    return api;
+  }
+
   // ---- LV05: the second dashed line and its label ("-12 dB") are the ducking Depth: they move with the parameter (the first one is 0 dB, the background's own level)
   function depthLineDisplay(box, ctx, y) {
     const svg = svgOf(box); if (!svg) return null;
@@ -2046,7 +2084,7 @@
     LV14: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), alignGraphDisplay(box, ctx), measureFlow(box, ctx, { call: 'measure', state: 1, found: 2, hint: 'Send the main system (for example pink noise) to the second (sidechain) input and the measurement microphone to the first, then press: 3 s of both are compared and the delay is set' })),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
-    LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90))), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
+    LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90)), linkKeySelect(box, ctx)), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, UT01: trackGain, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,

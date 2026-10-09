@@ -132,3 +132,34 @@ TEST_CASE("SW Link: a reference spectrum is shared by the product that has it (U
     stop = true; w.join();
     INFO(reads << " reads"); CHECK(mixed == 0); CHECK(reads > 0);
 }
+
+TEST_CASE("SW Link: a key signal - the latest samples of another instance's output ring, read on the audio thread; nothing from a ring that does not move, from another product, or from a slot that went away") {
+    Ring a(300, -20), b(1000, -20);
+    link::Member peer, me, other;
+    REQUIRE(peer.join(a.view(), "LV01")); REQUIRE(me.join(b.view(), "LV05")); REQUIRE(other.join(b.view(), "DY08"));
+    link::Member::KeyState st; std::vector<float> key(256, 0.0f);
+    // the ring of LV01 is a 300 Hz sine at -20 dB: the last 256 samples before the write position come back
+    CHECK(me.readKey("LV01", key.data(), 256, st));
+    { const size_t h = a.head.load(); double worst = 0; for (size_t k = 0; k < 256; ++k) worst = std::max(worst, std::abs(static_cast<double>(key[k]) - static_cast<double>(a.data[(h - 256 + k) & (Ring::kN - 1)].load()))); CHECK(worst == 0.0); }
+    CHECK_FALSE(me.readKey("LV02", key.data(), 256, st));    // no such product
+    CHECK_FALSE(peer.readKey("LV01", key.data(), 256, st));  // (an instance is not its own key)
+    link::Member::KeyState st2;
+    // a ring that moves is a key every time; one that stands still is none after two calls
+    int good = 0; for (int k = 0; k < 6; ++k) { a.advance(256); if (me.readKey("LV01", key.data(), 256, st2)) ++good; } CHECK(good == 6);
+    int still = 0; for (int k = 0; k < 6; ++k) if (me.readKey("LV01", key.data(), 256, st2)) ++still; CHECK(still <= 2);   // (the first call after the last move still counts)
+    a.advance(256); CHECK(me.readKey("LV01", key.data(), 256, st2));                                                         // it moves again: a key again
+    // more than the ring holds, or before it holds that much: nothing
+    CHECK_FALSE(me.readKey("LV01", key.data(), 100000, st2));
+    // the owner goes away: the key is gone (and nothing is read from a withdrawn ring)
+    peer.leave(); CHECK_FALSE(me.readKey("LV01", key.data(), 256, st2));
+    // two instances of the product: the other one takes over
+    Ring c(500, -20); link::Member peer2, peer3; REQUIRE(peer2.join(a.view(), "LV01")); REQUIRE(peer3.join(c.view(), "LV01"));
+    link::Member::KeyState st3; CHECK(me.readKey("LV01", key.data(), 256, st3));
+    // a reader against a ring that is being written: the samples are always whole samples of the ring (no crash, no garbage), with the owner leaving and joining
+    std::atomic<bool> stop{false};
+    std::thread w([&] { while (!stop) { peer2.leave(); peer2.join(a.view(), "LV01"); a.advance(64); } });
+    int reads = 0; link::Member::KeyState st4;
+    for (int k = 0; k < 20000; ++k) { if (me.readKey("LV01", key.data(), 256, st4)) { ++reads; for (float v : key) if (!(std::abs(v) <= 0.11f)) { CHECK(std::abs(v) <= 0.11f); break; } } }
+    stop = true; w.join();
+    INFO(reads << " reads"); CHECK(reads > 0);
+}

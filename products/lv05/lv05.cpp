@@ -1,8 +1,23 @@
 #include "lv05/lv05.hpp"
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace sw::lv05 {
+
+namespace {
+// the instances that can be the key: the LIVE products (LV05 itself not); 0 is the external sidechain
+struct KeyProduct { const char* code; const char* label; };
+const KeyProduct kKeyProducts[] = {
+    {"LV01", "LV01 Voice"}, {"LV02", "LV02 Feedback"}, {"LV03", "LV03 Channel"}, {"LV04", "LV04 Safety limiter"}, {"LV06", "LV06 Stream master"}, {"LV07", "LV07 Speech Agc"}, {"LV08", "LV08 Room Noise"},
+    {"LV09", "LV09 Hum Cut"}, {"LV10", "LV10 Voice Fx"}, {"LV11", "LV11 Mic Switch"}, {"LV12", "LV12 Geq 31"}, {"LV13", "LV13 Live Peq"}, {"LV14", "LV14 Align"}, {"LV15", "LV15 Auto Mixer"},
+    {"LV16", "LV16 Live Gate"}, {"LV17", "LV17 Bus Comp"}, {"LV18", "LV18 Pop Guard"}, {"LV19", "LV19 Av Sync"}, {"LV20", "LV20 Rta"}, {"LV21", "LV21 Test Gen"}, {"LV22", "LV22 Polarity"},
+    {"LV23", "LV23 Loudness"}, {"LV24", "LV24 Live Reverb"}, {"LV25", "LV25 Live Delay"}, {"LV26", "LV26 Mono"}, {"LV27", "LV27 Scene Sync"}, {"LV28", "LV28 Remote Hub"}, {"LV29", "LV29 Interp Mix"},
+    {"LV30", "LV30 Recorder"}};
+constexpr int kNumKeyProducts = static_cast<int>(sizeof(kKeyProducts) / sizeof(kKeyProducts[0]));
+}  // namespace
+int Processor::keyChoices() { return kNumKeyProducts + 1; }
+const char* Processor::keyProduct() const { const int k = static_cast<int>(target_[Key]); return k >= 1 && k <= kNumKeyProducts ? kKeyProducts[k - 1].code : nullptr; }
 
 const std::vector<ParamSpec>& specs() {
     static const std::vector<ParamSpec> s = [] {
@@ -14,6 +29,9 @@ const std::vector<ParamSpec>& specs() {
             {"lv05.voice",   "Voice only",   0, 1, 1,       Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             {"lv05.hold2duck", "Hold to duck", 0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         };
+        std::vector<double> steps{0}; std::vector<std::string> labels{"Sidechain"};
+        for (int k = 0; k < kNumKeyProducts; ++k) { steps.push_back(k + 1); labels.push_back(kKeyProducts[k].label); }
+        v.push_back({"lv05.key", "Key", 0, static_cast<double>(kNumKeyProducts), 0, Curve::Step, 1, steps, "", labels});
         v[HoldToDuck].automatable = false;
         return v;
     }();

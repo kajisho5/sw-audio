@@ -79,6 +79,11 @@ template <class P, class = void> struct HasLinkRef : std::false_type {};
 template <class P> struct HasLinkRef<P, std::void_t<decltype(P::linkSerial(std::declval<const typename P::Core&>())), decltype(P::linkBands(std::declval<const typename P::Core&>(), std::declval<double*>()))>> : std::true_type {};
 template <class P, class = void> struct HasLinkRefUse : std::false_type {};
 template <class P> struct HasLinkRefUse<P, std::void_t<decltype(P::kLinkRefFrom), decltype(P::linkRefUse(std::declval<typename P::Core&>(), std::declval<const double*>()))>> : std::true_type {};
+// optional trait (LV05 Auto ducker): static const char* linkKeyOf(const Core&) -> the product code of the SW Link instance chosen as the key ("LV01"), null for the host's sidechain input; with
+// static constexpr int kLinkKeyReadout = the read-outs slot that gets 1 (the instance is there and plays) or 0. The adapter then gives the core that instance's latest output samples as sidechain 0
+// (mono; plugin/clap/swlink.hpp readKey, on the audio thread), and not the host's sidechain.
+template <class P, class = void> struct HasLinkKey : std::false_type {};
+template <class P> struct HasLinkKey<P, std::void_t<decltype(P::linkKeyOf(std::declval<const typename P::Core&>())), decltype(P::kLinkKeyReadout)>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -358,7 +363,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); if constexpr (HasUseWorker<typename P::Core>::value) s->shell_.core().useWorker(true); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
+        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); if constexpr (HasLinkKey<P>::value) s->scLink_.assign(s->maxFrames_, 0.0f); if constexpr (HasUseWorker<typename P::Core>::value) s->shell_.core().useWorker(true); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -432,6 +437,14 @@ private:
                 }
             }
         }
+        if constexpr (HasLinkKey<P>::value) {   // the key is another instance's output (SW Link), when the screen chose one
+            if (const char* code = P::linkKeyOf(s->shell_.core())) {
+                scBase[0] = scBase[1] = nullptr; scCh = 0;
+                const bool got = frames <= s->scLink_.size() && s->link_.readKey(code, s->scLink_.data(), static_cast<int>(frames), s->keyState_);
+                if (got) { scBase[0] = s->scLink_.data(); scCh = 1; }
+                s->linkKeyFound_.store(got ? 1.0f : 0.0f, std::memory_order_relaxed);
+            } else s->linkKeyFound_.store(0.0f, std::memory_order_relaxed);
+        }
         const uint32_t nev = pr->in_events->size(pr->in_events);
         uint32_t ev = 0, pos = 0;
         while (pos < frames) {  // sample-accurate parameter events
@@ -453,6 +466,7 @@ private:
         }
         s->measure(ob.data32, nch, frames, 2);
         if constexpr (HasReadouts<P>::value) s->publishReadouts();
+        if constexpr (HasLinkKey<P>::value) s->ro_[static_cast<size_t>(P::kLinkKeyReadout)].store(static_cast<double>(s->linkKeyFound_.load(std::memory_order_relaxed)), std::memory_order_relaxed);
         if constexpr (HasLinkRef<P>::value) s->publishLinkRef();
         s->updateTail();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
@@ -697,6 +711,8 @@ private:
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
     std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
+    std::vector<float> scLink_;                   // room for the key read from another SW Link instance (allocated in activate)
+    link::Member::KeyState keyState_; std::atomic<float> linkKeyFound_{0.0f};
     std::atomic<uint32_t> tail_{0};   // the tail in samples, kept up to date by the audio thread (the host asks from any thread)
     uint32_t maxFrames_ = 4096;   // the largest block activate() promised the buffers for (process() cuts a longer block, which the CLAP rules forbid but a host can still send)
     std::array<std::atomic<float>, 4> peaks_{};

@@ -8,6 +8,9 @@
 //     publishes the pointers last. Nothing is copied on the audio thread: the instance only writes its ring, as it does for its own screen.
 //   * Others read the ring from their GUI thread (peers(), others()). To make that safe against the owner going away, a reader first counts itself in the slot (readers), then looks at the pointers; the owner
 //     withdraws the pointers (leave()) and waits until no reader is inside before the ring is destroyed. A slot that changed owner in between is noticed by its id, and the read is dropped.
+//   * A product that takes another instance's signal as a key (LV05 Auto ducker: "Key = the SW Link instance LV01 Voice") reads the latest samples of that instance's output ring on its own audio thread
+//     (readKey: atomics only, the reader count guards against the owner going away). The ring holds what the other instance has played so far: the key is that instance's last block when it has
+//     already been processed in this cycle, or the one before (at most a block late: a ducker's attack and hold are far longer). An instance whose ring has stopped moving is no key.
 //   * "Alive": a slot whose write position has not moved for `timeout` (1.5 s) is an instance that is not processing (stopped, bypassed by the host), and does not count.
 //   * A product that has a reference spectrum to share (UT03: the long-term spectrum of its reference, 60 bands of 1/6 octave, sw/band_spectrum.hpp) publishes it in its slot (publishReference:
 //     only atomic stores, so the audio thread may do it after a block): the values first, then a serial that is not 0; a reader (findReference: EQ05 Match) reads the serial, the values and the serial again and drops the read when it changed.
@@ -180,6 +183,35 @@ public:
     }
     void setTimeout(double seconds) { timeout_ = seconds; }
     void setSpectrumInterval(double seconds) { specInterval_ = seconds; }   // how often others() looks at the rings again (default 90 ms)
+
+    // The audio thread: the latest `frames` samples of the output ring of another instance of `product` ("LV01") into out (the ring is the mean of its left and right). What it remembers between calls: which slot,
+    // and whether the ring still moves. False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
+    struct KeyState { int slot = -1; uint64_t id = 0; size_t head = 0; int still = 0; };
+    bool readKey(const char* product, float* out, int frames, KeyState& st) const {
+        Registry* r = reg_ ? reg_ : registry(); if (!r || frames <= 0) return false;
+        const uint32_t code = packCode(product);
+        auto tryRead = [&](int i) -> bool {
+            Slot& s = r->s[i]; const uint64_t id = s.id.load();
+            if (id == 0 || id == id_ || s.product.load() != code) return false;
+            bool ok = false;
+            s.readers.fetch_add(1);                                      // from here the owner cannot take the ring away
+            const std::atomic<float>* d = s.data.load(); const std::atomic<size_t>* hp = s.head.load();
+            if (d && hp && s.id.load() == id) {
+                const size_t mask = s.mask.load(), h = hp->load(std::memory_order_acquire), n = static_cast<size_t>(frames);
+                if (id != st.id || i != st.slot) { st.slot = i; st.id = id; st.head = h; st.still = 0; }
+                else if (h != st.head) { st.head = h; st.still = 0; } else ++st.still;
+                if (st.still < 2 && h >= n && mask + 1 >= n) {
+                    for (size_t k = 0; k < n; ++k) out[k] = d[(h - n + k) & mask].load(std::memory_order_relaxed);
+                    ok = s.id.load() == id;
+                }
+            }
+            s.readers.fetch_sub(1);
+            return ok;
+        };
+        if (st.slot >= 0 && tryRead(st.slot)) return true;
+        for (int i = 0; i < kSlots; ++i) if (i != st.slot && tryRead(i)) return true;   // (another instance of the product, or the first time)
+        return false;
+    }
 
     // GUI thread: how many other instances are alive
     int peers() { return refresh(); }

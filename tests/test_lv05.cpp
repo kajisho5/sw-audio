@@ -69,3 +69,18 @@ TEST_CASE("LV05 mono, odd blocks, before prepare, silence") {
     Processor z; std::vector<float> a(256, 0.3f); float* c[1] = {a.data()}; z.process(c, 1, 256); CHECK(a[0] == 0.3f);
     auto q = make(); const auto o = runKey(q, std::vector<float>(48000, 0.0f), nullptr); for (float v : o.y) REQUIRE(v == 0.0f);
 }
+
+TEST_CASE("LV05 Key: the external sidechain (default) or another SW Link instance (the LIVE products; the plug-in layer feeds the key), appended after the others") {
+    const auto& s = specs();
+    REQUIRE(s.size() == static_cast<size_t>(kNumParams)); CHECK(Key == kNumParams - 1); CHECK(Key == 6);
+    CHECK(std::string(s[Key].id) == "lv05.key"); CHECK(s[Key].def == 0); CHECK(s[Key].min == 0); CHECK(s[Key].max == 29);
+    REQUIRE(s[Key].labels.size() == 30); CHECK(s[Key].labels[0] == "Sidechain"); CHECK(s[Key].labels[1] == "LV01 Voice"); CHECK(s[Key].labels[29] == "LV30 Recorder");
+    CHECK(Processor::keyChoices() == 30);
+    Processor p; p.prepare(48000.0, 256);
+    CHECK(p.keyProduct() == nullptr);                              // the default: the host's sidechain
+    p.setParam(Key, 1); REQUIRE(p.keyProduct() != nullptr); CHECK(std::string(p.keyProduct()) == "LV01");
+    p.setParam(Key, 5); CHECK(std::string(p.keyProduct()) == "LV06");   // (LV05 itself is not in the list)
+    p.setParam(Key, 29); CHECK(std::string(p.keyProduct()) == "LV30");
+    p.setParam(Key, 0); CHECK(p.keyProduct() == nullptr);
+    for (int k = 1; k <= 29; ++k) { std::string lab = s[Key].labels[static_cast<size_t>(k)]; p.setParam(Key, k); CHECK(lab.substr(0, 4) == std::string(p.keyProduct())); CHECK(lab != "LV05 Auto ducker"); }
+}

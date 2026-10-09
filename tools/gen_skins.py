@@ -337,10 +337,16 @@ def eq02_dynamic(root, params):
 
 
 def lv05_key(root, params):
-    """LV05: the design's key picker ("LV01 Voice, MC mic", an instance chosen through SW Link) says what the key is: the plug-in's sidechain input (chosen in the host). The text is
-    replaced and the picker dimmed (nothing to choose here)."""
+    """LV05: the design's key picker ("LV01 Voice, MC mic", an instance chosen through SW Link) is the Key parameter: ui/displays.js (linkKeySelect) shows the choice (the host's sidechain, or another
+    SW AUDIO instance in the same host process) and opens the list. Without the parameter the picker would be a dead part: then the text says what the key is and the picker is dimmed."""
     b = next((x for x in root.find_all('button') if 'LV01 Voice' in x.get_text()), None)
     if b is None:
+        return ''
+    if any(p['id'] == 'lv05.key' for p in params):
+        for node in list(b.descendants):
+            if isinstance(node, str) and 'LV01 Voice' in node:
+                node.replace_with('Choose key')
+        b['data-keysel'] = '1'
         return ''
     for node in list(b.descendants):
         if isinstance(node, str) and 'LV01 Voice' in node:

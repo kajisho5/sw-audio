@@ -201,10 +201,20 @@ async function open(code, query = '') {
   await mlk2.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-ref]').textContent.trim() === 'UT03 reference', null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'EQ05: the UT03 reference is the reference'));
   ok(/Reference: UT03 reference\./.test(await pg.locator('.evob button[data-ref]').getAttribute('title')), 'its tooltip: ' + await pg.locator('.evob button[data-ref]').getAttribute('title'));
   await pg.locator('.evob button[data-call="match"]').click(); await pg.waitForFunction(() => /Listening \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="match"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'EQ05: Match listens with the UT03 reference'));
+  // LV05 Key: the design's dropdown lists the host's sidechain and the other SW AUDIO instances (SW Link); the choice is the Key parameter; the dot says whether that instance is there
+  await open('LV05'); const ksel = pg.locator('button.sel');
+  eq(await ksel.count(), 1, 'LV05 has the Key dropdown'); eq((await ksel.textContent()).trim(), 'Sidechain', 'it starts on the host\'s sidechain'); ok(/sidechain input/.test(await ksel.getAttribute('title')), 'its tooltip: ' + await ksel.getAttribute('title'));
+  await ksel.click(); await pg.waitForTimeout(150);
+  const keyRows = await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-key]')].map(r => r.textContent.replace('\u2713 ', '')));
+  eq(keyRows.length, 30, 'the menu lists Sidechain and 29 LIVE products'); eq(keyRows[0] + ' / ' + keyRows[1] + ' / ' + keyRows[29], 'Sidechain / LV01 Voice / LV30 Recorder', 'in the order of the products');
+  await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-key]')].find(r => /LV01 Voice/.test(r.textContent)).click()); await pg.waitForTimeout(400);
+  eq((await ksel.textContent()).trim(), 'LV01 Voice', 'the button shows the choice'); eq((await pg.evaluate(() => window.simValues()))[6], 1, 'the Key parameter is 1');
+  ok(/LV01 Voice is in this host and playing/.test(await ksel.getAttribute('title')), 'the instance is found (read-out): ' + await ksel.getAttribute('title'));
+  eq(await pg.evaluate(() => !!document.getElementById('app').shadowRoot.querySelector('[data-key]')), false, 'the menu closed');
   await open('DY04'); eq(await pg.locator('.evob button[data-ref]').count(), 0, 'DY04 has no Reference button');
 
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match and LV05 Key: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

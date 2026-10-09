@@ -706,6 +706,40 @@ bool linkChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// SW Link key: LV05 Auto ducker with Key = LV01 Voice (another binary, the same process) ducks under what LV01 plays; its read-out says the instance is there; the host's sidechain is not used then; without the
+// peer (or with the Key back on "Sidechain") nothing is ducked.
+bool linkKeyChecks(const std::vector<fs::path>& files) {
+    auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
+    const fs::path fk = find("LV01"), fd = find("LV05");
+    if (fk.empty() || fd.empty()) return true;   // a partial set of plug-ins: nothing to check
+    bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link key: %s\n", t.c_str()); ok = false; };
+    Loaded k, d; std::string why;
+    if (!k.open(fk, why)) { fail("LV01 " + why); return false; }
+    if (!d.open(fd, why)) { fail("LV05 " + why); k.close(); return false; }
+    const auto* pe = static_cast<const clap_plugin_params_t*>(d.p->get_extension(d.p, CLAP_EXT_PARAMS));
+    clap_id keyId = CLAP_INVALID_ID, voiceId = CLAP_INVALID_ID;
+    for (uint32_t i = 0; pe && i < pe->count(d.p); ++i) { clap_param_info_t pi{}; if (!pe->get_info(d.p, i, &pi)) continue; if (std::string(pi.name) == "Key") keyId = pi.id; if (std::string(pi.name) == "Voice only") voiceId = pi.id; }
+    if (keyId == CLAP_INVALID_ID || voiceId == CLAP_INVALID_ID) { fail("LV05 has no Key / Voice only parameter"); k.close(); d.close(); return false; }
+    auto readoutsOf = [&]() { const auto a = updateArrays(d.m->send(d.p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
+    // both play noise at -20 dBFS (the program of LV05 is that noise as well); the key is LV01's output
+    EventList none, setKey; setKey.set(keyId, 1.0); setKey.set(voiceId, 0.0);   // Key = LV01 Voice, Voice only Off (a noise is not a voice)
+    d.run.process(2, 3, none); k.run.process(2, 4, none);
+    { const auto r = readoutsOf(); if (r.size() < 3 || r[0] != 0.0 || r[2] != 0.0) { fail("LV05 should start with no ducking and no key found"); k.close(); d.close(); return false; } }
+    d.run.process(1, 5, setKey); k.run.process(1, 6, none);
+    for (int i = 0; i < 480; ++i) { k.run.process(1, 10u + static_cast<uint64_t>(i), none); d.run.process(1, 1000u + static_cast<uint64_t>(i), none); }   // about 2.6 s, a block each in turn as a host does: the 80 ms attack is long over
+    { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 1.0 || r[0] > -10.0) fail("LV05 with Key = LV01 should duck by about 12 dB under LV01's noise (gain " + std::to_string(r.empty() ? 99.0 : r[0]) + " dB, key found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
+    // LV01 stops (it is not processed any more): its ring stands still, the key is gone and the gain comes back (Release 2 s)
+    for (int i = 0; i < 960; ++i) d.run.process(1, 2000u + static_cast<uint64_t>(i), none);   // 5 s
+    { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 0.0 || r[0] < -3.0) fail("with LV01 not playing the key should be gone and the ducking released (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB, found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
+    // back on the host's sidechain: nothing connected here, so nothing ducks even while LV01 plays
+    EventList toSc; toSc.set(keyId, 0.0); d.run.process(1, 7, toSc);
+    for (int i = 0; i < 480; ++i) { k.run.process(1, 3000u + static_cast<uint64_t>(i), none); d.run.process(1, 4000u + static_cast<uint64_t>(i), none); }
+    { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 0.0 || r[0] < -1.0) fail("Key = Sidechain with nothing connected should not duck (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB)"); }
+    k.close(); d.close();
+    if (ok) std::printf("ok    SW Link key: LV05 ducks under another instance's output (Key = LV01 Voice, in the same process), notices when it stops, and the host's sidechain is used again with Key = Sidechain\n");
+    return ok;
+}
+
 // SW Link reference: UT03 shares the long-term spectrum of the reference the screen loaded into it; EQ05 (another binary, the same process) sees it (info.link[1]) and takes it ("c linkref" -> its
 // read-outs: a reference is in place, a load worked), then Match listens and fits with it (the lows of the UT03 reference are raised: the fit raises the lows in the EQ).
 bool linkReferenceChecks(const std::vector<fs::path>& files) {
@@ -1257,6 +1291,7 @@ int main(int argc, char** argv) {
     }
     if (!linkChecks(files)) ++fails;
     if (!linkReferenceChecks(files)) ++fails;
+    if (!linkKeyChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;

@@ -1,5 +1,6 @@
 // SW LV05 Auto ducker — ducks the program under a key signal (spec: 仕様書 v1.0「LV05 Auto ducker」). Reported delay 0.
-//   Key: the external sidechain (a second input appears on its own). **The SW Link instance choice of the spec is not here (no SW Link yet).** Without a key signal nothing is ducked.
+//   Key: the external sidechain (a second input appears on its own; the default "Sidechain") or - SW Link - another SW AUDIO instance in the same host process (LV01 Voice ...): the plug-in layer then feeds that
+//   instance's latest output samples as the key (plugin/clap/swlink.hpp readKey). The core does not see the difference: it gets a key signal or none. Without a key signal nothing is ducked.
 //   Depth 0..-40 dB, Attack (how fast the gain goes down), Hold (after the key stops), Release (back up). Gain moves in dB with one-pole ballistics.
 //   Voice only (EVO, class B, first stage "rules"): the key counts only while sw::VoiceDetector says voiced speech or singing (periodic, low zero-crossing rate, over the noise floor); claps, knocks and steady noise do not duck.
 //   Voice only Off: the key counts when its level is over max(-50 dBFS, floor + 10 dB) (the spec has no threshold parameter; this is the design value).
@@ -12,7 +13,7 @@
 
 namespace sw::lv05 {
 
-enum ParamId { Depth, Attack, Hold, Release, VoiceOnly, HoldToDuck, kNumParams };
+enum ParamId { Depth, Attack, Hold, Release, VoiceOnly, HoldToDuck, Key, kNumParams };   // Key appended (ids stay stable)
 
 const std::vector<ParamSpec>& specs();
 
@@ -28,6 +29,9 @@ public:
     double gainDb() const { return gDb_; }
     bool keyActive() const { return keyOn_; }
     const VoiceDetector& voice() const { return vd_; }
+    // the SW Link instance chosen as the key (the product code, e.g. "LV01"), or null for the external sidechain
+    const char* keyProduct() const;
+    static int keyChoices();
 
 private:
     void run(float** ch, int numCh, int n, const float* const* sc, int scCh);
