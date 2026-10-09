@@ -2,6 +2,7 @@
 #include "gui_bridge.hpp"
 #include "dy08/dy08.hpp"
 #include "lv12/lv12.hpp"
+#include <clocale>
 #include <cmath>
 using namespace sw;
 
@@ -64,4 +65,18 @@ TEST_CASE("GUI specs JSON: every field of every product's parameters, and escapi
 TEST_CASE("GUI meta: known products carry their colours, unknown ones fall back") {
     const std::string m = gui::metaJson("EQ05"); CHECK(m.find("\"code\":\"EQ05\"") != std::string::npos); CHECK(m.find("#3b7fe6") != std::string::npos);
     const std::string u = gui::metaJson("ZZ99"); CHECK(u.find("\"code\":\"ZZ99\"") != std::string::npos); CHECK(u.find("#f0ad3d") != std::string::npos);
+}
+
+TEST_CASE("GUI numbers: a dot both ways whatever the host's C locale (2026-10-09)") {
+    const char* old = std::setlocale(LC_NUMERIC, nullptr);
+    const std::string keep = old ? old : "C";
+    if (!std::setlocale(LC_NUMERIC, "de_DE.UTF-8") && !std::setlocale(LC_NUMERIC, "fr_FR.UTF-8")) { MESSAGE("no comma locale installed"); return; }
+    CHECK(sw::gui::num(0.25) == "0.25");
+    CHECK(sw::gui::num(-1.5e-7) == "-1.5e-07");
+    sw::gui::Message m;
+    CHECK(sw::gui::parseMessage("s 3 0.75", m));
+    CHECK(m.value == 0.75);
+    CHECK_FALSE(sw::gui::parseMessage("s 3 0,75", m));
+    CHECK_FALSE(sw::gui::parseMessage("s 3 0.75x", m));
+    std::setlocale(LC_NUMERIC, keep.c_str());
 }

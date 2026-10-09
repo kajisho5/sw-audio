@@ -4,6 +4,9 @@
 #include "gui_assets.hpp"
 #include "sw/param.hpp"
 #include <cctype>
+#include <cmath>
+#include <locale>
+#include <sstream>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,7 +23,26 @@ inline std::string jsonString(const std::string& s) {
     }
     return o + "\"";
 }
-inline std::string num(double v) { if (!(v == v) || v > 1e300 || v < -1e300) v = 0; char b[40]; std::snprintf(b, sizeof b, "%.10g", v); return b; }
+// numbers with a dot whatever the host's C locale (a host may set LC_NUMERIC to one with a decimal comma: "0,5" would break the page)
+inline std::string num(double v) {
+    if (!(v == v) || v > 1e300 || v < -1e300) v = 0;
+    char b[40]; std::snprintf(b, sizeof b, "%.10g", v);
+    for (char* c = b; *c; ++c) if (*c == ',') *c = '.';   // %g has no grouping: a comma can only be the decimal point
+    return b;
+}
+inline bool parseNum(const char* p, double& out) {   // the whole text, a dot as the decimal point, finite
+    size_t n = 0;
+    for (const char* c = p; *c; ++c, ++n) if (!((*c >= '0' && *c <= '9') || *c == '.' || *c == '-' || *c == '+' || *c == 'e' || *c == 'E') || n > 40) return false;
+    if (n == 0) return false;
+    std::istringstream in{std::string(p)};
+    in.imbue(std::locale::classic());
+    double v = 0; in >> v;
+    if (in.fail() || !std::isfinite(v)) return false;
+    in >> std::ws;
+    if (!in.eof()) return false;
+    out = v;
+    return true;
+}
 
 inline std::string specsJson(const std::vector<ParamSpec>& v) {
     static const char* cn[] = {"lin", "log", "skew", "step", "fader", "symlog"};
@@ -94,7 +116,7 @@ inline bool parseMessage(const std::string& m, Message& out) {
     if (t == 'c') { const char* sp = std::strchr(p, ' '); out.name = sp ? std::string(p, sp) : std::string(p); out.args = sp ? std::string(sp + 1) : ""; return !out.name.empty(); }
     const long i = std::strtol(p, &end, 10); if (end == p || i < 0 || i > 100000) return false;
     out.index = static_cast<int>(i);
-    if (t == 's') { p = end; if (*p != ' ') return false; const double v = std::strtod(p + 1, &end); if (end == p + 1 || !(v == v)) return false; out.value = v; }
+    if (t == 's') { p = end; if (*p != ' ') return false; double v = 0; if (!parseNum(p + 1, v)) return false; out.value = v; }
     else if (*end != 0) return false;
     return true;
 }
