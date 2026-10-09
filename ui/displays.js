@@ -790,7 +790,25 @@
     } };
   }
 
+
+  // ---- true-peak limiter (MS02): the measured output level as a mirrored envelope (last ~10 s) and the Ceiling line; the design's "inter-sample peaks caught" markers and count are dropped (the core does not publish them)
+  function ceilingDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const area = svg.querySelector(':scope > path[fill="#8a8c92"]'), cl = svg.querySelector(':scope > line[stroke-dasharray]'), texts = [...svg.querySelectorAll(':scope > text')];
+    const ct = texts.find(t => /^Ceiling/.test(t.textContent)), isp = texts.find(t => /Inter-sample/.test(t.textContent)); if (!area || !cl) return null;
+    [...svg.querySelectorAll(':scope > path[fill="#f2f2f2"]')].forEach(e => e.remove()); if (isp) isp.remove();
+    const [, , W, H] = vbOf(svg), C = H / 2, N = 80, dx = W / (N - 1), hist = Ring(N, -90); let tick = 0;
+    const yOf = db => C - clamp((db + 36) / 36, 0, 1) * (C - 14);
+    return { update(info) {
+      const ce = ctx.value('Ceiling'); if (ce !== undefined) { const y = yOf(ce).toFixed(1); cl.setAttribute('y1', y); cl.setAttribute('y2', y); if (ct) { ct.textContent = 'Ceiling ' + ce.toFixed(1) + ' dBTP'; ct.setAttribute('y', (yOf(ce) - 4).toFixed(1)); } }
+      const m = info && info.meters; if (!m || ++tick % 6) return; hist.push(outDb(m));
+      let up = '', dn = ''; for (let k = 0; k < N; k++) { const x = (k * dx).toFixed(1), a = C - yOf(hist.a[k]); up += (k ? ' L' : 'M') + x + ' ' + (C - a).toFixed(1); dn = ' L' + x + ' ' + (C + a).toFixed(1) + dn; }
+      area.setAttribute('d', up + dn + ' Z');
+    } };
+  }
+
   const registry = {
+    MS02: ceilingDisplay,
     LV17: grHistoryDisplay,
     LV10: xyPadDisplay, VO06: xyPadDisplay,
     RV01: reverbDisplay,
