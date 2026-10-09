@@ -933,6 +933,35 @@
   }
 
 
+  // ---- RV04 convolution: the impulse response's envelope (one bar per 5 px), from the category's reverberation times (products/rv04/rv04.cpp kCat), Length, Size, Reverse and Pre-delay
+  // the IR is synthesised from seven octave bands (125 Hz - 8 kHz) that decay at their own RT60; the bar is the band-average amplitude, 0 dB = the highest bar, 60 dB range
+  const RV04_CAT = [
+    { name: 'Halls', rt: [3.4, 3.2, 2.9, 2.6, 2.0, 1.4, 0.8], sec: 5.0 }, { name: 'Rooms', rt: [0.9, 0.85, 0.75, 0.65, 0.55, 0.4, 0.25], sec: 1.6 },
+    { name: 'Churches', rt: [7.0, 6.8, 6.2, 5.5, 4.2, 2.8, 1.4], sec: 8.0 }, { name: 'Gear', rt: [2.8, 2.6, 2.4, 2.2, 2.0, 1.8, 1.4], sec: 3.5 }];
+  function rv04Envelope(cat, lengthPct, sizePct, s) {   // amplitude at time s (s) of the IR as the plug-in uses it (before Reverse)
+    const c = RV04_CAT[cat], size = sizePct / 100, lt = c.sec * lengthPct / 100, fade = Math.max(0.1 * lt, 0.02);
+    const pos = s / size; if (pos < 0 || pos > lt) return 0;
+    let e = 0; for (const rt of c.rt) { const a = Math.exp(-6.907755 * pos / rt); e += a * a; }
+    let a = Math.sqrt(e / c.rt.length); const f0 = lt - fade; if (pos > f0) a *= 0.5 * (1 + Math.cos(Math.PI * (pos - f0) / fade)); return a;
+  }
+  function convolutionDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const bars = [...svg.querySelectorAll(':scope > line')].filter(l => (l.getAttribute('stroke') || '').toLowerCase() === '#9a8df0'); if (bars.length < 20) return null;
+    const endT = [...svg.querySelectorAll(':scope > text')].find(t => t.getAttribute('text-anchor') === 'end'), title = [...box.querySelectorAll('.val')].find(e => /, [\d.]+ s$/.test(e.textContent));
+    const base = +bars[0].getAttribute('y1'), full = base - 12, x0 = 14, x1 = 924; let last = '';
+    return { update() {
+      const cat = Math.round(ctx.value('Category')), pre = (ctx.value('Pre-delay') || 0) / 1000, len = ctx.value('Length') || 100, size = ctx.value('Size') || 100, rev = (ctx.value('Reverse') || 0) > 0.5;
+      if (!Number.isFinite(cat)) return; const key = [cat, pre, len, size, rev].join('|'); if (key === last) return; last = key;
+      if (cat < 0 || cat > 3) { bars.forEach(b => b.setAttribute('y2', base)); if (title) title.textContent = 'Custom IR'; if (endT) endT.textContent = ''; return; }   // a loaded IR is not known to the screen
+      const c = RV04_CAT[cat], irLen = c.sec * len / 100 * size / 100, T = pre + irLen, hs = [];
+      bars.forEach(b => { const t = ((+b.getAttribute('x1')) - x0) / (x1 - x0) * T, s = t - pre; hs.push(s < 0 || s > irLen ? 0 : rv04Envelope(cat, len, size, rev ? irLen - s : s)); });
+      const mx = Math.max(...hs, 1e-9);
+      bars.forEach((b, i) => { const db = hs[i] > 0 ? 20 * Math.log10(hs[i] / mx) : -999; b.setAttribute('y2', (base - clamp((db + 60) / 60, 0, 1) * full).toFixed(1)); });
+      if (endT) endT.textContent = T.toFixed(1) + ' s'; if (title) title.textContent = c.name + ', ' + irLen.toFixed(1) + ' s';
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -975,6 +1004,7 @@
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
     CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
+    RV04: convolutionDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
     RS06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Tail length' }),
