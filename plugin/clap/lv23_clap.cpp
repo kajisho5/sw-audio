@@ -2,6 +2,10 @@
 #include "clap_adapter.hpp"
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include "lv23/lv23.hpp"
 
 namespace {
@@ -16,6 +20,21 @@ struct Lv23 {
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static void guiCall(Core& c, const char* n, const char* a) { (void)a; if (!std::strcmp(n, "reset")) c.reset(); }
+    // Export log: the measurement log as a CSV in Documents/SW AUDIO (GUI thread: file output; the log is a fixed ring the audio thread fills, reading it here only risks one row of the newest second)
+    static bool guiOnGui(const char* n) { return !std::strcmp(n, "export"); }
+    static void guiCallGui(Core& c, const char*, const char*) {
+        const char* h = std::getenv("HOME"); if (!h) h = std::getenv("USERPROFILE"); if (!h) return;
+        namespace fs = std::filesystem; std::error_code ec; const fs::path dir = fs::path(h) / "Documents" / "SW AUDIO"; fs::create_directories(dir, ec); if (ec) return;
+        const std::time_t now = std::time(nullptr); std::tm tmv{};
+#ifdef _WIN32
+        localtime_s(&tmv, &now);
+#else
+        localtime_r(&now, &tmv);
+#endif
+        char name[64]; std::strftime(name, sizeof name, "lv23-log-%Y%m%d-%H%M%S.csv", &tmv);
+        c.setStartTime(static_cast<double>(now - c.logCount()));   // the clock column: the log began logCount seconds ago
+        std::ofstream f(dir / name, std::ios::binary); if (f) f << c.exportCsv();
+    }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_MASTERING, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv23", "SW LV23 Loudness", "SEVENTHWELL",

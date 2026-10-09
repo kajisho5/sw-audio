@@ -65,6 +65,11 @@ template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&
 template <class P, class = void> struct HasReadouts : std::false_type {};
 template <class P> struct HasReadouts<P, std::void_t<decltype(P::kReadouts), decltype(P::readouts(std::declval<const typename P::Core&>(), std::declval<double*>()))>> : std::true_type {};
 
+// optional trait: static bool guiOnGui(const char* name); static void guiCallGui(Core&, const char* name, const char* arg) -> a screen button that runs on the GUI thread (file output)
+// in a product whose other buttons run on the audio thread (LV23 Export log)
+template <class P, class = void> struct HasGuiCallGui : std::false_type {};
+template <class P> struct HasGuiCallGui<P, std::void_t<decltype(P::guiOnGui("")), decltype(P::guiCallGui(std::declval<typename P::Core&>(), "", ""))>> : std::true_type {};
+
 template <class P, class = void> struct HasGuiCall : std::false_type {};
 template <class P> struct HasGuiCall<P, std::void_t<decltype(P::guiCall(std::declval<typename P::Core&>(), "", ""))>> : std::true_type {};
 template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
@@ -167,6 +172,7 @@ private:
     }
     struct CallOp { char name[16]; char arg[16]; };
     void guiCall(const std::string& name, const std::string& arg) {
+        if constexpr (HasGuiCallGui<P>::value) { if (P::guiOnGui(name.c_str())) { P::guiCallGui(shell_.core(), name.c_str(), arg.c_str()); return; } }
         if constexpr (HasGuiCall<P>::value) {
             if (name.size() >= sizeof(CallOp::name) || arg.size() >= sizeof(CallOp::arg)) return;
             if constexpr (GuiCallOnGuiThread<P>::value) { P::guiCall(shell_.core(), name.c_str(), arg.c_str()); }

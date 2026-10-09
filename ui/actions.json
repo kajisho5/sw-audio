@@ -5,7 +5,7 @@
   "LV12": [{"label": "Flat", "call": "flat"}],
   "LV19": [{"label": "Clap sync", "call": "clap", "arg": "150"}],
   "LV21": [{"label": "Arm", "call": "arm", "toggle": true}, {"label": "Output", "call": "output", "toggle": true}],
-  "LV23": [{"label": "Reset", "call": "reset"}],
+  "LV23": [{"label": "Reset", "call": "reset"}, {"label": "Export log", "call": "export"}],
   "LV25": [{"label": "Tap", "call": "tap"}],
   "LV28": [{"label": "Lock all", "call": "lockall", "toggle": true}],
   "LV30": [{"label": "Record", "call": "record", "toggle": true}, {"label": "Mark", "call": "mark"}],
