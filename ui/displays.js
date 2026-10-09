@@ -735,7 +735,29 @@
     return { update(info) { const r = info && info.readouts; if (r) el.textContent = fmt(r[0]); } };
   }
 
+
+  // ---- reverb (RV01): the decay from Pre-delay to Decay (RT60, -60 dB, straight in dB), the pre-delay and RT60 markers; the design's "High band decay" curve is dropped (it would need the Damping model)
+  function reverbDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')], area = ps.find(e => e.getAttribute('fill') !== 'none'), line = ps.find(e => e.getAttribute('fill') === 'none' && !e.getAttribute('stroke-dasharray')), dashed = ps.find(e => e.getAttribute('stroke-dasharray'));
+    const texts = [...svg.querySelectorAll(':scope > text')], find = re => texts.find(t => re.test(t.textContent)), preT = find(/^Pre-delay/), rtT = find(/^RT60/), hb = find(/High band/);
+    const lines = [...svg.querySelectorAll(':scope > line')], preL = lines.find(l => l.getAttribute('x1') === '35'), rtL = lines.find(l => l.getAttribute('x1') === '646'), axis = svg.querySelector(':scope > g[font-size="11"]');
+    if (!area || !line || !preL || !rtL) return null;
+    if (dashed) dashed.remove(); if (hb) hb.remove(); const lt = find(/^Late tail/); if (lt) lt.remove();
+    const X0 = 30, X1 = 910, TOP = 82, BASE = 196; let last = '';
+    return { update() {
+      const dec = Math.max(0.1, ctx.value('Decay') || 1), pre = (ctx.value('Pre-delay') || 0) / 1000, key = dec + '|' + pre; if (key === last) return; last = key;
+      const axisMax = Math.max(4, Math.ceil(dec * 1.05)), tx = t => X0 + t / axisMax * (X1 - X0), xp = tx(pre), xr = tx(dec);
+      let d = 'M' + xp.toFixed(1) + ' ' + TOP; for (let i = 1; i <= 40; i++) { const t = pre + (dec - pre) * i / 40; d += ' L' + tx(t).toFixed(1) + ' ' + (TOP + (BASE - TOP) * i / 40).toFixed(1); }
+      line.setAttribute('d', d); area.setAttribute('d', d + ' L' + xp.toFixed(1) + ' ' + BASE + ' Z');
+      preL.setAttribute('x1', (xp - 0).toFixed(1)); preL.setAttribute('x2', xp.toFixed(1)); if (preT) { preT.setAttribute('x', (xp + 6).toFixed(1)); preT.textContent = 'Pre-delay ' + Math.round(pre * 1000) + ' ms'; }
+      rtL.setAttribute('x1', xr.toFixed(1)); rtL.setAttribute('x2', xr.toFixed(1)); if (rtT) { rtT.setAttribute('x', (xr + 6).toFixed(1)); rtT.textContent = 'RT60 ' + dec.toFixed(1) + ' s'; }
+      if (axis) { const t = [...axis.querySelectorAll('text')]; t.forEach((e, k) => { const sec = axisMax * k / 4; e.textContent = k === 0 ? '0' : (Number.isInteger(sec) ? sec : sec.toFixed(1)) + (k === 4 ? ' s' : ' s'); }); }
+    } };
+  }
+
   const registry = {
+    RV01: reverbDisplay,
     LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), LV19: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
