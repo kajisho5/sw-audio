@@ -302,7 +302,53 @@
     } };
   }
 
+
+  // ---- maximizer (MS01): the design's faders are Gain and Ceiling (the design called the first one Threshold; the spec has Gain), the bars are the
+  // measured input / output peaks and the gain reduction (in - out + the gain pushed in), the history is drawn from the same values.
+  // LUFS read-outs (integrated, short-term, true peak) are not measured by the screen: they show a dash. Max GR is tracked; click it to reset.
+  function maximizerDisplay(box, ctx) {
+    const tracks = [...box.querySelectorAll('.track')], cols = [...box.querySelectorAll('.col')];
+    const gainI = (ctx.params.find(q => q.name === 'Gain') || {}).i, ceilI = (ctx.params.find(q => q.name === 'Ceiling') || {}).i;
+    if (tracks.length < 2 || gainI === undefined || ceilI === undefined) return null;
+    const q = i => ctx.params.find(x => x.i === i), caps = tracks.map(t => t.querySelector('.fcap'));
+    [[0, gainI, 'Gain'], [1, ceilI, 'Ceiling']].forEach(([k, i, nm]) => {
+      const t = tracks[k], col = t.parentElement, lbl = col.querySelector('.lbl'); if (lbl) lbl.textContent = nm;
+      t.style.cursor = 'ns-resize'; t.style.touchAction = 'none'; let drag = false;
+      const put = e => { const r = t.getBoundingClientRect(), x = clamp(1 - (e.clientY - r.top - 11) / (r.height - 22), 0, 1), m = q(i); ctx.set(i, m.c.value(x)); };
+      t.addEventListener('pointerdown', e => { t.setPointerCapture(e.pointerId); drag = true; ctx.begin(i); put(e); });
+      t.addEventListener('pointermove', e => { if (drag) put(e); });
+      const end = () => { if (!drag) return; drag = false; ctx.end(i); }; t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end);
+      t.addEventListener('dblclick', () => { ctx.begin(i); ctx.set(i, q(i).p.def); ctx.end(i); });
+    });
+    const colOf = name => cols.find(c => { const l = c.querySelector('.lbl'); return l && l.textContent.trim() === name; });
+    const inC = colOf('In'), outC = colOf('Out'), grC = colOf('GR');
+    const bars = c => c ? [...c.querySelectorAll('.bar')] : [], ro = c => c && c.querySelector('.ro');
+    const COL = 'linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)';
+    const setBar = (b, db) => { const pct = clamp((db + 30) / 30, 0, 1) * 100; b.style.background = 'linear-gradient(to top,transparent 0 ' + pct.toFixed(1) + '%,rgba(20,21,23,.9) ' + pct.toFixed(1) + '%),' + COL; };
+    const grFill = grC && grC.querySelector('div[style*="overflow"] > div');
+    const svg = box.querySelector('.disp svg'), hp = svg ? svg.querySelectorAll(':scope > path') : [];
+    const stats = [...box.querySelectorAll('.stat')], stat = n => stats.find(e => e.firstElementChild && e.firstElementChild.textContent.trim().toUpperCase() === n);
+    ['INTEGRATED', 'SHORT-TERM', 'TRUE PEAK'].forEach(n => { const e = stat(n); if (e) { e.lastElementChild.textContent = '—'; e.title = 'Not measured by the screen'; } });
+    const maxE = stat('MAX GR'); let maxGr = 0; if (maxE) { maxE.style.cursor = 'pointer'; maxE.addEventListener('click', () => { maxGr = 0; }); }
+    const W = 436, H = 150, N = 42, dx = W / (N - 1), lvl = Ring(N, -90), gr = Ring(N, 0); let tick = 0, shown = 0;
+    return { update(info) {
+      [[0, gainI], [1, ceilI]].forEach(([k, i]) => { const m = q(i), x = m.c.norm(ctx.get(i)); caps[k].style.top = 'calc((100% - 22px) * ' + (1 - x).toFixed(4) + ')'; const r = ro(tracks[k].parentElement); if (r) r.textContent = ctx.get(i).toFixed(1); });
+      const m = info && info.meters; if (!m) return;
+      const bi = bars(inC), bo = bars(outC); if (bi[0]) { setBar(bi[0], m[0]); setBar(bi[1], m[1]); } if (bo[0]) { setBar(bo[0], m[2]); setBar(bo[1], m[3]); }
+      const ri = ro(inC), rO = ro(outC); if (ri) ri.textContent = Math.max(m[0], m[1]) > -99 ? Math.max(m[0], m[1]).toFixed(1) : '-∞'; if (rO) rO.textContent = outDb(m) > -99 ? outDb(m).toFixed(1) : '-∞';
+      const g = Math.max(0, peakDb(m) + (ctx.get(gainI) || 0) - outDb(m)), gv = peakDb(m) > -70 ? Math.min(30, g) : 0;
+      shown += (gv - shown) * 0.4; if (grFill) grFill.style.height = (clamp(shown / 25, 0, 1) * 100).toFixed(1) + '%'; const rg = ro(grC); if (rg) rg.textContent = shown.toFixed(1);
+      maxGr = Math.max(maxGr, gv); if (maxE) maxE.lastElementChild.textContent = (maxGr > 0.05 ? '-' : '') + maxGr.toFixed(1) + ' dB';
+      if (hp.length >= 3 && ++tick % 4 === 0) {
+        lvl.push(peakDb(m)); gr.push(gv); let up = '', dn = '', gg = '';
+        for (let k = 0; k < N; k++) { const x = (k * dx).toFixed(1), a = clamp((lvl.a[k] + 40) / 40, 0, 1) * 66; up += (k ? ' L' : 'M') + x + ' ' + (75 - a).toFixed(1); dn += (k ? ' L' : 'M') + x + ' ' + (75 + a).toFixed(1); gg += ' L' + x + ' ' + (clamp(gr.a[k], 0, 25) / 25 * 70).toFixed(1); }
+        hp[0].setAttribute('d', up + ' L' + W + ' 75 L0 75 Z'); hp[1].setAttribute('d', dn + ' L' + W + ' 75 L0 75 Z'); hp[2].setAttribute('d', 'M0 0' + gg + ' L' + W + ' 0 Z');
+      }
+    } };
+  }
+
   const registry = {
+    MS01: maximizerDisplay,
     DY10: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     LV12: faderBank,
