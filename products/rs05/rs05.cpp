@@ -92,6 +92,20 @@ void Processor::analyse(Chan& c, int64_t t) {
     for (int k = lo; k < hi; ++k) c.ring[static_cast<size_t>((base + k) % static_cast<int64_t>(kRing))] = w_[static_cast<size_t>(k)];
 }
 
+void Processor::scope(double* in, double* out) const {
+    for (int b = 0; b < kScopeBins; ++b) in[b] = out[b] = 0.0;
+    const int64_t q = t_ - kLatency;   // the samples before q have left the plug-in
+    if (!prepared_ || q < kScopeWin) return;
+    const int per = kScopeWin / kScopeBins;
+    const Chan& c = ch_[0];
+    for (int b = 0; b < kScopeBins; ++b)
+        for (int k = 0; k < per; ++k) {
+            const size_t i = static_cast<size_t>((q - kScopeWin + b * per + k) % static_cast<int64_t>(kRing));
+            if (std::abs(c.raw[i]) > std::abs(in[b])) in[b] = c.raw[i];
+            if (std::abs(c.ring[i]) > std::abs(out[b])) out[b] = c.ring[i];
+        }
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);

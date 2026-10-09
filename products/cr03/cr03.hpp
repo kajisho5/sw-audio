@@ -33,6 +33,11 @@ public:
     int activeGrains() const { return active_; }
     // chord of the last 4 s: bit i = pitch class i (0 = C)
     int chordMask() const { return chord_; }
+    // for the screen (audio thread): the grains playing now, up to kScopeGrains, kGrainValues each: how far back in the input they read (seconds), speed (rate; negative = reversed),
+    // place in the window (0 .. 1), source span (seconds, length x |rate|), pan (-1 .. +1). Returns how many were written.
+    static constexpr int kScopeGrains = 24, kGrainValues = 5;
+    int grains(double* out) const;
+    double sampleRate() const { return fs_; }
 
 private:
     struct GrainState { bool on = false; double pos = 0, step = 1, g = 1; int age = 0, len = 1; float l = 0.7f, r = 0.7f; };

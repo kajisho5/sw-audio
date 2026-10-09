@@ -1527,6 +1527,93 @@
       gain.textContent = 'Gain ' + sg(r[2]) + ' dB';
     } };
   }
+  // ---- declipper (RS05): readouts = runs restored (count), the ceiling in use (dBFS), the length of the window (ms), then 64 + 64 points of channel 0: what came in (grey) and what goes out (green, before Makeup).
+  // Each point is the sample with the largest size in its bin; the dashed lines are the ceiling (the core's own value: Threshold, or the one Detect read from the samples)
+  function declipDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const lines = [...svg.querySelectorAll(':scope > line')], paths = [...svg.querySelectorAll(':scope > path')];
+    if (lines.length < 2 || paths.length < 2) return null;
+    const [, , W, H] = vbOf(svg), C = H / 2, S = 70, M = 64, y = v => clamp(C - v * S, 3, H - 3);
+    const info = mkEl('text', { x: W - 10, y: 14, 'text-anchor': 'end', 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 11, fill: '#a4a6ac' }); svg.append(info);
+    let last = 0;
+    return { update(inf) {
+      const r = inf && inf.readouts; if (!r || r.length < 3 + 2 * M) return;
+      const now = Date.now(); if (now - last < 55) return; last = now;
+      const cl = Math.pow(10, r[1] / 20); [[lines[0], cl], [lines[1], -cl]].forEach(([l, v]) => { l.setAttribute('y1', y(v).toFixed(1)); l.setAttribute('y2', y(v).toFixed(1)); });
+      const d = o => { let s = ''; for (let k = 0; k < M; k++) s += (k ? ' L' : 'M') + (k / (M - 1) * W).toFixed(1) + ' ' + y(r[o + k]).toFixed(1); return s; };
+      paths[0].setAttribute('d', d(3)); paths[1].setAttribute('d', d(3 + M));
+      info.textContent = 'Runs restored ' + Math.round(r[0]) + '  ·  Ceiling ' + r[1].toFixed(1) + ' dBFS  ·  Last ' + r[2].toFixed(0) + ' ms';
+    } };
+  }
+  // ---- grain delay (DL05): readouts = Time (s), frozen, then 4 grain slots x [on, how far back the grain reads (s), speed (direction x rate), place in its window, source span (s)].
+  // The axis is the recording: right = now, left = 2 x Time back (a Reverse segment is read from up to 2 Time back); frozen: right = the moment of the freeze. Grey = the measured input level on that axis,
+  // pills = the grains' read positions (the live ones solid, the last ~3 s as a fading trail), the arrow = its direction
+  function grainDelayDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const pills = [...svg.querySelectorAll(':scope > rect')], grey = svg.querySelector(':scope > path'); if (!grey || pills.length < 4) return null;
+    const fill = pills[0].getAttribute('fill') || '#9a8df0'; pills.forEach(p => p.remove());
+    const [, , W, H] = vbOf(svg), C = H / 2, AMP = 60, LANES = 4, TRAIL = 40, tr = [];
+    const g = mkEl('g', { fill }); svg.append(g);
+    const label = (x, anchor) => { const t = mkEl('text', { x, y: 14, 'text-anchor': anchor, 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 11, fill: '#8a8c92' }); svg.append(t); return t; };
+    const left = label(10, 'start'), right = label(W - 10, 'end');
+    const hist = []; let last = 0, tFreeze = 0;
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 22) return;
+      const now = Date.now(); if (now - last < 60) return; last = now;
+      const P = Math.max(0.05, r[0]), span = 2 * P, frozen = r[1] > 0.5, tEnd = frozen ? (tFreeze || (tFreeze = now)) : (tFreeze = 0, now);
+      if (!frozen) { hist.push([now, m ? peakDb(m) : -90]); while (hist.length && now - hist[0][0] > 12000) hist.shift(); }
+      const X = back => W - clamp(back / span, 0, 1) * W;
+      let top = '', bot = ''; const pts = hist.filter(h => (tEnd - h[0]) / 1000 <= span && h[0] <= tEnd);
+      pts.forEach((h, i) => { const x = X((tEnd - h[0]) / 1000).toFixed(1), a = clamp((h[1] + 60) / 60, 0, 1) * AMP; top = (i ? top + ' L' : 'M') + x + ' ' + (C - a).toFixed(1) + (i ? '' : ''); bot = ' L' + x + ' ' + (C + a).toFixed(1) + bot; });
+      grey.setAttribute('d', pts.length > 1 ? top + bot + ' Z' : '');
+      for (let i = 0; i < LANES; i++) {
+        const o = 2 + i * 5; if (r[o] < 0.5) continue;
+        const lane = 30 + i * 46; tr.push({ x: X(r[o + 1]), w: Math.max(8, r[o + 4] / span * W), y: lane, a: 0.15 + 0.7 * (0.5 - 0.5 * Math.cos(2 * Math.PI * r[o + 3])), dir: r[o + 2], live: now });
+      }
+      while (tr.length > TRAIL * 2) tr.shift();
+      let s = '';
+      for (const q of tr) {
+        const age = (now - q.live) / 1000, live = age < 0.1, op = live ? q.a : 0.45 * q.a * Math.max(0, 1 - age / 3); if (op < 0.02) continue;
+        const x0 = clamp(q.x - q.w / 2, 0, W - q.w), tip = q.dir < 0 ? x0 : x0 + q.w;
+        s += '<rect x="' + x0.toFixed(1) + '" y="' + q.y + '" width="' + q.w.toFixed(1) + '" height="8" rx="4" fill-opacity="' + op.toFixed(2) + '"/>';
+        if (live) s += '<path d="M' + tip.toFixed(1) + ' ' + (q.y + 4) + ' l' + (q.dir < 0 ? 7 : -7) + ' -7 l0 14 Z" fill-opacity="' + op.toFixed(2) + '"/>';
+      }
+      g.innerHTML = s; left.textContent = span.toFixed(span < 10 ? 1 : 0) + ' s back'; right.textContent = frozen ? 'frozen' : 'now';
+    } };
+  }
+  // ---- granular (CR03): readouts = grains playing, chord, how many are listed, then 24 grains x [how far back it reads (s), speed (negative = reversed), place in its window, source span (s), pan].
+  // x = how far back in the input (right = now, left = 2 s back), y = the grain's pitch (the speed in semitones, -24 .. +24; Harmony puts the pills on the chord tones), pill = a grain (width = the source it spans,
+  // brightness = its window), the arrow = reversed; the last ~1.5 s fade out. Grey = the measured input level on the same axis
+  function granularDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const pills = [...svg.querySelectorAll(':scope > rect')], grey = svg.querySelector(':scope > path'); if (!grey || pills.length < 4) return null;
+    const fill = pills[0].getAttribute('fill') || '#3fd1a0'; pills.forEach(p => p.remove());
+    const [, , W, H] = vbOf(svg), C = H / 2, AMP = 50, SPAN = 2, STEP = (H - 40) / 48, tr = [], g = mkEl('g', { fill }); svg.append(g);
+    const label = (x, y, a, t) => { const e = mkEl('text', { x, y, 'text-anchor': a, 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 11, fill: '#8a8c92' }); e.textContent = t; svg.append(e); return e; };
+    label(10, 14, 'start', SPAN + ' s back'); const nowL = label(W - 10, 14, 'end', 'now'); label(10, C + 4, 'start', '0 st'); label(10, 34, 'start', '+24'); label(10, H - 10, 'start', '−24');
+    const hist = []; let last = 0;
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 3 + 120) return;
+      const now = Date.now(); if (now - last < 60) return; last = now;
+      hist.push([now, m ? peakDb(m) : -90]); while (hist.length && now - hist[0][0] > SPAN * 1000) hist.shift();
+      let top = '', bot = ''; hist.forEach((h, i) => { const x = (W - (now - h[0]) / 1000 / SPAN * W).toFixed(1), a = clamp((h[1] + 60) / 60, 0, 1) * AMP; top += (i ? ' L' : 'M') + x + ' ' + (C - a).toFixed(1); bot = ' L' + x + ' ' + (C + a).toFixed(1) + bot; });
+      grey.setAttribute('d', hist.length > 1 ? top + bot + ' Z' : '');
+      const n = Math.min(24, Math.round(r[2]));
+      for (let i = 0; i < n; i++) {
+        const o = 3 + i * 5, st = 12 * Math.log2(Math.max(1e-3, Math.abs(r[o + 1])));
+        tr.push({ x: W - clamp(r[o] / SPAN, 0, 1) * W, w: Math.max(8, r[o + 3] / SPAN * W), y: C - clamp(st, -24, 24) * STEP, a: 0.2 + 0.7 * (0.5 - 0.5 * Math.cos(2 * Math.PI * r[o + 2])), rev: r[o + 1] < 0, t: now });
+      }
+      while (tr.length > 160) tr.shift();
+      let s = '';
+      for (const q of tr) {
+        const age = (now - q.t) / 1000, live = age < 0.1, op = live ? q.a : 0.5 * q.a * Math.max(0, 1 - age / 1.5); if (op < 0.03) continue;
+        const x0 = clamp(q.x - q.w / 2, 0, W - q.w);
+        s += '<rect x="' + x0.toFixed(1) + '" y="' + (q.y - 4).toFixed(1) + '" width="' + q.w.toFixed(1) + '" height="8" rx="4" fill-opacity="' + op.toFixed(2) + '"/>';
+        if (q.rev && live) s += '<path d="M' + x0.toFixed(1) + ' ' + q.y.toFixed(1) + ' l7 -6 l0 12 Z" fill-opacity="' + op.toFixed(2) + '"/>';
+      }
+      g.innerHTML = s; nowL.textContent = r[0] + ' grains';
+    } };
+  }
   const lufs = v => (v > -150 ? v.toFixed(1) : '—');
   const combine = (...ds) => { const l = ds.filter(Boolean); return l.length ? { update(i) { l.forEach(d => d.update && d.update(i)); }, destroy() { l.forEach(d => d.destroy && d.destroy()); } } : null; };
 
@@ -1534,6 +1621,9 @@
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
     LV01: voiceStripDisplay,
     DY09: transientDisplay,
+    RS05: declipDisplay,
+    DL05: grainDelayDisplay,
+    CR03: granularDisplay,
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
     LV03: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV03'), miniEqCurve(box, ctx)),
     LV04: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }])),

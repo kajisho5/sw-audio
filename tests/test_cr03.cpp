@@ -71,3 +71,32 @@ TEST_CASE("CR03 Harmony pulls the grains' pitches to the chord tones of the inpu
 TEST_CASE("CR03 loud input stays finite") {
     auto p = make({{Density, 100}, {Grain, 500}, {Pitch, 24}}); auto x = noise(6, 2.0, 9); for (auto& v : x) v *= 8.0f; for (float v : run(p, x)) CHECK(std::isfinite(v));
 }
+
+namespace {
+void feedTone(Processor& p, double seconds) {
+    std::vector<float> l(static_cast<size_t>(seconds * kFs)); for (size_t i = 0; i < l.size(); ++i) l[i] = static_cast<float>(0.3 * std::sin(0.05 * static_cast<double>(i)));
+    std::vector<float> r = l;
+    for (size_t off = 0; off < l.size(); off += 256) { float* b[2] = {l.data() + off, r.data() + off}; p.process(b, 2, static_cast<int>(std::min<size_t>(256, l.size() - off))); }
+}
+}
+TEST_CASE("CR03 grains: what the screen sees of the grains playing now") {
+    double g[Processor::kScopeGrains * Processor::kGrainValues];
+    { auto p = make(); CHECK(p.grains(g) == 0); }   // nothing has played yet
+    {   // Cloud, Pitch +7, Grain 100 ms, Density 20, Mono: the grains read back from the input at speed 2^(7/12), centred
+        auto p = make({{Mode, Cloud}, {Grain, 100}, {Density, 20}, {Pitch, 7}, {Spread, 0}, {Spray, 0}, {Harmony, 0}}); feedTone(p, 1.5);
+        const int n = p.grains(g); CHECK(n > 0); CHECK(n <= Processor::kScopeGrains); CHECK(n == p.activeGrains());
+        for (int i = 0; i < n; ++i) { const double* s = g + i * Processor::kGrainValues;
+            CHECK(s[0] > 0.0); CHECK(s[0] < 2.0); CHECK(s[1] == doctest::Approx(std::exp2(7.0 / 12.0)).epsilon(1e-6)); CHECK(s[2] >= 0.0); CHECK(s[2] <= 1.0);
+            CHECK(s[3] == doctest::Approx(0.1 * std::exp2(7.0 / 12.0)).epsilon(0.02)); CHECK(std::abs(s[4]) < 1e-6); }
+    }
+    {   // Wide: the pans spread over -1 .. +1; Scatter: the reads reach far back
+        auto p = make({{Mode, Scatter}, {Grain, 50}, {Density, 80}, {Spread, 2}}); feedTone(p, 3.0);
+        double mn = 9, mx = -9, far = 0; for (int rep = 0; rep < 40; ++rep) { feedTone(p, 0.05); const int n = p.grains(g); for (int i = 0; i < n; ++i) { const double* s = g + i * Processor::kGrainValues; mn = std::min(mn, s[4]); mx = std::max(mx, s[4]); far = std::max(far, s[0]); } }
+        CHECK(mn < -0.5); CHECK(mx > 0.5); CHECK(far > 1.0);
+    }
+    {   // Glitch: some grains are reversed (negative speed)
+        auto p = make({{Mode, Glitch}, {Grain, 50}, {Density, 80}}); feedTone(p, 2.0);
+        int rev = 0, all = 0; for (int rep = 0; rep < 60; ++rep) { feedTone(p, 0.05); const int n = p.grains(g); for (int i = 0; i < n; ++i) { ++all; if (g[i * Processor::kGrainValues + 1] < 0.0) ++rev; } }
+        CHECK(all > 0); CHECK(rev > 0); CHECK(rev < all);
+    }
+}

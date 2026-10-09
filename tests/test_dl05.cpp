@@ -124,3 +124,33 @@ TEST_CASE("DL05 extremes stay finite") {
         const auto y = run(p, noise(0, 3.0, 8)); for (float v : y) { CHECK(std::isfinite(v)); CHECK(std::abs(v) < 8.0f); }
     }
 }
+
+namespace {
+void feedNoise(Processor& p, double seconds) {
+    std::vector<float> l(static_cast<size_t>(seconds * kFs)); for (size_t i = 0; i < l.size(); ++i) l[i] = static_cast<float>(0.3 * std::sin(0.07 * static_cast<double>(i)));
+    std::vector<float> r = l;
+    for (size_t off = 0; off < l.size(); off += 256) { float* b[2] = {l.data() + off, r.data() + off}; p.process(b, 2, static_cast<int>(std::min<size_t>(256, l.size() - off))); }
+}
+}
+TEST_CASE("DL05 grains: where each grain reads now (screen read-outs)") {
+    double g[Processor::kGrainSlots * Processor::kGrainValues];
+    { auto p = make(); p.grains(g); for (double v : g) CHECK(v == 0.0); }   // nothing has played yet
+    {   // Forward, 1/4 at 120 bpm: every grain reads exactly one note (0.5 s) back, forwards at speed 1
+        auto p = make({{Mode, Forward}, {Spray, 0}}); feedNoise(p, 2.0); p.grains(g);
+        int on = 0; for (int i = 0; i < Processor::kGrainSlots; ++i) { const double* s = g + i * Processor::kGrainValues; if (s[0] < 0.5) continue; ++on;
+            CHECK(s[1] == doctest::Approx(0.5).epsilon(0.004)); CHECK(s[2] == doctest::Approx(1.0)); CHECK(s[3] >= 0.0); CHECK(s[3] <= 1.0); CHECK(s[4] > 0.0); }
+        CHECK(on >= 1);
+    }
+    {   // Reverse: backwards at speed -1; within the last two notes (the segment is read from its far end)
+        auto p = make({{Mode, Reverse}, {Spray, 0}}); feedNoise(p, 2.0); p.grains(g);
+        int on = 0; for (int i = 0; i < Processor::kGrainSlots; ++i) { const double* s = g + i * Processor::kGrainValues; if (s[0] < 0.5) continue; ++on;
+            CHECK(s[2] == doctest::Approx(-1.0)); CHECK(s[1] >= 0.0); CHECK(s[1] <= 1.0 + 0.01); }
+        CHECK(on >= 1);
+    }
+    {   // Pitch +12: speed 2; Freeze: the reads stay within the frozen note
+        auto p = make({{Mode, Reverse}, {Pitch, 1}}); feedNoise(p, 2.0); p.grains(g);
+        for (int i = 0; i < Processor::kGrainSlots; ++i) if (g[i * Processor::kGrainValues] > 0.5) CHECK(g[i * Processor::kGrainValues + 2] == doctest::Approx(-2.0));
+        auto q = make({{Mode, Forward}, {Freeze, 1}}); feedNoise(q, 1.0); CHECK(q.frozen()); feedNoise(q, 1.5); q.grains(g);
+        for (int i = 0; i < Processor::kGrainSlots; ++i) if (g[i * Processor::kGrainValues] > 0.5) { CHECK(g[i * Processor::kGrainValues + 1] >= 0.0); CHECK(g[i * Processor::kGrainValues + 1] <= 0.5 + 0.01); }
+    }
+}

@@ -32,6 +32,12 @@ public:
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
     double timeSamples() const;   // P in use
+    // for the screen (audio thread): per grain slot (kGrainSlots) 5 values: on (0 / 1), how far back in the recording it reads now (seconds), its speed (direction x rate: -2 .. 2),
+    // where it is in its window (0 .. 1) and how much source it spans (seconds, length x rate). `frozen()`: the recording is stopped.
+    static constexpr int kGrainSlots = 4, kGrainValues = 5;
+    void grains(double* out) const;
+    bool frozen() const { return frozen_; }
+    double sampleRate() const { return fs_; }
 
 private:
     struct Grain { bool on = false; double s0 = 0, dir = 1, rate = 1, tau = 0, len = 2; };

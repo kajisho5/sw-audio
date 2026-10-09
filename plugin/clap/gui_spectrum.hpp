@@ -13,6 +13,7 @@
 namespace sw::gui {
 
 constexpr int kSpecBands = 64;
+constexpr int kMaxReadouts = 160;   // the most values a product's `readouts` trait may hand to the screen (RS05 sends a 2 x 64 point waveform)
 constexpr int kSpecFft = 4096;
 constexpr int kGonioPts = 160;   // stereo scope: correlation, then L, R of 160 recent samples (every 8th)
 

@@ -128,6 +128,19 @@ void Processor::spawn() {
     g->l = static_cast<float>(std::cos(ang)); g->r = static_cast<float>(std::sin(ang));
 }
 
+int Processor::grains(double* out) const {
+    int n = 0;
+    if (!prepared_) return 0;
+    for (const auto& g : grains_) {
+        if (!g.on || n >= kScopeGrains) continue;
+        double* o = out + n * kGrainValues;
+        o[0] = std::max(0.0, (static_cast<double>(t_) - g.pos) / fs_); o[1] = g.step; o[2] = static_cast<double>(g.age) / g.len;
+        o[3] = g.len * std::abs(g.step) / fs_; o[4] = std::atan2(static_cast<double>(g.r), static_cast<double>(g.l)) * 4.0 / kPi - 1.0;
+        ++n;
+    }
+    return n;
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);

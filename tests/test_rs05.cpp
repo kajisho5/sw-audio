@@ -72,3 +72,23 @@ TEST_CASE("RS05 loud input stays finite; stereo channels are separate") {
     auto q = make({{Makeup, 0}}); const auto a = tonal(0.4, 2.0), b = tonal(0.3, 2.0); const auto r = run2(q, a, b);
     for (size_t i = 24000; i + kLatency < a.size(); i += 97) { NEAR(r.first[i + kLatency], a[i], 1e-5); NEAR(r.second[i + kLatency], b[i], 1e-5); }
 }
+
+TEST_CASE("RS05 scope: the screen sees what came in and what goes out (restored peaks above the ceiling)") {
+    const double ceil = std::pow(10.0, -3.0 / 20.0);
+    auto x = sine(0, 0.6, 120); const auto c = clip(x, ceil * 1.01);   // 120 Hz, clipped flat just above the -3 dBFS threshold
+    auto p = make({{Threshold, -3}, {Detect, 0}, {Makeup, 0}});
+    double in[Processor::kScopeBins], out[Processor::kScopeBins];
+    p.scope(in, out); for (int b = 0; b < Processor::kScopeBins; ++b) { CHECK(in[b] == 0.0); CHECK(out[b] == 0.0); }   // nothing has left yet
+    std::vector<float> l = c, r = c;
+    for (size_t off = 0; off < l.size(); off += 256) { float* b[2] = {l.data() + off, r.data() + off}; p.process(b, 2, static_cast<int>(std::min<size_t>(256, l.size() - off))); }
+    p.scope(in, out);
+    double mi = 0, mo = 0; for (int b = 0; b < Processor::kScopeBins; ++b) { mi = std::max(mi, std::abs(in[b])); mo = std::max(mo, std::abs(out[b])); }
+    CHECK(mi <= ceil * 1.01 + 1e-6); CHECK(mi > ceil * 0.95);   // what came in is flat at the ceiling
+    CHECK(mo > mi * 1.03);                                      // the repair pushed the peaks above it
+    CHECK(p.runsRestored() > 0);
+    // away from the peaks the two agree (the repair only touches the clipped runs)
+    int same = 0; for (int b = 0; b < Processor::kScopeBins; ++b) if (std::abs(in[b] - out[b]) < 1e-9) ++same;
+    CHECK(same > Processor::kScopeBins / 4);
+    // after a reset (prepare) the window is empty again
+    p.prepare(kFs, 256); p.scope(in, out); for (int b = 0; b < Processor::kScopeBins; ++b) CHECK(out[b] == 0.0);
+}

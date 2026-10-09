@@ -89,6 +89,20 @@ void Processor::spawn() {
     hopLeft_ = static_cast<int>(hop);
 }
 
+void Processor::grains(double* out) const {
+    for (int i = 0; i < kGrainSlots * kGrainValues; ++i) out[i] = 0.0;
+    if (!prepared_) return;
+    const double P = timeSamples(), ref = frozen_ ? tf_ : static_cast<double>(w_);
+    for (int i = 0; i < kGrainSlots; ++i) {
+        const Grain& g = grain_[static_cast<size_t>(i)];
+        if (!g.on) continue;
+        double src = g.s0 + g.dir * g.rate * g.tau;
+        if (frozen_) { const double base = tf_ - P; src = base + std::fmod(std::fmod(src - base, P) + P, P); }   // as process() reads it
+        double* o = out + i * kGrainValues;
+        o[0] = 1.0; o[1] = std::max(0.0, (ref - src) / fs_); o[2] = g.dir * g.rate; o[3] = g.tau / g.len; o[4] = g.len * g.rate / fs_;
+    }
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);

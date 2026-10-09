@@ -28,6 +28,11 @@ public:
     int latencySamples() const { return kLatency; }
     int runsRestored() const { return count_; }
     double ceilingUsed() const { return used_; }   // the ceiling (linear) of the last analysis of channel 0
+    // for the screen (audio thread): the last kScopeWin samples that left the plug-in on channel 0 in kScopeBins bins (the sample with the largest size in each bin, oldest first):
+    // `in` = as they came in, `out` = after the repair (before Makeup). Zeros until that much has left.
+    static constexpr int kScopeBins = 64, kScopeWin = 1024;
+    void scope(double* in, double* out) const;
+    double scopeMs() const { return 1000.0 * kScopeWin / fs_; }
 
 private:
     struct Chan { std::vector<double> ring, raw; double autoLevel = 0.0; int autoAge = 1 << 30; };

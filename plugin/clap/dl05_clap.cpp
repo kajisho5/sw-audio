@@ -9,6 +9,9 @@ struct Dl05 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = sw::dl05::Mix;
+    // for the screen: Time in seconds, frozen, then per grain slot: on, how far back it reads (s), speed, place in its window, source span (s)
+    static constexpr int kReadouts = 2 + Core::kGrainSlots * Core::kGrainValues;
+    static void readouts(const Core& c, double* o) { o[0] = c.timeSamples() / c.sampleRate(); o[1] = c.frozen() ? 1.0 : 0.0; c.grains(o + 2); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DELAY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.dl05", "SW DL05 Reverse", "SEVENTHWELL",

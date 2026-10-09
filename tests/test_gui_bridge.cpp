@@ -92,6 +92,17 @@ TEST_CASE("GUI readouts: the values a core measures follow the spectrum in the u
     Fake g; g.v = {1.0}; gui::Session<Fake> t(g); const std::string w = t.onMessage("p"); CHECK(w.substr(w.size() - 3) == "]);"); CHECK(w.find("-23.5") == std::string::npos); CHECK(w.find("],[],[0.5,") != std::string::npos);   // no readouts: an empty array keeps the place of the stereo values
 }
 
+TEST_CASE("GUI readouts: up to kMaxReadouts values go through (RS05 sends a 2 x 64 point waveform); a core cannot send more than that") {
+    Fake f; f.v = {1.0}; f.nro = 131; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
+    const size_t a = u.find("],[-23.5,"); REQUIRE(a != std::string::npos);
+    const size_t e = u.find("],[", a + 3); REQUIRE(e != std::string::npos);
+    size_t commas = 0; for (size_t i = a; i < e; ++i) if (u[i] == ',') ++commas;
+    CHECK(commas == 131);                                              // the "],[" before the first value counts one comma, the 130 between 131 values the rest
+    Fake g; g.v = {1.0}; g.nro = 5000; gui::Session<Fake> t(g); const std::string w = t.onMessage("p");
+    const size_t b = w.find("],[-23.5,"); REQUIRE(b != std::string::npos); const size_t d = w.find("],[", b + 3); size_t c2 = 0; for (size_t i = b; i < d; ++i) if (w[i] == ',') ++c2;
+    CHECK(c2 == static_cast<size_t>(gui::kMaxReadouts));               // clipped to the limit
+}
+
 TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independent signals; the points are the recent samples") {
     gui::SpectrumTap tap; const int n = 6000; std::vector<float> l(n), r(n), r2(n);
     for (int i = 0; i < n; ++i) { l[i] = static_cast<float>(0.5 * std::sin(0.05 * i)); r[i] = l[i]; r2[i] = -l[i]; }
