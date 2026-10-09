@@ -260,18 +260,9 @@ bool Processor::adoptIr() {
 
 void Processor::loadIr(const float* data, size_t frames, int channels, double sourceRate) {
     channels = std::clamp(channels, 1, 2);
-    const double rate = sourceRate > 0.0 ? sourceRate : 48000.0;
-    // the project state keeps the IR as it came
-    {
-        const uint32_t fr = static_cast<uint32_t>(frames); const float rf = static_cast<float>(rate);
-        savedIr_.clear();
-        if (frames > 0) {
-            savedIr_ = {'R', '4', 'I', 'R', static_cast<uint8_t>(channels), static_cast<uint8_t>(fr), static_cast<uint8_t>(fr >> 8), static_cast<uint8_t>(fr >> 16), static_cast<uint8_t>(fr >> 24)};
-            uint8_t rb[4]; std::memcpy(rb, &rf, 4); savedIr_.insert(savedIr_.end(), rb, rb + 4);
-            const size_t at = savedIr_.size(); savedIr_.resize(at + frames * static_cast<size_t>(channels) * 4);
-            std::memcpy(savedIr_.data() + at, data, frames * static_cast<size_t>(channels) * 4);
-        }
-    }
+    // an IR from a shared project or a file: values that are not numbers are silence, the rest at most +24 dBFS; a rate outside 1 kHz .. 768 kHz (not a number, zero, negative) is taken as 48 kHz
+    // (a tiny rate would ask for an impossible length)
+    const double rate = std::isfinite(sourceRate) && sourceRate >= 1000.0 && sourceRate <= 768000.0 ? sourceRate : 48000.0;
     // the mailbox: a ready IR that the audio thread has not taken yet is replaced; while the audio thread is taking one (a moment) or another loader writes, wait
     for (;;) {
         int s = 0; if (pendState_.v.compare_exchange_strong(s, 1)) break;
@@ -280,8 +271,19 @@ void Processor::loadIr(const float* data, size_t frames, int channels, double so
     }
     const size_t n = frames * static_cast<size_t>(channels);
     pend_.v.assign(data, data + n);
-    for (float& x : pend_.v) if (!std::isfinite(x)) x = 0.0f;
+    for (float& x : pend_.v) x = std::isfinite(x) ? std::clamp(x, -16.0f, 16.0f) : 0.0f;
     pend_.ch = channels; pend_.rate = rate;
+    // the project state keeps the IR as it is used (the loading thread's own copy; saveExtra never reads the audio thread's)
+    {
+        const uint32_t fr = static_cast<uint32_t>(frames); const float rf = static_cast<float>(rate);
+        savedIr_.clear();
+        if (frames > 0) {
+            savedIr_ = {'R', '4', 'I', 'R', static_cast<uint8_t>(channels), static_cast<uint8_t>(fr), static_cast<uint8_t>(fr >> 8), static_cast<uint8_t>(fr >> 16), static_cast<uint8_t>(fr >> 24)};
+            uint8_t rb[4]; std::memcpy(rb, &rf, 4); savedIr_.insert(savedIr_.end(), rb, rb + 4);
+            const size_t at = savedIr_.size(); savedIr_.resize(at + n * 4);
+            std::memcpy(savedIr_.data() + at, pend_.v.data(), n * 4);
+        }
+    }
     pendState_.store(2);
 }
 

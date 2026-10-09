@@ -109,6 +109,12 @@ public:
         const auto& s = spec(id);
         return stepped(id) ? static_cast<double>(std::lround(s.toNorm(v) * (s.numSteps() - 1))) : s.toNorm(v);
     }
+    // a host value as it may arrive from a host or a saved session: a number that is not finite reads as the default, anything else is
+    // clamped into the parameter's host range (0..1, or 0..steps-1; hostToPlain rounds to a step)
+    static double sanitizeHost(int id, double h) {
+        if (!std::isfinite(h)) return plainToHost(id, spec(id).def);
+        return std::clamp(h, 0.0, stepped(id) ? static_cast<double>(std::max(0, spec(id).numSteps() - 1)) : 1.0);
+    }
 
     explicit Plugin(const clap_host_t* host) : host_(host), host_values_(static_cast<size_t>(numParams())), dirty_(static_cast<size_t>(numParams())) {
         for (int i = 0; i < numParams(); ++i) { host_values_[static_cast<size_t>(i)].store(plainToHost(i, spec(i).def)); dirty_[static_cast<size_t>(i)].store(true); }
@@ -139,8 +145,9 @@ private:
         const auto* ev = reinterpret_cast<const clap_event_param_value_t*>(h);
         if (ev->param_id >= static_cast<clap_id>(numParams())) return;
         const int id = static_cast<int>(ev->param_id);
-        host_values_[static_cast<size_t>(id)].store(ev->value);
-        apply(id, hostToPlain(id, ev->value));
+        const double v = sanitizeHost(id, ev->value);
+        host_values_[static_cast<size_t>(id)].store(v);
+        apply(id, hostToPlain(id, v));
     }
 
     // ---- the plug-in window (CLAP gui extension; the platform view is gui_mac.mm / gui_win.cpp, none on Linux)
@@ -461,6 +468,7 @@ private:
         while (n > 0) { const int64_t w = s->write(s, c, n); if (w <= 0) return false; c += w; n -= static_cast<uint64_t>(w); }
         return true;
     }
+    static constexpr uint32_t kMaxStateParams = 65536;
     static bool readAll(const clap_istream_t* s, void* d, uint64_t n) {
         char* c = static_cast<char*>(d);
         while (n > 0) { const int64_t r = s->read(s, c, n); if (r <= 0) return false; c += r; n -= static_cast<uint64_t>(r); }
@@ -481,10 +489,12 @@ private:
     static bool stateLoad(const clap_plugin_t* p, const clap_istream_t* s) {
         char magic[4]; uint32_t count = 0;
         if (!readAll(s, magic, 4) || std::memcmp(magic, "SWA1", 4) != 0 || !readAll(s, &count, 4)) return false;
+        if (count > kMaxStateParams) return false;   // no product has that many: a damaged or foreign state
+        std::vector<double> vals(count);              // read whole before anything changes: a cut state changes nothing
+        for (uint32_t i = 0; i < count; ++i) if (!readAll(s, &vals[i], 8)) return false;
         Plugin* pl = self(p);
-        for (uint32_t i = 0; i < count; ++i) {
-            double v; if (!readAll(s, &v, 8)) return false;
-            if (i < static_cast<uint32_t>(numParams())) { pl->host_values_[i].store(v); pl->dirty_[i].store(true); }
+        for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
+            pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
         }
         if constexpr (HasExtraState<typename P::Core>::value) {   // optional: states saved before the extra block existed end here
             char xm[4]; uint32_t len = 0;
