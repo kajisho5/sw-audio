@@ -21,7 +21,7 @@ enum PresetId { None = 0, Low = 1, High = 2, RobotP = 3, Radio = 4, Anon = 5 };
 
 const std::vector<ParamSpec>& specs();
 PitchConfig engineConfig(double fs);
-std::vector<std::pair<int, double>> presetValues(int preset);   // (Pitch, Formant, Robot) written by a preset
+std::array<std::pair<int, double>, 3> presetValues(int preset);   // (Pitch, Formant, Robot) written by a preset; a preset that writes nothing gives ids of -1 (a fixed array: it is called on the audio thread)
 
 class Processor : public RatioSource {
 public:

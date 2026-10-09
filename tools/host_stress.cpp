@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
     });
     std::thread window([&] {
         Rng rng(7);
-        static const char* calls[] = {"tap", "learn", "forget", "assist 1", "assist 0", "linkwatch 1", "linkwatch 0", "randomize", "clear", "remember", "reset", "measure", "autoalign", "ringout 1", "ringout 0", "lock", "clearlive", "flat",
+        static const char* calls[] = {"tap", "learn", "check", "forget", "assist 1", "assist 0", "linkwatch 1", "linkwatch 0", "randomize", "clear", "remember", "reset", "measure", "autoalign", "ringout 1", "ringout 0", "lock", "clearlive", "flat",
                                       "refclear 1", "refclear 2", "looprange 0.2 0.6", "resetcounts", "resetmeters", "arm 1", "arm 0", "output 1", "output 0", "record 1", "record 0", "mark", "clap 150", "lockall 1", "lockall 0", "export", "presetlist", "irabort", "refabort"};
         while (!stop.load()) {
             const double r = rng.next();

@@ -16,7 +16,7 @@ public:
     void prepare(double fs) {
         fs_ = fs; dec_ = std::max(1, static_cast<int>(std::lround(fs / 16000.0))); fd_ = fs / dec_;
         frame_ = static_cast<int>(std::lround(0.02 * fd_)); hop_ = frame_ / 2;
-        buf_.assign(static_cast<size_t>(frame_), 0.0); pos_ = 0; sinceHop_ = 0; acc_ = 0; accN_ = 0;
+        buf_.assign(static_cast<size_t>(frame_), 0.0); tmp_.assign(static_cast<size_t>(frame_), 0.0); pos_ = 0; sinceHop_ = 0; acc_ = 0; accN_ = 0;
         floor_ = 1e-4; hist_ = 0; active_ = false; levelDb_ = -120; lastR_ = 0; lastZ_ = 0; started_ = 0;
     }
     // feeds mono samples; returns the activity after the last sample
@@ -40,7 +40,7 @@ private:
         if (++sinceHop_ >= hop_) { sinceHop_ = 0; frameDone(); }
     }
     void frameDone() {
-        const int N = frame_; std::vector<double>& f = tmp_; f.resize(static_cast<size_t>(N));
+        const int N = frame_; std::vector<double>& f = tmp_;   // (sized in prepare(): this runs on the audio thread)
         double mean = 0; for (int i = 0; i < N; ++i) { f[static_cast<size_t>(i)] = buf_[static_cast<size_t>((pos_ + i) % N)]; mean += f[static_cast<size_t>(i)]; }
         mean /= N; double e = 0; for (auto& v : f) { v -= mean; e += v * v; }
         const double rms = std::sqrt(e / N); levelDb_ = 20.0 * std::log10(std::max(rms, 1e-9));

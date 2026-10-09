@@ -41,7 +41,7 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; linBands_.reserve(kBands); }
 
 int Processor::kernelLengthFor(double fs, double base) { int L = 2048; while (L < base * fs / 48000.0 * 0.92) L *= 2; return L; }
 
@@ -82,6 +82,7 @@ void Processor::prepare(double sampleRate, int) {
     fadeLen_ = static_cast<int>(std::lround(0.020 * fs_));
     res_.setup(fs_);
     for (auto& c : conv_) { c.prepare(L_, 128, 1); c.setFadeSamples(fadeLen_); }
+    designer_.prepare(L_);
     for (auto& b : band_) { for (auto& f : b.f) f.reset(); for (auto& d : b.det) d.reset(); b.env = {}; b.offset = {}; }
     for (int p = 0; p < 2; ++p) { nat_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); nat_[static_cast<size_t>(p)][kNatDelay] = 1.0; natHist_[static_cast<size_t>(p)].assign(kNatTaps, 0.0); }
     natPos_ = 0;
@@ -117,9 +118,9 @@ void Processor::configure(int ramp) {
 void Processor::buildNatural() {
     // phase-only correction: arg(analog) - arg(digital) of the static bands on each path, as a short linear FIR
     const int N = 256;
-    Fft fft(N);
+    Fft& fft = natFft_;   // (kept, with its work array: this runs on the audio thread when a knob moves)
     for (int p = 0; p < 2; ++p) {
-        std::vector<std::complex<double>> C(static_cast<size_t>(N));
+        std::vector<std::complex<double>>& C = natC_;
         for (int k = 0; k <= N / 2; ++k) {
             const double f = std::min(static_cast<double>(k) * fs_ / N, 0.499 * fs_);
             std::complex<double> ratio = 1.0;
@@ -146,9 +147,9 @@ void Processor::buildNatural() {
 
 void Processor::buildLinear(bool immediate) {
     for (int p = 0; p < 2; ++p) {
-        std::vector<BandShape> lin;
+        std::vector<BandShape>& lin = linBands_; lin.clear();
         for (int b = 0; b < kBands; ++b) if (active(b) && onPath(b, p)) lin.push_back(shape(b));
-        conv_[static_cast<size_t>(p)].setKernel(designKernel(lin, {}, L_, fs_), immediate);
+        conv_[static_cast<size_t>(p)].setKernel(designer_.design([&](double f) { return totalMagnitude(lin, f); }, [](double) { return 1.0; }, false, fs_), immediate);
     }
     sinceKernel_ = 0;
 }

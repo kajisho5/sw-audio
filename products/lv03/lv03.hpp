@@ -21,7 +21,7 @@ enum MicId { Handheld = 0, Lavalier = 1, Headset = 2, Podium = 3 };
 
 const std::vector<ParamSpec>& specs();
 // the parameters a Mic type writes: (id, value), all but Mic and Out
-std::vector<std::pair<int, double>> micPreset(int mic);
+std::array<std::pair<int, double>, 14> micPreset(int mic);   // (a fixed array: it is called on the audio thread when Mic is set)
 
 class Processor {
 public:

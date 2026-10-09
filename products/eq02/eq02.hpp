@@ -11,6 +11,7 @@
 #include "sw/param.hpp"
 #include "sw/resonance.hpp"
 #include <array>
+#include <complex>
 #include <vector>
 
 namespace sw::eq02 {
@@ -59,6 +60,10 @@ private:
     };
     std::array<Band, kBands> band_{};
     std::array<Convolver, 2> conv_{};
+    FirDesigner designer_;                       // the kernel design's tables and work arrays (the design runs on the audio thread: nothing is allocated there)
+    std::vector<BandShape> linBands_ = std::vector<BandShape>(0);
+    Fft natFft_{256};
+    std::vector<std::complex<double>> natC_ = std::vector<std::complex<double>>(256);
     std::array<std::vector<double>, 2> nat_{}, natHist_{};
     double atk_ = 0, rel_ = 0;
 };

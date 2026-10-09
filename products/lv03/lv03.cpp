@@ -41,13 +41,13 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-std::vector<std::pair<int, double>> micPreset(int m) {
+std::array<std::pair<int, double>, 14> micPreset(int m) {
     const MicSet& k = kMic[std::clamp(m, 0, 3)];
-    return {{Trim, k.trim}, {Hpf, k.hpf}, {Phase, 0}, {GateThresh, k.thr}, {GateRange, k.range}, {EqLow, k.low}, {EqMid, k.mid}, {EqHigh, k.high}, {EqMidF, k.midF},
-            {FbGuard, k.fb}, {CompThresh, k.cth}, {CompRatio, k.cr}, {DeessAmount, k.ds}, {DeessFreq, k.dsF}};
+    return {{{Trim, k.trim}, {Hpf, k.hpf}, {Phase, 0}, {GateThresh, k.thr}, {GateRange, k.range}, {EqLow, k.low}, {EqMid, k.mid}, {EqHigh, k.high}, {EqMidF, k.midF},
+            {FbGuard, k.fb}, {CompThresh, k.cth}, {CompRatio, k.cr}, {DeessAmount, k.ds}, {DeessFreq, k.dsF}}};
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; writes_.reserve(32); }
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate; guard_.prepare(fs_, 4); guard_.setParams(1, -12, 0.1, 8.0);
@@ -81,7 +81,7 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     applyParam(id, v);
     if (id != Mic) writes_.erase(std::remove_if(writes_.begin(), writes_.end(), [id](const std::pair<int, double>& w) { return w.first == id; }), writes_.end());
-    else { const auto p = micPreset(static_cast<int>(v + 0.5)); for (const auto& w : p) applyParam(w.first, w.second); writes_ = p; }
+    else { const auto p = micPreset(static_cast<int>(v + 0.5)); for (const auto& w : p) applyParam(w.first, w.second); writes_.assign(p.begin(), p.end()); }
 }
 
 int Processor::takeParamWrite(int& id, double& plain) {

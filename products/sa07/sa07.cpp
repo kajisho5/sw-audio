@@ -29,7 +29,7 @@ constexpr double kPopRate = 30.0, kDustRate = 600.0, kPopPeakDb = -24.0, kDustPe
 double u01(uint32_t& s) { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s / 4294967296.0; }
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; writes_.reserve(8); }
 
 int Processor::latencySamples() const { return std::max(2, static_cast<int>(std::lround(0.001 * fs_))); }
 

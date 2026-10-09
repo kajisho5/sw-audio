@@ -41,6 +41,8 @@ private:
     bool dirty_ = false, iirDirty_ = false, prepared_ = false;
     std::array<double, kNumParams> target_{};
     Convolver conv_;
+    FirDesigner designer_;                       // the kernel design's tables and work arrays (the design runs on the audio thread: nothing is allocated there)
+    std::vector<BandShape> linBands_, minBands_;
     std::array<std::array<Svf, kBands>, 2> iir_{};
     std::vector<float> sideDelay_;
     struct GuardCache { double key[4] = {-1, -1, -1, -1}; bool guard = false; };

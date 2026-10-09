@@ -13,27 +13,32 @@ constexpr int kControl = 16;
 int fact(int n) { int f = 1; for (int i = 2; i <= n; ++i) f *= i; return f; }
 }
 
+// (no std::vector here: both run on the audio thread when the order changes)
 std::array<int, kModules> orderFromIndex(int index) {
-    std::vector<int> left = {0, 1, 2, 3, 4, 5};
+    std::array<int, kModules> left = {0, 1, 2, 3, 4, 5};
+    int n = kModules;
     std::array<int, kModules> o{};
     index = std::clamp(index, 0, fact(kModules) - 1);
     for (int k = 0; k < kModules; ++k) {
         const int f = fact(kModules - 1 - k), pick = index / f;
         index %= f;
         o[static_cast<size_t>(k)] = left[static_cast<size_t>(pick)];
-        left.erase(left.begin() + pick);
+        for (int j = pick; j + 1 < n; ++j) left[static_cast<size_t>(j)] = left[static_cast<size_t>(j + 1)];
+        --n;
     }
     return o;
 }
 
 int indexFromOrder(const std::array<int, kModules>& order) {
-    std::vector<int> left = {0, 1, 2, 3, 4, 5};
-    int index = 0;
+    std::array<int, kModules> left = {0, 1, 2, 3, 4, 5};
+    int n = kModules, index = 0;
     for (int k = 0; k < kModules; ++k) {
-        const auto it = std::find(left.begin(), left.end(), order[static_cast<size_t>(k)]);
-        if (it == left.end()) return 0;
-        index += static_cast<int>(it - left.begin()) * fact(kModules - 1 - k);
-        left.erase(it);
+        int at = -1;
+        for (int j = 0; j < n; ++j) if (left[static_cast<size_t>(j)] == order[static_cast<size_t>(k)]) { at = j; break; }
+        if (at < 0) return 0;
+        index += at * fact(kModules - 1 - k);
+        for (int j = at; j + 1 < n; ++j) left[static_cast<size_t>(j)] = left[static_cast<size_t>(j + 1)];
+        --n;
     }
     return index;
 }

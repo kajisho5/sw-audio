@@ -79,24 +79,28 @@ public:
         if (cnt[0] < 3 || cnt[1] < 3) return r;
         const double meanQ = c1[quiet] * 6.0, meanL = c1[loud] * 6.0;
         if (meanL - meanQ < 4.0) return r;   // the two groups do not differ in level: a threshold cannot tell them apart
-        std::vector<double> pq, pl, cq, cl;
-        for (int i = 0; i < n; ++i) { (grp[static_cast<size_t>(i)] == quiet ? pq : pl).push_back(peak_[static_cast<size_t>(i)]); (grp[static_cast<size_t>(i)] == quiet ? cq : cl).push_back(cent_[static_cast<size_t>(i)]); }
-        const double loudMin = percentile(pl, 0.10), quietMax = percentile(pq, 0.90);
+        std::array<double, kMaxOnsets> pq, pl, cq, cl; int nq = 0, nl = 0;   // (on the stack: finish() runs on the audio thread, which does not allocate)
+        for (int i = 0; i < n; ++i) {
+            const size_t k = static_cast<size_t>(i);
+            if (grp[k] == quiet) { pq[static_cast<size_t>(nq)] = peak_[k]; cq[static_cast<size_t>(nq)] = cent_[k]; ++nq; } else { pl[static_cast<size_t>(nl)] = peak_[k]; cl[static_cast<size_t>(nl)] = cent_[k]; ++nl; }
+        }
+        const double loudMin = percentile(pl.data(), nl, 0.10), quietMax = percentile(pq.data(), nq, 0.90);
         double thr = loudMin > quietMax ? 0.5 * (loudMin + quietMax) : 0.5 * (meanL + meanQ);
         thr = std::clamp(thr, -80.0, -1.0);
-        const double tLo = percentile(cl, 0.10), tHi = percentile(cl, 0.90), bLo = percentile(cq, 0.10), bHi = percentile(cq, 0.90);
+        const double tLo = percentile(cl.data(), nl, 0.10), tHi = percentile(cl.data(), nl, 0.90), bLo = percentile(cq.data(), nq, 0.10), bHi = percentile(cq.data(), nq, 0.90);
+        const double mq = mean(cq.data(), nq), ml = mean(cl.data(), nl);
         double hpf = 0.25 * tLo, lpf = 2.5 * tHi;
-        if (mean(cq) < mean(cl)) hpf = std::clamp(std::sqrt(tLo * bHi), hpf, 0.8 * tLo);          // bleed below the wanted hits: the high-pass between them
-        else if (mean(cq) > mean(cl)) lpf = std::clamp(std::sqrt(tHi * bLo), 1.5 * tHi, lpf);     // bleed above: the low-pass between them
+        if (mq < ml) hpf = std::clamp(std::sqrt(tLo * bHi), hpf, 0.8 * tLo);          // bleed below the wanted hits: the high-pass between them
+        else if (mq > ml) lpf = std::clamp(std::sqrt(tHi * bLo), 1.5 * tHi, lpf);     // bleed above: the low-pass between them
         r.ok = true; r.thresholdDb = thr; r.hpfHz = std::clamp(hpf, 20.0, 2000.0); r.lpfHz = std::clamp(lpf, 1000.0, 20000.0);
-        r.targetCount = static_cast<int>(pl.size()); r.bleedCount = static_cast<int>(pq.size());
+        r.targetCount = nl; r.bleedCount = nq;
         return r;
     }
 
 private:
     static double sq(double x) { return x * x; }
-    static double mean(const std::vector<double>& v) { double s = 0; for (double x : v) s += x; return v.empty() ? 0.0 : s / static_cast<double>(v.size()); }
-    static double percentile(std::vector<double> v, double p) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[std::min(v.size() - 1, static_cast<size_t>(p * static_cast<double>(v.size() - 1) + 0.5))]; }
+    static double mean(const double* v, int n) { double s = 0; for (int i = 0; i < n; ++i) s += v[i]; return n > 0 ? s / n : 0.0; }
+    static double percentile(double* v, int n, double p) { if (n <= 0) return 0.0; std::sort(v, v + n); return v[std::min(n - 1, static_cast<int>(p * static_cast<double>(n - 1) + 0.5))]; }   // (sorts in place)
     void cancel() { started_ = false; left_ = total_ = 0; count_ = 0; env_ = slow_ = 0.0; since_ = refractory_ + 1; capturing_ = false; capN_ = 0; }
     // the measure of one onset: the peak of the captured samples, and their spectral centroid (100 Hz up to 0.45 fs)
     void analyse() {

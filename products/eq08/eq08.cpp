@@ -38,7 +38,7 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; linBands_.reserve(kBands); minBands_.reserve(kBands); }
 
 int Processor::kernelLengthFor(double fs, double base) {  // base taps at 48 kHz, same duration at other rates (power of two)
     int L = 2048;
@@ -68,7 +68,8 @@ bool Processor::guarded(int b) {
     const double* t = &target_[static_cast<size_t>(b * kPerBand + Type)];
     if (c.key[0] == t[0] && c.key[1] == t[1] && c.key[2] == t[2] && c.key[3] == t[3]) return c.guard;
     for (int i = 0; i < 4; ++i) c.key[i] = t[i];
-    const auto h = designKernel({shape(b)}, {}, L_, fs_);
+    const BandShape one = shape(b);
+    const auto& h = designer_.design([&](double f) { return one.magnitude(f); }, [](double) { return 1.0; }, false, fs_);
     const int D = L_ / 2, edge = D - static_cast<int>(kGuardWindowMs * 0.001 * fs_);
     double pre = 0; for (int n = 0; n < edge; ++n) pre += h[static_cast<size_t>(n)] * h[static_cast<size_t>(n)];
     c.guard = 10.0 * std::log10(pre / std::max(h[static_cast<size_t>(D)] * h[static_cast<size_t>(D)], 1e-30) + 1e-300) > kGuardDb;
@@ -76,21 +77,22 @@ bool Processor::guarded(int b) {
 }
 
 void Processor::rebuildKernel(bool immediate) {
-    std::vector<BandShape> lin, mn;
+    std::vector<BandShape>& lin = linBands_; std::vector<BandShape>& mn = minBands_;   // (kept, reserved: this runs on the audio thread when a knob moves)
+    lin.clear(); mn.clear();
     const bool guard = target_[Guard] > 0.5;
     for (int b = 0; b < kBands; ++b) {
         if (!active(b)) continue;
         if (guard && guarded(b)) mn.push_back(shape(b)); else lin.push_back(shape(b));
     }
-    std::vector<double> h;
+    const std::vector<double>* h;
     if (mode_ == Mixed) {  // split the linear part's magnitude in the log domain around 200 Hz
         auto w = [](double f) { return 1.0 / (1.0 + std::pow(f / kMixedSplitHz, 4.0)); };
-        h = designKernelFn([&](double f) { return std::pow(totalMagnitude(lin, f), 1.0 - w(f)); },
-                           [&](double f) { return totalMagnitude(mn, f) * std::pow(totalMagnitude(lin, f), w(f)); }, true, L_, fs_);
+        h = &designer_.design([&](double f) { return std::pow(totalMagnitude(lin, f), 1.0 - w(f)); },
+                              [&](double f) { return totalMagnitude(mn, f) * std::pow(totalMagnitude(lin, f), w(f)); }, true, fs_);
     } else {
-        h = designKernel(lin, mn, L_, fs_);
+        h = &designer_.design([&](double f) { return totalMagnitude(lin, f); }, [&](double f) { return totalMagnitude(mn, f); }, !mn.empty(), fs_);
     }
-    conv_.setKernel(h, immediate);
+    conv_.setKernel(*h, immediate);
     sinceKernel_ = 0;
     dirty_ = false;
 }
@@ -122,6 +124,7 @@ void Processor::prepare(double sampleRate, int) {
     L_ = kernelLengthFor(fs_, target_[Length]);
     fadeLen_ = static_cast<int>(std::lround(0.020 * fs_));
     conv_.prepare(L_, B_, 2);
+    designer_.prepare(L_);
     conv_.setFadeSamples(fadeLen_);
     for (auto& c : iir_) for (auto& f : c) f.reset();
     sideDelay_.assign(static_cast<size_t>(std::max(1, latencySamples())), 0.0f);

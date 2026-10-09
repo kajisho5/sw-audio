@@ -40,10 +40,10 @@ RoomDims roomDims(int room) {
 double micDistanceMeters(int room, double micPct) { return 0.5 + std::clamp(micPct, 0.0, 100.0) * 0.01 * (0.7 * roomDims(room).lx - 0.5); }
 double decaySeconds(double knob) { return 0.4 * std::pow(10.0, std::clamp(knob, 0.0, 10.0) * 0.1); }
 
-std::vector<Tap> earlyReflections(int room, double micPct) {
+void earlyReflections(int room, double micPct, std::vector<Tap>& taps) {   // into the caller's vector (reserved: it is called on the audio thread when a knob moves)
     const RoomDims r = roomDims(room);
     const SourceMic p = positions(room, micPct);
-    std::vector<Tap> taps;
+    taps.clear();
     auto axis = [](int n, double len, double s) { return n * len + ((n & 1) ? len - s : s); };   // the n-th image of the source along one axis
     for (int order = 0; order <= 2; ++order)
         for (int nx = -2; nx <= 2; ++nx) for (int ny = -2; ny <= 2; ++ny) for (int nz = -2; nz <= 2; ++nz) {
@@ -52,14 +52,14 @@ std::vector<Tap> earlyReflections(int room, double micPct) {
             const double dx = ix - p.mx, dy = iy - p.my, dz = iz - p.mz, dist = std::sqrt(dx * dx + dy * dy + dz * dz);
             taps.push_back({dist / kSound, std::pow(kWall, order) / std::max(dist, 0.3), std::clamp(dy / std::max(dist, 0.3) * 1.5, -1.0, 1.0)});
         }
-    return taps;
 }
+std::vector<Tap> earlyReflections(int room, double micPct) { std::vector<Tap> t; earlyReflections(room, micPct, t); return t; }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; taps_.reserve(32); }
 
 void Processor::updateRoom() {
     const int room = static_cast<int>(target_[Room] + 0.5);
-    taps_ = earlyReflections(room, target_[MicDistance]);
+    earlyReflections(room, target_[MicDistance], taps_);
     nTaps_ = static_cast<int>(std::min<size_t>(taps_.size(), tapDelay_.size()));
     for (int k = 0; k < nTaps_; ++k) {
         const Tap& t = taps_[static_cast<size_t>(k)];

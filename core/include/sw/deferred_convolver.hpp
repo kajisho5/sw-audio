@@ -24,7 +24,7 @@ public:
         out_.assign(static_cast<size_t>(B_), 0.0); pend_ = outN_ = pendN_ = out_;
         wr_.assign(static_cast<size_t>(2 * B_), 0.0);
         pendK_.assign(static_cast<size_t>(P_) * static_cast<size_t>(B_), 0.0);
-        jobC_.acc.assign(bins, cd(0, 0)); jobN_ = jobC_;
+        jobC_.acc.assign(bins, cd(0, 0)); jobN_ = jobC_; scratch_.assign(bins, cd(0, 0));
         head_ = 0; pos_ = 0; fadeLeft_ = 0; usedStage_ = usedCur_ = usedNext_ = P_;
         jobC_.state = jobN_.state = Job::Idle;
     }
@@ -100,7 +100,7 @@ private:
     }
     void computeNow(const std::vector<std::vector<cd>>& K, int used, int head, std::vector<double>& out) {
         std::fill(jobC_.acc.begin(), jobC_.acc.end(), cd(0, 0));   // (jobC_'s accumulator is free to use while we are not in the middle of its MAC: use a local if it is)
-        std::vector<cd>& a = scratch_.empty() ? (scratch_.assign(static_cast<size_t>(B_ + 1), cd(0, 0)), scratch_) : scratch_;
+        std::vector<cd>& a = scratch_;   // (sized in prepare(): this runs on the audio thread)
         std::fill(a.begin(), a.end(), cd(0, 0));
         for (int p = 0; p < used; ++p) mac(a, fdl_[static_cast<size_t>((head - p + P_) % P_)], K[static_cast<size_t>(p)], B_);
         inverse(a, out);

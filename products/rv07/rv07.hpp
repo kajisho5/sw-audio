@@ -21,6 +21,7 @@ struct Tap { double delaySeconds, gain, pan; int order; };
 struct RoomDims { double lx, ly, lz; };
 RoomDims roomDims(int roomSize, double distance, double angleDeg);   // the room as used: grown when the source is farther than the room allows
 std::vector<Tap> earlyTaps(int roomSize, double distance, double angleDeg);   // [0] is the direct sound (delay 0, order 0), then 24 images
+void earlyTaps(int roomSize, double distance, double angleDeg, std::vector<Tap>& out);   // the same into a vector the caller keeps (no allocation when it has room for 25)
 double wallReflectivity(int wall);
 
 class Processor {
@@ -40,6 +41,7 @@ private:
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};
     std::array<double, 40> delay_{}, cur_{}, gl_{}, gr_{};
+    std::vector<Tap> taps_;   // the early taps of the current settings (built on the audio thread: reserved in the constructor)
     std::vector<float> buf_;
     std::array<Svf, 2> hp_{}, glassHp_{};
 };

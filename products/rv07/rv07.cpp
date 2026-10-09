@@ -36,10 +36,10 @@ double wallReflectivity(int wall) { return kWall[std::clamp(wall, 0, 3)].rho; }
 
 RoomDims roomDims(int roomSize, double distance, double angleDeg) { const Geo g = geometry(roomSize, distance, angleDeg); return {g.lx, g.ly, g.lz}; }
 
-std::vector<Tap> earlyTaps(int roomSize, double distance, double angleDeg) {
+void earlyTaps(int roomSize, double distance, double angleDeg, std::vector<Tap>& taps) {   // into the caller's vector (reserved: it is called on the audio thread when a knob moves)
     const Geo g = geometry(roomSize, distance, angleDeg);
     auto axis = [](int n, double len, double s) { return n * len + ((n & 1) ? len - s : s); };
-    std::vector<Tap> taps;
+    taps.clear();
     double r0 = 0;
     for (int order = 0; order <= 2; ++order)
         for (int nx = -2; nx <= 2; ++nx) for (int ny = -2; ny <= 2; ++ny) for (int nz = -2; nz <= 2; ++nz) {
@@ -50,15 +50,15 @@ std::vector<Tap> earlyTaps(int roomSize, double distance, double angleDeg) {
             const double az = std::atan2(-dy, dx);   // to the right is positive
             taps.push_back({order == 0 ? 0.0 : (r - r0) / kSound, 1.0 / std::max(r, 0.3), std::clamp(std::sin(az), -1.0, 1.0), order});
         }
-    return taps;
 }
+std::vector<Tap> earlyTaps(int roomSize, double distance, double angleDeg) { std::vector<Tap> t; earlyTaps(roomSize, distance, angleDeg, t); return t; }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; taps_.reserve(32); }
 
 void Processor::update() {
     const int size = static_cast<int>(target_[RoomSize] + 0.5), wall = static_cast<int>(target_[Wall] + 0.5), use = static_cast<int>(target_[Use] + 0.5);
     const double d = target_[Distance];
-    const auto taps = earlyTaps(size, d, target_[Angle]);
+    earlyTaps(size, d, target_[Angle], taps_); const auto& taps = taps_;
     nTaps_ = static_cast<int>(std::min<size_t>(taps.size(), delay_.size()));
     useGain_ = useGain(use);
     const double rho = kWall[wall].rho;

@@ -23,6 +23,7 @@ RoomDims roomDims(int room);                                  // Small / Medium 
 double micDistanceMeters(int room, double micPct);            // 0 % = 0.5 m .. 100 % = 0.7 x the room's length
 double decaySeconds(double knob);                             // 0..10 -> 0.4 .. 4 s (logarithmic)
 std::vector<Tap> earlyReflections(int room, double micPct);   // the direct sound first, then the images up to the 2nd order
+void earlyReflections(int room, double micPct, std::vector<Tap>& out);   // the same into a vector the caller keeps (no allocation when it has room for 25)
 
 class Processor {
 public:

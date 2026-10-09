@@ -18,18 +18,18 @@ const std::vector<ParamSpec>& specs() {
 
 PitchConfig engineConfig(double fs) { PitchConfig c; c.fs = fs; c.minF0 = 110.0; c.maxF0 = 1000.0; c.windowPeriods = 1.5; return c; }
 
-std::vector<std::pair<int, double>> presetValues(int p) {
+std::array<std::pair<int, double>, 3> presetValues(int p) {
     switch (p) {
-        case Low: return {{Pitch, -5}, {Formant, -2}, {Robot, 0}};
-        case High: return {{Pitch, 5}, {Formant, 2}, {Robot, 0}};
-        case RobotP: return {{Pitch, 0}, {Formant, 0}, {Robot, 1}};
-        case Radio: return {{Pitch, 0}, {Formant, 0}, {Robot, 0}};
-        case Anon: return {{Pitch, -3}, {Formant, 2}, {Robot, 0}};
-        default: return {};
+        case Low: return {{{Pitch, -5}, {Formant, -2}, {Robot, 0}}};
+        case High: return {{{Pitch, 5}, {Formant, 2}, {Robot, 0}}};
+        case RobotP: return {{{Pitch, 0}, {Formant, 0}, {Robot, 1}}};
+        case Radio: return {{{Pitch, 0}, {Formant, 0}, {Robot, 0}}};
+        case Anon: return {{{Pitch, -3}, {Formant, 2}, {Robot, 0}}};
+        default: return {{{-1, 0}, {-1, 0}, {-1, 0}}};
     }
 }
 
-Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
+Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; writes_.reserve(16); }
 
 int Processor::latencySamples() const { return PitchAnalyzer::latencyFor(engineConfig(fs_)); }
 
@@ -45,7 +45,7 @@ void Processor::setParam(int id, double v) {
     v = sp.toValue(sp.toNorm(v));
     applyParam(id, v);
     if (id != Preset) writes_.erase(std::remove_if(writes_.begin(), writes_.end(), [id](const std::pair<int, double>& w) { return w.first == id; }), writes_.end());
-    else { const auto p = presetValues(static_cast<int>(v + 0.5)); for (const auto& w : p) applyParam(w.first, w.second); writes_ = p; }
+    else { const auto p = presetValues(static_cast<int>(v + 0.5)); writes_.clear(); for (const auto& w : p) if (w.first >= 0) { applyParam(w.first, w.second); writes_.push_back(w); } }
 }
 int Processor::takeParamWrite(int& id, double& plain) {
     if (writes_.empty()) return 0;

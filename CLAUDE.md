@@ -43,7 +43,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 - 外部サイドチェーン：Core に `processWithSidechain(...)` を書くと、自動で2つ目の入力端子が付く。
 - 遅延が変わる設定（先読み、位相モード、FIR 長など）：`latencySamples()` は「次の prepare で使う値」を返す。prepare 時に確定させる。違えばプラグイン層がホストに再起動を求める。
 - **Unit A／B／C（2U ラック筐体の 42 製品）：最後のパラメータ `unitSpec("<コード>.unit")`、プラグイン層の trait `kUnitParam`（Shell が出力段のゲイン公差を掛ける）。コアの中の周波数は `sw::Unit::freqMul(unit, ch, スロット)`、飽和の効き始めは共通部品の `setOnsetDb(ch, db)` か、段の駆動ゲインに `Unit::satDb` の係数を掛ける。A は偏差ゼロ（左右が完全に同じ）。**
-- 音声スレッドでメモリを確保しない（バッファは prepare で確保）。出力は `|y|<1e-30` を 0 に。
+- **音声スレッドでメモリを確保しない**（バッファは prepare で確保。`std::vector` の `push_back`・`resize`・値渡しの返り値・`std::function` の生成・`Fft` の構築も確保になる。`reserve` や固定長の `std::array`、作業用の配列を `prepare` で作っておく）。**`tests/test_no_alloc.cpp`（`tools/gen_fuzz.py` が作る。製品を足したら `python3 tools/gen_fuzz.py`）が全製品で数える**。学習ボタンのような新しい口は `tests/test_no_alloc_learn.cpp` に足す。違反が出たら `SW_ALLOC_TRACE=1 ./build-cmake/sw-tests -tc="the audio thread does not allocate: <コード>"` で呼び出し元のアドレスが出る（`addr2line -f -C -e build-cmake/sw-tests <オフセット>`）。出力は `|y|<1e-30` を 0 に。
 - **非線形の段は `sw::OsSwitch`（`DriveStage`・`BiasShaper` もその上）を通し、`oversampleSpec("<コード>.os")` を製品パラメータの末尾（Unit があればその直前）にする**（1x／2x／4x、既定 2x。仕様書が 4× の製品は第 2 引数）。段のループの中にある時間のもの（フィルター係数、DC 除去、包絡の追従）は `os.rate(fs)` で計算する（`fs` 決め打ちや 2×fs 決め打ちは設定を変えると音が変わる）。画面の「2× OS」ボタンは `gen_skins.py` が `.os` に結び付ける。
 - アナログ系の段のヘッドルームは +6 dBFS（決定事項）。
 - **ブロック長に依存させない**：制御値・判定・ランプ・時定数は、`process()` の局所変数や「ホストのブロックの頭から」でなく、ストリームの絶対位置の格子（`ph_` を持ち、32〜64 サンプル）で決める。制御ブロックの終わりで決めたものは次の制御ブロックにかけて直線で入れる。リミッターの Auto release は `PeakLimiter::setAutoRelease`（1 サンプルごとの判定）。`tests/block_helpers.hpp` の `bsi::worstDb` が −90 dB 未満（定常）で、`host_smoke --blocks` が通ること。`activate` の `max_frames` より長いブロックはアダプターが割る。
@@ -84,7 +84,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の UI の項目（画面の実装、ホストのトラック名・MIDI・SW Link・OBS 連携など、コアに口だけある部分）と、RS02。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、EQ08・EQ02 Linear のカーネル再設計を音声スレッドから外す（確保は直した。計算そのものが L ＝ 8192 で約 5 ms 以上）、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り・OBS 連携（LV27）・EQ05 の Match、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）
