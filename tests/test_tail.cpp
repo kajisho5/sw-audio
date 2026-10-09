@@ -106,3 +106,31 @@ TEST_CASE("tail: granular (the buffer read back), the strips' sends, the pedalbo
     CHECK(make<sw::gt03::Processor>({{sw::gt03::BypassAll, 1}, {sw::gt03::slotParam(5, sw::gt03::On), 1}}).tailSeconds() == 0.0);
     agrees("GT03 Delay on", make<sw::gt03::Processor>({{sw::gt03::slotParam(4, sw::gt03::On), 1}}), 8.0, 2.0);
 }
+
+// reset() / prepare() as the adapter calls them when the host stops or jumps: 0.4 s of noise, then the reset, then silence: nothing of the old audio may come out
+namespace {
+template <class P, class Reset> double afterReset(P& p, Reset doReset) {
+    auto l = noise(-20.0, 0.4, 5), r = noise(-20.0, 0.4, 6);
+    for (size_t off = 0; off < l.size(); off += 256) { const int m = static_cast<int>(std::min<size_t>(256, l.size() - off)); float* c[2] = {l.data() + off, r.data() + off}; p.process(c, 2, m); }
+    doReset(p);
+    std::vector<float> a(24064, 0.0f), b(24064, 0.0f);   // (a multiple of 256: the loop below runs whole blocks)
+    for (size_t off = 0; off < a.size(); off += 256) { float* c[2] = {a.data() + off, b.data() + off}; p.process(c, 2, 256); }
+    double peak = 0; for (size_t i = 960; i < a.size(); ++i) peak = std::max({peak, static_cast<double>(std::fabs(a[i])), static_cast<double>(std::fabs(b[i]))});
+    return peak;
+}
+}  // namespace
+
+TEST_CASE("reset: the delays, reverbs, granular and the pedalboard forget what they held (a prepare() without allocation for most, a reset() for GT03 and the IR products)") {
+    auto viaPrepare = [](auto& p) { p.prepare(kFs, 256); };
+    { auto p = make<sw::dl01::Processor>({{sw::dl01::Feedback, 70}, {sw::dl01::Time, 300}, {sw::dl01::Sync, 0}}); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::dl02::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::dl04::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::rv01::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::rv02::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::rv06::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::lv24::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    { auto p = make<sw::cr03::Processor>(); CHECK(afterReset(p, viaPrepare) < 1e-4); }
+    // GT03: the Delay and Reverb pedals On (slots 5 and 6), the pedals' own audio forgotten without making them again
+    { auto p = make<sw::gt03::Processor>({{sw::gt03::slotParam(4, sw::gt03::On), 1}, {sw::gt03::slotParam(5, sw::gt03::On), 1}});
+      CHECK(afterReset(p, [](auto& q) { q.reset(); }) < 1e-4); }
+}

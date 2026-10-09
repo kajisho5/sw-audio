@@ -50,6 +50,19 @@ void Processor::prepare(double sampleRate, int maxBlock) {
     prepared_ = true; assign(); applyAll();
 }
 
+// the host stopped or jumped: every pedal forgets its audio. The pedals exist already (prepare() made them), and their own prepare() only clears the buffers they have; the settings are sent again
+void Processor::reset() {
+    if (!prepared_) return;
+    for (auto& c : comp_) c->prepare(fs_, maxBlock_);
+    for (auto& c : drive_) c->prepare(fs_, maxBlock_);
+    for (auto& c : chorus_) c->prepare(fs_, maxBlock_);
+    for (auto& c : delay_) c->prepare(fs_, maxBlock_);
+    for (auto& c : reverb_) c->prepare(fs_, maxBlock_);
+    gate_.prepare(fs_); gate_.set(GateEngine::Mode::Gate, target_[NoiseGate], -50.0, 1.0, 60.0, 150.0); tracker_.prepare(fs_, 12000.0, true); hz_ = 0;
+    for (auto& a : wasOn_) a.fill(false);
+    applyAll();
+}
+
 void Processor::assign() {
     int used[kTypes] = {0};
     for (int n = 0; n < kSlots; ++n) {

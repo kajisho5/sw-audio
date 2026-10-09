@@ -40,6 +40,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets() { inGain_ = std::pow(10.0, target_[Input] / 20.0); if (prepared_) { assign(); applyAll(); } }
     void process(float** ch, int numCh, int n);
+    void reset();                 // forget the audio (the host stopped or jumped): the pedals' delay lines and tails; no allocation (prepare() makes the pedals)
     double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const { return 0; }
     double tunerHz() const { return hz_; }
