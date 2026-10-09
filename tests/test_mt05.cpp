@@ -45,3 +45,16 @@ TEST_CASE("MT05 the two channels are read separately; silence and loud input are
     auto q = make(); feed(q, std::vector<float>(48000, 0.0f)); CHECK(q.vuDb(0) < -150.0);
     auto x = noise(6, 1.0, 9); for (auto& v : x) v *= 8.0f; feed(q, x); CHECK(std::isfinite(q.vuDb(0))); CHECK(std::isfinite(q.ppmDb(0)));
 }
+
+TEST_CASE("MT05 adoptShared: the 0 VU reference another instance published is taken and handed to the host once (begin, value, end)") {
+    sw::mt05::Processor p; p.prepare(48000.0, 256);
+    int id = 0; double v = 0;
+    CHECK(p.takeParamWrite(id, v) == 0);
+    p.adoptShared(-14.0);
+    CHECK(p.takeParamWrite(id, v) == 7); CHECK(id == sw::mt05::RefDb); CHECK(v == -14.0);
+    CHECK(p.takeParamWrite(id, v) == 0);                       // once
+    p.adoptShared(-18.0); p.adoptShared(-20.0);
+    CHECK(p.takeParamWrite(id, v) == 7); CHECK(v == -20.0); CHECK(p.takeParamWrite(id, v) == 0);   // two before the host looks: the last
+    p.adoptShared(-17.0);                                       // not on the grid of the parameter: it snaps like every value
+    CHECK(p.takeParamWrite(id, v) == 7); CHECK((v == -18.0 || v == -20.0 || v == -14.0));
+}

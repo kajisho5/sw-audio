@@ -1,8 +1,8 @@
 // SW MT05 Vu Ppm — a VU / PPM meter (spec: 仕様書 v1.0「MT05 Vu Ppm」). The signal passes unchanged; reported delay 0; no Delta / Auto gain / Unit (the spec recommends dropping them).
 //   Ref dBFS (-14 / -18 / -20): the level of a sine (RMS) that reads 0 VU, or 0 on the PPM scale. VU: the rectified average x 1.1107 (so that a sine reads its RMS), through a one-pole of 65 ms (99 % of a step in 300 ms),
 //   in dB re Ref. PPM (design: the quasi-peak of IEC 60268-10 type II): the rectified signal rises with a time constant of 4.5 ms (a 10 ms burst reaches about 1 dB under the steady value) and falls by
-//   20 dB in 1.7 s linearly in dB. levelDb(ch) is the reading of the chosen Meter. EVO (class A, the spec): the 0 VU reference as a project setting shared by several MT05 over SW Link needs SW Link: not yet
-//   (Ref is a per-instance parameter).
+//   20 dB in 1.7 s linearly in dB. levelDb(ch) is the reading of the chosen Meter. EVO (class A, the spec): the 0 VU reference is a setting of the session shared by the MT05 instances over SW Link: the plug-in layer
+//   publishes a change the person makes and calls adoptShared() with the value another instance published (plugin/clap/swlink.hpp).
 #pragma once
 #include "sw/param.hpp"
 #include <array>
@@ -27,8 +27,15 @@ public:
     double vuDb(int channel) const;
     double ppmDb(int channel) const;
     void reset();
+    // SW Link (the plug-in layer): another MT05 instance's Ref dBFS is taken over (the 0 VU reference is a setting of the session); the value goes to the host through takeParamWrite
+    void adoptShared(double refDb) { setParam(RefDb, refDb); pending_ = true; }
+    int takeParamWrite(int& id, double& plain) {
+        if (!pending_) return 0;
+        pending_ = false; id = RefDb; plain = target_[RefDb]; return 7;   // begin, value, end
+    }
 
 private:
+    bool pending_ = false;
     double fs_ = 48000.0;
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};

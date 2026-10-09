@@ -84,6 +84,12 @@ template <class P> struct HasLinkRefUse<P, std::void_t<decltype(P::kLinkRefFrom)
 // (mono; plugin/clap/swlink.hpp readKey, on the audio thread), and not the host's sidechain.
 template <class P, class = void> struct HasLinkKey : std::false_type {};
 template <class P> struct HasLinkKey<P, std::void_t<decltype(P::linkKeyOf(std::declval<const typename P::Core&>())), decltype(P::kLinkKeyReadout)>> : std::true_type {};
+// optional trait (MT05: the 0 VU reference of the session): static constexpr int kLinkSharedParam = the parameter whose value the instances of the product share, static constexpr const char* kLinkSharedFrom
+// = the product code ("MT05"); the core has void adoptShared(double) (sets the parameter and hands the value to the host through takeParamWrite). A change the person makes (the host's automation, the screen)
+// is published with SW Link (publishShared: atomics only); the other instances take it at their next block; an instance that adopts does not publish. A value equal to the default is no change (an instance
+// that has just been made does not overwrite the others'; one that loads another value from a project does).
+template <class P, class = void> struct HasLinkShared : std::false_type {};
+template <class P> struct HasLinkShared<P, std::void_t<decltype(P::kLinkSharedParam), decltype(P::kLinkSharedFrom)>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -187,6 +193,7 @@ private:
         else if (kHasDelta && id == deltaId()) shell_.setDelta(plain > 0.5);
         else if (kHasBypass && id == bypassId()) shell_.setIn(plain < 0.5);   // Bypass On = the product is out (10 ms crossfade, the delay stays)
         if (id < numProduct()) shell_.core().setParam(id, plain);
+        if constexpr (HasLinkShared<P>::value) { if (id == P::kLinkSharedParam && plain != lastShared_) { lastShared_ = plain; link_.publishShared(plain); } }
     }
     void applyPending() {
         for (int i = 0; i < numParams(); ++i)
@@ -436,6 +443,10 @@ private:
                     float* d = s->scClean_[static_cast<size_t>(c)].data(); std::memcpy(d, scBase[c], frames * sizeof(float)); cleanInput(d, frames); scBase[c] = d;
                 }
             }
+        }
+        if constexpr (HasLinkShared<P>::value) {   // a setting another instance of this product published (SW Link): taken here, before the events of the block
+            double v;
+            if (s->link_.adoptShared(P::kLinkSharedFrom, v) && v != s->lastShared_) { s->lastShared_ = v; s->shell_.core().adoptShared(v); }
         }
         if constexpr (HasLinkKey<P>::value) {   // the key is another instance's output (SW Link), when the screen chose one
             if (const char* code = P::linkKeyOf(s->shell_.core())) {
@@ -738,6 +749,8 @@ private:
         }
     }
     uint32_t lref_audio_ = 0;
+    static double sharedDefault() { if constexpr (HasLinkShared<P>::value) return P::specs()[static_cast<size_t>(P::kLinkSharedParam)].def; else return 0.0; }
+    double lastShared_ = sharedDefault();   // the shared setting as this instance last had it (published, adopted or default)
     link::Member link_;       // SW Link: the other SW AUDIO instances of this process read the ring above (declared after it: leaves before the ring is destroyed)
     std::atomic<bool> link_watch_{false};   // a part of the screen wants the others' spectrum (Unmask)
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)

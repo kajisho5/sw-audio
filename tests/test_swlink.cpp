@@ -163,3 +163,31 @@ TEST_CASE("SW Link: a key signal - the latest samples of another instance's outp
     stop = true; w.join();
     INFO(reads << " reads"); CHECK(reads > 0);
 }
+
+TEST_CASE("SW Link: a shared setting - the last change of any instance of a product is taken once by the others, not by the one that made it, not by other products; a late joiner takes what is there; no bouncing") {
+    Ring a(300, -20), b(1000, -20), c(500, -20);
+    link::Member m1, m2, m3, other;
+    REQUIRE(m1.join(a.view(), "MT05")); REQUIRE(m2.join(b.view(), "MT05")); REQUIRE(m3.join(c.view(), "MT05")); REQUIRE(other.join(c.view(), "DY08"));
+    double v = 0;
+    CHECK_FALSE(m2.adoptShared("MT05", v));            // nothing published yet
+    m1.publishShared(-14.0);
+    CHECK(m2.adoptShared("MT05", v)); CHECK(v == -14.0);
+    CHECK_FALSE(m2.adoptShared("MT05", v));            // once
+    CHECK(m3.adoptShared("MT05", v)); CHECK(v == -14.0);
+    CHECK_FALSE(m1.adoptShared("MT05", v));            // not by the one that made it
+    CHECK_FALSE(other.adoptShared("DY08", v));
+    // the last change wins, whoever made it; the adopters do not publish, so nothing comes back
+    m2.publishShared(-20.0);
+    CHECK(m1.adoptShared("MT05", v)); CHECK(v == -20.0);
+    CHECK(m3.adoptShared("MT05", v)); CHECK(v == -20.0);
+    CHECK_FALSE(m1.adoptShared("MT05", v)); CHECK_FALSE(m2.adoptShared("MT05", v)); CHECK_FALSE(m3.adoptShared("MT05", v));
+    // two changes before the others look: they take the newest
+    m1.publishShared(-18.0); m3.publishShared(-14.0);
+    CHECK(m2.adoptShared("MT05", v)); CHECK(v == -14.0);
+    CHECK(m1.adoptShared("MT05", v)); CHECK(v == -14.0);
+    CHECK_FALSE(m3.adoptShared("MT05", v));
+    // a late joiner takes what is there; when the owner has left there is nothing
+    link::Member late; REQUIRE(late.join(a.view(), "MT05")); CHECK(late.adoptShared("MT05", v)); CHECK(v == -14.0);
+    late.leave(); m3.leave(); m1.leave(); m2.leave();
+    link::Member alone; REQUIRE(alone.join(a.view(), "MT05")); CHECK_FALSE(alone.adoptShared("MT05", v));
+}

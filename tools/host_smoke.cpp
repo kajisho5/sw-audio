@@ -740,6 +740,37 @@ bool linkKeyChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// SW Link shared setting: two MT05 instances in one process (the same binary opened twice, as a host with two tracks does): a change of the 0 VU reference made on one reaches the other's parameter, a late
+// instance takes the value that is already there, and a change on the second goes back to the first (the last change wins).
+bool linkSharedChecks(const std::vector<fs::path>& files) {
+    auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
+    const fs::path fm = find("MT05");
+    if (fm.empty()) return true;   // a partial set of plug-ins: nothing to check
+    bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link shared setting: %s\n", t.c_str()); ok = false; };
+    Loaded a, b, c; std::string why;
+    if (!a.open(fm, why)) { fail("MT05 A " + why); return false; }
+    if (!b.open(fm, why)) { fail("MT05 B " + why); a.close(); return false; }
+    auto refOf = [&](Loaded& x) -> double { const auto up = updateArrays(x.m->send(x.p, "p")); return up.empty() || up[0].empty() ? -999.0 : up[0][0]; };   // parameter 0: Ref dBFS
+    const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+    clap_id refId = CLAP_INVALID_ID; for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) { clap_param_info_t pi{}; if (pe->get_info(a.p, i, &pi) && std::string(pi.name) == "Ref dBFS") refId = pi.id; }
+    if (refId == CLAP_INVALID_ID) { fail("no Ref dBFS parameter"); a.close(); b.close(); return false; }
+    EventList none; a.run.process(2, 1, none); b.run.process(2, 2, none);
+    if (refOf(a) != -18.0 || refOf(b) != -18.0) { fail("both should start at -18 (a fresh instance does not overwrite the others)"); a.close(); b.close(); return false; }
+    EventList to14; to14.set(refId, 0.0); a.run.process(1, 3, to14);   // (a stepped parameter's host value is the step: -14 is step 0, -18 step 1, -20 step 2)
+    for (int i = 0; i < 3; ++i) { b.run.process(1, 4u + static_cast<uint64_t>(i), none); a.run.process(1, 5u + static_cast<uint64_t>(i), none); }
+    if (refOf(b) != -14.0) fail("B should take A's 0 VU reference (-14), got " + std::to_string(refOf(b)));
+    if (refOf(a) != -14.0) fail("A should keep -14, got " + std::to_string(refOf(a)));
+    if (!c.open(fm, why)) { fail("MT05 C " + why); a.close(); b.close(); return false; }
+    c.run.process(2, 9, none); b.run.process(1, 10, none); a.run.process(1, 11, none); c.run.process(1, 12, none);
+    if (refOf(c) != -14.0) fail("a late instance should take the value that is there (-14), got " + std::to_string(refOf(c)));
+    EventList to20; to20.set(refId, 2.0); b.run.process(1, 13, to20);
+    for (int i = 0; i < 3; ++i) { a.run.process(1, 14u + static_cast<uint64_t>(i), none); c.run.process(1, 20u + static_cast<uint64_t>(i), none); b.run.process(1, 30u + static_cast<uint64_t>(i), none); }
+    if (refOf(a) != -20.0 || refOf(c) != -20.0 || refOf(b) != -20.0) fail("the last change (-20 on B) should reach A and C: " + std::to_string(refOf(a)) + " " + std::to_string(refOf(b)) + " " + std::to_string(refOf(c)));
+    c.close(); b.close(); a.close();
+    if (ok) std::printf("ok    SW Link shared setting: three MT05 instances share the 0 VU reference (a change reaches the others, a late one takes it, the last change wins)\n");
+    return ok;
+}
+
 // SW Link reference: UT03 shares the long-term spectrum of the reference the screen loaded into it; EQ05 (another binary, the same process) sees it (info.link[1]) and takes it ("c linkref" -> its
 // read-outs: a reference is in place, a load worked), then Match listens and fits with it (the lows of the UT03 reference are raised: the fit raises the lows in the EQ).
 bool linkReferenceChecks(const std::vector<fs::path>& files) {
@@ -1292,6 +1323,7 @@ int main(int argc, char** argv) {
     if (!linkChecks(files)) ++fails;
     if (!linkReferenceChecks(files)) ++fails;
     if (!linkKeyChecks(files)) ++fails;
+    if (!linkSharedChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;

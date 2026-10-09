@@ -9,6 +9,8 @@ struct Mt05 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kLinkSharedParam = sw::mt05::RefDb;       // the 0 VU reference is shared by the MT05 instances of the session (SW Link)
+    static constexpr const char* kLinkSharedFrom = "MT05";
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

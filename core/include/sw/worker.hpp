@@ -19,11 +19,12 @@ public:
     BackgroundWork& operator=(const BackgroundWork&) { return *this; }
     ~BackgroundWork() { stop(); }
 
-    // not on the audio thread: (re)starts the thread with `job`
-    void start(std::function<void()> job) {
+    // not on the audio thread: (re)starts the thread with `job`. False when the system gives no thread: the owner then does the work itself (running() is false: EQ08 / EQ02 design in process())
+    bool start(std::function<void()> job) {
         stop();
         job_ = std::move(job); quit_.store(false); kicked_.store(false); busy_ = false;
-        th_ = std::thread([this] { loop(); });
+        try { th_ = std::thread([this] { loop(); }); } catch (...) { return false; }
+        return true;
     }
     // joins the thread (what was kicked and not yet run is dropped)
     void stop() {

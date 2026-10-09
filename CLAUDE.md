@@ -86,7 +86,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。残りは LV15・LV11・LV29・LV27・LO03・VO05・MT05 の共有）・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。残りは LV15・LV11・LV29・LV27・LO03・VO05：デザインに相手を選ぶ部品が無く、仕様書も選び方を決めていない）。MT05 の 0 VU 基準の共有は済・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）

@@ -11,6 +11,9 @@
 //   * A product that takes another instance's signal as a key (LV05 Auto ducker: "Key = the SW Link instance LV01 Voice") reads the latest samples of that instance's output ring on its own audio thread
 //     (readKey: atomics only, the reader count guards against the owner going away). The ring holds what the other instance has played so far: the key is that instance's last block when it has
 //     already been processed in this cycle, or the one before (at most a block late: a ducker's attack and hold are far longer). An instance whose ring has stopped moving is no key.
+//   * A setting shared by the instances of one product (MT05: the 0 VU reference of the session): the instance whose setting the person changed publishes the value with a stamp from the registry's
+//     counter (publishShared); the others of that product take the newest value they have not seen (adoptShared) and write it to their own host parameter. An instance that adopts does not publish,
+//     so nothing bounces; the last change wins. An instance that joins late takes what is already there.
 //   * "Alive": a slot whose write position has not moved for `timeout` (1.5 s) is an instance that is not processing (stopped, bypassed by the host), and does not count.
 //   * A product that has a reference spectrum to share (UT03: the long-term spectrum of its reference, 60 bands of 1/6 octave, sw/band_spectrum.hpp) publishes it in its slot (publishReference:
 //     only atomic stores, so the audio thread may do it after a block): the values first, then a serial that is not 0; a reader (findReference: EQ05 Match) reads the serial, the values and the serial again and drops the read when it changed.
@@ -45,7 +48,7 @@ __declspec(dllimport) void* __stdcall VirtualAlloc(void*, unsigned long long, un
 
 namespace sw::link {
 
-constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 2;   // "SWLK"
+constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 3;   // "SWLK"
 constexpr int kSlots = 128;
 constexpr int kRefBands = 60;                           // the reference spectrum a product may publish (= sw::BandSpectrum::kBands)
 constexpr const char* kEnv = "SW_AUDIO_LINK";
@@ -60,8 +63,10 @@ struct Slot {
     std::atomic<uint32_t> product{0};                              // the product code, four characters packed (EQ02 -> 'E','Q','0','2')
     std::atomic<uint32_t> refSerial{0};                            // the shared reference spectrum: 0 = none, otherwise which one it is (changes with every new reference); written last, withdrawn first
     std::atomic<float> refDb[kRefBands];                           // (dB, 1/6 octave from 20 Hz)
+    std::atomic<uint32_t> sharedStamp{0};                          // the setting this instance's person changed last (0: none yet): when (a stamp of the registry's counter) ...
+    std::atomic<double> sharedValue{0.0};                          // ... and its value; written value first, stamp last
 };
-struct Registry { uint32_t magic = kMagic, version = kVersion, slots = kSlots, slotSize = sizeof(Slot); Slot s[kSlots]; };
+struct Registry { uint32_t magic = kMagic, version = kVersion, slots = kSlots, slotSize = sizeof(Slot); std::atomic<uint32_t> stamp{0}; Slot s[kSlots]; };
 
 inline bool valid(const Registry* r) { return r && r->magic == kMagic && r->version == kVersion && r->slots == static_cast<uint32_t>(kSlots) && r->slotSize == sizeof(Slot); }
 
@@ -149,7 +154,7 @@ public:
     // main thread: withdraw the ring, wait for the readers that are inside, free the slot. Call before the ring is destroyed.
     void leave() {
         if (!slot_) return;
-        slot_->refSerial.store(0);
+        slot_->refSerial.store(0); slot_->sharedStamp.store(0);
         slot_->data.store(nullptr); slot_->head.store(nullptr);
         while (slot_->readers.load() != 0) std::this_thread::yield();
         slot_->id.store(0); slot_ = nullptr; reg_ = nullptr;
@@ -183,6 +188,31 @@ public:
     }
     void setTimeout(double seconds) { timeout_ = seconds; }
     void setSpectrumInterval(double seconds) { specInterval_ = seconds; }   // how often others() looks at the rings again (default 90 ms)
+
+    // A shared setting (see above): the person changed it on this instance; atomics only (any thread, not while leave() runs)
+    void publishShared(double value) {
+        if (!slot_ || !reg_) return;
+        const uint32_t st = reg_->stamp.fetch_add(1) + 1;
+        slot_->sharedValue.store(value, std::memory_order_relaxed); slot_->sharedStamp.store(st, std::memory_order_release);
+        seenStamp_ = st;
+    }
+    // ... and the other instances of `product` take it: the newest value that was published after the last one this instance published or took. False when there is none. Atomics only.
+    bool adoptShared(const char* product, double& value) {
+        Registry* r = reg_ ? reg_ : registry(); if (!r) return false;
+        const uint32_t code = packCode(product);
+        uint32_t best = 0; double v = 0.0;
+        for (int i = 0; i < kSlots; ++i) {
+            Slot& s = r->s[i]; const uint64_t id = s.id.load();
+            if (id == 0 || id == id_ || s.product.load() != code) continue;
+            const uint32_t a = s.sharedStamp.load(std::memory_order_acquire);
+            if (a == 0 || a <= seenStamp_ || a <= best) continue;
+            const double x = s.sharedValue.load(std::memory_order_relaxed);
+            if (s.sharedStamp.load(std::memory_order_acquire) != a || s.id.load() != id) continue;   // changed while it was read: the next call
+            best = a; v = x;
+        }
+        if (!best) return false;
+        seenStamp_ = best; value = v; return true;
+    }
 
     // The audio thread: the latest `frames` samples of the output ring of another instance of `product` ("LV01") into out (the ring is the mean of its left and right). What it remembers between calls: which slot,
     // and whether the ring still moves. False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
@@ -266,7 +296,7 @@ private:
         return n;
     }
 
-    Slot* slot_ = nullptr; Registry* reg_ = nullptr; uint64_t id_ = 0;
+    Slot* slot_ = nullptr; Registry* reg_ = nullptr; uint64_t id_ = 0; uint32_t seenStamp_ = 0;
     double timeout_ = 1.5, specInterval_ = 0.09;
     Seen seen_[kSlots];
     double spec_[gui::kSpecBands] = {}; bool cached_ = false; int cachedN_ = 0; Clock::time_point lastSpec_;
