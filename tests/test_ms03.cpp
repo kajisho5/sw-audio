@@ -71,3 +71,16 @@ TEST_CASE("MS03 silence stays silent, extreme input finite") {
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
 }
+
+TEST_CASE("MS03 Low lat: the band and link look-ahead shrink to 0.5 ms (88 samples @48 kHz, from the next prepare on); the bands still add back flat and the out ceiling is still kept") {
+    CHECK(std::string(specs()[LowLat].id) == "ms03.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 1);
+    { Processor p; CHECK(p.latencySamples() == 184); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 24 + 24 + 24 + 16); p.setParam(LowLat, 0); CHECK(p.latencySamples() == 184); }
+    for (double f : {40.0, 120.0, 1000.0, 6000.0}) { auto p = make({{LowLat, 1}}); NEAR(rmsDb(run(p, sine(-30, 1, f))), -30.0, 0.2); }
+    Set s; s.push_back({LowLat, 1}); for (int n = 0; n < 4; ++n) s.push_back({band(n, BGain), 12});
+    for (int link : {0, 1}) {
+        Set t = s; t.push_back({Link, static_cast<double>(link)});
+        auto p = make(t); CHECK(p.latencySamples() == 88);
+        const auto y = run(p, noise(-8, 3, 4));
+        CHECK(peakDb(y, 48000, y.size()) <= -1.0 + 0.1);
+    }
+}

@@ -18,6 +18,7 @@ const std::vector<ParamSpec>& specs() {
             {"ms01.tp",       "True peak",   0, 1, 1,        Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             {"ms01.dither",   "Dither",      0, 24, 0,       Curve::Step, 1, {0, 16, 24}, "", {"Off", "16 bit", "24 bit"}},
             {"ms01.lowguard", "Low end guard", 0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            {"ms01.lowlat",   "Low lat",     0, 1, 0,        Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         };
         v[Release].maxLabel = "Auto";
         return v;
@@ -26,20 +27,20 @@ const std::vector<ParamSpec>& specs() {
 }
 
 namespace {
-constexpr double kLookaheadMs = 2.0, kSlowOffsetDb = 6.0, kGuardHz = 120.0, kGuardDb = -12.0;
+constexpr double kLookaheadMs = 2.0, kLowLookaheadMs = 0.5, kSlowOffsetDb = 6.0, kGuardHz = 120.0, kGuardDb = -12.0;
 constexpr double kLockTauS = 10.0, kLockMinS = 30.0, kLockWithinLu = 0.3, kLockWarmS = 2.0, kForgetS = 10.0, kLockSteadyLu = 0.15;
 }
 
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 int Processor::latencySamples() const {
-    const int la = std::max(1, static_cast<int>(std::lround(kLookaheadMs * 0.001 * fs_)));
+    const int la = std::max(1, static_cast<int>(std::lround((target_[LowLat] > 0.5 ? kLowLookaheadMs : kLookaheadMs) * 0.001 * fs_)));   // Low lat: 0.5 ms (for the next prepare)
     return la + (target_[TruePeak] > 0.5 ? TruePeakDetector::kTapsPerPhase : 0);
 }
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
-    const int la = std::max(1, static_cast<int>(std::lround(kLookaheadMs * 0.001 * fs_)));
+    const int la = std::max(1, static_cast<int>(std::lround((target_[LowLat] > 0.5 ? kLowLookaheadMs : kLookaheadMs) * 0.001 * fs_)));
     lim_.prepare(fs_, 2, la, target_[TruePeak] > 0.5, 4);
     gainDb_ = target_[Gain];
     gain_.reset(fs_, 20.0, std::pow(10.0, gainDb_ / 20.0));

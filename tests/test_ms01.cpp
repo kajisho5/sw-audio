@@ -20,7 +20,7 @@ double crestDb(const std::vector<float>& y, size_t from) { return peakDb(y, from
 TEST_CASE("MS01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"ms01.gain", "ms01.target", "ms01.evo.on", "ms01.char.x", "ms01.char.y", "ms01.ceiling", "ms01.release", "ms01.stereo", "ms01.tp", "ms01.dither", "ms01.lowguard"};
+    const char* ids[] = {"ms01.gain", "ms01.target", "ms01.evo.on", "ms01.char.x", "ms01.char.y", "ms01.ceiling", "ms01.release", "ms01.stereo", "ms01.tp", "ms01.dither", "ms01.lowguard", "ms01.lowlat"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Gain].min == 0); CHECK(s[Gain].max == 24); CHECK(s[Gain].def == 0);
     CHECK(s[Target].min == -30); CHECK(s[Target].max == -5); CHECK(s[Target].def == -14.0);
@@ -88,4 +88,16 @@ TEST_CASE("MS01 Lock Off leaves Gain manual; silence and extreme input are safe"
     { auto z = make(); for (float v : run(z, std::vector<float>(4800, 0.0f))) CHECK(v == 0.0f); }
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
+}
+
+TEST_CASE("MS01 Low lat: the look-ahead shrinks from 2 ms to 0.5 ms (24 + the true-peak interpolation 16 = 40 @48 kHz, from the next prepare on); the ceiling is still kept") {
+    CHECK(std::string(specs()[LowLat].id) == "ms01.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 1);
+    { Processor p; CHECK(p.latencySamples() == 112); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 40); p.setParam(TruePeak, 0); CHECK(p.latencySamples() == 24); p.setParam(LowLat, 0); CHECK(p.latencySamples() == 96); }
+    auto q = make({{LowLat, 1}, {Gain, 24}}); CHECK(q.latencySamples() == 40);
+    const auto y = run(q, loop(0.5, 4));
+    CHECK(peakDb(y, 24000, y.size()) <= -1.0 + 0.05);                 // the same ceiling as with 2 ms
+    NEAR(peakDb(y, 24000, y.size()), -1.0, 0.5);
+    // the output is the signal 40 samples later when nothing is limited
+    auto r = make({{LowLat, 1}, {Ceiling, 0}}); const auto x = sine(-30, 1000); const auto z = run(r, x);
+    NEAR(rmsDb(z), rmsDb(x), 0.2);
 }

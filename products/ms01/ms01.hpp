@@ -2,6 +2,7 @@
 // Gain -> slow stage (density; Character X = ratio 1..4 and knee 0..12 dB, Y = attack 1..30 ms) -> fast stage (sw::PeakLimiter, 2 ms
 // look-ahead, true peak 4x) -> TPDF dither. Lock: measures the integrated loudness of the output (10 s memory) and moves Gain to Target
 // (time constant 10 s); after >= 30 s, within 0.3 LU of Target and steady (< 0.15 LU change over 5 s) it holds the value (readable with gainDb(); the plugin layer writes it back).
+//   Low lat (the last parameter, spec: common function): the look-ahead shrinks from 2 ms to 0.5 ms (the true-peak interpolation stays the FIR one: 40 samples instead of the spec's about 24 with an IIR interpolation).
 #pragma once
 #include "sw/dynamics.hpp"
 #include "sw/loudness.hpp"
@@ -14,7 +15,7 @@
 
 namespace sw::ms01 {
 
-enum ParamId { Gain, Target, Lock, CharX, CharY, Ceiling, Release, Stereo, TruePeak, Dither, LowGuard, kNumParams };
+enum ParamId { Gain, Target, Lock, CharX, CharY, Ceiling, Release, Stereo, TruePeak, Dither, LowGuard, LowLat, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -25,7 +26,7 @@ public:
     void setParam(int id, double plainValue);
     void snapToTargets() { gain_.skip(1 << 30); }
     void process(float** ch, int numCh, int n);
-    int latencySamples() const;  // desired; look-ahead / true peak apply at prepare
+    int latencySamples() const;  // desired; look-ahead / true peak / Low lat apply at prepare
     double slowReductionDb() const { return slowGr_; }
     double fastReductionDb() const { return lim_.gainReductionDb(); }
     bool locked() const { return locked_; }

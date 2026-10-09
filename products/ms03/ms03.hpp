@@ -2,6 +2,7 @@
 // LR4 split (sw::Lr4Split4) -> per band: Gain, soft pre-clip (Dense only), look-ahead limiter (2 ms, sw::PeakLimiter) -> sum ->
 // link stage (1 ms look-ahead limiter on the sum; with Link bands the reduction it asks for is shared out by the bands' current energy,
 // otherwise it is applied to the sum as a whole) -> final true-peak limiter (4x, 0.5 ms) that always keeps Out ceiling.
+//   Low lat (the last parameter, spec: common function): the band and link look-ahead shrink to 0.5 ms (the delay 184 -> 88 samples @48 kHz). Like every setting that changes the delay it applies at the next prepare().
 #pragma once
 #include "sw/dynamics.hpp"
 #include "sw/lr4split.hpp"
@@ -14,7 +15,7 @@ namespace sw::ms03 {
 
 enum BandParam { BGain, BCeiling, BRelease };
 constexpr int band(int n, int k) { return n * 3 + k; }   // n = 0..3
-enum ParamId { X1 = 12, X2, X3, OutCeiling, Char, Link, kNumParams };
+enum ParamId { X1 = 12, X2, X3, OutCeiling, Char, Link, LowLat, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -35,6 +36,7 @@ private:
     void runChunk(float** ch, int nch, int n);
     double fs_ = 48000.0;
     int la1_ = 96, la2_ = 48, la3_ = 24;
+    bool low_ = false;   // Low lat as prepared
     std::array<double, kNumParams> target_{};
     Lr4Split4 split_;
     std::array<PeakLimiter, 4> bandLim_;

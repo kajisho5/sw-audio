@@ -25,13 +25,14 @@ const std::vector<ParamSpec>& specs() {
         v.push_back({"ms03.outceiling", "Out ceiling", -12, 0, -1, Curve::Lin, 1, {}, "dBTP"});
         v.push_back({"ms03.char", "Character", 0, 2, 1, Curve::Step, 1, {0, 1, 2}, "", {"Clean", "Punch", "Dense"}});
         v.push_back({"ms03.evo.on", "Link bands", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}});
+        v.push_back({"ms03.lowlat", "Low lat", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}});
         return v;
     }();
     return s;
 }
 
 namespace {
-constexpr double kBandLookaheadMs = 2.0, kLinkLookaheadMs = 1.0, kFinalLookaheadMs = 0.5;
+constexpr double kBandLookaheadMs = 2.0, kLinkLookaheadMs = 1.0, kFinalLookaheadMs = 0.5, kLowLookaheadMs = 0.5;   // the last: Low lat, for the band and the link stage
 constexpr double kReleaseScale[3] = {1.0, 0.5, 2.0};   // Character: Clean / Punch / Dense (design)
 constexpr double kDenseKnee = 1.25;                    // Dense: soft pre-clip at 1.25 x the band ceiling
 }
@@ -39,15 +40,17 @@ constexpr double kDenseKnee = 1.25;                    // Dense: soft pre-clip a
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 int Processor::latencySamples() const {
-    const int a = std::max(1, static_cast<int>(std::lround(kBandLookaheadMs * 0.001 * fs_))), b = std::max(1, static_cast<int>(std::lround(kLinkLookaheadMs * 0.001 * fs_)));
+    const bool low = target_[LowLat] > 0.5;   // for the next prepare
+    const int a = std::max(1, static_cast<int>(std::lround((low ? kLowLookaheadMs : kBandLookaheadMs) * 0.001 * fs_))), b = std::max(1, static_cast<int>(std::lround((low ? kLowLookaheadMs : kLinkLookaheadMs) * 0.001 * fs_)));
     const int c = std::max(1, static_cast<int>(std::lround(kFinalLookaheadMs * 0.001 * fs_)));
     return a + b + c + TruePeakDetector::kTapsPerPhase;
 }
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
-    la1_ = std::max(1, static_cast<int>(std::lround(kBandLookaheadMs * 0.001 * fs_)));
-    la2_ = std::max(1, static_cast<int>(std::lround(kLinkLookaheadMs * 0.001 * fs_)));
+    low_ = target_[LowLat] > 0.5;
+    la1_ = std::max(1, static_cast<int>(std::lround((low_ ? kLowLookaheadMs : kBandLookaheadMs) * 0.001 * fs_)));
+    la2_ = std::max(1, static_cast<int>(std::lround((low_ ? kLowLookaheadMs : kLinkLookaheadMs) * 0.001 * fs_)));
     la3_ = std::max(1, static_cast<int>(std::lround(kFinalLookaheadMs * 0.001 * fs_)));
     for (auto& b : bandLim_) b.prepare(fs_, 2, la1_, false, 4);
     linkLim_.prepare(fs_, 2, la2_, false, 4);

@@ -165,6 +165,9 @@
      "Crossover 3"
     ]
    }
+  },
+  "btn:low lat": {
+   "toggle": "Low lat"
   }
  },
  "EQ05": {
@@ -349,7 +352,10 @@
     "p": 7,
     "prefix": "Link"
    }
-  ]
+  ],
+  "btn:low lat": {
+   "toggle": "Low lat"
+  }
  },
  "DY04": {
   "btn:hpf": {
