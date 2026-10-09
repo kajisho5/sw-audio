@@ -9,6 +9,18 @@
    "call": "clear"
   }
  ],
+ "CS02": [
+  {
+   "label": "Learn",
+   "call": "learn"
+  }
+ ],
+ "DY04": [
+  {
+   "label": "Learn",
+   "call": "learn"
+  }
+ ],
  "EQ02": [
   {
    "label": "Assist",

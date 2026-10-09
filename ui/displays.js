@@ -526,7 +526,7 @@
   // ---- "Auto thresh" of EQ07 (core: learnThresholds; readouts = listening, progress): while it listens the button says how far it is
   function learnButton(box, ctx) {
     const btn = box.querySelector('button[data-call="learn"]'); if (!btn) return null; const label = btn.textContent.trim();
-    return { update(info) { const r = info && info.readouts; if (!r || r.length < 2) return; const t = r[0] > 0.5 ? 'Listening ' + Math.round(r[1] * 100) + ' %' : label; if (btn.textContent !== t) btn.textContent = t; btn.classList.toggle('on', r[0] > 0.5); } };
+    return { update(info) { const r = info && info.readouts; if (!r || r.length < 2) return; const t = r[0] > 0.5 ? (r.length >= 3 ? 'Listening: ' + Math.round(r[2]) + ' hits (press to finish)' : 'Listening ' + Math.round(r[1] * 100) + ' %') : label; if (btn.textContent !== t) btn.textContent = t; btn.classList.toggle('on', r[0] > 0.5); } };
   }
 
   // ---- EQ02 "Assist" (core: setAssist, resonances; readouts = assist on, then 6 x [Hz, dB it sticks out]): the button switches the listening; the resonances are marked on the EQ graph (small triangles
@@ -1893,6 +1893,7 @@
       { re: /^TP -?\d|^TP —$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[2] > -150 ? 'TP ' + r[2].toFixed(1) : 'TP —') : null; } },
       { re: /^LRA \d|^LRA —$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[3] > 0 ? 'LRA ' + r[3].toFixed(1) : 'LRA —') : null; } }]), meterReset(box, ctx)),
     LV01: voiceStripDisplay,
+    DY04: learnButton, CS02: learnButton,
     DY09: transientDisplay,
     RS05: declipDisplay,
     DL05: grainDelayDisplay,

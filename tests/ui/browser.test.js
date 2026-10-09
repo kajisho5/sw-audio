@@ -4,6 +4,7 @@
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
 //   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
+//   7. DY04's and CS02's Learn button (put in the EVO bar: the design only has the text): a click starts the listening, the label shows the hits heard, a second click ends it.
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -109,6 +110,19 @@ async function open(code, query = '') {
   await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(150); ok(/\bon\b/.test(await unitBtn('B').getAttribute('class')), 'undo goes back to B');
   await open('UT01'); ok(await pg.locator('.evob button[data-inert]', { hasText: /^A$/ }).count() === 1, 'UT01 has no Unit: A is dimmed'); ok(/no Unit A \/ B \/ C/.test(await pg.locator('.evob button[data-inert]', { hasText: /^A$/ }).getAttribute('title')), 'and says why');
 
+  // ---- 7. DY04 Learn (the button is not in the design: gen_skins puts it in the EVO bar; the core's learner reports through the read-outs)
+  await open('DY04'); const lrn = pg.locator('.evob button[data-call="learn"]');
+  eq(await lrn.count(), 1, 'DY04 has the Learn button in the EVO bar'); eq((await lrn.textContent()).trim(), 'Learn', 'idle: it says Learn');
+  await lrn.click(); await pg.waitForFunction(() => /Listening: \d+ hits/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'while listening the button shows the hits heard'));
+  ok(/\bon\b/.test(await lrn.getAttribute('class')), 'and is lit');
+  await lrn.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent.trim() === 'Learn', null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'a second click ends the listening: back to Learn'));
+  ok(!/\bon\b/.test((await lrn.getAttribute('class')) || ''), 'and goes out');
+  await open('CS02'); const lrn2 = pg.locator('.evob button[data-call="learn"]');
+  eq(await lrn2.count(), 1, 'CS02 has the Learn button in the EVO bar'); eq((await lrn2.textContent()).trim(), 'Learn', 'CS02 idle: it says Learn');
+  await lrn2.click(); await pg.waitForFunction(() => /Listening: \d+ hits/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'CS02: while listening the button shows the hits heard'));
+  await lrn2.click(); await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="learn"]').textContent.trim() === 'Learn', null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'CS02: a second click ends the listening'));
+  await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
+
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 and CS02 Learn: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

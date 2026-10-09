@@ -24,6 +24,8 @@ const std::vector<ParamSpec>& specs() {
             {"cs02.fader",        "Fader",   -100, 10, 0,    Curve::Fader, 1, {}, "dB"},
             {"cs02.link",         "Link",    0, 1, 1,        Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             unitSpec("cs02.unit"),
+            {"cs02.gate.keyhpf",  "Gate key HPF", 20, 2000, 20,       Curve::Log, 1, {}, "Hz"},      // internal (no knob): set by Learn; 20 Hz = bypassed
+            {"cs02.gate.keylpf",  "Gate key LPF", 1000, 20000, 20000, Curve::Log, 1, {}, "Hz"},      // internal (no knob): set by Learn; 20 kHz = bypassed
         };
         v[Ratio].maxLabel = "Max";      // rightmost = infinity
         v[Thresh].reversed = true;      // knob runs +10 .. -20 (spec)
@@ -45,6 +47,7 @@ void Processor::prepare(double sampleRate, int) {
     chain_ = {};
     for (auto& c : chain_) { for (auto& g : c.dyn.gate) g.prepare(fs_); for (auto& d : c.dyn.det) d.set(fs_, LevelDetector::Mode::Rms); }
     atk_ = Ballistics::coef(fs_, 3.0);
+    learner_.prepare(fs_); wasLearning_ = false; learnedOk_ = false; nWrites_ = writeAt_ = 0;
     for (int i = 0; i < kNumParams; ++i) setParam(i, target_[static_cast<size_t>(i)]);
     snapToTargets();
 }
@@ -71,6 +74,7 @@ void Processor::setParam(int id, double v) {
         case Lmf: lmf_.setTarget(v); break;
         case Lf: lf_.setTarget(v); break;
         case Route: route_.setTarget(v); break;
+        case KeyHpf: case KeyLpf: updateKey(); break;
         case Fader: fader_.setTarget(v <= sp.min ? 0.0 : std::pow(10.0, v / 20.0)); break;
         default: break;
     }
@@ -103,6 +107,8 @@ void Processor::dynSample(Dyn& d, double* x, int nch) {
     const bool link = target_[Link] > 0.5 && nch == 2;
     // gate (peak key per channel, linked like the compressor)
     double gk[2] = {std::abs(x[0]), nch > 1 ? std::abs(x[1]) : 0.0};
+    if (keyHpOn_ || keyLpOn_)   // the learned key filters (the gate listens to the band of the wanted hits)
+        for (int k = 0; k < nch; ++k) { double v = x[k]; if (keyHpOn_) v = d.keyHp[static_cast<size_t>(k)].process(v); if (keyLpOn_) v = d.keyLp[static_cast<size_t>(k)].process(v); gk[k] = std::abs(v); }
     if (link) gk[0] = gk[1] = std::max(gk[0], gk[1]);
     for (int k = 0; k < nch; ++k) x[k] *= d.gate[static_cast<size_t>(k)].process(gk[k]);
     // VCA feed-forward compressor, RMS detection, fixed 3 ms attack
@@ -139,6 +145,7 @@ void Processor::process(float** ch, int numCh, int n) {
                 const double lp = lp_[static_cast<size_t>(k)].process(v);
                 x[k] = v + lpOn * (lp - v);
             }
+            if (learner_.learning()) { const float m = static_cast<float>(nch > 1 ? 0.5 * (x[0] + x[1]) : x[0]); learner_.process(&m, 1); }   // the key as the gate hears it before its own filters
             double a[2] = {x[0], x[1]}, b[2] = {x[0], x[1]};
             if (rt < 1.0) runChain(chain_[0], true, a, nch);
             if (rt > 0.0) runChain(chain_[1], false, b, nch);
@@ -148,7 +155,38 @@ void Processor::process(float** ch, int numCh, int n) {
                 ch[k][i] = static_cast<float>(std::abs(y) < 1e-30 ? 0.0 : y);
             }
         }
+        if (wasLearning_ && !learner_.learning()) { wasLearning_ = false; applyLearned(learner_.finish()); }   // the time ran out
     }
+}
+
+void Processor::learn() {
+    if (learner_.learning()) { applyLearned(learner_.finish()); wasLearning_ = false; }
+    else { learner_.start(kLearnSeconds); wasLearning_ = true; nWrites_ = writeAt_ = 0; }
+}
+
+// the result of a Learn: the Gate threshold (the learner works in dBFS; the strip's scale has 0 dB at -18 dBFS) and the two key frequencies go into the core at once and to the host through takeParamWrite
+void Processor::applyLearned(const BleedLearner::Result& r) {
+    learnedOk_ = r.ok; nWrites_ = writeAt_ = 0;
+    if (!r.ok) return;
+    const struct { int id; double v; } w[3] = {{GateThresh, r.thresholdDb - kRefDbfs}, {KeyHpf, r.hpfHz}, {KeyLpf, r.lpfHz}};
+    for (const auto& x : w) { setParam(x.id, x.v); writes_[static_cast<size_t>(nWrites_++)] = {x.id, target_[static_cast<size_t>(x.id)]}; }
+}
+
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (writeAt_ >= nWrites_) { nWrites_ = writeAt_ = 0; return 0; }
+    id = writes_[static_cast<size_t>(writeAt_)].first; plain = writes_[static_cast<size_t>(writeAt_)].second; ++writeAt_;
+    return 7;
+}
+
+// the gate's key filters (2nd order, like DY04's): bypassed at the ends of their ranges (the defaults)
+void Processor::updateKey() {
+    const auto& hs = specs()[KeyHpf]; const auto& ls = specs()[KeyLpf];
+    keyHpOn_ = target_[KeyHpf] > hs.min * 1.0001; keyLpOn_ = target_[KeyLpf] < ls.max * 0.9999;
+    for (auto& c : chain_)
+        for (size_t k = 0; k < 2; ++k) {
+            c.dyn.keyHp[k].setup(Svf::Mode::HighPass, target_[KeyHpf], fs_, 0.70710678, 0);
+            c.dyn.keyLp[k].setup(Svf::Mode::LowPass, std::min(target_[KeyLpf], 0.45 * fs_), fs_, 0.70710678, 0);
+        }
 }
 
 }  // namespace sw::cs02

@@ -406,6 +406,20 @@ def bind_toggles(root, params, report, code):
     return n
 
 
+# EVO functions whose button the spec has ("学習ボタン") but the design does not draw (it only has the line of text in the bottom bar): a button is put in the bar, next to the text
+EVO_BUTTONS = {'DY04': 'Learn', 'CS02': 'Learn'}
+
+
+def add_evo_button(root, code):
+    label = EVO_BUTTONS.get(code)
+    bar = root.select_one('.evob')
+    if not label or bar is None or any(b.get_text().strip() == label for b in bar.select('button')):
+        return
+    btn = BeautifulSoup('<button class="btn" style="margin:0 10px;height:20px;padding:0 12px;font-size:10px;flex:none" title="%s: listen to the key, then press again (or wait 30 s)">%s</button>' % (label, label), 'html.parser')
+    txt = bar.select_one('.evt')
+    (txt.insert_after if txt is not None else bar.append)(btn.button)
+
+
 def bind_actions(root, code, report):
     """Buttons that call a method of the core (Randomize, Ring out, Learn noise, Reset, Tap ... ui/actions.json): data-call (+ data-arg, data-calltoggle).
     A design label that begins with the action's label is that action (LV21 "Output off" = Output)."""
@@ -579,6 +593,7 @@ def build(code, report):
                 b['data-band'] = str(k); nbt += 1; nbb += 1
     bind_toggles(root, params, report, code)
     eq05_shapes(root, params, code)
+    add_evo_button(root, code)
     bind_actions(root, code, report)
     # buttons: an option of a stepped parameter, or the on/off of a 2-step parameter
     opts = {}
