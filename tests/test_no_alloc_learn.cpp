@@ -65,14 +65,15 @@ TEST_CASE("the audio thread does not allocate while an EQ05 Match listens and wh
     { allocguard::Scope g; p.match(); p.match(); CHECK(g.n() == 0); }   // (pressed twice: starts and cancels)
 }
 
+namespace { void* volatile gSink; }   // (a pointer stored here is observable: the compiler may not drop the new / delete pair - Apple clang does when it sees nothing use the memory)
 TEST_CASE("the allocation guard counts what happens while it is on, and only on its own thread") {
     long n;
-    { allocguard::Scope g; std::vector<int>* v = new std::vector<int>(100); delete v; n = g.n(); }
-    CHECK(n >= 2);
+    { allocguard::Scope g; std::vector<int>* v = new std::vector<int>(100); gSink = v; delete v; n = g.n(); }
+    CHECK(n >= 1);
     { allocguard::Scope g; int x = 3; (void)x; n = g.n(); }
     CHECK(n == 0);
     std::atomic<bool> go{false}, done{false};
-    std::thread t([&] { while (!go) std::this_thread::yield(); std::vector<int> w(100); (void)w; done = true; });
+    std::thread t([&] { while (!go) std::this_thread::yield(); int* w = new int[100]; gSink = w; delete[] w; done = true; });
     long other;
     { allocguard::Scope g; go = true; while (!done) std::this_thread::yield(); other = g.n(); }
     t.join();

@@ -17,7 +17,7 @@ struct Lv21 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv21", "SW LV21 Test Gen", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "Test signal generator, silent until armed", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "Test signal generator, silent until armed", f};
         return &d;
     }
 };

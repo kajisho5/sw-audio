@@ -12,7 +12,7 @@ struct Lo01 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_FILTER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lo01", "SW LO01 Low Harm", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "Low-frequency harmonics for small speakers", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "Low-frequency harmonics for small speakers", f};
         return &d;
     }
 };

@@ -79,8 +79,8 @@ void Processor::setParam(int id, double v) {
         case LfGain:  ctl_.lfGain.setTarget(v); break;
         case LfFreq:  ctl_.lfFreqN.setTarget(sp.toNorm(v)); break;
         case LfShape: ctl_.lfBell.setTarget(v); break;
-        case Hpf:     ctl_.hpfOn.setTarget(v > 0 ? 1.0 : 0.0); if (v > 0) ctl_.hpfFreqN.setTarget(hpfNorm(v)); break;
-        case Lpf:     ctl_.lpfOn.setTarget(v > 0 ? 1.0 : 0.0); if (v > 0) ctl_.lpfFreqN.setTarget(hpfNorm(v)); break;
+        case Hpf:     hpfNow_.store(v); ctl_.hpfOn.setTarget(v > 0 ? 1.0 : 0.0); if (v > 0) ctl_.hpfFreqN.setTarget(hpfNorm(v)); break;
+        case Lpf:     lpfNow_.store(v); ctl_.lpfOn.setTarget(v > 0 ? 1.0 : 0.0); if (v > 0) ctl_.lpfFreqN.setTarget(hpfNorm(v)); break;
         case Drive:   ctl_.drive.setTarget(v * 1.8); break;  // 0..10 -> 0..+18 dB
         case DrivePos: {
             const int pos = static_cast<int>(v);
@@ -296,7 +296,7 @@ bool Processor::refAppendBase64(const char* text) {
 }
 // the reference's long-term spectrum (its own sample rate: the bands are in Hz); it needs 3 s of playing, or it is not a reference
 bool Processor::refCommit() {
-    if (!refOpen_) return false;
+    if (!refOpen_) { refFailed_.store(refFailed_.load() + 1.0); return false; }
     refOpen_ = false;
     bool ok = false;
     if (!refBroken_ && refBytes_.size() >= 4 * 1024 && refBytes_.size() % 4 == 0) {
@@ -308,8 +308,10 @@ bool Processor::refCommit() {
     }
     refBytes_.clear(); refBytes_.shrink_to_fit();
     if (ok) refReady_.store(true);   // (a reference that fails to load leaves the previous one)
+    if (ok) refDone_.store(refDone_.load() + 1.0); else refFailed_.store(refFailed_.load() + 1.0);
     return ok;
 }
+void Processor::refAbort() { refOpen_ = false; refBytes_.clear(); refBytes_.shrink_to_fit(); }
 void Processor::refClear() { refOpen_ = false; refBytes_.clear(); refBytes_.shrink_to_fit(); refReady_.store(false); }
 
 // the audio thread: a press starts listening to the input (10 s of playing), another press cancels
@@ -339,7 +341,7 @@ void Processor::fit() {
     if (!fitPending_.load()) return;
     const auto& sp = specs();
     MatchModel md; md.fs = fs_;
-    const double hpf = target_[Hpf], lpf = target_[Lpf];
+    const double hpf = hpfNow_.load(), lpf = lpfNow_.load();
     for (int b = 0; b < kBands; ++b) {
         const double f = BandSpectrum::centerHz(b);
         double pf[BandSpectrum::kMaxPoints]; md.np[b] = input_.samplePoints(b, pf, md.pw[b]);
@@ -391,6 +393,7 @@ void Processor::applyMatch() {
     resultReady_.store(false);
     for (size_t i = 0; i < result_.size(); ++i) { setParam(result_[i].first, result_[i].second); writes_[i] = {result_[i].first, target_[static_cast<size_t>(result_[i].first)]}; }
     nWrites_ = kMatchParams; writeAt_ = 0;
+    applied_.store(applied_.load() + 1.0);
 }
 
 int Processor::takeParamWrite(int& id, double& plain) {

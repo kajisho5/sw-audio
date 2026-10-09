@@ -14,7 +14,7 @@ struct Mt05 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_ANALYZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.mt05", "SW MT05 Vu Ppm", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "VU and PPM meter", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "VU and PPM meter", f};
         return &d;
     }
 };

@@ -413,19 +413,29 @@ EVO_BUTTONS = {
     'RV08': ('Learn', 'Learn: listen to the key, then press again (or wait 30 s)', {}),
     'CS03': ('Set input', 'Set input: listen for 5 s, then set the Gain (press again to stop)', {}),
     'CS04': ('Suggest order', 'Suggest a module order for the kind of source', {'data-suggest': '1'}),
+    'EQ05': [('Reference', 'Choose the reference: an audio file (or drop one on the window). Shift-click removes it.', {'data-ref': '1'}),
+             ('Match', 'Match: play the input for 10 s of playing; the four bands are then set to bring its tone curve to the reference\'s', {})],
 }
 
 
 def add_evo_button(root, code):
-    spec = EVO_BUTTONS.get(code)
+    specs = EVO_BUTTONS.get(code)
     bar = root.select_one('.evob')
-    if not spec or bar is None or any(b.get_text().strip() == spec[0] for b in bar.select('button')):
+    if not specs or bar is None:
         return
-    label, title, attrs = spec
-    extra = ''.join(' %s="%s"' % (k, v) for k, v in attrs.items())
-    btn = BeautifulSoup('<button class="btn" style="margin:0 10px;height:20px;padding:0 12px;font-size:10px;flex:none" title="%s"%s>%s</button>' % (title, extra, label), 'html.parser')
-    txt = bar.select_one('.evt')
-    (txt.insert_after if txt is not None else bar.append)(btn.button)
+    if isinstance(specs, tuple):
+        specs = [specs]
+    prev = bar.select_one('.evt')
+    for label, title, attrs in specs:
+        if any(b.get_text().strip() == label for b in bar.select('button')):
+            continue
+        extra = ''.join(' %s="%s"' % (k, v) for k, v in attrs.items())
+        btn = BeautifulSoup('<button class="btn" style="margin:0 10px;height:20px;padding:0 12px;font-size:10px;flex:none" title="%s"%s>%s</button>' % (title, extra, label), 'html.parser').button
+        if prev is not None:
+            prev.insert_after(btn)
+        else:
+            bar.append(btn)
+        prev = btn
 
 
 def bind_actions(root, code, report):

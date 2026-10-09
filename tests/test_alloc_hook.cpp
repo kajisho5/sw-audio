@@ -2,15 +2,25 @@
 #include "alloc_guard.hpp"
 #include <cstdlib>
 #include <new>
+#if defined(_WIN32)
+#include <malloc.h>
+#endif
+#if defined(__GLIBC__)   // (the trace needs glibc's backtrace: not on Windows or macOS)
 #include <execinfo.h>
 #include <unistd.h>
+#define SW_ALLOC_HAS_TRACE 1
+#endif
 
 namespace {
 void note() {   // SW_ALLOC_TRACE=1: where the counted allocations come from (addresses; addr2line -f -C -e build-cmake/sw-tests <offset> turns them into functions)
+#ifdef SW_ALLOC_HAS_TRACE
     static const bool trace = std::getenv("SW_ALLOC_TRACE") != nullptr;
     if (allocguard::count.fetch_add(1) == 0 && trace) {   // the first one of a Scope
         allocguard::on = false; void* bt[24]; const int k = backtrace(bt, 24); backtrace_symbols_fd(bt, k, 2); (void)!write(2, "----\n", 5); allocguard::on = true;
     }
+#else
+    allocguard::count.fetch_add(1);
+#endif
 }
 void* take(std::size_t n) {
     if (allocguard::on) note();
@@ -19,10 +29,22 @@ void* take(std::size_t n) {
 }
 void* takeAligned(std::size_t n, std::size_t a) {
     if (allocguard::on) note();
-    void* p = nullptr;
     if (a < sizeof(void*)) a = sizeof(void*);
+#if defined(_WIN32)
+    if (void* p = _aligned_malloc(n ? n : 1, a)) return p;
+    throw std::bad_alloc();
+#else
+    void* p = nullptr;
     if (posix_memalign(&p, a, n ? n : 1) != 0) throw std::bad_alloc();
     return p;
+#endif
+}
+void giveAligned(void* p) noexcept {
+#if defined(_WIN32)
+    _aligned_free(p);   // (memory from _aligned_malloc must go back through it)
+#else
+    std::free(p);
+#endif
 }
 }  // namespace
 void* operator new(std::size_t n) { return take(n); }
@@ -35,7 +57,7 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
-void operator delete(void* p, std::align_val_t) noexcept { std::free(p); }
-void operator delete[](void* p, std::align_val_t) noexcept { std::free(p); }
-void operator delete(void* p, std::size_t, std::align_val_t) noexcept { std::free(p); }
-void operator delete[](void* p, std::size_t, std::align_val_t) noexcept { std::free(p); }
+void operator delete(void* p, std::align_val_t) noexcept { giveAligned(p); }
+void operator delete[](void* p, std::align_val_t) noexcept { giveAligned(p); }
+void operator delete(void* p, std::size_t, std::align_val_t) noexcept { giveAligned(p); }
+void operator delete[](void* p, std::size_t, std::align_val_t) noexcept { giveAligned(p); }

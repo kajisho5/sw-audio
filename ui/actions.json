@@ -177,5 +177,26 @@
    "label": "Remember gain",
    "call": "remember"
   }
+ ],
+ "EQ05": [
+  {
+   "label": "Match",
+   "call": "match",
+   "exact": true,
+   "undo": [
+    "eq05.hf.gain",
+    "eq05.hf.freq",
+    "eq05.hf.shape",
+    "eq05.hmf.gain",
+    "eq05.hmf.freq",
+    "eq05.hmf.q",
+    "eq05.lmf.gain",
+    "eq05.lmf.freq",
+    "eq05.lmf.q",
+    "eq05.lf.gain",
+    "eq05.lf.freq",
+    "eq05.lf.shape"
+   ]
+  }
  ]
 }

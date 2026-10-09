@@ -12,7 +12,7 @@ struct Cr05 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DELAY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.cr05", "SW CR05 Tape Stop", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "Tape stop, start and spin back", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "Tape stop, start and spin back", f};
         return &d;
     }
 };

@@ -40,8 +40,12 @@ public:
     void refBegin(double rate);
     bool refAppendBase64(const char* text);
     bool refCommit();
-    void refClear();
+    void refAbort();                                  // the load in progress is dropped (the reference in place stays)
+    void refClear();                                  // the reference in place is dropped
     bool hasReference() const { return refReady_.load(); }
+    int refLoadsDone() const { return static_cast<int>(refDone_.load()); }       // loads that worked / failed since the start (the screen waits for one of them to change after refCommit)
+    int refLoadsFailed() const { return static_cast<int>(refFailed_.load()); }
+    int matchesApplied() const { return static_cast<int>(applied_.load()); }     // fitted values put into the EQ since the start
     void match();
     bool matching() const { return listening_.load(); }
     double matchProgress() const { return progress_.load(); }
@@ -82,7 +86,7 @@ private:
     BandSpectrum input_;
     std::array<double, BandSpectrum::kBands> inBands_{}, refBands_{};
     CopyAtomic<bool> listening_{false}, fitPending_{false}, refReady_{false}, resultReady_{false};
-    CopyAtomic<double> progress_{0.0}, before_{0.0}, after_{0.0};
+    CopyAtomic<double> progress_{0.0}, before_{0.0}, after_{0.0}, refDone_{0.0}, refFailed_{0.0}, applied_{0.0}, hpfNow_{0.0}, lpfNow_{0.0};   // (hpfNow_ / lpfNow_: the GUI thread's fit reads the filters as they are set)
     std::vector<uint8_t> refBytes_; double refRate_ = 48000.0; bool refOpen_ = false, refBroken_ = false;
     std::array<std::pair<int, double>, kMatchParams> result_{}, writes_{};   // result_: by the GUI thread (resultReady_), writes_: the queue of the audio thread
     int nWrites_ = 0, writeAt_ = 0;

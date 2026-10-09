@@ -543,6 +543,71 @@
     } };
   }
 
+  // ---- EQ05 "Match" (core: refBegin / refAppendBase64 / refCommit, match, fit; readouts = listening, progress, the input has been heard and waits for fit, a reference is in place, the tone curves' difference before / after
+  // (RMS dB), fits applied, reference loads that worked / failed). "Reference" takes a file (chosen, or dropped on the window): decoded here, mixed to mono and, when longer than 40 s, cut into 8 pieces of 5 s spread over it
+  // (a 20 ms fade at each end), sent as float samples in base64 pieces (refbegin <rate>, refdata ..., refend). "Match" listens to the input for 10 s of playing; when the core has heard it, this page asks for the fit
+  // ("fit": it runs on the window's thread) and the core writes the four bands' values (one undo step: ui/actions.json). Pressed without a reference it asks for one.
+  const MATCH_SEG_S = 5, MATCH_SEGS = 8;
+  function matchReference(box, ctx) {
+    const btn = box.querySelector('button[data-call="match"]'), refBtn = box.querySelector('button[data-ref]'); if (!btn || !refBtn) return null;
+    const input = document.createElement('input'); refBtn.parentNode.append(input);
+    const label = btn.textContent.trim(), refLabel = refBtn.textContent.trim(), refTip = refBtn.title, matchTip = btn.title;
+    let r = null, busy = false, pend = null, name = '', sec = 0, stage = 'idle', applied0 = 0, fitAt = 0, refText = '', refTextUntil = 0;
+    const short = n => (n.length > 16 ? n.slice(0, 13) + '…' : n);
+    const monoOf = d => {
+      const seg = Math.round(MATCH_SEG_S * d.rate), all = seg * MATCH_SEGS, mix = i => 0.5 * (d.l[i] + d.r[i]);
+      if (d.n <= all) { const o = new Float32Array(d.n); for (let i = 0; i < d.n; i++) o[i] = mix(i); return o; }
+      const o = new Float32Array(all), fade = Math.max(1, Math.round(0.02 * d.rate));
+      for (let k = 0; k < MATCH_SEGS; k++) { const start = Math.floor((d.n - seg) * (k + 0.5) / MATCH_SEGS); for (let i = 0; i < seg; i++) o[k * seg + i] = Math.min(1, i / fade, (seg - 1 - i) / fade) * mix(start + i); }
+      return o;
+    };
+    const say = (t, ms) => { refText = t; refTextUntil = ms ? Date.now() + ms : 0; paint(); };
+    async function load(file) {
+      if (busy) return; busy = true; say('Decoding …');
+      try {
+        const d = await decodeFile(file, REF_MAX_S), mono = monoOf(d);
+        ctx.call('refbegin', String(d.rate));
+        await sendPieces(ctx, 'refdata', new Uint8Array(mono.buffer), f => say('Sending ' + Math.round(100 * f) + ' %'));
+        pend = { done0: r ? r[7] : 0, failed0: r ? r[8] : 0, t: Date.now(), name: file.name, sec: d.n / d.rate };
+        say('Reading …'); ctx.call('refend', '');
+      } catch (e) { busy = false; pend = null; ctx.call('refabort', ''); say('Could not load', 3500); }
+    }
+    pickFile(input, 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac', load);
+    refBtn.addEventListener('click', e => { if (e.shiftKey) { if (!busy) { ctx.call('refclear', ''); name = ''; sec = 0; stage = 'idle'; paint(); } return; } if (!busy) input.click(); });
+    box.addEventListener('dragover', e => { if (e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files')) e.preventDefault(); });
+    box.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); load(f); });
+    // the press on Match reaches the generic action handler (it calls the core) only when there is a reference and nothing is being fitted; otherwise it asks for the reference
+    btn.parentNode.addEventListener('click', e => {
+      if (e.target !== btn && !btn.contains(e.target)) return;
+      if (busy || stage === 'fit') { e.stopPropagation(); return; }
+      if (stage !== 'listen' && !(r && r[3] > 0.5)) { e.stopPropagation(); input.click(); return; }
+    }, true);
+    function paint() {
+      const has = !!(r && r[3] > 0.5), shown = refText && (!refTextUntil || Date.now() < refTextUntil) ? refText : has ? (name ? short(name) : 'Reference ✓') : refLabel;
+      if (refBtn.textContent !== shown) refBtn.textContent = shown;
+      const rt = has ? 'Reference: ' + (name || 'in place (chosen earlier)') + (sec ? ' (' + mmss(sec) + ')' : '') + '. Click to choose another, shift-click removes it. It is not saved with the project.' : refTip;
+      if (refBtn.title !== rt) refBtn.title = rt; refBtn.classList.toggle('on', has);
+      const t = stage === 'listen' ? 'Listening ' + Math.round((r ? r[1] : 0) * 100) + ' %' : stage === 'fit' ? 'Fitting …' : stage === 'done' ? 'Matched' : label;
+      if (btn.textContent !== t) btn.textContent = t;
+      const tip = stage === 'done' && r ? 'The tone curve of the input differed from the reference\'s by ' + r[4].toFixed(1) + ' dB (RMS over 30 Hz - 16 kHz, level taken out); with the four bands as set now ' + r[5].toFixed(1) + ' dB. Undo (the toolbar) puts the previous settings back. HPF, LPF and Drive were not touched.'
+        : stage === 'listen' ? 'Listening to the input: it has to play for 10 s (silence does not count). Press again to cancel.' : has ? matchTip : 'Choose a reference first (press to pick a file)';
+      if (btn.title !== tip) btn.title = tip; btn.classList.toggle('on', stage === 'listen' || stage === 'fit');
+    }
+    return { update(info) {
+      const ro = info && info.readouts; if (!ro || ro.length < 9) return; r = ro;
+      if (pend) {
+        if (r[7] > pend.done0) { name = pend.name; sec = pend.sec; pend = null; busy = false; say('Loaded', 2500); }
+        else if (r[8] > pend.failed0) { pend = null; busy = false; say('Could not read it', 3500); }
+        else if (Date.now() - pend.t > 60000) { pend = null; busy = false; say('No answer', 3500); }
+      }
+      if (r[0] > 0.5) stage = 'listen';
+      else if (r[2] > 0.5 && stage !== 'fit') { stage = 'fit'; applied0 = r[6]; fitAt = Date.now(); ctx.call('fit', ''); }
+      else if (stage === 'listen') stage = 'idle';   // cancelled
+      if (stage === 'fit') { if (r[6] > applied0) stage = 'done'; else if (Date.now() - fitAt > 15000) stage = 'idle'; }
+      paint();
+    } };
+  }
+
   // ---- EQ02 "Assist" (core: setAssist, resonances; readouts = assist on, then 6 x [Hz, dB it sticks out]): the button switches the listening; the resonances are marked on the EQ graph (small triangles
   // with their frequency); pressing a mark puts a narrow Bell there on the first band that is off, cutting a part of what sticks out (Q 6, -0.7 x the excess, at most -12 dB)
   function assistMarks(box, ctx, eq) {
@@ -1946,6 +2011,7 @@
     LV01: voiceStripDisplay,
     DY04: learnButton, CS02: learnButton, CS03: learnButton,
     MS07: truncationCheck,
+    EQ05: matchReference,
     DY09: transientDisplay,
     RS05: declipDisplay,
     DL05: grainDelayDisplay,

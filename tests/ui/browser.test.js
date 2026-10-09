@@ -169,8 +169,34 @@ async function open(code, query = '') {
     eq(await cardOrder(), ord, kind + ': the table\'s order');
   }
 
+  // EQ05 Match: "Reference" takes a file (chosen or dropped), "Match" listens and then the core writes the four bands (one undo step); without a reference Match asks for one
+  await open('EQ05'); const mt = pg.locator('.evob button[data-call="match"]'), mref = pg.locator('.evob button[data-ref]');
+  eq(await mt.count(), 1, 'EQ05 has the Match button in the EVO bar'); eq(await mref.count(), 1, 'and the Reference button'); eq((await mt.textContent()).trim(), 'Match', 'Match idle'); eq((await mref.textContent()).trim(), 'Reference', 'Reference idle');
+  ok(/Choose a reference first/.test(await mt.getAttribute('title')), 'without a reference the tooltip says so');
+  const wavFile = (sec, rate) => { const n = sec * rate, b = Buffer.alloc(44 + 2 * n); b.write('RIFF', 0); b.writeUInt32LE(36 + 2 * n, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(2 * n, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(6000 * Math.sin(i * 0.05) + (Math.random() - 0.5) * 6000), 44 + 2 * i); return b; };
+  const eqDef = (await pg.evaluate(() => window.simValues())).slice(0, 12);
+  const chooser = pg.waitForEvent('filechooser'); await mt.click(); const fc = await chooser;   // (no reference: the press opens the file chooser)
+  await fc.setFiles({ name: 'reference-song.wav', mimeType: 'audio/wav', buffer: wavFile(3, 48000) });
+  await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-ref]').textContent.trim() === 'reference-son…', null, { timeout: 15000 }).then(() => ok(true), () => ok(false, 'EQ05: the Reference button shows the file\'s name'));
+  ok(/Reference: reference-song\.wav \(0:03\)/.test(await mref.getAttribute('title')), 'its tooltip: ' + await mref.getAttribute('title'));
+  await mt.click(); await pg.waitForFunction(() => /Listening \d+ %/.test(document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="match"]').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'EQ05: while listening the button shows how far it is'));
+  await pg.waitForFunction(() => document.getElementById('app').shadowRoot.querySelector('.evob button[data-call="match"]').textContent.trim() === 'Matched', null, { timeout: 15000 }).then(() => ok(true), () => ok(false, 'EQ05: after the listening and the fit it says Matched'));
+  ok(/3\.1 dB/.test(await mt.getAttribute('title')) && /0\.3 dB/.test(await mt.getAttribute('title')), 'the tooltip has the difference before and after: ' + await mt.getAttribute('title'));
+  await pg.waitForTimeout(700);
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(0, 12)), '[3.5,9000,0,-2,2800,1.1,1.5,450,0.9,2,90,0]', 'the values the core wrote');
+  await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(250);
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(0, 12)), JSON.stringify(eqDef), 'one Undo takes all twelve back (the Match step)');
+  await pg.locator('[data-act="redo"]').click(); await pg.waitForTimeout(250);
+  eq(JSON.stringify((await pg.evaluate(() => window.simValues())).slice(0, 12)), '[3.5,9000,0,-2,2800,1.1,1.5,450,0.9,2,90,0]', 'and Redo brings them again');
+  await mt.click(); await pg.waitForTimeout(400); await mt.click(); await pg.waitForTimeout(400);   // started, then cancelled
+  eq((await mt.textContent()).trim(), 'Match', 'a second press while it listens cancels');
+  await mref.click({ modifiers: ['Shift'] }); await pg.waitForTimeout(300);
+  eq((await mref.textContent()).trim(), 'Reference', 'shift-click on Reference removes it');
+  await pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot, dt = new DataTransfer(); dt.items.add(new File([new Uint8Array(1)], 'x.wav')); sh.querySelector('.evob button[data-ref]').dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true })); });
+  await open('DY04'); eq(await pg.locator('.evob button[data-ref]').count(), 0, 'DY04 has no Reference button');
+
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check and CS04 Suggest order: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

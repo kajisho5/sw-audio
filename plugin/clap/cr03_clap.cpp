@@ -15,7 +15,7 @@ struct Cr03 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DELAY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.cr03", "SW CR03 Granular", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "Granular cloud, scatter and glitch", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "Granular cloud, scatter and glitch", f};
         return &d;
     }
 };

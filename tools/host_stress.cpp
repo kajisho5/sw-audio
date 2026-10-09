@@ -73,19 +73,40 @@ int main(int argc, char** argv) {
     });
     std::thread window([&] {
         Rng rng(7);
+        // EQ05 Match: a reference (6 s of tilted noise, float samples in base64 pieces) is sent now and again now and then (the random "refclear" removes it); "match" (rare, so that a listening can last 10 s of playing) and "fit" run against the audio thread
+        const bool isEq05 = std::string(d->id).find(".eq05") != std::string::npos;
+        auto sendRef = [&] {
+            std::vector<float> f(static_cast<size_t>(6 * 48000)); double lp = 0; for (auto& v : f) { const double x = (rng.next() - 0.5) * 0.35; lp += 0.05 * (x - lp); v = static_cast<float>(x + 4.0 * lp); }
+            static const char* t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            const unsigned char* b = reinterpret_cast<const unsigned char*>(f.data()); const size_t n = f.size() * sizeof(float);
+            msg->send(p, "c refbegin 48000");
+            for (size_t off = 0; off < n; off += 3 * 16384) { std::string o; const size_t e = std::min(n, off + 3 * 16384); for (size_t i = off; i < e; i += 3) { const unsigned v = (b[i] << 16) | (i + 1 < n ? b[i + 1] << 8 : 0) | (i + 2 < n ? b[i + 2] : 0); o += t[v >> 18]; o += t[(v >> 12) & 63]; o += i + 1 < n ? t[(v >> 6) & 63] : '='; o += i + 2 < n ? t[v & 63] : '='; } msg->send(p, ("c refdata " + o).c_str()); }
+            msg->send(p, "c refend");
+        };
+        int phase = 0; long startBlocks = 0;   // EQ05: reference + match, 10 s of playing later fit, a few blocks later again
         static const char* calls[] = {"tap", "learn", "check", "forget", "assist 1", "assist 0", "linkwatch 1", "linkwatch 0", "randomize", "clear", "remember", "reset", "measure", "autoalign", "ringout 1", "ringout 0", "lock", "clearlive", "flat",
-                                      "refclear 1", "refclear 2", "looprange 0.2 0.6", "resetcounts", "resetmeters", "arm 1", "arm 0", "output 1", "output 0", "record 1", "record 0", "mark", "clap 150", "lockall 1", "lockall 0", "export", "presetlist", "irabort", "refabort"};
+                                      "refclear 1", "refclear 2", "looprange 0.2 0.6", "resetcounts", "resetmeters", "arm 1", "arm 0", "output 1", "output 0", "record 1", "record 0", "mark", "clap 150", "lockall 1", "lockall 0", "export", "presetlist", "irabort", "refabort", "fit"};
         while (!stop.load()) {
             const double r = rng.next();
+            if (isEq05) {
+                if (phase == 0) { sendRef(); msg->send(p, "c match"); startBlocks = blocks.load(); phase = 1; }
+                else if (phase == 1 && blocks.load() - startBlocks > 1950) { msg->send(p, "c fit"); startBlocks = blocks.load(); phase = 2; }
+                else if (phase == 2 && blocks.load() - startBlocks > 30) phase = 0;
+            }
             if (r < 0.45) msg->send(p, "p");
             else if (r < 0.8 && np) { const uint32_t i = static_cast<uint32_t>(rng.next() * np) % np; double v = info[i].min_value + rng.next() * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
                 msg->send(p, ("b " + std::to_string(i)).c_str()); char b[64]; std::snprintf(b, sizeof b, "s %u %.9g", i, v); msg->send(p, b); msg->send(p, ("e " + std::to_string(i)).c_str()); }
-            else { const char* c = calls[static_cast<size_t>(rng.next() * (sizeof calls / sizeof *calls)) % (sizeof calls / sizeof *calls)]; msg->send(p, (std::string("c ") + c).c_str()); }
+            else { const char* c = calls[static_cast<size_t>(rng.next() * (sizeof calls / sizeof *calls)) % (sizeof calls / sizeof *calls)]; if (isEq05 && !std::strncmp(c, "ref", 3)) continue; msg->send(p, (std::string("c ") + c).c_str()); }
             ++messages; std::this_thread::sleep_for(std::chrono::microseconds(150));
         }
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long>(seconds * 1000)));
     stop = true; audio.join(); window.join();
+    if (std::string(d->id).find(".eq05") != std::string::npos) {   // EQ05: how far Match got (read-outs: listening, progress, needs fit, reference, before, after, fits applied, loads done / failed)
+        const std::string u = msg->send(p, "p"); std::vector<std::string> arrays; int depth = 0; size_t from = 0;
+        for (size_t i = 0; i < u.size(); ++i) { if (u[i] == '[') { if (depth++ == 0) from = i; } else if (u[i] == ']' && --depth == 0) arrays.push_back(u.substr(from, i - from + 1)); }
+        std::printf("  EQ05 read-outs: %s\n", arrays.size() > 3 ? arrays[3].c_str() : "(none)");
+    }
     p->stop_processing(p); p->deactivate(p); p->destroy(p); entry->deinit(); dlclose(lib);
     std::printf("%-28s %6ld blocks, %7ld window messages: %s\n", d->name, blocks.load(), messages.load(), bad.load() ? "FAIL (process error or NaN)" : "ok");
     return bad.load() ? 1 : 0;

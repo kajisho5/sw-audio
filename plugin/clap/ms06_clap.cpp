@@ -16,7 +16,7 @@ struct Ms06 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_LIMITER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.ms06", "SW MS06 Master Chain", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.15.0", "Master chain with stage gain match", f};
+                                                   "https://seventh-well.com", "", "", "0.16.0", "Master chain with stage gain match", f};
         return &d;
     }
 };

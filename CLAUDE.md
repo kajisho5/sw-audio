@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.15.0：132 製品が完成（単体テスト 1630 件（ASan・UBSan でも全合格）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッドと窓のスレッドを同時に）で全製品 0 件。GitHub Actions は run 169＝v0.15.0（畳み込みの積和ループ・`--leaks`・DY04／CS02／RV08／CS03／DY10 の学習・解析）まで Windows・macOS（auval の aumf を含む）・Linux で全ジョブ成功。そのあとの変更（MS07・CS04・音声スレッドの確保・カーネル設計）の実行は結果待ち）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.16.0：132 製品が完成（単体テスト 1639 件（ASan・UBSan でも全合格）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッドと窓のスレッドを同時に）で全製品 0 件。GitHub Actions は run 169＝v0.15.0（畳み込みの積和ループ・`--leaks`・DY04／CS02／RV08／CS03／DY10 の学習・解析）まで Windows・macOS（auval の aumf を含む）・Linux で全ジョブ成功。そのあとの変更（MS07・CS04・音声スレッドの確保・カーネル設計・EQ05 Match）は、run 170 が Windows のビルド（`execinfo.h`）と macOS の自己試験 1 件で失敗〔試験側の移植の不具合、直した〕、修正後の実行は結果待ち）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 
@@ -84,7 +84,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、EQ08・EQ02 Linear のカーネル再設計を音声スレッドから外す（確保は直し、設計は 2〜6 倍速くした。計算そのものは 24 バンドで 3〜8 ms）、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り・OBS 連携（LV27）・EQ05 の Match、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、EQ08・EQ02 Linear のカーネル再設計を音声スレッドから外す（確保は直し、設計は 2〜6 倍速くした。計算そのものは 24 バンドで 3〜8 ms）、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り（EQ05 の Match の参照元に UT03 を使う道を含む。ファイルから選ぶ道は済）・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）
