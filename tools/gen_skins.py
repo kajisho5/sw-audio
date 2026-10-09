@@ -328,8 +328,9 @@ def bind_toggles(root, params, report, code):
                 for p in two:
                     if norm(p['name']) == a:
                         hit = (p['i'], p['steps'][1]); break
-        if hit is None:
+        if hit is None:                       # a switch of the design that the specification has no parameter for: hidden (the layout stays), not drawn as a control that does nothing
             report.setdefault(code, []).append('tog:' + '/'.join(spans))
+            par['style'] = (par.get('style') or '') + ';visibility:hidden'
             continue
         t['data-tog'] = '1'; t['data-p'] = str(hit[0]); t['data-up'] = str(hit[1]); n += 1
     return n
