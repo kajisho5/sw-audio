@@ -21,7 +21,7 @@ const specs = JSON.parse(fs.readFileSync(path.join(__dirname, '../ui/specs.json'
   const sets = [];
   for (const c of codes) {
     const runs = [];
-    for (const r of [1, 2, 3]) { await pg.goto(`http://localhost:8123/preview.html?p=${c}&rand=${r}`); await pg.waitForTimeout(350); runs.push(new Set(await pg.evaluate(leaves))); }
+    for (const r of [1, 2, 3]) { await pg.goto(`http://localhost:8123/preview.html?p=${c}&rand=${r}${process.env.RR ? '&rr=' + r : ''}`); await pg.waitForTimeout(350); runs.push(new Set(await pg.evaluate(leaves))); }
     const fixed = [...runs[0]].filter(t => runs[1].has(t) && runs[2].has(t) && t.length < 60 && !/^SW [A-Z]{2}\d\d$/.test(t));
     console.log(c.toUpperCase().padEnd(5), fixed.join(' | '));
   }

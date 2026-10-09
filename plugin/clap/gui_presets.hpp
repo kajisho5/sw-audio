@@ -1,4 +1,4 @@
-// User presets of a plug-in window: a preset is a text file (the page writes its body, this only stores it) in the person's Documents/SW AUDIO/Presets/<CODE> folder.
+// User presets of a plug-in window: a preset is a text file (the page writes its body, this only stores it) in the person's <Documents>/SW AUDIO/Presets/<CODE> folder.
 // File: "SWPRESET 1 <CODE>" then the body on one line (parameter id=value pairs joined by ';'). No platform code, no CLAP.
 #pragma once
 #include <algorithm>
@@ -16,11 +16,11 @@ constexpr size_t kMaxName = 60, kMaxBody = 65536;
 inline std::filesystem::path pathOf(const std::string& s) { return std::filesystem::u8path(s); }
 inline bool isCode(const std::string& c) { if (c.empty() || c.size() > 8) return false; for (char x : c) if (!std::isalnum(static_cast<unsigned char>(x))) return false; return true; }
 
-// <home>/Documents/SW AUDIO/Presets/<CODE> ("" without a home folder or with a code that is not letters and digits)
-inline std::string dirFor(const std::string& code, const std::string& home) {
-    if (home.empty() || !isCode(code)) return "";
-    std::string h = home; while (!h.empty() && (h.back() == '/' || h.back() == '\\')) h.pop_back();
-    return h + "/Documents/SW AUDIO/Presets/" + code;
+// <Documents>/SW AUDIO/Presets/<CODE> ("" without a Documents folder or with a code that is not letters and digits); see gui_paths.hpp
+inline std::string dirFor(const std::string& code, const std::string& documents) {
+    if (documents.empty() || !isCode(code)) return "";
+    std::string h = documents; while (!h.empty() && (h.back() == '/' || h.back() == '\\')) h.pop_back();
+    return h + "/SW AUDIO/Presets/" + code;
 }
 
 // a file name: the characters a file system refuses become '-', trimmed, at most kMaxName bytes (never cut inside a UTF-8 character); "" when nothing usable is left

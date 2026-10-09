@@ -11,7 +11,8 @@ std::string tmpDir() { static int n = 0; const fs::path p = fs::temp_directory_p
 }
 
 TEST_CASE("presets: the folder, names and the percent-encoding the page uses") {
-    CHECK(presets::dirFor("DY08", "/home/me") == "/home/me/Documents/SW AUDIO/Presets/DY08");
+    CHECK(presets::dirFor("DY08", "/home/me/Documents") == "/home/me/Documents/SW AUDIO/Presets/DY08");
+    CHECK(presets::dirFor("DY08", "C:\\Users\\me\\OneDrive\\Documents\\") == "C:\\Users\\me\\OneDrive\\Documents/SW AUDIO/Presets/DY08");
     CHECK(presets::dirFor("DY08", "") == "");
     CHECK(presets::cleanName("  Vocal bus 2  ") == "Vocal bus 2");
     CHECK(presets::cleanName("a/b\\c:d*e?f\"g<h>i|j") == "a-b-c-d-e-f-g-h-i-j");

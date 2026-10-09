@@ -12,6 +12,7 @@
 #pragma once
 #include "gui_bridge.hpp"
 #include "sw_message.h"
+#include "gui_paths.hpp"
 #include "gui_view.hpp"
 #ifdef SW_SKIN_HEADER
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
@@ -234,9 +235,8 @@ private:
         s->guiDestroyView();
         std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
         const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, kHasBypass, init, f.latencyMs(), skin());
-        s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); const char* home = std::getenv("HOME"); if (!home) home = std::getenv("USERPROFILE");
-        const std::string code = gui::codeOf(P::descriptor()->id);
-        s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_, gui::presets::dirFor(code, home ? home : ""), code);
+        s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); const std::string code = gui::codeOf(P::descriptor()->id);
+        s->session_ = std::make_unique<gui::Session<GuiFacade>>(*s->facade_, gui::presets::dirFor(code, gui::documentsDir()), code);
         s->view_ = gui::createView(html, [s](const std::string& m) { return s->session_ ? s->session_->onMessage(m) : std::string(); }, s->scale_);
         return s->view_ != nullptr;
     }
@@ -244,9 +244,8 @@ private:
     static const char* guiMessage(const clap_plugin_t* p, const char* msg) {
         static thread_local std::string reply;
         Plugin* s = self(p); GuiFacade f{*s};
-        const char* home = std::getenv("HOME"); if (!home) home = std::getenv("USERPROFILE");
         const std::string code = gui::codeOf(P::descriptor()->id);
-        gui::Session<GuiFacade> session(f, gui::presets::dirFor(code, home ? home : ""), code);
+        gui::Session<GuiFacade> session(f, gui::presets::dirFor(code, gui::documentsDir()), code);
         reply = session.onMessage(msg ? msg : "");
         return reply.c_str();
     }

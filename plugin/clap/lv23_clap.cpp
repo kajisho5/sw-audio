@@ -23,8 +23,8 @@ struct Lv23 {
     // Export log: the measurement log as a CSV in Documents/SW AUDIO (GUI thread: file output; the log is a fixed ring the audio thread fills, reading it here only risks one row of the newest second)
     static bool guiOnGui(const char* n) { return !std::strcmp(n, "export"); }
     static void guiCallGui(Core& c, const char*, const char*) {
-        const char* h = std::getenv("HOME"); if (!h) h = std::getenv("USERPROFILE"); if (!h) return;
-        namespace fs = std::filesystem; std::error_code ec; const fs::path dir = fs::path(h) / "Documents" / "SW AUDIO"; fs::create_directories(dir, ec); if (ec) return;
+        const std::string docs = sw::gui::documentsDir(); if (docs.empty()) return;
+        namespace fs = std::filesystem; std::error_code ec; const fs::path dir = fs::u8path(docs) / "SW AUDIO"; fs::create_directories(dir, ec); if (ec) return;
         const std::time_t now = std::time(nullptr); std::tm tmv{};
 #ifdef _WIN32
         localtime_s(&tmv, &now);

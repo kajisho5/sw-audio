@@ -19,7 +19,7 @@ struct Lv30 {
     static void guiCall(Core& c, const char* n, const char* a) {
         if (!std::strcmp(n, "record")) {
             if (a[0] == '1') {
-                if (c.folder().empty()) { const char* h = std::getenv("HOME"); if (!h) h = std::getenv("USERPROFILE"); if (h) c.setFolder(std::string(h) + "/Documents/SW AUDIO"); }
+                if (c.folder().empty()) { const std::string docs = sw::gui::documentsDir(); if (!docs.empty()) c.setFolder(docs + "/SW AUDIO"); }
                 c.start();
             } else c.stop();
         } else if (!std::strcmp(n, "mark")) c.mark();
