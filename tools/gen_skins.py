@@ -374,13 +374,15 @@ def bind_actions(root, code, report):
 def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
     shown dimmed with a title instead of pretending to work."""
-    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto'}
+    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'measure'}
     bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip().lower()
+        if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown
+            b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
         in_evo = b.find_parent(class_='evob') is not None
         if t in inert or (b.get('aria-label') or '').lower() == 'history' or (in_evo and t in ('a', 'b', 'c')):
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'
@@ -388,6 +390,23 @@ def mark_inert(root):
         elif b.find_parent(class_='tb') is not None and b.select_one('svg') and t and not b.get('aria-label'):
             b['title'] = 'Presets are not available yet'
     return n
+
+
+def eq05_shapes(root, params, code):
+    """EQ05: the design's four Bell/Shelf buttons are HF Shape (first pair) and LF Shape (second pair)."""
+    if code != 'EQ05':
+        return
+    idx = {p['name']: p for p in params}
+    pairs = [idx.get('HF Shape'), idx.get('LF Shape')]
+    bs = [b for b in root.select('button') if norm(b.get_text()) in ('bell', 'shelf') and not b.get('data-p')]
+    for k, p in enumerate(pairs):
+        if p is None:
+            continue
+        for b in bs[2 * k:2 * k + 2]:
+            lab = [norm(x) for x in p['labels']]
+            n = norm(b.get_text())
+            if n in lab:
+                b['data-p'] = str(p['i']); b['data-v'] = str(p['steps'][lab.index(n)])
 
 
 def build(code, report):
@@ -442,6 +461,7 @@ def build(code, report):
             if k is not None:
                 b['data-band'] = str(k); nbt += 1; nbb += 1
     bind_toggles(root, params, report, code)
+    eq05_shapes(root, params, code)
     bind_actions(root, code, report)
     # buttons: an option of a stepped parameter, or the on/off of a 2-step parameter
     opts = {}
@@ -473,6 +493,20 @@ def build(code, report):
             t = tl.get_text().strip(); b['data-tile'] = '1'
         if t == 'Δ' and delta:
             b['data-p'] = str(delta[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
+        tn = norm(t)
+        if tn == 'in' and b.find_parent(class_='tb') is None:
+            two2 = [p for p in params if p['curve'] == 'step' and len(p['steps']) == 2]
+            own2 = next((p for p in two2 if norm(p['name']) == 'in' and not p['id'].startswith('common.')), None)
+            byp = next((p for p in params if p['id'] == 'common.bypass'), None)
+            tgt = own2 or byp
+            if tgt:                                    # the panel's In: lit while the product is in (the common Bypass is 1 when out, so inverted)
+                b['data-p'] = str(tgt['i']); b['data-toggle'] = '1'
+                if byp and not own2:
+                    b['data-inv'] = '1'
+                nbt += 1; nbb += 1; continue
+        mom = next((p for p in params if p['curve'] == 'step' and len(p['steps']) == 2 and p.get('auto') is False and re.match(r'^(hold to|mute$)', p['name'].lower()) and (norm(p['name']) == tn or tn.endswith(' ' + norm(p['name'])))), None)
+        if mom is not None and tn.startswith('hold to'):   # press and hold (LV01 "Hold to mute" = Mute, LV11 "Hold to cough")
+            b['data-p'] = str(mom['i']); b['data-hold'] = '1'; nbt += 1; nbb += 1; continue
         if t == 'Auto' and autogain and b.parent is not None and any(x.get_text().strip() == 'Δ' for x in b.parent.find_all('button', recursive=False)):
             b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue   # the panel's Auto next to the Δ button = the common Auto gain
         if not t:

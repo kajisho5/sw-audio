@@ -260,6 +260,13 @@
         return draw;
       }
       function attachButton(b, cur) {
+        if (b.dataset.hold) {                        // press and hold: on while the button is down (Hold to mute / cough)
+          b.style.touchAction = 'none';
+          b.addEventListener('pointerdown', e => { b.setPointerCapture(e.pointerId); const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, h.p.steps[1], false); });
+          const up = () => { const i = cur(), h = hostOf(i); if (vals[i] === h.p.steps[0]) return; setValue(i, h.p.steps[0], false); bridge.end(i); };
+          b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+          return () => { const i = cur(), h = hostOf(i); if (h) b.classList.toggle('on', h.c.norm(vals[i]) > 0.5); };
+        }
         const toggle = !!b.dataset.toggle, t = +b.dataset.v, inv = !!b.dataset.inv;   // inv: lit when the parameter is 0 (the power button of a product that has its own In parameter)
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
         const tile = b.dataset.tile, tv = tile && b.querySelector('.tv'), dot = tile && b.querySelector('.dot, .offd');   // LIVE tiles: the value text and the lamp follow the parameter
