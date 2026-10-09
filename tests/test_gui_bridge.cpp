@@ -103,6 +103,14 @@ TEST_CASE("GUI readouts: up to kMaxReadouts values go through (RS05 sends a 2 x 
     CHECK(c2 == static_cast<size_t>(gui::kMaxReadouts));               // clipped to the limit
 }
 
+TEST_CASE("GUI messages: a button call may be large (a piece of a reference file), nothing else may") {
+    gui::Message m;
+    CHECK(gui::parseMessage("c refdata " + std::string(300000, 'A'), m)); CHECK(m.name == "refdata"); CHECK(m.args.size() == 300000);
+    CHECK_FALSE(gui::parseMessage("c refdata " + std::string(2000000, 'A'), m));    // over the limit
+    CHECK_FALSE(gui::parseMessage("s 1 " + std::string(5000, '1'), m));            // other messages stay short
+    CHECK(gui::parseMessage("c tap", m)); CHECK(gui::parseMessage("s 3 0.5", m));
+}
+
 TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independent signals; the points are the recent samples") {
     gui::SpectrumTap tap; const int n = 6000; std::vector<float> l(n), r(n), r2(n);
     for (int i = 0; i < n; ++i) { l[i] = static_cast<float>(0.5 * std::sin(0.05 * i)); r[i] = l[i]; r2[i] = -l[i]; }

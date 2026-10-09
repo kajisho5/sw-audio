@@ -152,6 +152,7 @@
 - [x] UT01 Gain — Remembers gain staging per track type
 - [x] UT02 Mono Check — Phone speaker simulation
 - [x] UT03 Reference — Loudness matched A/B so louder never wins
+  - [x] 画面からの参照曲の読み込み（ファイル選択→画面でデコード→断片で送信、音声スレッドを止めない差し替え、macOS の開くパネル）。実機のホストでの確認は依頼者待ち
 
 ### LV
 - [x] LV01 Voice — One knob sets noise, EQ, comp and limit together

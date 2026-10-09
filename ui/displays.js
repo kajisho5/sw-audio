@@ -1614,6 +1614,86 @@
       g.innerHTML = s; nowL.textContent = r[0] + ' grains';
     } };
   }
+  // ---- reference loader (UT03): the window cannot hand a file path to the plug-in, so the page reads the file, decodes it (the web view knows WAV, AIFF, MP3, FLAC, AAC ... ; at 48 kHz),
+  // writes it as a 16 bit stereo WAV and sends it in base64 pieces (call refbegin / refdata / refend); the core decodes that and plays it. readouts = match, input LUFS, reference 1 / 2 LUFS,
+  // then per reference: length (s), loop start, loop end (s); loads that worked / failed. The drawing: A = the measured input level (last ~12 s), B / C = the overview of the loaded file, the loop region over it
+  const REF_RATE = 48000, REF_MAX_S = 1200, REF_PIECE = 3 * 65536;
+  // stereo 16 bit WAV bytes from two channels of float samples (clipped to -1 .. 1)
+  function wav16(l, r, n, rate) {
+    const out = new Uint8Array(44 + n * 4), dv = new DataView(out.buffer), w = (o, t) => { for (let i = 0; i < t.length; i++) out[o + i] = t.charCodeAt(i); };
+    w(0, 'RIFF'); dv.setUint32(4, 36 + n * 4, true); w(8, 'WAVE'); w(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 2, true);
+    dv.setUint32(24, rate, true); dv.setUint32(28, rate * 4, true); dv.setUint16(32, 4, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 4, true);
+    const q = x => Math.max(-32768, Math.min(32767, Math.round(x * 32767)));
+    for (let i = 0, o = 44; i < n; i++, o += 4) { dv.setInt16(o, q(l[i]), true); dv.setInt16(o + 2, q(r[i]), true); }
+    return out;
+  }
+  const b64 = u8 => { let t = ''; for (let i = 0; i < u8.length; i += 0x8000) t += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(t); };
+  const mmss = sec => { const m = Math.floor(sec / 60), s = Math.round(sec - m * 60); return m + ':' + String(s === 60 ? 59 : s).padStart(2, '0'); };
+  // the overview of a decoded file: `bins` heights 0 .. 1 (RMS of the bin in dB, -50 .. 0)
+  function overviewOf(l, r, n, bins) {
+    const o = new Array(bins).fill(0);
+    for (let b = 0; b < bins; b++) { const a = Math.floor(b * n / bins), e = Math.max(a + 1, Math.floor((b + 1) * n / bins)); let sum = 0; for (let i = a; i < e; i++) sum += 0.5 * (l[i] * l[i] + r[i] * r[i]); const db = 10 * Math.log10(sum / (e - a) + 1e-12); o[b] = clamp((db + 50) / 50, 0, 1); }
+    return o;
+  }
+  function referenceDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const paths = [...svg.querySelectorAll(':scope > path')], loopRect = svg.querySelector(':scope > rect'), texts = [...svg.querySelectorAll(':scope > text')];
+    const loopT = texts.find(t => /^Loop/.test(t.textContent)), labB = texts.find(t => /Reference/.test(t.textContent));
+    if (paths.length < 2 || !loopRect || !loopT || !labB) return null;
+    const [, , W] = vbOf(svg), CA = 64.8, CB = 180, AMP = 40, BINS = 121, LOOPS = ['Intro', 'Verse', 'Chorus', 'Custom'];
+    const note = mkEl('text', { x: W / 2, y: CB + 4, 'text-anchor': 'middle', 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 13, fill: '#9a9a9a' }); svg.append(note);
+    const wrap = svg.parentElement; wrap.style.position = 'relative';
+    const mkBtn = (right, onClick) => { const b = document.createElement('button'); b.style.cssText = 'position:absolute;top:116px;right:' + right + 'px;font:600 11px "Space Mono",monospace;color:#cfcfcf;background:#161617;border:1px solid #3a3a3d;padding:4px 8px;border-radius:3px;cursor:pointer;z-index:2'; b.addEventListener('click', onClick); wrap.append(b); return b; };
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac'; input.style.display = 'none'; wrap.append(input);
+    const st = { ov: [null, null, null], name: ['', '', ''], busy: false, status: '', pending: null }, hist = Ring(120, -90); let last = 0, lastR = null;
+    const selSlot = () => (ctx.value('Source') === 2 ? 2 : 1);
+    const loadBtn = mkBtn(80, () => { if (!st.busy) input.click(); }), clearBtn = mkBtn(10, () => { const k = selSlot(); ctx.call('refclear', String(k)); st.ov[k] = null; st.name[k] = ''; st.status = ''; });
+    async function decode(file) {
+      const buf = await file.arrayBuffer(), OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OAC) throw new Error('This window cannot decode audio files');
+      const c = new OAC(2, 1, REF_RATE);
+      return new Promise((res, rej) => { const p = c.decodeAudioData(buf, res, rej); if (p && p.catch) p.catch(rej); });
+    }
+    async function load(slot, file) {
+      st.busy = true; st.status = 'Decoding ' + file.name + ' …';
+      try {
+        const ab = await decode(file);
+        if (ab.duration > REF_MAX_S) throw new Error('Too long (the limit is ' + REF_MAX_S / 60 + ' minutes)');
+        const n = ab.length, l = ab.getChannelData(0), r = ab.numberOfChannels > 1 ? ab.getChannelData(1) : l;
+        const ov = overviewOf(l, r, n, BINS), bytes = wav16(l, r, n, ab.sampleRate);
+        ctx.call('refbegin', String(slot));
+        for (let off = 0; off < bytes.length; off += REF_PIECE) {
+          ctx.call('refdata', b64(bytes.subarray(off, Math.min(bytes.length, off + REF_PIECE))));
+          st.status = 'Sending ' + file.name + ' … ' + Math.round(100 * Math.min(1, (off + REF_PIECE) / bytes.length)) + ' %';
+          await new Promise(res => setTimeout(res, 3));
+        }
+        const base = lastR || [];
+        st.pending = { slot, ov, name: file.name, done0: base[10] || 0, failed0: base[11] || 0, t: Date.now() };
+        st.status = 'Reading ' + file.name + ' …';
+        ctx.call('refend', '');
+      } catch (e) { st.busy = false; st.status = 'Could not load: ' + (e && e.message ? e.message : 'unknown file'); ctx.call('refabort', ''); }
+    }
+    input.addEventListener('change', () => { const f = input.files && input.files[0]; input.value = ''; if (f && !st.busy) load(selSlot(), f); });
+    const lane = (hs, c, amp) => { let top = '', bot = ''; for (let k = 0; k < hs.length; k++) { const x = (k / (hs.length - 1) * W).toFixed(1), a = hs[k] * amp; top += (k ? ' L' : 'M') + x + ' ' + (c - a).toFixed(1); bot = ' L' + x + ' ' + (c + a).toFixed(1) + bot; } return top + bot + ' Z'; };
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 12) return; lastR = r;
+      const now = Date.now(), k = selSlot(), len = r[4 + 3 * (k - 1)], rs = r[5 + 3 * (k - 1)], re = r[6 + 3 * (k - 1)];
+      if (st.pending) {
+        if (r[10] > st.pending.done0) { const p = st.pending; st.ov[p.slot] = p.ov; st.name[p.slot] = p.name; st.pending = null; st.busy = false; st.status = ''; }
+        else if (r[11] > st.pending.failed0) { st.pending = null; st.busy = false; st.status = 'The plug-in could not read this file'; }
+        else if (now - st.pending.t > 120000) { st.pending = null; st.busy = false; st.status = 'No answer from the plug-in'; }
+      }
+      if (now - last >= 100) { last = now; hist.push(m ? peakDb(m) : -90); paths[0].setAttribute('d', lane(hist.a.map(v => clamp((v + 60) / 60, 0, 1)), CA, AMP)); }
+      const loaded = len > 0;
+      paths[1].setAttribute('d', loaded ? lane(st.ov[k] || new Array(BINS).fill(0.18), CB, AMP) : '');
+      note.textContent = st.status || (loaded ? (st.ov[k] ? '' : 'Loaded (the file name is not known to this window)') : 'Load a reference file (WAV, AIFF, MP3, FLAC …)');
+      labB.textContent = (k === 2 ? 'C  ' : 'B  ') + (st.name[k] || (k === 2 ? 'Reference 2' : 'Reference')) + (loaded ? '  ' + mmss(len) : '');
+      loopRect.style.display = loopT.style.display = loaded ? '' : 'none';
+      if (loaded) { loopRect.setAttribute('x', (rs / len * W).toFixed(1)); loopRect.setAttribute('width', Math.max(2, (re - rs) / len * W).toFixed(1)); loopT.setAttribute('x', ((rs + re) / 2 / len * W).toFixed(1)); loopT.textContent = 'Loop: ' + (LOOPS[Math.round(ctx.value('Loop') || 0)] || '').toLowerCase(); }
+      loadBtn.textContent = 'Load ' + (k === 2 ? 'C' : 'B') + ' …'; loadBtn.disabled = st.busy; loadBtn.style.opacity = st.busy ? '.5' : '1';
+      clearBtn.style.display = loaded ? '' : 'none'; clearBtn.textContent = 'Clear'; loadBtn.style.right = loaded ? '80px' : '10px';
+    } };
+  }
   const lufs = v => (v > -150 ? v.toFixed(1) : '—');
   const combine = (...ds) => { const l = ds.filter(Boolean); return l.length ? { update(i) { l.forEach(d => d.update && d.update(i)); }, destroy() { l.forEach(d => d.destroy && d.destroy()); } } : null; };
 
@@ -1628,8 +1708,8 @@
     LV03: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV03'), miniEqCurve(box, ctx)),
     LV04: (box, ctx) => { let tot = -1, at = 0;   // the time of the last event comes from the clock once, when a new event shows up (the core's seconds do not advance while the host is stopped)
       return combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => { const r = info && info.readouts; if (!r || r.length < 5) return null; if (r[2] < 0) return 'No limit events'; if (r[1] !== tot) { tot = r[1]; at = Date.now() - r[2] * 1000; } const d = new Date(at), p2 = v => String(v).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + '  GR ' + r[3].toFixed(1) + ' dB  ' + r[4].toFixed(1) + ' s'; } }])); },
-    UT03: (box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
-      return { update(info) { const r = info && info.readouts; if (!r || r.length < 4) return; if (mix) mix[1].textContent = lufs(r[1]) + ' LUFS'; if (ref) ref[1].textContent = lufs(Math.max(r[2], r[3])) + ' LUFS'; if (matchV) matchV.textContent = r[1] > -150 ? (r[0] >= 0 ? '+' : '') + r[0].toFixed(1) + ' LU' : '— LU'; } }; },
+    UT03: (box, ctx) => combine(referenceDisplay(box, ctx), ((box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
+      return { update(info) { const r = info && info.readouts; if (!r || r.length < 4) return; if (mix) mix[1].textContent = lufs(r[1]) + ' LUFS'; if (ref) ref[1].textContent = lufs(Math.max(r[2], r[3])) + ' LUFS'; if (matchV) matchV.textContent = r[1] > -150 ? (r[0] >= 0 ? '+' : '') + r[0].toFixed(1) + ' LU' : '— LU'; } }; })(box, ctx)),
     LV19: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'), textRules(box, ctx, [{ re: /^\d+(\.\d+)? ms late$/, text: info => info.readouts && info.readouts.length >= 5 ? (info.readouts[4] > 0.5 ? info.readouts[3].toFixed(0) + ' ms late' : 'in sync') : null }])),
     GT02: micPositionDisplay,
     ST05: speakerTriangleDisplay,
@@ -1696,6 +1776,6 @@
     DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' }),
   };
 
-  global.SWDISP = { sa06Shape, cr01Gain, attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
+  global.SWDISP = { sa06Shape, cr01Gain, wav16, b64, overviewOf, attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
   if (typeof module !== 'undefined') module.exports = global.SWDISP;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,4 +1,5 @@
 #include "ut03/ut03.hpp"
+#include "sw/base64.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -123,8 +124,14 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate; meter_.setup(fs_, 2, 30.0);
-    for (int i = 0; i < 2; ++i) { if (!ref_[i].src.l.empty()) rebuild(i); free_[i] = 0; lastEnd_[i] = -1; jumpFade_[i] = 0; }
-    prepared_ = true; snapToTargets();
+    retired_.clear();   // the audio thread is not running while a plug-in is (re)activated
+    prepared_ = true;
+    for (int i = 0; i < 2; ++i) {
+        if (owned_[i] && (!owned_[i]->measured || std::abs(owned_[i]->rate - fs_) > 0.5)) publish(i, convert(*owned_[i]));
+        free_[i] = 0; lastEnd_[i] = -1; jumpFade_[i] = 0;
+    }
+    retired_.clear();
+    snapToTargets();
 }
 void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cast<size_t>(id)]; target_[static_cast<size_t>(id)] = sp.toValue(sp.toNorm(v)); }
 void Processor::snapToTargets() {
@@ -133,48 +140,118 @@ void Processor::snapToTargets() {
     gDb_[0] = gDb_[1] = 0; matchDb_ = 0;
 }
 
-void Processor::rebuild(int i) {
-    Ref& r = ref_[i];
-    r.l = resample(r.src.l, r.src.rate, fs_); r.r = resample(r.src.r, r.src.rate, fs_);
-    IntegratedLoudness m; m.setup(fs_, 2, 0.0);
-    for (size_t off = 0; off < r.l.size(); off += 4096) { const int n = static_cast<int>(std::min<size_t>(4096, r.l.size() - off)); const float* c[2] = {r.l.data() + off, r.r.data() + off}; m.process(c, 2, n); }
-    r.lufs = m.integrated();
-    // chorus: the loudest 20 s window (mean square of 100 ms blocks, 1 s steps)
-    const size_t blk = std::max<size_t>(1, static_cast<size_t>(std::lround(fs_ * 0.1))), nb = r.l.size() / blk;
+namespace {
+// integrated loudness of the whole file and the start (in samples) of its loudest 20 s (mean square of 100 ms blocks, 1 s steps)
+void measureRef(const std::vector<float>& l, const std::vector<float>& r, double fs, double& lufs, int& chorus) {
+    IntegratedLoudness m; m.setup(fs, 2, 0.0);
+    for (size_t off = 0; off < l.size(); off += 4096) { const int n = static_cast<int>(std::min<size_t>(4096, l.size() - off)); const float* c[2] = {l.data() + off, r.data() + off}; m.process(c, 2, n); }
+    lufs = m.integrated();
+    const size_t blk = std::max<size_t>(1, static_cast<size_t>(std::lround(fs * 0.1))), nb = l.size() / blk;
     std::vector<double> e(nb + 1, 0.0);
-    for (size_t b = 0; b < nb; ++b) { double s = 0; for (size_t k = 0; k < blk; ++k) { const double v = 0.5 * (double(r.l[b * blk + k]) + r.r[b * blk + k]); s += v * v; } e[b + 1] = e[b] + s; }
-    const size_t win = 200; r.chorus = 0;
-    if (nb > win) { double best = -1; for (size_t b = 0; b + win <= nb; b += 10) { const double s = e[b + win] - e[b]; if (s > best) { best = s; r.chorus = static_cast<int>(b * blk); } } }
+    for (size_t b = 0; b < nb; ++b) { double s = 0; for (size_t k = 0; k < blk; ++k) { const double v = 0.5 * (double(l[b * blk + k]) + r[b * blk + k]); s += v * v; } e[b + 1] = e[b] + s; }
+    const size_t win = 200; chorus = 0;
+    if (nb > win) { double best = -1; for (size_t b = 0; b + win <= nb; b += 10) { const double s = e[b + win] - e[b]; if (s > best) { best = s; chorus = static_cast<int>(b * blk); } } }
+}
+}  // namespace
+
+std::shared_ptr<const Processor::Ref> Processor::build(Decoded&& d) const {
+    auto r = std::make_shared<Ref>();
+    if (!prepared_ || std::abs(d.rate - fs_) < 0.5) { r->rate = d.rate; r->l = std::move(d.l); r->r = std::move(d.r); }
+    else { r->rate = fs_; r->l = resample(d.l, d.rate, fs_); r->r = resample(d.r, d.rate, fs_); }
+    if (prepared_) { measureRef(r->l, r->r, fs_, r->lufs, r->chorus); r->measured = true; }
+    return r;
+}
+std::shared_ptr<const Processor::Ref> Processor::convert(const Ref& o) const {
+    auto r = std::make_shared<Ref>();
+    r->rate = fs_; r->l = resample(o.l, o.rate, fs_); r->r = resample(o.r, o.rate, fs_);
+    measureRef(r->l, r->r, fs_, r->lufs, r->chorus); r->measured = true;
+    return r;
+}
+
+// the new reference becomes visible to the audio thread with one store; the old one waits in retired_ until a block that started after this has run
+void Processor::publish(int i, std::shared_ptr<const Ref> n) {
+    if (n) { auto* m = const_cast<Ref*>(n.get()); m->id = serial_.load() + 1; serial_.store(m->id); }   // not yet visible to anyone
+    std::shared_ptr<const Ref> old = std::move(owned_[i]);
+    owned_[i] = std::move(n);
+    pub_[i].store(owned_[i].get());
+    const unsigned g = gen_.load() + 1; gen_.store(g);
+    if (old) retired_.emplace_back(std::move(old), g);
+    reap();
+}
+void Processor::reap() {
+    const unsigned a = acked_.load();
+    for (size_t k = 0; k < retired_.size();) { if (retired_[k].second <= a) retired_.erase(retired_.begin() + static_cast<long>(k)); else ++k; }
 }
 
 bool Processor::loadReference(int slot, const uint8_t* data, size_t size) {
     if (slot < 1 || slot > 2) return false;
-    Decoded dec; if (!decodeAudio(data, size, dec)) return false;
-    Ref& r = ref_[slot - 1]; r.src = std::move(dec);
-    if (prepared_) rebuild(slot - 1); else { r.l = r.src.l; r.r = r.src.r; }
-    free_[slot - 1] = 0; lastEnd_[slot - 1] = -1;
+    Decoded dec;
+    if (!decodeAudio(data, size, dec)) { failed_.store(failed_.load() + 1); return false; }
+    publish(slot - 1, build(std::move(dec)));
+    done_.store(done_.load() + 1);
     return true;
 }
-void Processor::clearReference(int slot) { if (slot >= 1 && slot <= 2) { ref_[slot - 1] = Ref{}; free_[slot - 1] = 0; lastEnd_[slot - 1] = -1; } }
-void Processor::setLoopRegion(double a, double b) { customA_ = std::max(0.0, a); customB_ = std::max(customA_, b); }
+void Processor::clearReference(int slot) { if (slot >= 1 && slot <= 2) publish(slot - 1, nullptr); }
 
-void Processor::region(int i, long long& a, long long& b) const {
-    const Ref& r = ref_[i]; const long long len = static_cast<long long>(r.l.size()); const long long span = static_cast<long long>(std::lround(20.0 * fs_));
+bool Processor::stageBegin(int slot) {
+    stageOpen_ = false; stage_.clear(); stage_.shrink_to_fit();
+    if (slot < 1 || slot > 2) return false;
+    stageSlot_ = slot; stageOpen_ = true; stageBroken_ = false;
+    return true;
+}
+bool Processor::stageAppend(const uint8_t* data, size_t size) {
+    if (!stageOpen_ || stageBroken_) return false;
+    if (stage_.size() + size > stageLimit_) { stageBroken_ = true; stage_.clear(); stage_.shrink_to_fit(); return false; }
+    stage_.insert(stage_.end(), data, data + size);
+    return true;
+}
+bool Processor::stageAppendBase64(const char* text) {
+    if (!stageOpen_ || stageBroken_) return false;
+    std::vector<uint8_t> bytes; bytes.reserve(text ? std::strlen(text) / 4 * 3 : 0);
+    if (!base64Decode(text, bytes)) { stageBroken_ = true; stage_.clear(); stage_.shrink_to_fit(); return false; }
+    return stageAppend(bytes.data(), bytes.size());
+}
+bool Processor::stageCommit() {
+    if (!stageOpen_) return false;
+    stageOpen_ = false;
+    bool ok = false;
+    if (stageBroken_) failed_.store(failed_.load() + 1); else ok = loadReference(stageSlot_, stage_.data(), stage_.size());
+    stage_.clear(); stage_.shrink_to_fit();
+    return ok;
+}
+void Processor::stageAbort() { stageOpen_ = false; stage_.clear(); stage_.shrink_to_fit(); }
+
+double Processor::referenceSeconds(int slot) const {
+    const Ref* r = (slot >= 1 && slot <= 2) ? pub_[slot - 1].load() : nullptr;
+    return r && r->rate > 0 ? static_cast<double>(r->l.size()) / r->rate : 0.0;
+}
+void Processor::setLoopRegion(double a, double b) { const double s = std::max(0.0, a); customA_.store(s); customB_.store(std::max(s, b)); }
+
+void Processor::region(const Ref& r, long long& a, long long& b) const {
+    const long long len = static_cast<long long>(r.l.size()); const long long span = static_cast<long long>(std::lround(20.0 * fs_));
+    const double ca = customA_.load(), cb = customB_.load();
     a = 0; b = len;
-    if (len <= span) { if (static_cast<int>(target_[Loop]) == Custom) { a = std::min<long long>(len - 1, std::llround(customA_ * fs_)); b = std::min<long long>(len, std::llround(customB_ * fs_)); } }
+    if (len <= span) { if (static_cast<int>(target_[Loop]) == Custom) { a = std::min<long long>(len - 1, std::llround(ca * fs_)); b = std::min<long long>(len, std::llround(cb * fs_)); } }
     else switch (static_cast<int>(target_[Loop])) {
         case Intro: a = 0; b = span; break;
         case Verse: a = span; b = std::min(len, 2 * span); break;
         case Chorus: a = r.chorus; b = std::min(len, a + span); break;
-        default: a = std::min<long long>(len - 1, std::llround(customA_ * fs_)); b = std::min<long long>(len, std::llround(customB_ * fs_)); break;
+        default: a = std::min<long long>(len - 1, std::llround(ca * fs_)); b = std::min<long long>(len, std::llround(cb * fs_)); break;
     }
     if (b - a < 16) { a = 0; b = len; }
 }
-void Processor::regionOf(int slot, double& s, double& e) const { s = e = 0; if (!hasReference(slot)) return; long long a, b; region(slot - 1, a, b); s = static_cast<double>(a) / fs_; e = static_cast<double>(b) / fs_; }
+void Processor::regionOf(int slot, double& s, double& e) const {
+    s = e = 0; const Ref* r = (slot >= 1 && slot <= 2) ? pub_[slot - 1].load() : nullptr; if (!r || r->l.empty()) return;
+    long long a, b; region(*r, a, b); s = static_cast<double>(a) / fs_; e = static_cast<double>(b) / fs_;
+}
 
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || numCh < 1 || n <= 0) return;
     const bool stereo = numCh > 1;
+    // the references as they are now (a reference replaced during this block stays alive until the next one starts)
+    acked_.store(gen_.load());
+    const Ref* rf[2] = {pub_[0].load(), pub_[1].load()};
+    for (int i = 0; i < 2; ++i) { const unsigned id = rf[i] ? rf[i]->id : 0; if (id != seenId_[i]) { seenId_[i] = id; free_[i] = 0; lastEnd_[i] = -1; } }
     { const float* in[2] = {ch[0], stereo ? ch[1] : ch[0]}; meter_.process(in, 2, n); }
     const int srcSel = static_cast<int>(target_[Source]);
     const bool matchOn = target_[LoudnessMatch] > 0.5;
@@ -184,7 +261,7 @@ void Processor::process(float** ch, int numCh, int n) {
     double g[2];
     for (int i = 0; i < 2; ++i) {
         double m = 0;
-        if (matchOn && ref_[i].lufs > -199.0 && inL > -199.0) m = std::clamp(inL - ref_[i].lufs, -24.0, 24.0);
+        if (matchOn && rf[i] && rf[i]->lufs > -199.0 && inL > -199.0) m = std::clamp(inL - rf[i]->lufs, -24.0, 24.0);
         if (i == (srcSel == RefC ? 1 : 0)) matchDb_ = matchOn ? m : 0.0;
         gDb_[i] += blockA * ((m + target_[Level]) - gDb_[i]);
         g[i] = std::pow(10.0, gDb_[i] / 20.0);
@@ -194,8 +271,8 @@ void Processor::process(float** ch, int numCh, int n) {
     const int ne = std::max(1, static_cast<int>(fs_ * 0.005));
     long long ra[2] = {0, 0}, rb[2] = {0, 0}, pos[2] = {0, 0}; bool live[2] = {false, false};
     for (int i = 0; i < 2; ++i) {
-        if (ref_[i].l.empty()) continue;
-        region(i, ra[i], rb[i]); const long long len = rb[i] - ra[i];
+        if (!rf[i] || rf[i]->l.empty()) continue;
+        region(*rf[i], ra[i], rb[i]); const long long len = rb[i] - ra[i];
         if (sync) {
             if (!hostPlaying_) { lastEnd_[i] = -1; continue; }   // host stands still: the reference is silent
             const long long hs = static_cast<long long>(std::floor(hostSec_ * fs_));
@@ -222,7 +299,7 @@ void Processor::process(float** ch, int numCh, int n) {
             if (dStart < ne) e = std::min(e, static_cast<double>(dStart) / ne); if (dEnd < ne) e = std::min(e, static_cast<double>(dEnd) / ne);
             if (jumpFade_[i] > 0) { e = std::min(e, 1.0 - static_cast<double>(jumpFade_[i]) / ne); }
             const double wg = (w >= 1.0 ? 1.0 : std::sin(w * kPi / 2)) * g[i] * e;
-            aL += wg * ref_[i].l[static_cast<size_t>(p)]; aR += wg * ref_[i].r[static_cast<size_t>(p)];
+            aL += wg * rf[i]->l[static_cast<size_t>(p)]; aR += wg * rf[i]->r[static_cast<size_t>(p)];
         }
         for (int i = 0; i < 2; ++i) if (jumpFade_[i] > 0) --jumpFade_[i];
         if (gm == 1.0 && aL == 0.0 && aR == 0.0) continue;   // plain input: untouched

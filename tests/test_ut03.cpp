@@ -1,7 +1,9 @@
 #include "doctest.h"
 #include "ut03/ut03.hpp"
 #include "tu.hpp"
+#include <atomic>
 #include <cstring>
+#include <thread>
 using namespace sw;
 using namespace sw::ut03;
 using namespace tu;
@@ -160,4 +162,62 @@ TEST_CASE("UT03 two references, clearing, mono input, other sample rate, odd blo
     { Processor q; q.setParam(Source, 1); q.prepare(44100, 256); q.snapToTargets(); const auto w = wav(noise(-20, 20.0, 5), nullptr, 48000, 16); REQUIRE(q.loadReference(1, w.data(), w.size()));
       q.setParam(Source, 1); q.snapToTargets(); const auto v = run(q, noise(-20, 3.0, 6)); for (float s : v) REQUIRE(std::isfinite(s)); q.prepare(96000, 256); const auto v2 = run(q, noise(-20, 1.0, 6)); for (float s : v2) REQUIRE(std::isfinite(s)); }
     { Processor q; std::vector<float> l(256, 0.5f); float* c[1] = {l.data()}; q.process(c, 1, 256); CHECK(l[0] == 0.5f); q.snapToTargets(); q.setPlayhead(1, true); }
+}
+
+TEST_CASE("UT03 staged upload (the screen sends the file in pieces) gives the same reference as a one-shot load") {
+    const auto x = noise(-18, 8.0, 31); const auto f = wav(x, nullptr, kFs, 16);
+    auto a = make(); REQUIRE(a.loadReference(1, f.data(), f.size()));
+    auto b = make();
+    CHECK_FALSE(b.stageAppend(f.data(), 10)); CHECK_FALSE(b.stageCommit());   // nothing open
+    CHECK_FALSE(b.stageBegin(0)); CHECK_FALSE(b.stageBegin(3));
+    REQUIRE(b.stageBegin(1));
+    for (size_t off = 0; off < f.size(); off += 1000) REQUIRE(b.stageAppend(f.data() + off, std::min<size_t>(1000, f.size() - off)));
+    REQUIRE(b.stageCommit());
+    CHECK(b.hasReference(1)); CHECK(b.referenceLufs(1) == doctest::Approx(a.referenceLufs(1)).epsilon(1e-9));
+    CHECK(b.referenceSeconds(1) == doctest::Approx(8.0).epsilon(0.001)); CHECK(b.referenceSeconds(2) == 0.0);
+    CHECK(b.loadsDone() == 1); CHECK(b.loadsFailed() == 0);
+    CHECK_FALSE(b.stageCommit());   // nothing open any more
+    // a file we cannot read: refused, the earlier reference stays
+    const uint8_t junk[40] = {1, 2, 3};
+    REQUIRE(b.stageBegin(1)); REQUIRE(b.stageAppend(junk, sizeof junk)); CHECK_FALSE(b.stageCommit());
+    CHECK(b.hasReference(1)); CHECK(b.referenceLufs(1) == doctest::Approx(a.referenceLufs(1)).epsilon(1e-9)); CHECK(b.loadsFailed() == 1);
+    // a limit on what one upload may hold; starting again drops an unfinished upload
+    b.setStageLimit(100); REQUIRE(b.stageBegin(2)); CHECK(b.stageAppend(f.data(), 60)); CHECK_FALSE(b.stageAppend(f.data(), 60)); CHECK_FALSE(b.stageCommit()); CHECK_FALSE(b.hasReference(2));
+    b.setStageLimit(size_t(1) << 29); REQUIRE(b.stageBegin(2)); REQUIRE(b.stageAppend(junk, 5)); REQUIRE(b.stageBegin(2)); REQUIRE(b.stageAppend(f.data(), f.size())); CHECK(b.stageCommit()); CHECK(b.hasReference(2));
+    b.stageBegin(1); b.stageAbort(); CHECK_FALSE(b.stageCommit());
+    b.clearReference(2); CHECK(b.referenceSeconds(2) == 0.0); CHECK_FALSE(b.hasReference(2));
+}
+TEST_CASE("UT03 a reference can be loaded and cleared while the audio thread plays (the screen's thread against the audio thread)") {
+    const auto r1 = noise(-20, 4.0, 41), r2 = noise(-26, 4.0, 42); const auto w1 = wav(r1, nullptr, kFs, 16), w2 = wav(r2, nullptr, kFs, 16);
+    auto p = make({{Source, 1}, {Crossfade, 0}, {LoudnessMatch, 0}, {Sync, 0}}); REQUIRE(p.loadReference(1, w1.data(), w1.size()));
+    std::atomic<bool> stop{false}; std::atomic<int> loads{0};
+    std::thread t([&] { for (int i = 0; i < 12; ++i) { const auto& w = (i & 1) ? w1 : w2; if (p.loadReference(1, w.data(), w.size())) ++loads; if (i % 5 == 4) p.clearReference(1); } stop = true; });
+    std::vector<float> l(256), r(256); size_t blocks = 0; bool finite = true; double mx = 0;
+    while (!stop || blocks < 100) {
+        for (size_t i = 0; i < 256; ++i) l[i] = r[i] = static_cast<float>(0.1 * std::sin(0.01 * static_cast<double>(blocks * 256 + i)));
+        float* ch[2] = {l.data(), r.data()}; p.process(ch, 2, 256);
+        for (size_t i = 0; i < 256; ++i) { finite = finite && std::isfinite(l[i]) && std::isfinite(r[i]); mx = std::max(mx, static_cast<double>(std::abs(l[i]))); }
+        ++blocks;
+    }
+    t.join(); CHECK(finite); CHECK(loads.load() >= 10); CHECK(mx < 2.0);
+}
+
+namespace {
+std::string b64(const std::vector<uint8_t>& v, size_t a, size_t n) {
+    static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; std::string o;
+    for (size_t i = a; i < a + n; i += 3) { const uint32_t x = (uint32_t(v[i]) << 16) | (i + 1 < a + n ? uint32_t(v[i + 1]) << 8 : 0) | (i + 2 < a + n ? v[i + 2] : 0); o += T[x >> 18]; o += T[(x >> 12) & 63]; o += i + 1 < a + n ? T[(x >> 6) & 63] : '='; o += i + 2 < a + n ? T[x & 63] : '='; }
+    return o;
+}
+}
+TEST_CASE("UT03 staged upload from text: base64 pieces the screen sends") {
+    const auto x = noise(-18, 6.0, 51); const auto f = wav(x, nullptr, kFs, 16);
+    auto a = make(); REQUIRE(a.loadReference(2, f.data(), f.size()));
+    auto b = make(); REQUIRE(b.stageBegin(2));
+    const size_t piece = 3 * 4000;   // pieces that are a multiple of 3 bytes join up; the last one carries the padding
+    for (size_t off = 0; off < f.size(); off += piece) { const std::string t = b64(f, off, std::min(piece, f.size() - off)); REQUIRE(b.stageAppendBase64(t.c_str())); }
+    REQUIRE(b.stageCommit()); CHECK(b.hasReference(2)); CHECK(b.referenceLufs(2) == doctest::Approx(a.referenceLufs(2)).epsilon(1e-9));
+    // text that is not base64, or has the wrong length: the upload fails, the earlier reference stays
+    REQUIRE(b.stageBegin(2)); CHECK_FALSE(b.stageAppendBase64("AB!D")); CHECK_FALSE(b.stageCommit()); CHECK(b.hasReference(2));
+    REQUIRE(b.stageBegin(2)); CHECK_FALSE(b.stageAppendBase64("ABC")); CHECK_FALSE(b.stageCommit());
+    CHECK(b.stageBegin(1)); CHECK(b.stageAppendBase64("")); CHECK(b.stageAppendBase64("AAAA")); b.stageAbort(); CHECK_FALSE(b.stageAppendBase64("AAAA"));
 }

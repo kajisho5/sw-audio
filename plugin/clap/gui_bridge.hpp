@@ -89,9 +89,11 @@ inline std::string updateScript(const std::vector<double>& plain, double latency
 }
 
 struct Message { char type = 0; int index = -1; double value = 0; std::string name, args; };
+constexpr size_t kMaxCallMessage = size_t(1) << 20;
 inline bool parseMessage(const std::string& m, Message& out) {
     out = Message{};
-    if (m.empty() || m.size() > 4096) return false;
+    // a button call may carry a piece of a file (UT03 reference, base64 text); every other message is short
+    if (m.empty() || m.size() > (m[0] == 'c' ? kMaxCallMessage : 4096)) return false;
     const char t = m[0]; if (t != 's' && t != 'b' && t != 'e' && t != 'c' && t != 'p' && t != 'r') return false;
     if (m.size() > 1 && m[1] != ' ') return false;
     out.type = t;
