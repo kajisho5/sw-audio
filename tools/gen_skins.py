@@ -374,7 +374,7 @@ def bind_actions(root, code, report):
 def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
     shown dimmed with a title instead of pretending to work."""
-    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'measure'}
+    inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'assist', 'unmask', 'auto thresh', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'measure'}
     bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call')
     n = 0
     for b in root.select('button'):
@@ -407,6 +407,24 @@ def eq05_shapes(root, params, code):
             n = norm(b.get_text())
             if n in lab:
                 b['data-p'] = str(p['i']); b['data-v'] = str(p['steps'][lab.index(n)])
+
+
+def cycle_match(text, params):
+    """A chip that prints a parameter and its current option ("Dither off", "ISP 8x", "FFT 4k"): a click steps to the next option. Returns (param, prefix, lowercase) or None."""
+    words = text.split()
+    for p in params:
+        if p['curve'] != 'step' or len(p['steps']) < 2 or p['id'].startswith('common.') or not p.get('labels'):
+            continue
+        pw = norm(p['name']).split()
+        for k in range(min(len(words) - 1, len(pw)), 0, -1):
+            if norm(' '.join(words[:k])).split() != pw[:k] or (k < len(pw) and k > 1):
+                continue
+            if k < len(pw) and k == 1 and pw[0] != norm(words[0]):
+                continue
+            rem = norm(' '.join(words[k:]))
+            if rem in [norm(l) for l in p['labels']]:
+                return p, ' '.join(words[:k]), ' '.join(words[k:]).islower()
+    return None
 
 
 def build(code, report):
@@ -491,7 +509,7 @@ def build(code, report):
         tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None   # the LIVE line's tiles: <b>label</b> + <span class="tv">value</span>
         if tl is not None and tl.get_text().strip():
             t = tl.get_text().strip(); b['data-tile'] = '1'
-        if t == 'Δ' and delta:
+        if (t == 'Δ' or t.startswith('Δ ')) and delta:
             b['data-p'] = str(delta[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
         tn = norm(t)
         if tn == 'in' and b.find_parent(class_='tb') is None:
@@ -514,6 +532,9 @@ def build(code, report):
         nbt += 1
         n = norm(t)
         al = alias.get('btn:' + n)
+        if isinstance(al, dict) and al.get('set'):     # one button sets several parameters (MS01 Character corners): {"set": [["Character X", 0], ["Character Y", 100]]}
+            idx = {p['name']: p['i'] for p in params}
+            b['data-set'] = json.dumps([[idx[nm], v] for nm, v in al['set']]); nbb += 1; continue
         if al is not None:
             b['data-p'] = str(al[0]); b['data-v'] = str(al[1]); nbb += 1; continue
         if n in names and len(names[n]) == 1:
@@ -535,6 +556,12 @@ def build(code, report):
                         hit.append((idxs, v2))
             if len(hit) == 1:
                 b['data-pb'] = json.dumps(hit[0][0]); b['data-v'] = str(hit[0][1]); nbb += 1; continue
+        cy = cycle_match(t, params)
+        if cy is not None:
+            b['data-p'] = str(cy[0]['i']); b['data-cycle'] = cy[1]
+            if cy[2]:
+                b['data-lower'] = '1'
+            nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
     mark_inert(root)
     for ctl in root.select('.ctl, .rc'):

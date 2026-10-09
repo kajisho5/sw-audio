@@ -268,5 +268,55 @@
     "kind": "readout"
    }
   }
+ },
+ "MS01": {
+  "btn:transparent": {
+   "set": [
+    [
+     "Character X",
+     0
+    ],
+    [
+     "Character Y",
+     0
+    ]
+   ]
+  },
+  "btn:punch": {
+   "set": [
+    [
+     "Character X",
+     0
+    ],
+    [
+     "Character Y",
+     100
+    ]
+   ]
+  },
+  "btn:loud": {
+   "set": [
+    [
+     "Character X",
+     100
+    ],
+    [
+     "Character Y",
+     100
+    ]
+   ]
+  },
+  "btn:warm": {
+   "set": [
+    [
+     "Character X",
+     100
+    ],
+    [
+     "Character Y",
+     0
+    ]
+   ]
+  }
  }
 }

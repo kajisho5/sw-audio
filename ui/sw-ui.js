@@ -267,6 +267,11 @@
           b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
           return () => { const i = cur(), h = hostOf(i); if (h) b.classList.toggle('on', h.c.norm(vals[i]) > 0.5); };
         }
+        if (b.dataset.cycle !== undefined) {         // a chip that prints a parameter and its option ("Dither off"): a click steps to the next option
+          const pre = b.dataset.cycle, low = !!b.dataset.lower;
+          b.addEventListener('click', () => { const i = cur(), h = hostOf(i), st = h.p.steps, k = st.findIndex(v => Math.abs(v - vals[i]) < 1e-9); bridge.begin(i); setValue(i, st[(k + 1) % st.length]); bridge.end(i); });
+          return () => { const i = cur(), h = hostOf(i); if (!h) return; const k = h.p.steps.findIndex(v => Math.abs(v - vals[i]) < 1e-9), lab = (h.p.labels && h.p.labels[k]) || String(vals[i]); b.textContent = pre + ' ' + (low ? lab.toLowerCase() : lab); };
+        }
         const toggle = !!b.dataset.toggle, t = +b.dataset.v, inv = !!b.dataset.inv;   // inv: lit when the parameter is 0 (the power button of a product that has its own In parameter)
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
         const tile = b.dataset.tile, tv = tile && b.querySelector('.tv'), dot = tile && b.querySelector('.dot, .offd');   // LIVE tiles: the value text and the lamp follow the parameter
@@ -297,6 +302,12 @@
         const i = +t.dataset.p, up = +t.dataset.up, h = hostOf(i); if (!h) return; t.style.cursor = 'pointer';
         t.addEventListener('click', () => { const other = h.p.steps.find(v => Math.abs(v - up) > 1e-9), isUp = Math.abs(vals[i] - up) < 1e-9; bridge.begin(i); setValue(i, isUp ? other : up); bridge.end(i); });
         reg(i, () => t.classList.toggle('dn', Math.abs(vals[i] - up) > 1e-9));
+      });
+      // one button, several parameters (MS01 Character corners): data-set = [[host index, value], ...]; lit while all of them are there
+      skinBox.querySelectorAll('button[data-set]').forEach(b => {
+        const set = JSON.parse(b.dataset.set), ids = set.map(x => x[0]);
+        b.addEventListener('click', () => { ids.forEach(i => bridge.begin(i)); set.forEach(([i, v]) => setValue(i, v)); ids.forEach(i => bridge.end(i)); });
+        const f = () => b.classList.toggle('on', set.every(([i, v]) => hostOf(i) && Math.abs(vals[i] - v) < 1e-6)); ids.forEach(i => reg(i, f));
       });
       // buttons that call a method of the core (ui/actions.json): Randomize, Ring out, Learn noise, Reset, Tap ...
       skinBox.querySelectorAll('button[data-call]').forEach(b => {
