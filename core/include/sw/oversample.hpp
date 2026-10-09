@@ -70,4 +70,31 @@ private:
     Mem upMem_, downMem_;
 };
 
+// 4x / 8x / 16x as a cascade of Oversampler2x stages (a minimum-phase IIR half-band per octave, no reported delay): the same up / down interface as FirOversampler (oversample_fir.hpp),
+// so a clipper can switch between the linear-phase FIR and this. Stage k runs at 2^k times the base rate; every stage keeps the memory of its own stream.
+class IirOversampler {
+public:
+    static constexpr int kMaxStages = 4;   // 16x
+    void setup(int factor) { stages_ = factor >= 16 ? 4 : factor >= 8 ? 3 : factor >= 4 ? 2 : 1; n_ = 1 << stages_; reset(); }
+    int factor() const { return n_; }
+    int latencySamples() const { return 0; }
+    // one base sample -> factor high-rate samples
+    void up(double x, double* out) {
+        out[0] = x; int cnt = 1; double tmp[16];
+        for (int s = 0; s < stages_; ++s) { for (int i = 0; i < cnt; ++i) st_[static_cast<size_t>(s)].up(out[i], &tmp[2 * i]); cnt *= 2; for (int i = 0; i < cnt; ++i) out[i] = tmp[i]; }
+    }
+    // factor high-rate samples -> one base sample
+    double down(const double* in) {
+        double buf[16]; for (int i = 0; i < n_; ++i) buf[i] = in[i];
+        int cnt = n_;
+        for (int s = stages_ - 1; s >= 0; --s) { for (int i = 0; i < cnt / 2; ++i) buf[i] = st_[static_cast<size_t>(s)].down(&buf[2 * i]); cnt /= 2; }
+        return buf[0];
+    }
+    void reset() { for (auto& s : st_) s.reset(); }
+
+private:
+    int stages_ = 2, n_ = 4;
+    std::array<Oversampler2x, kMaxStages> st_{};
+};
+
 }  // namespace sw

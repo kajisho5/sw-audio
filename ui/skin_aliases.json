@@ -481,5 +481,10 @@
   "btn:low lat": {
    "toggle": "Low lat"
   }
+ },
+ "MS04": {
+  "btn:low lat": {
+   "toggle": "Low lat"
+  }
  }
 }

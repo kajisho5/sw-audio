@@ -435,7 +435,7 @@ def bind_actions(root, code, report):
 
 # what the dimmed parts say when pressed on (the designs show them on every screen; the title says why they do nothing here)
 INERT_TITLES = {
-    'low lat': 'No low-latency mode in this plug-in (the products that have one: EQ02, EQ07, EQ08, DY05, DY08, MS02, RS01, CS04 work; MS01, MS03 and MS04 are not built yet)',
+    'low lat': 'No low-latency mode in this plug-in (the products that have one: EQ02, EQ07, EQ08, DY05, DY08, MS02, RS01, CS04, MS04 work; MS01 and MS03 are not built yet)',
     '2× os': 'A choice of 1x / 2x / 4x oversampling is not built yet (the nonlinear stages of this plug-in, if it has any, run at a fixed rate)',
     '100%': 'The window size is fixed (zoom is not built yet)',
     'a': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'b': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'c': 'Unit A / B / C (component tolerances of the analog models) is not built yet',

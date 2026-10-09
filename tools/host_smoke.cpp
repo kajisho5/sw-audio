@@ -311,13 +311,14 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
             ev.note(true, 62); run.process(40, 99, ev); const auto after = readouts(1);
             if (on.empty() || after.empty() || after[0] != on[0] + 1) fail("CR04: a note-on with Freeze On did not make one new capture (" + std::to_string(on.empty() ? -1 : on[0]) + " -> " + std::to_string(after.empty() ? -1 : after[0]) + ")");
         }
-    } else if (code == "RS01" || code == "CS04") {   // Low lat changes the delay: the plug-in asks the host to restart it, and the new delay is what it reports after the restart (deactivate / activate)
+    } else if (code == "RS01" || code == "CS04" || code == "MS04") {   // Low lat changes the delay: the plug-in asks the host to restart it, and the new delay is what it reports after the restart (deactivate / activate)
         const auto* pe = static_cast<const clap_plugin_params_t*>(p->get_extension(p, CLAP_EXT_PARAMS));
         const auto* lat = static_cast<const clap_plugin_latency_t*>(p->get_extension(p, CLAP_EXT_LATENCY));
         auto idOf = [&](const char* name) { for (uint32_t i = 0; pe && i < pe->count(p); ++i) { clap_param_info_t pi{}; if (pe->get_info(p, i, &pi) && std::string(pi.name) == name) return pi.id; } return CLAP_INVALID_ID; };
         auto restart = [&]() { p->stop_processing(p); p->deactivate(p); p->activate(p, kSr, 16, kBlock); p->start_processing(p); };
         const clap_id ll = idOf("Low lat"); if (ll == CLAP_INVALID_ID || !lat) { fail(code + ": no Low lat parameter or no latency extension"); return; }
         uint32_t offLat = 2048, onLat = 512;   // RS01: the 2048-point window / the 512-point one
+        if (code == "MS04") { offLat = 48; onLat = 8; }   // the FIR oversampler / the IIR half-bands
         if (code == "CS04") { const clap_id lim = idOf("Limit"); if (lim == CLAP_INVALID_ID) { fail("CS04: no Limit"); return; } ev.set(lim, 1.0); run.process(3, 7, ev); restart(); offLat = 48; onLat = 1; }   // the limiter's look-ahead: 1 ms / 1 sample
         const uint32_t before = lat->get(p); const int req0 = gRestartRequests;
         if (before != offLat) fail(code + ": the delay with Low lat Off should be " + std::to_string(offLat) + ", it is " + std::to_string(before));

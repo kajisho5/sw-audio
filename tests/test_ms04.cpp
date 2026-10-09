@@ -61,3 +61,35 @@ TEST_CASE("MS04 Listen plays only what the clipper removed") {
     Processor hot; hot.setParam(Listen, 1); hot.setParam(Knee, 0); hot.setParam(Drive, 12); hot.prepare(kFs, 256); hot.snapToTargets();
     CHECK(20 * std::log10(amp(run(hot, sine(0.5, 1000, 24000)), 1000) / 0.5) > -30.0);     // clipped peaks -> audible
 }
+
+TEST_CASE("MS04 Low lat: a minimum-phase IIR oversampler (cascaded half-bands) with a short reported delay (8 samples, their low-frequency group delay), from the next prepare on; level, ceiling and aliasing behave like the FIR path within the IIR's limits") {
+    CHECK(std::string(specs()[LowLat].id) == "ms04.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable); CHECK(LowLat == kNumParams - 1);
+    for (double f : {4.0, 8.0, 16.0}) { Processor p; p.setParam(Oversample, f); CHECK(p.latencySamples() == 48); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 8); p.prepare(kFs, 256); CHECK(p.latencySamples() == 8); }
+    auto lowlat = [](Processor& p) { p.setParam(LowLat, 1); };
+    { Processor p; lowlat(p); p.prepare(kFs, 256); p.snapToTargets(); CHECK(std::abs(20 * std::log10(amp(run(p, sine(0.1, 1000, 24000)), 1000) / 0.1)) < 0.1); }                 // quiet material at unity
+    { Processor p; lowlat(p); p.setParam(Drive, 12); p.prepare(kFs, 256); p.snapToTargets(); CHECK(std::abs(20 * std::log10(amp(run(p, sine(0.01, 1000, 24000)), 1000) / 0.01)) < 0.1); }   // Gain match
+    { Processor p; lowlat(p); p.setParam(Drive, 12); p.setParam(GainMatch, 0); p.prepare(kFs, 256); p.snapToTargets();
+      const auto y = run(p, sine(0.9, 997, 24000)); double pk = 0; for (size_t i = 2000; i < y.size(); ++i) pk = std::max(pk, (double)std::abs(y[i]));
+      CHECK(20 * std::log10(pk) <= -0.3 + 1.0); }                                                                                                                              // held near the ceiling (an IIR may overshoot a little)
+    auto alias = [&](double f) {
+        Processor p; lowlat(p); p.setParam(Oversample, f); p.setParam(Knee, 0); p.setParam(Drive, 18); p.setParam(GainMatch, 0); p.prepare(kFs, 256); p.snapToTargets();
+        const auto y = run(p, sine(0.5, 7100, 48000)); return amp(y, 48000 - 35500) / amp(y, 7100);
+    };
+    CHECK(alias(16) < alias(4) * 0.5);
+    { Processor quiet; lowlat(quiet); quiet.setParam(Listen, 1); quiet.prepare(kFs, 256); quiet.snapToTargets(); CHECK(20 * std::log10(amp(run(quiet, sine(0.05, 1000, 24000)), 1000) / 0.05) < -35.0); }   // Listen: nothing clipped -> (almost) silence
+}
+
+TEST_CASE("sw::IirOversampler (cascaded half-bands): DC and a 1 kHz sine come back at unit gain with a delay of a few samples, for 4x / 8x / 16x") {
+    for (int f : {4, 8, 16}) {
+        IirOversampler os; os.setup(f); CHECK(os.factor() == f); CHECK(os.latencySamples() == 0);
+        double buf[16], last = 0; for (int i = 0; i < 2000; ++i) { os.up(0.5, buf); last = os.down(buf); }
+        CHECK(last == doctest::Approx(0.5).epsilon(1e-6));                                             // DC
+        os.reset(); const auto x = sine(0.5, 1000, 4000); std::vector<double> y(x.size());
+        for (size_t i = 0; i < x.size(); ++i) { os.up(x[i], buf); y[i] = os.down(buf); }
+        // the delay: the shift (in samples) that best matches the output to the input, over the settled half
+        int bestD = -1; double bestE = 1e30; for (int d = 0; d < 12; ++d) { double e = 0; for (size_t i = 2000; i < x.size(); ++i) { const double v = y[i] - x[i - static_cast<size_t>(d)]; e += v * v; } if (e < bestE) { bestE = e; bestD = d; } }
+        CHECK(bestD >= 5); CHECK(bestD <= 10);   // 7 - 9 samples: what Low lat reports (8)
+        double a = 0, b = 0; for (size_t i = 2000; i < x.size(); ++i) { a += y[i] * y[i]; b += static_cast<double>(x[i]) * x[i]; }
+        CHECK(std::abs(10 * std::log10(a / b)) < 0.05);                                                  // the level within 0.05 dB
+    }
+}
