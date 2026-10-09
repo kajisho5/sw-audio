@@ -335,7 +335,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
+        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -404,6 +404,7 @@ private:
             uint32_t next = frames;
             if (ev < nev) next = std::min(frames, pr->in_events->get(pr->in_events, ev)->time);
             if (next <= pos) next = pos + 1;
+            next = std::min(next, pos + s->maxFrames_);   // never more than the buffers of prepare() hold
             float* chans[2] = {ob.data32[0] + pos, nch > 1 ? ob.data32[1] + pos : ob.data32[0] + pos};
             const float* sc[2] = {scCh > 0 ? scBase[0] + pos : nullptr, scCh > 1 ? scBase[1] + pos : nullptr};
             s->shell_.process(chans, static_cast<int>(nch), static_cast<int>(next - pos), scCh > 0 ? sc : nullptr, scCh);
@@ -640,6 +641,7 @@ private:
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
+    uint32_t maxFrames_ = 4096;   // the largest block activate() promised the buffers for (process() cuts a longer block, which the CLAP rules forbid but a host can still send)
     std::array<std::atomic<float>, 4> peaks_{};
     std::array<std::atomic<double>, gui::kMaxReadouts> ro_{};   // the core's measured values for the screen (trait readouts)
     void publishReadouts() { if constexpr (HasReadouts<P>::value) { static_assert(P::kReadouts <= gui::kMaxReadouts); double v[P::kReadouts > 0 ? P::kReadouts : 1] = {}; P::readouts(shell_.core(), v); for (int i = 0; i < P::kReadouts; ++i) ro_[static_cast<size_t>(i)].store(v[i], std::memory_order_relaxed); } }

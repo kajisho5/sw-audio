@@ -53,6 +53,7 @@ private:
     double fs_ = 48000.0, matchDb_ = 0.0, accSq_ = 0.0, accT_ = 0.0, inGain_ = 1.0, recovery_ = 1.0;
     bool matchDone_ = false, prepared_ = false;
     int ctl_ = 0, blockN_ = 0;
+    double a1_ = 1.0, pg_ = 1.0;           // the control-rate values (every 32 samples): kept between calls, a block need not start on a control boundary
     double blockSq_ = 0;
     std::array<double, kNumParams> target_{};
     LinearSmoother gain_, bass_, mid_, tre_, master_, match_;

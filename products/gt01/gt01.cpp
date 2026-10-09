@@ -155,15 +155,14 @@ void Processor::process(float** ch, int numCh, int n) {
     const double outLin = dbToLin(d.outDb);
     const bool bright = target_[Bright] > 0.5, matching = target_[VolumeMatch] > 0.5;
     const int blockLen = std::max(1, static_cast<int>(fs_ * 0.1));
-    double a1 = 1.0, pg = 1.0, brightDb = 0.0;
     for (int i = 0; i < n; ++i) {
         if (ctl_ == 0) {
             ctl_ = 32;
             const double g = gain_.skip(32);
-            a1 = dbToLin(d.gainLoDb + (d.gainHiDb - d.gainLoDb) * g * 0.1);
+            a1_ = dbToLin(d.gainLoDb + (d.gainHiDb - d.gainLoDb) * g * 0.1);
             const double mk = master_.skip(32);
-            pg = dbToLin(-60.0 + 78.0 * std::sqrt(std::clamp(mk, 0.0, 10.0) * 0.1));
-            brightDb = bright ? 9.0 * (1.0 - g * 0.1) : 0.0;
+            pg_ = dbToLin(-60.0 + 78.0 * std::sqrt(std::clamp(mk, 0.0, 10.0) * 0.1));
+            const double brightDb = bright ? 9.0 * (1.0 - g * 0.1) : 0.0;
             bass_.skip(32); mid_.skip(32); tre_.skip(32);
             if (bass_.isSmoothing() || mid_.isSmoothing() || tre_.isSmoothing()) updateTone(); 
             inGain_ = match_.skip(32);
@@ -188,7 +187,7 @@ void Processor::process(float** ch, int numCh, int n) {
             Ch& s = c_[static_cast<size_t>(c)];
             double x = ch[c][i] * inGain_;
             if (bright) x = s.bright.process(x);
-            const double a1c = a1 * onset_[static_cast<size_t>(c)];   // Unit B / C: this channel's tube
+            const double a1c = a1_ * onset_[static_cast<size_t>(c)];   // Unit B / C: this channel's tube
             double v = s.pre.process(x, [&](double u) {
                 double y = s1 * (std::tanh(a1c * u + d.b1) - tb1);
                 s.dc1 += aHp1 * (y - s.dc1); y -= s.dc1;
@@ -202,7 +201,7 @@ void Processor::process(float** ch, int numCh, int n) {
             s.tz[0] = tb_[1] * v - ta_[1] * t0 + s.tz[1];
             s.tz[1] = tb_[2] * v - ta_[2] * t0 + s.tz[2];
             s.tz[2] = tb_[3] * v - ta_[3] * t0;
-            v = t0 * recovery_ * pg;
+            v = t0 * recovery_ * pg_;
             // power stage with supply sag: the supply falls with the power drawn, the headroom with it
             const double h = std::max(0.4, 1.0 - d.sag * std::min(1.0, 2.0 * s.sag));
             double y = s.pow.process(v, [h](double u) { return h * std::tanh(u / h); });
