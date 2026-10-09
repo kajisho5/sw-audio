@@ -829,7 +829,25 @@
     } };
   }
 
+
+  // ---- handling-noise catcher (LV18): readouts = events caught (Plug pop, Wind, Handling, Plosive). The three markers show the counts, dim when the type is off, and flash when one is caught; the grey area is the output level (last ~10 s)
+  function catcherDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const area = svg.querySelector(':scope > path[fill="#8a8c92"]'), texts = [...svg.querySelectorAll(':scope > text')], lines = [...svg.querySelectorAll(':scope > line[stroke-dasharray]')], tris = [...svg.querySelectorAll(':scope > path[fill="#f2f2f2"]')];
+    const names = ['Plug pop', 'Wind', 'Handling']; if (!area || texts.length < 3 || lines.length < 3) return null;
+    const [, , W, H] = vbOf(svg), C = H * 0.62, N = 80, dx = W / (N - 1), hist = Ring(N, -90); let tick = 0; const seen = [0, 0, 0], flash = [0, 0, 0];
+    return { update(info) {
+      const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 3) return;
+      names.forEach((nm, k) => { const on = ctx.value(nm) > 0.5; if (r[k] > seen[k]) flash[k] = 12; seen[k] = r[k]; if (flash[k] > 0) flash[k]--;
+        texts[k].textContent = nm + ' · ' + r[k]; const op = on ? (flash[k] > 0 ? 1 : 0.8) : 0.25; lines[k].style.opacity = op; if (tris[k]) tris[k].style.opacity = op; texts[k].style.opacity = on ? 1 : 0.4; lines[k].setAttribute('stroke-width', flash[k] > 0 ? '2.5' : '1'); });
+      if (!m || ++tick % 6) return; hist.push(outDb(m)); let up = '', dn = '';
+      for (let k = 0; k < N; k++) { const x = (k * dx).toFixed(1), a = clamp((hist.a[k] + 60) / 60, 0, 1) * (C - 24); up += (k ? ' L' : 'M') + x + ' ' + (C - a).toFixed(1); dn = ' L' + x + ' ' + (C + a * 0.6).toFixed(1) + dn; }
+      area.setAttribute('d', up + dn + ' Z');
+    } };
+  }
+
   const registry = {
+    LV18: catcherDisplay,
     LV21: generatorDisplay,
     MS02: ceilingDisplay,
     LV17: grHistoryDisplay,

@@ -9,6 +9,8 @@ struct Lv18 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 4;   // events caught per type since the start: Plug pop, Wind, Handling, Plosive
+    static void readouts(const Core& c, double* o) { for (int k = 0; k < 4; ++k) o[k] = c.caught(k); }
     static constexpr bool kAutoGain = false;
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_RESTORATION, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
