@@ -64,7 +64,7 @@
       nums.forEach((n, i) => { n.style.color = i < steps ? 'var(--sub)' : 'var(--track)'; n.style.fontWeight = i % 4 === 0 ? '700' : '400'; });
     };
     ui.watch(['in07.arp.steps'].concat(bars.map(b => b.vid), pitches.map(p => p.pid)), showSteps);
-    const arpPanel = el('div', { class: 'panel', style: { left: '630px', top: '72px', width: '626px', height: '420px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' } },
+    const arpPanel = el('div', { class: 'panel', style: { left: '630px', top: '72px', width: '626px', height: '436px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' } },
       el('div', { class: 'sec', style: { height: '40px' } }, el('span', { class: 't', text: 'ARPEGGIATOR' }), ui.onButton('in07.arp.on', { style: { width: '96px', height: '32px' } })),
       row('MODE', ui.seg('in07.arp.mode', { labels: ['UP', 'DOWN', 'UP-DN', 'ORDER', 'RANDOM'] })),
       row('RATE', ui.seg('in07.arp.rate', { labels: ['1/8', '1/16', '1/16T', '1/32'] })),

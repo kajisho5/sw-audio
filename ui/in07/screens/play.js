@@ -39,7 +39,7 @@
   };
   // a sprite sheet's first frame as a thumbnail
   SW.thumb = (kind, size) => {
-    const s = el('span', { 'aria-hidden': 'true', style: { display: 'block', width: size + 'px', height: size + 'px', flexShrink: '0', backgroundRepeat: 'no-repeat' } });
+    const s = el('span', { 'aria-hidden': 'true', class: 'thumb', style: { display: 'block', width: size + 'px', height: size + 'px', flexShrink: '0', backgroundRepeat: 'no-repeat' } });
     const set = k => { kind = k; const u = SW.url[k]; s.style.backgroundImage = u ? 'url(' + u + ')' : ''; s.style.backgroundSize = (k === 'ring' ? size * 12 : size * 12) + 'px auto'; s.style.backgroundPosition = '0 0'; };
     set(kind);
     SW.on('image', n => { if (n === kind) set(kind); });
@@ -90,7 +90,7 @@
         const row = el('button', { type: 'button', role: 'option', 'aria-selected': on ? 'true' : 'false', style: { minHeight: '40px', display: 'flex', alignItems: 'center', gap: '10px', padding: '0 10px', border: on ? '1px solid var(--line2)' : '1px solid transparent', borderRadius: '10px', textAlign: 'left', background: on ? 'var(--sel)' : 'none', color: on ? 'var(--strong)' : 'var(--text)' } },
           el('span', { style: { width: on ? '6px' : '3px', height: on ? '6px' : '3px', borderRadius: '50%', flexShrink: '0', background: on ? 'var(--cat)' : 'var(--sub)' } }),
           el('span', { style: { flex: '1', fontSize: '16px', fontWeight: on ? '600' : '400', letterSpacing: '.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, text: p.name }),
-          el('span', { class: 'mono', style: { fontSize: '9px', color: 'var(--sub)' }, text: p.kind === 'user' ? (p.category ? p.category + ' · U' : 'USER') : p.category }));
+          el('span', { class: 'mono', style: { fontSize: '9px', color: 'var(--sub)' }, text: p.kind === 'user' ? (cat === 'USER' ? (p.category || '') : (p.category ? p.category + ' · ' : '') + 'USER') : p.category }));
         row.addEventListener('click', () => SW.loadPreset(p));
         list.appendChild(row);
         if (on) setTimeout(() => row.scrollIntoView({ block: 'nearest' }), 0);

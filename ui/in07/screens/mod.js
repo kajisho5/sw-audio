@@ -33,17 +33,21 @@
       el('p', { class: 'note', style: { margin: '0' }, text: 'Each slot is a line from its source to what it moves. The line is thicker for more amount and flows from source to target; a negative amount flows back as dots. Sources along the bottom: velocity, mod wheel, aftertouch and the eight macros; the LFO moon and the envelope at the core reach out from where they are.' })));
 
     // ---- the matrix
-    const head = el('div', { class: 'cap2', style: { display: 'grid', gridTemplateColumns: '24px 52px 118px 22px 118px minmax(0, 1fr)', gap: '8px', alignItems: 'center', height: '30px', letterSpacing: '.24em', fontSize: '10px', borderBottom: '1px solid var(--line)' } },
+    const head = el('div', { class: 'cap2', style: { display: 'grid', gridTemplateColumns: '24px 52px 134px 18px 134px minmax(0, 1fr)', gap: '8px', alignItems: 'center', height: '30px', letterSpacing: '.24em', fontSize: '10px', borderBottom: '1px solid var(--line)' } },
       el('span', { text: '#' }), el('span', { text: 'ON' }), el('span', { text: 'SOURCE' }), el('span'), el('span', { text: 'TARGET' }), el('span', { text: 'AMOUNT' }));
     const rows = [0, 1, 2, 3, 4, 5, 6, 7].map(s => {
       const arrow = el('svg', { width: 26, height: 12, viewBox: '0 0 26 12', 'aria-hidden': 'true' }, el('path', { d: 'M2 6h20M17 2l5 4-5 4', fill: 'none', stroke: 'var(--acc)', 'stroke-width': '1.3', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
-      const r = el('div', { style: { display: 'grid', gridTemplateColumns: '24px 52px 118px 22px 118px minmax(0, 1fr)', gap: '8px', alignItems: 'center', height: '58px', borderBottom: s < 7 ? '1px solid var(--line)' : 'none' } },
+      const r = el('div', { style: { display: 'grid', gridTemplateColumns: '24px 52px 134px 18px 134px minmax(0, 1fr)', gap: '8px', alignItems: 'center', height: '58px', borderBottom: s < 7 ? '1px solid var(--line)' : 'none' } },
         el('span', { class: 'mono', style: { fontSize: '11px', color: 'var(--sub)' }, text: String(s + 1) }),
         ui.onButton(mid(s, 'on'), { style: { width: '52px', height: '28px', padding: '0', borderRadius: '14px', fontFamily: "'Space Mono', monospace", fontSize: '9px', letterSpacing: '.06em' } }),
         ui.dropdown(mid(s, 'src'), { glyphs: SRC_G, label: 'Slot ' + (s + 1) + ' source' }), arrow,
         ui.dropdown(mid(s, 'dst'), { glyphs: DST_G, label: 'Slot ' + (s + 1) + ' target' }),
-        ui.slider(mid(s, 'amount'), { label: '', compact: true, labelWidth: 0, valWidth: 40, fmt: v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)), dim: () => P.get(mid(s, 'on')) < 0.5, also: [mid(s, 'on')] }));
-      ui.watch([mid(s, 'on')], () => { r.style.opacity = P.get(mid(s, 'on')) > 0.5 ? '1' : '.55'; });
+        ui.slider(mid(s, 'amount'), { label: '', compact: true, labelWidth: 0, valWidth: 40, fmt: v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(Math.round(v)) }));
+      // a slot that moves nothing (off, no source, no target or no amount) is drawn faint, as in the design
+      ui.watch([mid(s, 'on'), mid(s, 'src'), mid(s, 'dst'), mid(s, 'amount')], () => {
+        const live = P.get(mid(s, 'on')) > 0.5 && P.stepIndex(mid(s, 'src')) > 0 && P.stepIndex(mid(s, 'dst')) > 0 && P.get(mid(s, 'amount')) !== 0;
+        r.style.opacity = live ? '1' : '.55';
+      });
       return r;
     });
     root.appendChild(el('div', { class: 'panel', style: { left: '630px', top: '72px', width: '626px', height: '522px', padding: '12px 20px' } }, head, rows));

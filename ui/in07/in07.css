@@ -52,6 +52,7 @@ button { cursor: pointer; }
 .sw-stars { position: absolute; inset: 0; pointer-events: none;
   background-image: radial-gradient(1.2px 1.2px at 8% 14%, rgba(255,255,255,.55), rgba(0,0,0,0)), radial-gradient(1px 1px at 23% 82%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.4px 1.4px at 37% 7%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 52% 92%, rgba(255,255,255,.35), rgba(0,0,0,0)), radial-gradient(1.2px 1.2px at 64% 6%, rgba(255,255,255,.5), rgba(0,0,0,0)), radial-gradient(1px 1px at 78% 77%, rgba(255,255,255,.4), rgba(0,0,0,0)), radial-gradient(1.5px 1.5px at 91% 21%, rgba(191,243,223,.6), rgba(0,0,0,0)), radial-gradient(1px 1px at 4% 51%, rgba(255,255,255,.35), rgba(0,0,0,0)); }
 .sw-light .sw-stars { display: none; }
+.sw-light .thumb { filter: drop-shadow(1px 2px 2px rgba(30,60,50,.35)); }   /* white rings on the day screen: a shadow to the lower right (light from the top left) */
 .mono { font-family: 'Space Mono', ui-monospace, monospace; }
 .disp { font-family: Michroma, 'Arial', sans-serif; }
 .cap { font-size: 11px; letter-spacing: .34em; color: var(--sub); text-transform: uppercase; }
