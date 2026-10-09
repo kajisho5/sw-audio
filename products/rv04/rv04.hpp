@@ -7,6 +7,7 @@
 #pragma once
 #include "sw/copy_atomic.hpp"
 #include "sw/param.hpp"
+#include "sw/grid_clock.hpp"
 #include "sw/svf.hpp"
 #include "sw/tiered_convolver.hpp"
 #include <array>
@@ -46,6 +47,7 @@ public:
     int irLoadsDone() const { return irDone_; }     // the screen compares these after its commit
     int irLoadsFailed() const { return irFailed_; }
     bool irLoaded() const { return !custom_.empty() || pendState_.load() >= 2; }
+    bool rebuilding() const { return stage_ != Idle || need_ > 0; }   // a new IR is being built (the screen's "Reading ..."; the tests wait for it)
     void saveExtra(std::vector<uint8_t>& out) const;
     void loadExtra(const uint8_t* data, size_t size);
     double irSeconds() const { return irLen_ / fs_; }   // length of the IR in use
@@ -55,6 +57,8 @@ private:
     void markSynth() { need_ = std::max(need_, 2); }
     void markTransform() { need_ = std::max(need_, 1); }
     void startJob();
+    void gridTick();
+    void processSegment(float** ch, int nch, int n);
     void beginTransform();
     void stepJob();
     void runAllSync();
@@ -71,6 +75,8 @@ private:
     bool rev_ = false, sync_ = false, loaded_ = false;
     int commitIdx_ = 0;
     Stage stage_ = Idle;
+    GridClock clock_;  // the job starts, steps and commits on the stream's grid (sw/grid_clock.hpp), not per process() call
+    int ticks_ = 0;
     size_t jobPos_ = 0;
     double energy_ = 0;
     bool prepared_ = false;

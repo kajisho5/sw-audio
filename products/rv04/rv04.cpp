@@ -45,6 +45,7 @@ void Processor::updateFilters() {
 }
 
 void Processor::prepare(double sampleRate, int) {
+    clock_.reset(); ticks_ = 0;
     fs_ = sampleRate;
     maxLen_ = static_cast<size_t>(10.0 * fs_);
     for (int c = 0; c < 2; ++c) {
@@ -94,6 +95,7 @@ void Processor::runAllSync() {   // prepare / state load: everything now, and th
 
 // ---- the job: [Synth ->] Transform -> Normalise -> Load (-> commit)
 void Processor::startJob() {
+    ticks_ = 0;
     const int cat = categoryOf();
     const bool needSynth = need_ >= 2 || cat != synthCat_;
     need_ = 0;
@@ -330,12 +332,27 @@ void Processor::loadExtra(const uint8_t* d, size_t n) {
     loadIr(v.data(), frames, ch, rate);
 }
 
+// at every grid point of the stream: a new IR starts, or the one being built takes a step (every 4 points = 256 samples)
+void Processor::gridTick() {
+    if (stage_ == Idle) {
+        if (adoptIr() && categoryOf() == Custom) markSynth();   // an IR the screen has sent
+        if (need_ > 0) startJob();
+    } else if (++ticks_ >= GridClock::kStepTicks) { ticks_ = 0; stepJob(); }
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);
-    if (stage_ == Idle && adoptIr() && categoryOf() == Custom) markSynth();   // an IR the screen has sent
-    if (stage_ == Idle && need_ > 0) startJob();
-    if (stage_ != Idle) stepJob();
+    for (int off = 0; off < n;) {
+        const int len = std::min(n - off, clock_.toNext());
+        float* seg[2] = {ch[0] + off, nch > 1 ? ch[1] + off : nullptr};
+        processSegment(seg, nch, len);
+        off += len;
+        if (clock_.advance(len)) gridTick();
+    }
+}
+
+void Processor::processSegment(float** ch, int nch, int n) {
     const size_t preSz = pre_[0].size();
     float* wet[2] = {ch[0], nch > 1 ? ch[1] : nullptr};
     // pre-delay (gliding length, linear interpolation), into the convolvers

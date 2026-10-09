@@ -14,6 +14,7 @@
 //   A change of Speakers / Room / Angle / Head size (or the yaw) builds four new IRs step by step in the audio thread (one small job per call) and crossfades to them over 20 ms.
 #pragma once
 #include "sw/param.hpp"
+#include "sw/grid_clock.hpp"
 #include "sw/svf.hpp"
 #include "sw/tiered_convolver.hpp"
 #include <array>
@@ -52,6 +53,7 @@ public:
     int latencySamples() const { return 0; }
     void setHeadYaw(double deg) { yawTarget_ = deg; }
     bool busy() const { return stage_ != Idle || differs(wanted()); }   // a new IR set is being built or waiting to be
+    bool rebuilding() const { return busy(); }
     double builtAngle() const { return built_.angleDeg; }
     double builtYaw() const { return built_.yawDeg; }
 
@@ -59,6 +61,8 @@ private:
     enum Stage { Idle, Design, Load, Commit };
     bool differs(const IrSpec& w) const { return w.speakers != built_.speakers || w.room != built_.room || w.head != built_.head || w.angleDeg != built_.angleDeg || std::abs(w.yawDeg - built_.yawDeg) >= 1.5; }
     void startJob();
+    void gridTick();
+    void processSegment(float** ch, int n);
     void stepJob();
     IrSpec wanted() const;
     void setProfile();
@@ -66,6 +70,8 @@ private:
     size_t len_ = 24000;
     bool prepared_ = false, dirty_ = false, loaded_ = false, sync_ = false;
     Stage stage_ = Idle; int designIdx_ = 0, commitIdx_ = 0, loadIdx_ = 0;
+    GridClock clock_;  // the job starts, steps and commits on the stream's grid (sw/grid_clock.hpp), not per process() call
+    int ticks_ = 0;
     IrSpec built_{}, job_{};
     std::array<double, kNumParams> target_{};
     std::array<TieredConvolver, 4> conv_{};     // 0 LL, 1 LR, 2 RL, 3 RR (speaker, ear)

@@ -132,6 +132,7 @@ void Processor::rebuild(bool immediate) {
 }
 
 void Processor::prepare(double sampleRate, int) {
+    clock_.reset(); ticks_ = 0;
     fs_ = sampleRate;
     len_ = 8192; while (len_ < 8192.0 * fs_ / 48000.0) len_ *= 2;
     for (size_t c = 0; c < conv_.size(); ++c) conv_[c].prepare(len_, static_cast<int>(0.02 * fs_), static_cast<int>(c));
@@ -159,15 +160,29 @@ void Processor::snapToTargets() {
     for (auto& f : hp_) f.setup(Svf::Mode::HighPass, target_[LowCut], fs_, 0.70710678, 0);
 }
 
+// at every grid point of the stream: a new design starts (when the last IR has faded in), or the one being designed takes a step (every 4 points = 256 samples; about a millisecond each)
+void Processor::gridTick() {
+    if (designing_) {
+        if (++ticks_ >= GridClock::kStepTicks) { ticks_ = 0; if (designer_.step()) { for (auto& c : conv_) c.setKernel(designer_.ir(), false); designing_ = false; } }
+    } else if (dirty_ && !conv_[0].fading() && !conv_[1].fading()) {
+        designer_.begin(static_cast<int>(target_[Cab] + 0.5), static_cast<int>(target_[Mic] + 0.5), target_[MicDistance], target_[OffAxis], target_[Room]);
+        designing_ = true; dirty_ = false; ticks_ = 0;
+    }
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);
-    if (designing_) {   // one step per block: about a millisecond each
-        if (designer_.step()) { for (auto& c : conv_) c.setKernel(designer_.ir(), false); designing_ = false; }
-    } else if (dirty_ && !conv_[0].fading() && !conv_[1].fading()) {
-        designer_.begin(static_cast<int>(target_[Cab] + 0.5), static_cast<int>(target_[Mic] + 0.5), target_[MicDistance], target_[OffAxis], target_[Room]);
-        designing_ = true; dirty_ = false;
+    for (int off = 0; off < n;) {
+        const int len = std::min(n - off, clock_.toNext());
+        float* seg[2] = {ch[0] + off, nch > 1 ? ch[1] + off : nullptr};
+        processSegment(seg, nch, len);
+        off += len;
+        if (clock_.advance(len)) gridTick();
     }
+}
+
+void Processor::processSegment(float** ch, int nch, int n) {
     for (int c = 0; c < nch; ++c) conv_[static_cast<size_t>(c)].process(ch[c], n);
     if (lowCutOn_) for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) ch[c][i] = static_cast<float>(hp_[static_cast<size_t>(c)].process(ch[c][i]));
     for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) if (std::abs(ch[c][i]) < 1e-30f) ch[c][i] = 0.0f;

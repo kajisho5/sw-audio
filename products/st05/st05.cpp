@@ -133,6 +133,7 @@ void Processor::setProfile() {
 }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
+    clock_.reset(); ticks_ = 0;
     fs_ = sampleRate;
     len_ = static_cast<size_t>(kIrSeconds * fs_);
     for (size_t i = 0; i < 4; ++i) {
@@ -166,7 +167,7 @@ void Processor::snapToTargets() {
 }
 
 void Processor::startJob() {
-    job_ = wanted(); dirty_ = false; stage_ = Design; designIdx_ = 0;
+    job_ = wanted(); dirty_ = false; stage_ = Design; designIdx_ = 0; ticks_ = 0;
 }
 
 void Processor::stepJob() {
@@ -188,13 +189,25 @@ void Processor::stepJob() {
     }
 }
 
+// at every grid point of the stream: a new IR set starts, or the one being built takes a step (every 4 points = 256 samples)
+void Processor::gridTick() {
+    if (stage_ == Idle) { if (differs(wanted())) startJob(); }
+    else if (++ticks_ >= GridClock::kStepTicks) { ticks_ = 0; stepJob(); }
+}
+
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || numCh < 2) return;
     setProfile();
-    if (stage_ == Idle) {
-        if (differs(wanted())) startJob();
+    for (int off = 0; off < n;) {
+        const int len = std::min(n - off, clock_.toNext());
+        float* seg[2] = {ch[0] + off, ch[1] + off};
+        processSegment(seg, len);
+        off += len;
+        if (clock_.advance(len)) gridTick();
     }
-    if (stage_ != Idle) stepJob();
+}
+
+void Processor::processSegment(float** ch, int n) {
     for (int off = 0; off < n; off += static_cast<int>(tmp_[0].size())) {
         const int m = std::min(n - off, static_cast<int>(tmp_[0].size()));
         for (int i = 0; i < m; ++i) { tmp_[0][static_cast<size_t>(i)] = tmp_[1][static_cast<size_t>(i)] = ch[0][off + i]; tmp_[2][static_cast<size_t>(i)] = tmp_[3][static_cast<size_t>(i)] = ch[1][off + i]; }

@@ -7,6 +7,7 @@
 #include "sw/fft.hpp"
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
+#include "sw/grid_clock.hpp"
 #include "sw/tiered_convolver.hpp"
 #include <array>
 #include <complex>
@@ -48,12 +49,17 @@ public:
     double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     void reset();   // forget the audio (the host stopped or jumped): the convolvers' history and the low cut; the IR stays
     int latencySamples() const { return 0; }
+    bool rebuilding() const { return designing_ || dirty_; }   // a new IR is being designed or waits to be
 
 private:
     void rebuild(bool immediate);   // synchronous (prepare / state load)
+    void gridTick();
+    void processSegment(float** ch, int nch, int n);
     double fs_ = 48000.0;
     int len_ = 8192;
     bool prepared_ = false, dirty_ = false, designing_ = false;
+    GridClock clock_;  // the design starts, steps and commits on the stream's grid (sw/grid_clock.hpp), not per process() call
+    int ticks_ = 0;
     std::array<double, kNumParams> target_{};
     std::array<TieredConvolver, 2> conv_;   // left and right (the same IR; started half a block apart so that the heavy blocks do not fall into the same call)
     IrDesigner designer_;

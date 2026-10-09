@@ -52,6 +52,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 - **`reset()`（ホストが止まった・飛んだ）で音を忘れる**：コアに `void reset()`（バッファとフィルターの状態だけ消す。割り当てない。IR・学習した値・パラメータは残す）。無くてもテールを報告する製品は、アダプターが `prepare()` をもう一度呼ぶ（割り当てない作りであること）。重い `prepare()`（IR の合成）を持つ製品は `reset()` を必ず書く。`host_smoke --reset` が −40 dBFS 超で鳴る製品を落とす。
 - **学習（Learn）系の EVO は、コアが決めた値を `takeParamWrite(int& id, double& plain)` でホストへ返す**（戻り値 7＝開始・値・終了。値は `setParam` で自分に入れると同時に待ち行列へ。EQ07 Auto thresh・DY04 Learn・CS02 被り学習・RV08 Learn・CS03 入力レベル合わせ・DY10 Auto・MS07 Truncation check・CS04 並び順の提案・EQ05 Match）。ボタンはプラグイン層の trait `guiCall(core, "learn", arg)`（音声スレッドで実行）、状態は `kReadouts`／`readouts`。被り学習は `sw::BleedLearner`（DY04・CS02・RV08 共通。しきい値は「その製品の検出器が見る量」で決める：ピークで比べる検出器にはそのまま、追従値で比べる RV08 には追従値を渡す）、レベル合わせは `sw::LevelLearner`、クロスオーバー解析は `sw::CrossoverFinder`、実効ビット数は `sw::BitDepthProbe`、長時間平均スペクトル（1/6 oct）は `sw::BandSpectrum`（EQ05 Match：参照のファイルは `refbegin`／`refdata`／`refend` でウィンドウのスレッドから、最小二乗の `fit` もウィンドウのスレッド＝`guiOnGui`／`guiCallGui`、聴くのと値の書き込みは音声スレッド）。コアが複数のパラメータを書く操作は、`ui/actions.json` の `"undo": [パラメータ ID]` を付けるとページが書き込みを Undo の 1 段にまとめる（`"exact": true` は「Auto」が「Auto gain」に当たらないようにする、ラベルの完全一致）。聴く時間・検出条件・周波数の決め方は仕様書にないので README に設計値として書いてある。
 - **重い計算（カーネルの設計など）は別スレッド**（`sw::BackgroundWork`＝`core/include/sw/worker.hpp`。EQ08・EQ02 Linear）：コアに `useWorker(bool)` を書き、`prepare()` の最後で `job_.start(...)`、`process()` ではパラメータのコピーを渡して `kick()`（ロックしない）、できあがりは次のブロックで受け取る（`st_` の 0／1／2）。`BackgroundWork` はメンバーの最後に置く（先に join される）。コピーされたコアにスレッドは付かない（コピーは `process()` の中で同期設計）。アダプターが `prepare()` の前に `useWorker(true)` を呼ぶ（`HasUseWorker`）。`snapToTargets()` は途中の設計を待って捨てる。
+- **ステップで進むジョブ（IR の設計・読み込み）は `sw::GridClock`（`core/include/sw/grid_clock.hpp`）の格子で動かす**：`process()` をブロックの端でなく格子の点（絶対のサンプル位置の 64 ごと）で切り、ジョブの開始・1 ステップ（4 つごと）・切り替えは格子の点で行う（RV04・ST05・GT02）。「呼び出し 1 回に 1 ステップ」はブロック長で時間が変わる。`tests/test_ir_pacing.cpp` が「ブロック長が違っても出力がサンプル単位で同じ」を確かめる。
 - **テストの処理ループは端数ブロックを必ず `std::min(256, n - off)` で切る**（配列の外を読む不具合を2回出した）。
 - 有効化前に状態を読み込まれても落ちないこと（prepare 前は `snapToTargets()` で何もしない）。
 
@@ -85,7 +86,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り（EQ05 の Match の参照元に UT03 を使う道は済）・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（EQ05 の Match の参照元に UT03 を使う道は済）・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）
