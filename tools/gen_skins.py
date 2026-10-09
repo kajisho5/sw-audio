@@ -407,7 +407,7 @@ def bind_toggles(root, params, report, code):
 
 
 # EVO functions whose button the spec has ("学習ボタン") but the design does not draw (it only has the line of text in the bottom bar): a button is put in the bar, next to the text
-EVO_BUTTONS = {'DY04': 'Learn', 'CS02': 'Learn'}
+EVO_BUTTONS = {'DY04': 'Learn', 'CS02': 'Learn', 'CS03': 'Set input'}
 
 
 def add_evo_button(root, code):
@@ -415,7 +415,7 @@ def add_evo_button(root, code):
     bar = root.select_one('.evob')
     if not label or bar is None or any(b.get_text().strip() == label for b in bar.select('button')):
         return
-    btn = BeautifulSoup('<button class="btn" style="margin:0 10px;height:20px;padding:0 12px;font-size:10px;flex:none" title="%s: listen to the key, then press again (or wait 30 s)">%s</button>' % (label, label), 'html.parser')
+    btn = BeautifulSoup('<button class="btn" style="margin:0 10px;height:20px;padding:0 12px;font-size:10px;flex:none" title="%s: listen, then press again to stop (it also stops by itself)">%s</button>' % (label, label), 'html.parser')
     txt = bar.select_one('.evt')
     (txt.insert_after if txt is not None else bar.append)(btn.button)
 

@@ -36,6 +36,7 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
+    learner_.prepare(fs_); wasLearning_ = false; learnedOk_ = false; pending_ = false;
     gain_.reset(fs_, 20.0, 1.0);
     hiZ_.reset(fs_, 10.0, 0.0);
     for (LinearSmoother* s : {&low_, &mid_, &high_}) s->reset(fs_, 30.0, 0.0);  // Glide 30 ms
@@ -98,6 +99,7 @@ void Processor::process(float** chans, int numCh, int n) {
         if (moving) updateEq(len);
         for (int i = start; i < start + len; ++i) {
             const double g = gain_.next(), hz = hiZ_.next();
+            if (learner_.learning()) learner_.add(chans[0][i], nch > 1 ? chans[1][i] : chans[0][i]);   // the input as it comes in, before the Gain
             double x[2] = {0, 0}, level = 0;
             for (int k = 0; k < nch; ++k) {
                 Ch& c = ch_[static_cast<size_t>(k)];
@@ -124,7 +126,27 @@ void Processor::process(float** chans, int numCh, int n) {
                 chans[k][i] = static_cast<float>(std::abs(y) < 1e-30 ? 0.0 : y);
             }
         }
+        if (wasLearning_ && !learner_.learning()) { wasLearning_ = false; applyLearned(learner_.finish()); }   // the time ran out
     }
+}
+
+void Processor::learn() {
+    if (learner_.learning()) { applyLearned(learner_.finish()); wasLearning_ = false; }
+    else { learner_.start(kLearnSeconds); wasLearning_ = true; pending_ = false; }
+}
+
+// the result of a Learn: the Gain (the strip's scale 0..60, 30 = 0 dB) goes into the core at once and to the host through takeParamWrite
+void Processor::applyLearned(const LevelLearner::Result& r) {
+    learnedOk_ = r.ok; pending_ = false;
+    if (!r.ok) return;
+    setParam(Gain, r.gainDb + 30.0);
+    write_ = target_[Gain]; pending_ = true;
+}
+
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (!pending_) return 0;
+    pending_ = false; id = Gain; plain = write_;
+    return 7;
 }
 
 }  // namespace sw::cs03

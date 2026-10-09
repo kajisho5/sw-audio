@@ -8,7 +8,7 @@
 //   - a panel "In" switch that does not return the input level when Off           -> FAIL
 //   - a plug-in that is a bit-exact pass-through at its defaults                  -> WARN (meters / analysers are expected)
 //   - the plug-in window's page messages (sw_message.h, no window needed): the first poll is a well-formed update, presets save / load / delete in a temporary HOME,
-//     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs), EQ07's Auto thresh and DY04's / CS02's Learn button calls reach the audio thread -> FAIL
+//     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs), EQ07's Auto thresh and DY04's / CS02's Learn and CS03's Set input button calls reach the audio thread -> FAIL
 //   - processing time per second of audio                                         -> printed only (CI runners are noisy)
 // Usage: sw-host-smoke <dir-or-.clap> [...]      (Linux; exit code 1 when any product FAILs)
 #include "sw/unit.hpp"
@@ -278,6 +278,15 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c learn");
         const auto b = readouts(2);
         if (b.size() < 4 || b[0] != 0.0 || b[3] != 0.0) fail(code + ": a second Learn call did not stop the listening (or a result came out of silence)");
+    } else if (code == "CS03") {   // Set input: the button call starts the 5 s listening on the audio thread; pressing again with nothing heard stops it without a result
+        const auto base = readouts(2);
+        if (base.size() < 2 || base[0] != 0.0) { fail("CS03 read-outs missing or already listening"); return; }
+        m->send(p, "c learn");
+        const auto a = readouts(2);
+        if (a.size() < 2 || a[0] != 1.0 || a[1] <= 0.0) fail("CS03: Set input did not start listening after the screen's button call");
+        m->send(p, "c learn");
+        const auto b = readouts(2);
+        if (b.size() < 2 || b[0] != 0.0) fail("CS03: a second call did not stop the listening");
     } else if (code == "EQ02") {   // Assist: the toggle reaches the audio thread and shows in the read-outs (the marks themselves are checked in the unit tests)
         const auto base = readouts(2);
         if (base.size() < 13 || base[0] != 0.0) { fail("EQ02 read-outs missing or Assist already on"); return; }

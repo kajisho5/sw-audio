@@ -3,9 +3,10 @@
 // Pre: transformer saturation (lows saturate first), 2x OS; Hi Z = instrument load (top-end shelf) + even harmonics.
 // EQ: 100 Hz shelf / 1.5 kHz proportional-Q bell / 10 kHz shelf, 2 dB steps, 30 ms Glide (EQ06).
 // Comp: feed-forward, program-dependent attack (3..30 ms) and two-stage auto release (100 ms / 1.2 s).
-// EVO input level matching (listen 5 s, write Gain) comes with the UI.
+// EVO input level matching: learn() listens 5 s and writes the Gain (sw::LevelLearner).
 #pragma once
 #include "sw/dynamics.hpp"
+#include "sw/level_learner.hpp"
 #include "sw/oversample.hpp"
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
@@ -28,6 +29,14 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    // Input level (EVO, class A): the input is listened to for kLearnSeconds (or until learn() is called again); then the Gain is set so that the level after the pre-amp is -18 dBFS RMS with the peak
+    // not over -6 dBFS (sw::LevelLearner). The core writes it to the host (takeParamWrite: bit 0 begin, 1 value, 2 end). Audio thread.
+    static constexpr double kLearnSeconds = 5.0;
+    void learn();
+    bool learning() const { return learner_.learning(); }
+    double learnProgress() const { return learner_.progress(); }
+    bool learnedOk() const { return learnedOk_; }
+    int takeParamWrite(int& id, double& plain);
 
 private:
     void updateEq(int ramp);
@@ -41,6 +50,10 @@ private:
     std::array<Ch, 2> ch_{};
     GainComputer gc_;
     Ballistics fast_, slow_;
+    void applyLearned(const LevelLearner::Result& r);
+    LevelLearner learner_;
+    double write_ = 0.0;
+    bool pending_ = false, wasLearning_ = false, learnedOk_ = false;
 };
 
 }  // namespace sw::cs03
