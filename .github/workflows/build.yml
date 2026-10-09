@@ -71,6 +71,12 @@ jobs:
           node tests/ui/curves.test.js
           node tests/ui/traits.test.js
 
+      - name: Host smoke test (Linux)
+        if: matrix.shard == 0 && runner.os == 'Linux'
+        run: |
+          # loads every .clap like a DAW and pushes noise through it: Output gain, Bypass level, NaN at the defaults
+          build/sw-host-smoke build/plugins
+
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
         run: |

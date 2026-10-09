@@ -126,6 +126,13 @@ if (SW_BUILD_PLUGINS)
     set(CLAP_WRAPPER_DOWNLOAD_DEPENDENCIES TRUE CACHE BOOL "" FORCE)  # VST3 SDK / AudioUnit SDK
     FetchContent_MakeAvailable(clap-wrapper)
 
+    # host smoke test (Linux): loads the built .clap files like a DAW and checks what the unit tests and the validators cannot
+    # (Output gain, Bypass, NaN at the defaults); run: build/sw-host-smoke build/plugins   (tools/host_smoke.cpp)
+    if (UNIX AND NOT APPLE)
+        add_executable(sw-host-smoke tools/host_smoke.cpp)
+        target_link_libraries(sw-host-smoke PRIVATE clap ${CMAKE_DL_LIBS})
+    endif()
+
     # sw_add_plugin(<code> <display name> <AU subtype 4cc> [aufx|aumf])
     function(sw_add_plugin code name ausub)
         set(SW_CODE ${code})

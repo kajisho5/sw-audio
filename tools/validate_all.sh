@@ -13,3 +13,5 @@ for c in "$B"/plugins/*.clap; do
   vr=$(vst3-validator "$B/plugins/$n.vst3" 2>&1 | grep "Result:" | tail -1 | sed 's/Result: //')
   printf "%-28s CLAP: %-55s VST3: %s\n" "$n" "$cr" "$vr"
 done
+# audio-path smoke test (Output gain, Bypass, NaN) through the built .clap files
+[ -x "$B/sw-host-smoke" ] && "$B/sw-host-smoke" "$B/plugins" | grep -E "FAIL|WARN|plug-ins:"

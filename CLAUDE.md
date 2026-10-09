@@ -52,6 +52,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 tools/setup_linux.sh                       # 初回：ビルド道具・clap-validator・Steinberg validator を用意
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
 tools/validate_all.sh                      # ビルド＋単体テスト＋全プラグインの両 validator（1行ずつ結果）
+build-cmake/sw-host-smoke build-cmake/plugins   # ホスト経由の音声経路テスト（Linux。Output ゲイン・Bypass・Mix 0 %・In Off・NaN。validate_all.sh も実行）
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
 # ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
 g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
