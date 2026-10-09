@@ -5,6 +5,7 @@
 //   g(x) = (1 - Shape) + Shape * x, x = t / T (Flat = 1 all through; Reverse = a ramp up from 0 to 1), then 3 ms to close. Tone is a first-order tilt around 1 kHz, +-6 dB.
 //   Snare key (rv08.evo.on): the detector listens to 150..250 Hz and 2..5 kHz only (a 4th-order band-pass at 200 Hz and a 4th-order 2..5 kHz band-pass), so bleed outside the snare's bands does not open the gate.
 #pragma once
+#include "sw/bleed_learner.hpp"
 #include "sw/fdn.hpp"
 #include "sw/param.hpp"
 #include "sw/svf.hpp"
@@ -27,17 +28,31 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
+    // Learn (EVO, class B; the same learner as DY04's / CS02's): the key as the gate hears it (the snare's bands) is listened to for at most kLearnSeconds (or until learn() is called again); then
+    // Threshold goes between the snare and the bleed and Snare key is switched on. The core writes the two to the host (takeParamWrite: bit 0 begin, 1 value, 2 end). Audio thread.
+    static constexpr double kLearnSeconds = 30.0;
+    void learn();
+    bool learning() const { return learner_.learning(); }
+    double learnProgress() const { return learner_.progress(); }
+    int learnOnsets() const { return learner_.onsets(); }
+    bool learnedOk() const { return learnedOk_; }
+    int takeParamWrite(int& id, double& plain);
 
 private:
     struct Ap { std::vector<float> buf; size_t pos = 0; double process(double x, double g) { const double d = buf[pos]; const double y = -g * x + d; buf[pos] = static_cast<float>(x + g * y); if (++pos >= buf.size()) pos = 0; return y; } };
     void updateLines();
-    double fs_ = 48000.0, env_ = 0.0, gate_ = 0.0, t_ = 0.0, lateTrim_ = 1.0, tiltLp_[2] = {0, 0};
+    double fs_ = 48000.0, learnEnv_ = 0.0, env_ = 0.0, gate_ = 0.0, t_ = 0.0, lateTrim_ = 1.0, tiltLp_[2] = {0, 0};
     bool open_ = false, armed_ = true, prepared_ = false;
     std::array<double, kNumParams> target_{};
     Fdn fdn_;
     std::array<Ap, 4> ap_{};
     std::array<Svf, 2> keyLow_{};
     std::array<Svf, 4> keyHigh_{};
+    void applyLearned(const BleedLearner::Result& r);
+    BleedLearner learner_;
+    std::array<std::pair<int, double>, 2> writes_{};
+    int nWrites_ = 0, writeAt_ = 0;
+    bool wasLearning_ = false, learnedOk_ = false;
 };
 
 }  // namespace sw::rv08

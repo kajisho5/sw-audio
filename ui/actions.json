@@ -141,6 +141,12 @@
    "call": "reset"
   }
  ],
+ "RV08": [
+  {
+   "label": "Learn",
+   "call": "learn"
+  }
+ ],
  "ST03": [
   {
    "label": "Auto align",

@@ -38,6 +38,7 @@ void Processor::updateLines() {
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
+    learner_.prepare(fs_); wasLearning_ = false; learnedOk_ = false; nWrites_ = writeAt_ = 0; learnEnv_ = 0.0;
     fdn_.prepare(fs_, 16, 0.2);
     for (int k = 0; k < 4; ++k) { static const double ms[4] = {3.1, 2.3, 8.3, 5.9}; ap_[static_cast<size_t>(k)].buf.assign(std::max<size_t>(1, static_cast<size_t>(std::lround(ms[k] * 0.001 * fs_))), 0.0f); ap_[static_cast<size_t>(k)].pos = 0; }
     for (auto& f : keyLow_) f.setup(Svf::Mode::BandPass, 200.0, fs_, 2.0, 0.0);   // 150 .. 250 Hz (two in series)
@@ -68,16 +69,22 @@ void Processor::process(float** ch, int numCh, int n) {
     const double gateSamples = target_[GateTime] * 0.001 * fs_, closeStep = 1.0 / (kCloseMs * 0.001 * fs_);
     const double shape = target_[Shape] * 0.01, tone = (target_[Tone] - 50.0) * 0.02;
     const double gh = std::pow(10.0, tone * 6.0 / 20.0), gl = 1.0 / gh, lpA = 1.0 - std::exp(-2.0 * 3.14159265358979323846 * 1000.0 / fs_);
-    const bool key = target_[Snare] > 0.5;
+    const bool key = target_[Snare] > 0.5, learning = learner_.learning();
     const double envA = 1.0 - std::exp(-1.0 / (0.005 * fs_)), envR = 1.0 - std::exp(-1.0 / (0.015 * fs_));
     const double trimTarget = 1.0 / std::sqrt(Fdn::kEnergyConstant * decaySeconds(target_[Size]) / fdn_.meanLengthSeconds());
     for (int i = 0; i < n; ++i) {
         lateTrim_ += 0.0005 * (trimTarget - lateTrim_);
         const double m = nch > 1 ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i];
         double det = m;
-        if (key) {
+        if (key || learning) {
             double lo = keyLow_[1].process(keyLow_[0].process(m)), hi = keyHigh_[3].process(keyHigh_[2].process(keyHigh_[1].process(keyHigh_[0].process(m))));
-            det = lo + hi;
+            if (key) det = lo + hi;
+            if (learning) {   // what the detector would follow with Snare key on: its follower (5 / 15 ms) of the band-limited key. The learner is fed that level (not the audio), so the Threshold it finds is in the detector's own units
+                const double fa = std::abs(lo + hi);
+                learnEnv_ += (fa > learnEnv_ ? envA : envR) * (fa - learnEnv_);
+                const float le = static_cast<float>(learnEnv_);
+                learner_.process(&le, 1);
+            }
         }
         const double a = std::abs(det);
         env_ += (a > env_ ? envA : envR) * (a - env_);
@@ -102,6 +109,26 @@ void Processor::process(float** ch, int numCh, int n) {
             ch[c][i] = static_cast<float>(y);
         }
     }
+    if (wasLearning_ && !learner_.learning()) { wasLearning_ = false; applyLearned(learner_.finish()); }   // the time ran out
+}
+
+void Processor::learn() {
+    if (learner_.learning()) { applyLearned(learner_.finish()); wasLearning_ = false; }
+    else { learner_.start(kLearnSeconds); wasLearning_ = true; learnEnv_ = 0.0; nWrites_ = writeAt_ = 0; }
+}
+
+// the result of a Learn: the Threshold (0..10 = -60..0 dBFS, in the detector's own level: see process()) and Snare key on go into the core at once and to the host through takeParamWrite
+void Processor::applyLearned(const BleedLearner::Result& r) {
+    learnedOk_ = r.ok; nWrites_ = writeAt_ = 0;
+    if (!r.ok) return;
+    const struct { int id; double v; } w[2] = {{Threshold, (r.thresholdDb + 60.0) / 6.0}, {Snare, 1.0}};
+    for (const auto& x : w) { setParam(x.id, x.v); writes_[static_cast<size_t>(nWrites_++)] = {x.id, target_[static_cast<size_t>(x.id)]}; }
+}
+
+int Processor::takeParamWrite(int& id, double& plain) {
+    if (writeAt_ >= nWrites_) { nWrites_ = writeAt_ = 0; return 0; }
+    id = writes_[static_cast<size_t>(writeAt_)].first; plain = writes_[static_cast<size_t>(writeAt_)].second; ++writeAt_;
+    return 7;
 }
 
 }  // namespace sw::rv08

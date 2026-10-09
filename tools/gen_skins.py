@@ -407,7 +407,7 @@ def bind_toggles(root, params, report, code):
 
 
 # EVO functions whose button the spec has ("学習ボタン") but the design does not draw (it only has the line of text in the bottom bar): a button is put in the bar, next to the text
-EVO_BUTTONS = {'DY04': 'Learn', 'CS02': 'Learn', 'CS03': 'Set input'}
+EVO_BUTTONS = {'DY04': 'Learn', 'CS02': 'Learn', 'CS03': 'Set input', 'RV08': 'Learn'}
 
 
 def add_evo_button(root, code):

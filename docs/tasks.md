@@ -202,7 +202,7 @@
 
 - 画面（キャンバス docs/design/canvas/project/<コード>.dc.html を WebView で流用）。共通機能のうちモーフ（A/B）・EVO バー・Unit A/B/C・Low lat は画面と一緒に。
 - SW Link の残り（最初の部分＝誰がいるか・出力スペクトルは `plugin/clap/swlink.hpp` で済）：ラウドネスとトラック種別の共有、LV05 の Key 選択・LV15/LV11 の他製品との連携・EQ05 Match の参照元（UT03）・MT05 の 0 VU 基準の共有を、この登録簿の上に載せる。
-- 解析・学習系の EVO（区分 A／B／C：EQ02 Assist／Unmask、EQ07 Auto thresh、DY04 Learn、CS02 被り学習〔この 2 つは `sw::BleedLearner` を共有〕、CS03 入力レベル合わせ〔`sw::LevelLearner`〕は済。RV08 の進化機能「スネアにだけ開くゲート」は仕様書では同じ被り学習。CS03 の「音源の種類ごとの目標」は表が無く未実装）。
+- 解析・学習系の EVO（区分 A／B／C：EQ02 Assist／Unmask、EQ07 Auto thresh、DY04 Learn、CS02 被り学習、RV08 Learn〔この 3 つは `sw::BleedLearner` を共有〕、CS03 入力レベル合わせ〔`sw::LevelLearner`〕は済。CS03 の「音源の種類ごとの目標」は表が無く未実装）。
 - SW AUDIO for OBS（GPL の薄い OBS フィルタ＋非公開エンジン、共有メモリ、フェイルオープン。公開前に弁護士確認）。
 - MIDI・フットスイッチ入力：MD05・VO03・CR04・LV25 は済（アダプターにノートポート）。残りは、MIDI を使う製品（IN04 Bass など。IN01〜IN06 は作らない決定）。
 - VO03 Source MIDI の細部：和音の選び方は「Scale の音に最も近い和音の音」の簡易版（声部ごとの動きの履歴は見ていない）。

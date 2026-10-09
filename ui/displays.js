@@ -1923,7 +1923,7 @@
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, UT01: trackGain, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
-    RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
+    RV08: (box, ctx) => combine(textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]), learnButton(box, ctx)),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     CS04: modularStripDisplay,
     LV15: autoMixerDisplay,
