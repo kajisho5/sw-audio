@@ -53,6 +53,8 @@ tools/setup_linux.sh                       # 初回：ビルド道具・clap-val
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
 tools/validate_all.sh                      # ビルド＋単体テスト＋全プラグインの両 validator（1行ずつ結果）
 build-cmake/sw-host-smoke build-cmake/plugins   # ホスト経由の音声経路テスト（Linux。Output ゲイン・Bypass・Mix 0 %・In Off・NaN。validate_all.sh も実行）
+python3 tools/gen_skins.py && python3 tools/check_skins.py   # 画面とパラメータ表の突き合わせ（つまみのラベルと結び付き先、共通パラメータへの誤結合、重複、結び付かない部品。CI の Linux ジョブでも実行）
+NODE_PATH=$(npm root -g) node tools/audit_static_text.js [コード]   # 画面で数字が動かない文字（デザインの例の数字の残り）を探す（preview を http.server で配っておく）
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
 # ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
 g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
