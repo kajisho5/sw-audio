@@ -979,7 +979,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 
 **2026-10-09（ブランチ in07-engine、133 本＝132 本＋IN07）**：単体テスト 1403 件 全合格（Linux。AddressSanitizer・UBSan 付きでも全合格）、clap-validator は全製品 0 不合格（effects 33 合格・9 対象外。preset-discovery-crawl／-load は除外したので検査数が 44 → 42。「極小値で遅い」の警告が 11 製品で 1 回ずつ出たが、再実行で消える同じ種類の警告）、VST3 validator は全製品 47 合格・0 不合格。自作ホスト `tools/clap_note_host.cpp`（IN07）全合格。
 
-**v0.14.0（2026-10-09、ブランチ in07-engine、133 本）**：単体テスト 1444 件 全合格（Linux。AddressSanitizer・UBSan 付きでも全合格：全体 1443 件＋画面と MIDI の 18 件を最新のコードで）、clap-validator は全製品 0 不合格（effects 33 合格・9 対象外、IN07 36 合格・6 対象外）、VST3 validator は全製品 47 合格・0 不合格、`tools/clap_note_host.cpp`（IN07：音・状態・プリセットブラウザ・体験版の無音）全合格、`tools/in07_window_check.py`（本物のページと本物のプラグイン側、12 項目）全合格、ライセンスサーバーのテスト 6 件合格。GitHub Actions（Windows・macOS）での確認はこの版ではまだ。
+**v0.14.0（2026-10-09、ブランチ in07-engine、133 本）**：単体テスト 1444 件 全合格（Linux。AddressSanitizer・UBSan 付きでも全合格：全体 1443 件＋画面と MIDI の 18 件を最新のコードで）、clap-validator は全製品 0 不合格（effects 33 合格・9 対象外、IN07 36 合格・6 対象外）、VST3 validator は全製品 47 合格・0 不合格、`tools/clap_note_host.cpp`（IN07：音・状態・プリセットブラウザ・体験版の無音）全合格、`tools/in07_window_check.py`（本物のページと本物のプラグイン側、12 項目）全合格、ライセンスサーバーのテスト 6 件合格。GitHub Actions：run 37890323404（commit f85e055：窓の修正まで）で Windows MSVC・macOS（4 分割、auval）・Linux の全ジョブ成功。配布用の zip（release-in07）は run 37890111763 で Windows・macOS とも作成できた（テスト用、署名なし）。
 
 v0.11.0（23本）の時点では Windows を MinGW でクロスビルドして Wine 上で検証していた（CS04 以外の 22 本で不合格 0）。現在の Windows の根拠は上の GitHub Actions（MSVC）で、Wine での再検証はしていない。
 
@@ -1248,6 +1248,7 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 - **画面の設定**（MOTION 60／30／OFF・ダーク／ライト・大きさ 75〜130 %・保存時の作者名）：利用者ごとに `<アプリのデータ>/SEVENTHWELL/SWINGBY/window.txt`。決まった値以外は捨てる。大きさを変えるとホストに窓の大きさの変更を頼む。
 - **FX の順番の入れ替えで音が切れる → 直した**：▶◀ で並べ替えると、出力が順番の違う 2 つの鎖の間で一気に変わり、クリックになった（EQ の後の Limit と前の Limit で 5 dB 違う設定、音の山で入れ替えると 1 サンプルで 0.27 の段差）。順番が変わるときは 4 ms で下げて入れ替えて 4 ms で戻す（何も鳴っていなければすぐ）。`tests/test_in07.cpp`「moving an effect in the order dips」：16 か所の位相で入れ替えて最大段差 0.0129（前後の順番自身の音の最大 0.0129 以下）。
 - **確認**：`tests/test_inst_gui.cpp`（6 件：メッセージの厳密さ、ロケール、base64、JSON、ページの安全さ、設定）、`tests/test_in07_window.cpp`（3 件：ホストが読み込むのと同じプラグインで、ページ・値とジェスチャー・画面の音・プリセット・保存・フォルダ外の拒否・保存データ・ホストのプログラム変更・ライセンス・設定）、`tests/test_license_state.cpp`（ライセンスファイルの取り込み）、サーバーのテスト（CORS）。`tools/in07_window_check.py`：本物のページを Chromium で開き、プラグイン側は本物（`tools/in07_window_host.cpp`）につないで、絵 16・フォント 7 の到着、プリセット、値の往復、保存、設定、FX の並べ替えを確認（12 項目とも合格）、全画面の画像を `build/in07_window/` に。ブラウザでのプレビュー `tools/in07_ui_preview.py`（プラグインなし）。
+- **窓の側（プラットフォーム）で足したこと**：macOS の WKWebView はファイルを選ぶ欄（ライセンスファイル）に応じないので、開くパネルを出す役（WKUIDelegate）を付けた。Windows の WebView2 は F5・Ctrl+R（文字列から開いたページが空になる）・Ctrl+P を切った（文字の編集のキーは残る）。COPY CODE はクリップボードの API が断られたら古いコピーの命令、それも駄目ならコードを選んだ状態にする。
 - **まだ確かめていないこと**：Windows（WebView2）と macOS（WKWebView）の実物の窓での表示と操作、実際の DAW での確認。Linux のこの環境には窓がないため、ページとプラグイン側を別々に（上のとおり）確かめた。
 
 ### IN07 の MIDI と配布（2026-10-09）

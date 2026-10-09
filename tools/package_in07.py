@@ -3,7 +3,7 @@
 a short read-me, and the licences of everything inside (the fonts' OFL, the SDKs' licences found in the build tree, NOTICE.md).
 The caller zips it (macOS: ditto, so bundles and signatures survive; Windows: any zip).
 usage: tools/package_in07.py <build dir> <out dir> <windows-x64|macos-universal|linux-x64> <version>
-Needs the Python package "markdown"."""
+Needs the Python package "markdown". File names are ASCII: a zip made on Windows may not carry other characters intact."""
 import pathlib, shutil, sys
 
 import markdown
@@ -39,7 +39,7 @@ h1{font-size:28px;letter-spacing:.04em}h2{margin-top:2.2em;border-bottom:1px sol
 table{border-collapse:collapse;margin:12px 0;width:100%}td,th{border:1px solid #d5e2dd;padding:6px 10px;vertical-align:top;text-align:left}th{background:#f1f6f4}
 code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:#f1f6f4;padding:1px 4px;border-radius:3px}hr{border:0;border-top:1px solid #d5e2dd}
 @media (prefers-color-scheme:dark){body{background:#0c1112;color:#e8e8e8}th{background:#141c1d}td,th{border-color:#2a3432}code{background:#141c1d}h2{border-color:#2a3432}}"""
-for src, title, fname in [('manual_ja.md', 'SWINGBY 取扱説明書', 'SWINGBY マニュアル（日本語）.html'), ('manual_en.md', 'SWINGBY User Guide', 'SWINGBY Manual (English).html')]:
+for src, title, fname in [('manual_ja.md', 'SWINGBY 取扱説明書', 'SWINGBY Manual (Japanese).html'), ('manual_en.md', 'SWINGBY User Guide', 'SWINGBY Manual (English).html')]:
     text = (REPO / 'docs/dist/in07' / src).read_text(encoding='utf-8').replace('〔VERSION〕', version)
     body = markdown.markdown(text, extensions=['tables'])
     lang = 'ja' if src.endswith('_ja.md') else 'en'
@@ -57,7 +57,7 @@ where = {
 [日本語]
 使う形式のファイルを次のフォルダにコピーして、DAW を起動し直してください。
 {where}
-くわしくは「SWINGBY マニュアル（日本語）.html」。ライセンスがない間は体験版として動きます
+くわしくは「SWINGBY Manual (Japanese).html」（日本語のマニュアル）。ライセンスがない間は体験版として動きます
 （起動から 30 秒後、そのあと 60 秒ごとに 3 秒の無音）。有効化はプラグインの画面右上のライセンスの表示から。
 
 [English]
