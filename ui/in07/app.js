@@ -183,7 +183,22 @@
       el('p', { style: { fontSize: '13px' }, text: server ? 'ライセンスキーを入れて ACTIVATE。ネットのないパソコンは、別のパソコンでこのコードとキーから受け取ったライセンスファイルを LICENCE FILE で読み込みます。' : 'ライセンスファイル（.swlicense）を LICENCE FILE で読み込みます。' }),
       msg, file);
     const scrim = dialog('LICENCE', body, server ? [close, fromFile, activate] : [close, fromFile]);
-    copy.addEventListener('click', () => { try { navigator.clipboard.writeText(SW.licence.machine || ''); SW.toast('COPIED'); } catch (e) { /* none */ } });
+    // the clipboard API may be refused in a plug-in's web view (a page from a string has no secure origin): then a hidden text field
+    // and the old copy command, and when that fails too the code is selected for the user's own Ctrl+C / Cmd+C
+    copy.addEventListener('click', () => {
+      const text = SW.licence.machine || '';
+      const fallback = () => {
+        const t = el('textarea', { style: { position: 'fixed', left: '-1000px', top: '0', opacity: '0' } });
+        t.value = text; document.body.appendChild(t); t.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        t.remove();
+        if (ok) { SW.toast('COPIED'); return; }
+        const r = document.createRange(); r.selectNodeContents(code); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        SW.toast('SELECTED · CTRL+C / ⌘C');
+      };
+      try { navigator.clipboard.writeText(text).then(() => SW.toast('COPIED'), fallback); } catch (e) { fallback(); }
+    });
     fromFile.addEventListener('click', () => file.click());
     file.addEventListener('change', () => {
       const f = file.files && file.files[0]; if (!f) return;

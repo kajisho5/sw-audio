@@ -13,6 +13,23 @@
 }
 @end
 
+// <input type="file"> in a WKWebView does nothing until the app answers the open panel (the instruments' licence file, for example):
+// a sheet on the host's window when there is one, else a panel of its own
+@interface SWUIDelegate : NSObject <WKUIDelegate>
+@end
+@implementation SWUIDelegate
+- (void)webView:(WKWebView*)webView runOpenPanelWithParameters:(WKOpenPanelParameters*)parameters initiatedByFrame:(WKFrameInfo*)frame
+    completionHandler:(void (^)(NSArray<NSURL*>* _Nullable URLs))completionHandler {
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = parameters.allowsMultipleSelection;
+    void (^done)(NSModalResponse) = ^(NSModalResponse r) { completionHandler(r == NSModalResponseOK ? panel.URLs : nil); };
+    if (webView.window) [panel beginSheetModalForWindow:webView.window completionHandler:done];
+    else [panel beginWithCompletionHandler:done];
+}
+@end
+
 namespace sw::gui {
 namespace {
 class MacView : public View {
@@ -27,6 +44,8 @@ public:
         [cfg.userContentController addScriptMessageHandler:handler_ name:@"sw"];
         container_ = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 960, 550)];
         web_ = [[WKWebView alloc] initWithFrame:container_.bounds configuration:cfg];
+        ui_ = [[SWUIDelegate alloc] init];
+        web_.UIDelegate = ui_;   // a weak reference in WebKit: kept alive by ui_
         web_.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
         [web_ setValue:@NO forKey:@"drawsBackground"];
         [container_ addSubview:web_];
@@ -35,6 +54,7 @@ public:
     ~MacView() override {
         [web_.configuration.userContentController removeScriptMessageHandlerForName:@"sw"];
         handler_.callback = nullptr;
+        web_.UIDelegate = nil;
         [container_ removeFromSuperview];
     }
     bool setParent(void* h) override { NSView* parent = (__bridge NSView*)h; if (!parent) return false; [parent addSubview:container_]; container_.frame = NSMakeRect(0, 0, container_.frame.size.width, container_.frame.size.height); return true; }
@@ -45,6 +65,7 @@ private:
     std::function<std::string(const std::string&)> onMessage_;
     std::function<void(const std::string&)> callback_;
     SWMessageHandler* handler_ = nil;
+    SWUIDelegate* ui_ = nil;
     NSView* container_ = nil;
     WKWebView* web_ = nil;
 };

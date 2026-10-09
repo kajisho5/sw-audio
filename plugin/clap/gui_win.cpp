@@ -66,7 +66,13 @@ private:
                     if (!alive->load()) return S_OK;
                     if (FAILED(hr2) || !c) { showMissing(); return S_OK; }
                     controller_ = c; c->get_CoreWebView2(&webview_);
-                    ComPtr<ICoreWebView2Settings> st; if (SUCCEEDED(webview_->get_Settings(&st)) && st) { st->put_AreDefaultContextMenusEnabled(FALSE); st->put_AreDevToolsEnabled(FALSE); st->put_IsStatusBarEnabled(FALSE); st->put_IsZoomControlEnabled(FALSE); }
+                    ComPtr<ICoreWebView2Settings> st;
+                    if (SUCCEEDED(webview_->get_Settings(&st)) && st) {
+                        st->put_AreDefaultContextMenusEnabled(FALSE); st->put_AreDevToolsEnabled(FALSE); st->put_IsStatusBarEnabled(FALSE); st->put_IsZoomControlEnabled(FALSE);
+                        // F5 / Ctrl+R would reload the page into nothing (it came from a string), Ctrl+P would print: off (editing keys stay)
+                        ComPtr<ICoreWebView2Settings3> s3;
+                        if (SUCCEEDED(st.As(&s3)) && s3) s3->put_AreBrowserAcceleratorKeysEnabled(FALSE);
+                    }
                     EventRegistrationToken tok;
                     webview_->add_WebMessageReceived(Callback<ICoreWebView2WebMessageReceivedEventHandler>([this, alive](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* a) -> HRESULT {
                         if (!alive->load()) return S_OK;
