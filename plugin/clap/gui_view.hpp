@@ -21,4 +21,9 @@ const char* platformApi();
 // onMessage(text) is called on the UI thread for every message the page posts; its result, when not empty, is evaluated in the page
 std::unique_ptr<View> createView(const std::string& html, std::function<std::string(const std::string&)> onMessage, double scale);
 
+#ifdef _WIN32
+// the real Documents folder (it may be redirected, for example into OneDrive), UTF-8; "" when unknown. gui_win.cpp
+std::string nativeDocumentsDir();
+#endif
+
 }  // namespace sw::gui

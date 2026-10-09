@@ -1,6 +1,7 @@
 // Windows: the plug-in window is a child window of the host's parent HWND that carries a WebView2 (Edge) control.
 #include "gui_view.hpp"
 #include <windows.h>
+#include <shlobj.h>
 #include <wrl.h>
 #include <WebView2.h>
 #include <atomic>
@@ -88,4 +89,10 @@ private:
 
 const char* platformApi() { return "win32"; }
 std::unique_ptr<View> createView(const std::string& html, std::function<std::string(const std::string&)> onMessage, double) { return std::make_unique<WinView>(html, std::move(onMessage)); }
+std::string nativeDocumentsDir() {
+    wchar_t buf[MAX_PATH] = {};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, buf)) || !buf[0]) return "";
+    return narrow(buf);
+}
+
 }  // namespace sw::gui
