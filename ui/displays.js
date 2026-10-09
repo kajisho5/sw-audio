@@ -1343,6 +1343,26 @@
   }
 
 
+  // ---- LV27 / LV28: the connections they show are not in this version (LV27 has no link to OBS, LV28 has no tablet server: README), so the design's example data (an OBS scene table, "OBS connected",
+  // "2 devices", iPad / iPhone rows, the address and the QR code) would be false. They are replaced by a plain statement; the toggles and values that are real parameters stay.
+  function offlineStub(box, ctx, kind) {
+    const stat = box.querySelector('.stat'), dot = stat && stat.querySelector('.dot'), disp = box.querySelector('.disp > div'); if (!stat || !disp) return null;
+    const grey = d => { if (d) { d.style.background = '#55575c'; d.style.boxShadow = 'none'; } };
+    const note = text => { const n = document.createElement('div'); n.className = 'leng'; n.style.cssText = 'padding:10px 12px;font-size:13px;letter-spacing:.06em;line-height:1.5;text-transform:none;white-space:normal;color:#9a9a9a'; n.textContent = text; return n; };
+    grey(dot);
+    if (kind === 'LV27') {
+      stat.lastChild.textContent = 'OBS: not connected';
+      [...disp.children].forEach((c, i) => { if (i > 0) c.style.display = 'none'; });
+      disp.append(note('The link to OBS is not part of this version, so there are no scenes to show. Scene changes cannot reach the presets yet.'));
+    } else {
+      stat.lastChild.textContent = 'No server';
+      const [qr, right] = [...disp.children]; if (qr) { qr.style.opacity = '0.07'; qr.title = 'Not available: this version has no tablet server'; }
+      if (right) { [...right.children].forEach((c, i) => { if (i > 0) c.style.display = 'none'; }); const box1 = right.firstElementChild; if (box1 && box1.lastElementChild) { box1.lastElementChild.textContent = 'Not available yet'; } right.append(note('The tablet server is not part of this version: no address, no devices. Allow control, Require PIN and the default permission are saved for when it is.')); }
+    }
+    return null;
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1381,6 +1401,7 @@
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
+    LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
