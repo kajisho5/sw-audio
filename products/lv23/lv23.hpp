@@ -6,6 +6,7 @@
 //   **The delivery format of the log is not known (the spec's open point); the CSV here is: header "elapsed,clock,momentary_lufs,short_term_lufs,integrated_lufs,range_lu,true_peak_dbtp,dead_air", one line per second.**
 #pragma once
 #include "mt01/mt01.hpp"
+#include "sw/copy_atomic.hpp"
 #include "sw/param.hpp"
 #include <array>
 #include <string>
@@ -18,6 +19,14 @@ enum PresetId { Arib = 0, Ebu = 1, Stream = 2 };
 constexpr int kLogSeconds = 24 * 3600;
 
 struct LogRecord { float momentary, shortTerm, integrated, range, truePeak; unsigned char dead; };
+// one row of the log in the ring: the audio thread writes it, the GUI thread reads it for Export log. Every field is an atomic (no data race; a row the audio thread is overwriting
+// while it is read may mix two seconds, which is the "one row of the newest second" the export accepts)
+struct LogSlot {
+    CopyAtomic<float> momentary{0.f}, shortTerm{0.f}, integrated{0.f}, range{0.f}, truePeak{0.f};
+    CopyAtomic<unsigned char> dead{0};
+    void store(const LogRecord& r) { momentary.store(r.momentary); shortTerm.store(r.shortTerm); integrated.store(r.integrated); range.store(r.range); truePeak.store(r.truePeak); dead.store(r.dead); }
+    LogRecord load() const { return LogRecord{momentary.load(), shortTerm.load(), integrated.load(), range.load(), truePeak.load(), dead.load()}; }
+};
 
 const std::vector<ParamSpec>& specs();
 
@@ -40,17 +49,17 @@ public:
     bool inBand() const { return mt_.inBand(); }
     bool deadAirSeen() const { return dead_; }
     bool tpOver() const { return tpOver_; }
-    int logCount() const { return static_cast<int>(std::min<long long>(records_, kLogSeconds)); }
+    int logCount() const { return static_cast<int>(std::min<long long>(records_.load(), kLogSeconds)); }
     void setStartTime(double unixSeconds) { start_ = unixSeconds; }
     std::string exportCsv() const;
 
 private:
     double fs_ = 48000.0, start_ = 0.0, quiet_ = 0.0, sinceLog_ = 0.0;
     bool prepared_ = false, dead_ = false, tpOver_ = false;
-    long long records_ = 0;
+    CopyAtomic<long long> records_{0};   // rows written (the audio thread; read by Export log on the GUI thread)
     std::array<double, kNumParams> target_{};
     mt01::Processor mt_;
-    std::vector<LogRecord> log_;
+    std::vector<LogSlot> log_;
 };
 
 }  // namespace sw::lv23

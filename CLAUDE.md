@@ -57,6 +57,7 @@ python3 tools/gen_skins.py && python3 tools/check_skins.py   # 画面とパラ�
 node tests/ui/refload.test.js   # UT03・RV04 の読み込み（ページが作る WAV・base64 の断片・概観）。curves・traits・shapes と同じく CI の Linux ジョブで走る
 NODE_PATH=$(npm root -g) node tools/audit_static_text.js [コード]   # 画面で数字が動かない文字（デザインの例の数字の残り）を探す（preview を http.server で配っておく）
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
+tools/stress_tsan.sh [秒] [製品コード…]    # 音声スレッドと窓のスレッドを同時に当てて ThreadSanitizer でデータ競合を探す（build-tsan。全製品で約 40 分）
 # ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
 g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
     $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) tests/test_main.cpp -o /tmp/tests_asan && /tmp/tests_asan

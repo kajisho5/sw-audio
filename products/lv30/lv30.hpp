@@ -8,6 +8,7 @@
 //   Auto start On starts at prepare() — only when a folder has been chosen (setFolder(): the screen's folder picker; the default "Documents" is not touched until the person has chosen one, so a plain load writes nothing). The folder is saved with the project (saveExtra).
 //   Low disk space: the writer checks the free space once a second; under 200 MB it stops with lowDisk() true (the spec's open point: no old files are deleted).
 #pragma once
+#include "sw/copy_atomic.hpp"
 #include "sw/param.hpp"
 #include <array>
 #include <atomic>
@@ -61,7 +62,7 @@ private:
     void writer();
     double fs_ = 48000.0;
     bool prepared_ = false;
-    std::array<double, kNumParams> target_{};
+    std::array<CopyAtomic<double>, kNumParams> target_{};   // written by the host's automation (audio thread), read by start() and the writer thread
     // ring
     std::vector<float> ring_; size_t mask_ = 0;
     std::atomic<size_t> head_{0}, tail_{0};      // frames
