@@ -32,6 +32,8 @@ private:
     double goalFloor() const;
     double goalInterp() const;
     double fs_ = 48000.0, gF_ = 1.0, gI_ = 0.0;
+    static constexpr int kPiece = 32;   // the grid of the stream on which the interpreter's activity is read
+    int ph_ = 0;
     bool prepared_ = false, speaking_ = false;
     std::array<double, kNumParams> target_{};
     VoiceDetector vd_;

@@ -31,8 +31,15 @@ void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || numCh < 1 || n <= 0) return;
     if (static_cast<size_t>(n) > mono_.size()) mono_.assign(static_cast<size_t>(n), 0.0f);
     for (int i = 0; i < n; ++i) mono_[static_cast<size_t>(i)] = numCh > 1 ? 0.5f * (ch[0][i] + ch[1][i]) : ch[0][i];
-    vd_.process(mono_.data(), n);
-    stft_.process(ch, std::min(numCh, 2), n, *this);
+    // the voice detector is fed up to the frame (not the whole host block first): what frame() reads is the same whatever the block size is
+    const int nc = std::min(numCh, 2);
+    for (int off = 0; off < n;) {
+        const int m = std::min(n - off, stft_.toNextFrame());
+        vd_.process(mono_.data() + off, m);
+        float* p[2] = {ch[0] + off, nc > 1 ? ch[1] + off : nullptr};
+        stft_.process(p, nc, m, *this);
+        off += m;
+    }
 }
 
 void Processor::frame(std::complex<double>* const* spec, int nch, int nbins) {

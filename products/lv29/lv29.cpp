@@ -18,7 +18,7 @@ const std::vector<ParamSpec>& specs() {
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
-    fs_ = sampleRate; vd_.prepare(fs_); mono_.assign(static_cast<size_t>(std::max(1, maxBlock) + 8), 0.0f); speaking_ = false; prepared_ = true; gF_ = goalFloor(); gI_ = goalInterp();
+    fs_ = sampleRate; vd_.prepare(fs_); mono_.assign(static_cast<size_t>(std::max(1, maxBlock) + 8), 0.0f); speaking_ = false; ph_ = 0; prepared_ = true; gF_ = goalFloor(); gI_ = goalInterp();
 }
 void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cast<size_t>(id)]; target_[static_cast<size_t>(id)] = sp.toValue(sp.toNorm(v)); }
 
@@ -37,11 +37,18 @@ void Processor::processWithSidechain(float** ch, int numCh, int n, const float* 
     if (!hasInterp) return;   // nothing to mix: the floor passes
     if (static_cast<size_t>(n) > mono_.size()) mono_.assign(static_cast<size_t>(n), 0.0f);
     for (int i = 0; i < n; ++i) mono_[static_cast<size_t>(i)] = scCh > 1 && sc[1] ? 0.5f * (sc[0][i] + sc[1][i]) : sc[0][i];
-    speaking_ = vd_.process(mono_.data(), n);
-    const double a = 1.0 - std::exp(-3.0 / (0.001 * target_[Crossfade] * fs_)), gfT = goalFloor(), giT = goalInterp();
-    for (int i = 0; i < n; ++i) {
-        gF_ += a * (gfT - gF_); gI_ += a * (giT - gI_);
-        for (int c = 0; c < nc; ++c) { const float y = static_cast<float>(ch[c][i] * gF_ + mono_[static_cast<size_t>(i)] * gI_); ch[c][i] = std::abs(y) < 1e-30f ? 0.0f : y; }
+    // the interpreter is judged on a grid of the stream (every kPiece samples, wherever the host's block starts): the detector is fed up to the end of each piece, the goal for the next piece follows
+    const double a = 1.0 - std::exp(-3.0 / (0.001 * target_[Crossfade] * fs_));
+    for (int off = 0; off < n;) {
+        const int m = std::min(kPiece - ph_, n - off);
+        vd_.process(mono_.data() + off, m);
+        const double gfT = goalFloor(), giT = goalInterp();
+        for (int i = off; i < off + m; ++i) {
+            gF_ += a * (gfT - gF_); gI_ += a * (giT - gI_);
+            for (int c = 0; c < nc; ++c) { const float y = static_cast<float>(ch[c][i] * gF_ + mono_[static_cast<size_t>(i)] * gI_); ch[c][i] = std::abs(y) < 1e-30f ? 0.0f : y; }
+        }
+        off += m; ph_ += m;
+        if (ph_ >= kPiece) { ph_ = 0; speaking_ = vd_.active(); }
     }
 }
 

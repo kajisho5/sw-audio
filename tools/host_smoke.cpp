@@ -811,18 +811,18 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
 // every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
 struct TimedParam { size_t at; clap_id id; double v; };
 struct Cut { const char* name; std::vector<uint32_t> sizes; };
-void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
+void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<float>* sc, const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
     const size_t total = in[0].size(); uint32_t maxSize = 1; for (uint32_t z : sizes) maxSize = std::max(maxSize, z);
-    std::vector<float> bi[2], bo[2]; for (int c = 0; c < 2; ++c) { bi[c].resize(maxSize); bo[c].resize(maxSize); out[c].assign(total, 0.0f); }
+    std::vector<float> bi[2], bs[2], bo[2]; for (int c = 0; c < 2; ++c) { bi[c].resize(maxSize); bs[c].resize(maxSize); bo[c].resize(maxSize); out[c].assign(total, 0.0f); }
     size_t pos = 0, k = 0, ti = 0;
     while (pos < total) {
         const uint32_t n = static_cast<uint32_t>(std::min<size_t>(sizes[k++ % sizes.size()], total - pos));
         EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { ev.set(tp[ti].id, tp[ti].v, static_cast<uint32_t>(tp[ti].at - pos)); ++ti; }
-        for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); }
-        float* ip[2] = {bi[0].data(), bi[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
-        clap_audio_buffer_t ib{}; ib.channel_count = 2; ib.data32 = ip; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
+        for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); if (sc) std::copy(sc[c].begin() + static_cast<long>(pos), sc[c].begin() + static_cast<long>(pos + n), bs[c].begin()); }
+        float* ip[2] = {bi[0].data(), bi[1].data()}; float* sp[2] = {bs[0].data(), bs[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
+        clap_audio_buffer_t ib[2]{}; ib[0].channel_count = 2; ib[0].data32 = ip; ib[1].channel_count = 2; ib[1].data32 = sp; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
         clap_output_events_t oe{nullptr, outTryPush}; clap_process_t pr{};
-        pr.steady_time = -1; pr.frames_count = n; pr.audio_inputs = &ib; pr.audio_inputs_count = 1; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
+        pr.steady_time = -1; pr.frames_count = n; pr.audio_inputs = ib; pr.audio_inputs_count = sc ? 2 : 1; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
         if (a.p->process(a.p, &pr) == CLAP_PROCESS_ERROR) bad = true;
         for (int c = 0; c < 2; ++c) for (uint32_t i = 0; i < n; ++i) { out[c][pos + i] = bo[c][i]; if (!std::isfinite(bo[c][i])) bad = true; }
         pos += n;
@@ -831,15 +831,30 @@ void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<Tim
 bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& differ) {
     bool ok = true; differ = 0;
     const size_t total = static_cast<size_t>(kSr * 0.7);
-    const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
-    struct Scenario { const char* name; float level; bool events; };
-    const Scenario scenarios[] = {{"steady, -20 dBFS noise", 0.1732f, false}, {"steady, loud (peaks over 0 dBFS)", 1.0f, false}, {"-20 dBFS noise + 3 parameter events", 0.1732f, true}};
+    const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 0, 2, 3, 0, 5, 8, 13, 21, 0, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
+    struct Scenario { const char* name; float level; bool events; bool bursts; bool sidechain; };
+    const Scenario scenarios[] = {{"steady, -20 dBFS noise", 0.1732f, false, false, false}, {"steady, loud (peaks over 0 dBFS)", 1.0f, false, false, false}, {"steady, tone bursts with pauses", 0.25f, false, true, false},
+                                  {"sidechain connected (noise in, tone bursts on the sidechain)", 0.1732f, false, false, true}, {"-20 dBFS noise + 3 parameter events", 0.1732f, true, false, false}};
     for (const auto& f : files) {
         const std::string name = f.stem().string();
         std::vector<TimedParam> tp; bool bad = false; std::string why; std::vector<uint8_t> state;   // the state of the first instance goes into every other one (SA02: the seed of its component tolerances is saved with the project)
         std::vector<std::string> rows; double worstAll = -400.0; bool failed = false, differs = false;
         for (const auto& sc : scenarios) {
-            std::vector<float> in[2]; { Rng rng(77); for (int c = 0; c < 2; ++c) { in[c].resize(total); for (auto& x : in[c]) x = rng.next() * sc.level; } }
+            std::vector<float> in[2];
+            {   // noise, or a 220 Hz tone in bursts (0.12 s on, 0.1 s off) over a faint noise floor: what gates, detectors and pitch trackers need to act
+                Rng rng(77);
+                for (int c = 0; c < 2; ++c) {
+                    in[c].resize(total);
+                    for (size_t i = 0; i < total; ++i) {
+                        const float nz = rng.next();
+                        if (!sc.bursts) { in[c][i] = nz * sc.level; continue; }
+                        const bool on = std::fmod(static_cast<double>(i) / kSr, 0.22) < 0.12;
+                        in[c][i] = nz * 0.001f + (on ? sc.level * static_cast<float>(std::sin(6.283185307179586 * 220.0 * static_cast<double>(i) / kSr)) : 0.0f);
+                    }
+                }
+            }
+            std::vector<float> scIn[2]; bool noSidechain = false;
+            if (sc.sidechain) for (int c = 0; c < 2; ++c) { scIn[c].resize(total); for (size_t i = 0; i < total; ++i) scIn[c][i] = std::fmod(static_cast<double>(i) / kSr, 0.22) < 0.12 ? 0.25f * static_cast<float>(std::sin(6.283185307179586 * (330.0 + 110.0 * c) * static_cast<double>(i) / kSr)) : 0.0f; }
             auto runCut = [&](const std::vector<uint32_t>& sizes, std::vector<float> out[2]) -> bool {
                 Loaded a; if (!a.open(f, why, 1024)) return false;
                 const auto* st = static_cast<const clap_plugin_state_t*>(a.p->get_extension(a.p, CLAP_EXT_STATE));
@@ -854,10 +869,15 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
                         tp.push_back({at[e], info[i].id, v});
                     }
                 }
-                processCut(a, in, sc.events ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
+                if (sc.sidechain) {
+                    const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+                    if (!ports || ports->count(a.p, true) < 2) { noSidechain = true; a.close(); return true; }
+                }
+                processCut(a, in, sc.sidechain ? scIn : nullptr, sc.events ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
             };
             std::vector<float> ref[2];
             if (!runCut({256}, ref)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
+            if (noSidechain) continue;   // this product has no sidechain input
             double peak = 1e-9; for (int c = 0; c < 2; ++c) for (float x : ref[c]) peak = std::max(peak, static_cast<double>(std::fabs(x)));
             std::string row = std::string("  ") + sc.name + ":";
             for (const auto& cut : cuts) {

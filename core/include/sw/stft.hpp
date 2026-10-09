@@ -28,6 +28,8 @@ public:
     }
     void reset() { for (int c = 0; c < 2; ++c) { std::fill(in_[c].begin(), in_[c].end(), 0.0f); std::fill(oa_[c].begin(), oa_[c].end(), 0.0f); } wpos_ = 0; t_ = 0; }
     int latency() const { return n_; }
+    // samples until the next frame is handed to the handler: a caller that has to feed something (a detector) up to exactly the frame's time cuts its block there
+    int toNextFrame() const { return hop_ - static_cast<int>(t_ % hop_); }
     int size() const { return n_; }
     // in place; nch is the channel count of ch (1 or 2); with nch == 1 the handler sees one channel
     void process(float** ch, int nch, int num, Handler& h) {

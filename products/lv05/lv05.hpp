@@ -36,7 +36,10 @@ private:
     std::array<double, kNumParams> target_{};
     VoiceDetector vd_;
     double gDb_ = 0, env_ = 0, floor_ = 1e-4, holdLeft_ = 0;
-    bool keyOn_ = false;
+    bool keyOn_ = false, ducking_ = false;
+    static constexpr int kPiece = 64;   // the key decision grid of the stream
+    int ph_ = 0;
+    double pkAcc_ = 0;
     std::vector<float> mono_;
 };
 

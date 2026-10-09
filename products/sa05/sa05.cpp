@@ -97,40 +97,47 @@ void Processor::process(float** ch, int numCh, int n) {
     const int mode = static_cast<int>(target_[Mode] + 0.5);
     const double amount = target_[Harmonics] / 100.0, lowAmt = kLowScale * target_[LowDrive] / 100.0;
     const bool autoFill = target_[AutoFill] > 0.5, monoLow = target_[MonoLow] > 0.5 && nch > 1;
-    // Auto fill analysis on the mono sum of the input, every 100 ms of audio
-    if (autoFill) {
-        for (int i = 0; i < n; ++i) an_.push(nch > 1 ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i]);
-        sinceAnalysis_ += n;
-        if (sinceAnalysis_ >= static_cast<int>(0.1 * fs_)) { sinceAnalysis_ = 0; analyse(); for (size_t r = 0; r < 3; ++r) fill_[r] += (fillWant_[r] - fill_[r]) * fillC_; updateFilters(); }
-    }
-    for (int i = 0; i < n; ++i) {
-        double x[2] = {0, 0}, harm[2] = {0, 0}, lowH[2] = {0, 0};
-        for (int c = 0; c < nch; ++c) x[c] = ch[c][i];
-        for (int c = 0; c < nch; ++c) {
-            const size_t cc = static_cast<size_t>(c);
-            const double band = hp_[cc].process(x[c]);
-            double h = genHi_[cc].process(band, mode, msC_);
-            harm[c] = post_[cc].process(h);   // keep only what lies above Tune (intermodulation and DC fall away)
+    // Auto fill analysis on the mono sum of the input, every 100 ms of audio: the audio is worked on in pieces that end where the analysis is due, so it happens at the same sample
+    // whatever the host's block size is (and the filters it sets apply from the next piece on)
+    const int interval = std::max(1, static_cast<int>(0.1 * fs_));
+    for (int start = 0; start < n;) {
+        int len = n - start;
+        if (autoFill) {
+            len = std::min(len, std::max(1, interval - sinceAnalysis_));
+            for (int i = start; i < start + len; ++i) an_.push(nch > 1 ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i]);
+            sinceAnalysis_ += len;
         }
-        if (lowAmt > 0.0) {
-            if (monoLow) {
-                const double m = 0.5 * (x[0] + x[1]);
-                const double lo = lows_[0][1].process(lows_[0][0].process(m));
-                const double h = lowHp_[0].process(genLo_[0].process(lo, mode, msC_)) * lowAmt;
-                lowH[0] = lowH[1] = h;
-            } else {
-                for (int c = 0; c < nch; ++c) { const size_t cc = static_cast<size_t>(c); const double lo = lows_[cc][1].process(lows_[cc][0].process(x[c])); lowH[c] = lowHp_[cc].process(genLo_[cc].process(lo, mode, msC_)) * lowAmt; }
+        for (int i = start; i < start + len; ++i) {
+            double x[2] = {0, 0}, harm[2] = {0, 0}, lowH[2] = {0, 0};
+            for (int c = 0; c < nch; ++c) x[c] = ch[c][i];
+            for (int c = 0; c < nch; ++c) {
+                const size_t cc = static_cast<size_t>(c);
+                const double band = hp_[cc].process(x[c]);
+                double h = genHi_[cc].process(band, mode, msC_);
+                harm[c] = post_[cc].process(h);   // keep only what lies above Tune (intermodulation and DC fall away)
+            }
+            if (lowAmt > 0.0) {
+                if (monoLow) {
+                    const double m = 0.5 * (x[0] + x[1]);
+                    const double lo = lows_[0][1].process(lows_[0][0].process(m));
+                    const double h = lowHp_[0].process(genLo_[0].process(lo, mode, msC_)) * lowAmt;
+                    lowH[0] = lowH[1] = h;
+                } else {
+                    for (int c = 0; c < nch; ++c) { const size_t cc = static_cast<size_t>(c); const double lo = lows_[cc][1].process(lows_[cc][0].process(x[c])); lowH[c] = lowHp_[cc].process(genLo_[cc].process(lo, mode, msC_)) * lowAmt; }
+                }
+            }
+            for (int c = 0; c < nch; ++c) {
+                const size_t cc = static_cast<size_t>(c);
+                double h = harm[c];
+                if (autoFill) h = fillEq_[cc].r3.process(fillEq_[cc].r2.process(fillEq_[cc].r1.process(h)));
+                double y = x[c] + amount * h + lowH[c];
+                if (!std::isfinite(y)) y = 0.0;
+                if (std::abs(y) < 1e-30) y = 0.0;
+                ch[c][i] = static_cast<float>(y);
             }
         }
-        for (int c = 0; c < nch; ++c) {
-            const size_t cc = static_cast<size_t>(c);
-            double h = harm[c];
-            if (autoFill) h = fillEq_[cc].r3.process(fillEq_[cc].r2.process(fillEq_[cc].r1.process(h)));
-            double y = x[c] + amount * h + lowH[c];
-            if (!std::isfinite(y)) y = 0.0;
-            if (std::abs(y) < 1e-30) y = 0.0;
-            ch[c][i] = static_cast<float>(y);
-        }
+        if (autoFill && sinceAnalysis_ >= interval) { sinceAnalysis_ = 0; analyse(); for (size_t r = 0; r < 3; ++r) fill_[r] += (fillWant_[r] - fill_[r]) * fillC_; updateFilters(); }
+        start += len;
     }
 }
 
