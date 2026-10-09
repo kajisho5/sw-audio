@@ -65,12 +65,14 @@ jobs:
         if: matrix.shard == 0
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: UI data checks (curves, traits)
+      - name: UI data checks (curves, traits, shapes, screens vs parameter tables)
         if: matrix.shard == 0 && runner.os == 'Linux'
         run: |
           node tests/ui/curves.test.js
           node tests/ui/traits.test.js
           node tests/ui/shapes.test.js
+          python3 tools/gen_skins.py > /dev/null
+          python3 tools/check_skins.py
 
       - name: Host smoke test (Linux)
         if: matrix.shard == 0 && runner.os == 'Linux'

@@ -37,7 +37,7 @@
   ]
  },
  "DY02": {
-  "peak reduction": 1,
+  "peak reduction": 0,
   "_static": {
    "meter": {
     "kind": "switch",
@@ -47,7 +47,8 @@
      "+10"
     ]
    }
-  }
+  },
+  "gain": 1
  },
  "EQ06": {
   "hz": [
