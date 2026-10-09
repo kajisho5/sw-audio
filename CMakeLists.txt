@@ -51,9 +51,10 @@ target_link_libraries(sw-lv30 PUBLIC Threads::Threads)
 # ---- the plug-in screen: the runtime and the product data become one header (build/gen/gui_assets.hpp)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(SW_GUI_ASSETS ${CMAKE_BINARY_DIR}/gen/gui_assets.hpp)
+file(GLOB SW_FONT_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/ui/fonts/*.woff2)
 add_custom_command(OUTPUT ${SW_GUI_ASSETS}
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${SW_GUI_ASSETS}
-    DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${CMAKE_SOURCE_DIR}/ui/sw-ui.css ${CMAKE_SOURCE_DIR}/ui/sw-ui.js ${CMAKE_SOURCE_DIR}/ui/displays.js ${CMAKE_SOURCE_DIR}/ui/host.js ${CMAKE_SOURCE_DIR}/ui/products.json
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/embed_ui.py ${CMAKE_SOURCE_DIR}/ui/sw-ui.css ${CMAKE_SOURCE_DIR}/ui/fonts.css ${SW_FONT_FILES} ${CMAKE_SOURCE_DIR}/ui/sw-ui.js ${CMAKE_SOURCE_DIR}/ui/displays.js ${CMAKE_SOURCE_DIR}/ui/host.js ${CMAKE_SOURCE_DIR}/ui/products.json
     COMMENT "Embedding the plug-in screen")
 add_custom_target(sw-gui-assets DEPENDS ${SW_GUI_ASSETS})
 

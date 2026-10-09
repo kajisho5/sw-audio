@@ -941,7 +941,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 - **共通ランタイム `ui/sw-ui.js`。** 製品のパラメータ表から画面を自動で組み立てる：連続値は弧ノブ（ドラッグ・ホイール・ダブルクリックで既定値・値のクリックで数値入力）、段階値は 2 択ならボタン、6 択まではボタン列、それ以上はメニュー、Hold to… はおしている間だけ効くボタン、Band の並びはフェーダー。名前の前半が同じものは区画にまとめる（EQ05 の HF／HMF …、GT03 の Pedal 1〜8）。ツールバー（型番バッジ・名前・LIVE の遅延・A／B・Undo／Redo・Auto gain・Delta）、EVO バー、CPU の実測値（1 ブロックの処理時間÷長さ）を出す。色はカテゴリ色。曲線と値の書式は `sw::ParamSpec` と同じで、`tests/ui/curves.test.js` が 8055 点で C++ の値と一致を確かめる（`node tests/ui/curves.test.js`）。
 - **プラグインとの通信。** 画面は `ui/host.js` の `bridge`（値・set・begin／end・call・onChange・info）だけを通す。ネイティブ側へはテキスト 1 行（`s <番号> <値>`、`b`／`e`＝ジェスチャの開始と終了、`c`＝ボタン、`p`＝50 ms ごとの問い合わせ）を投げ、答えは `SWHOST.update([...値], 遅延ms, CPU)`。処理は `plugin/clap/gui_bridge.hpp`（プラットフォームに依存しない：ページ組み立て・メッセージ解釈・応答。`tests/test_gui_bridge.cpp`）。画面の操作は待ち行列を通って音声スレッドでホストのパラメータイベント（begin／value／end）になるので、オートメーションに記録できる。素材は `tools/embed_ui.py` が 1 つのヘッダーにして埋め込む。
 - **確認したこと／していないこと。** 全 132 製品の画面を Chromium（ヘッドレス）で描画して、実行時エラーが無く、ドラッグ・ダブルクリック・数値入力・ボタン・Undo・A/B が効くことを確かめた。**macOS と Windows の実機（ホストの中）では確かめていない**：Actions のビルドと validator が通ることだけ。
-- **まだ無いもの。** 製品ごとの専用表示（EQ カーブ・メーター・スペクトル・スコープなど。コアから値を渡す口も要る）、コアのメソッドを呼ぶボタン（Tap、Learn、Ring out など）、Blender 描画の素材とフォントの同梱（フォントは端末のもの）、Linux の窓、拡大縮小。`docs/tasks.md` の「画面（UI）」。
+- **まだ無いもの。** 製品ごとの専用表示（EQ カーブ・メーター・スペクトル・スコープなど。コアから値を渡す口も要る）、コアのメソッドを呼ぶボタン（Tap、Learn、Ring out など）、Blender 描画の素材の同梱（フォントは同梱済み：下記）、Linux の窓、拡大縮小。`docs/tasks.md` の「画面（UI）」。
 
 ## 全製品共通の部品
 
@@ -1043,6 +1043,10 @@ cmake/             MinGW 用ツールチェーン
 ## 手早いテスト（開発中）
 
 `./build_tests.sh` は CMake を使わずに単体テストだけを作る。`third_party/doctest.h`（doctest 2.4.11 の単一ヘッダー）を置いてから使う。正式な手順は上の CMake。
+
+### フォントの同梱（`ui/fonts/`、`ui/fonts.css`）
+
+Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（400・700）の latin サブセット（woff2、約 156 KB。出典は npm の @fontsource、SIL Open Font License 1.1、ライセンス文は `ui/fonts/LICENSE-*.txt`）。`tools/embed_ui.py` が `data:` URI にして画面の CSS の先頭に入れる（ネットワーク不要、端末にフォントが無くても同じ見た目）。`@font-face` は影の DOM の中では効かないため、ページ本体の `<style>` に置く。これまでプラグインの画面はフォントを読み込んでおらず、端末のフォントに頼っていた（プレビューだけ Google Fonts のリンク）。ネットワークを切ってブラウザで読み込めることを確認（DAW 内の WebView では未確認）。latin 以外の文字（日本語など）は含まない。
 
 ### 画面の中央の表示（`ui/displays.js`）
 

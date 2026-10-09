@@ -1,0 +1,8 @@
+/* SW AUDIO fonts (SIL Open Font License 1.1; see LICENSE-*.txt). Latin subset. The plug-in embeds these as data: URIs (tools/embed_ui.py). */
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:400;font-display:block;src:url(fonts/barlow-condensed-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:500;font-display:block;src:url(fonts/barlow-condensed-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:block;src:url(fonts/barlow-condensed-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:700;font-display:block;src:url(fonts/barlow-condensed-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Michroma';font-style:normal;font-weight:400;font-display:block;src:url(fonts/michroma-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Space Mono';font-style:normal;font-weight:400;font-display:block;src:url(fonts/space-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Space Mono';font-style:normal;font-weight:700;font-display:block;src:url(fonts/space-mono-latin-700-normal.woff2) format('woff2')}
