@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.14.0：132 製品が完成（単体テスト 1463 件（ASan・UBSan でも全合格）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッドと窓のスレッドを同時に）で全製品 0 件。GitHub Actions は run 158＝ブロック長に依存しないこと（`host_smoke --blocks`）・CR04 の修正・v0.14.0 まで Windows・macOS（auval の aumf を含む）・Linux で全ジョブ成功）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.14.0：132 製品が完成（単体テスト 1463 件（ASan・UBSan でも全合格）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッドと窓のスレッドを同時に）で全製品 0 件。GitHub Actions は run 166＝ブロック長（`host_smoke --blocks`）・テール・`reset()`・壊れた入力・CR04 の修正・v0.14.0 まで Windows・macOS（auval の aumf を含む）・Linux で全ジョブ成功）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 
