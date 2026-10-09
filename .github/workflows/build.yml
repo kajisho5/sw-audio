@@ -65,6 +65,12 @@ jobs:
         if: matrix.shard == 0
         run: ctest --test-dir build -C Release --output-on-failure
 
+      - name: UI data checks (curves, traits)
+        if: matrix.shard == 0 && runner.os == 'Linux'
+        run: |
+          node tests/ui/curves.test.js
+          node tests/ui/traits.test.js
+
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
         run: |
