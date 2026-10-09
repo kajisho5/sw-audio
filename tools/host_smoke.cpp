@@ -319,9 +319,10 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         const clap_id ll = idOf("Low lat"); if (ll == CLAP_INVALID_ID || !lat) { fail(code + ": no Low lat parameter or no latency extension"); return; }
         uint32_t offLat = 2048, onLat = 512;   // RS01: the 2048-point window / the 512-point one
         if (code == "MS04") { offLat = 48; onLat = 8; }   // the FIR oversampler / the IIR half-bands
-        if (code == "MS01") { offLat = 112; onLat = 40; }   // look-ahead 2 ms + true-peak interpolation / 0.5 ms + the same interpolation
-        if (code == "MS03") { offLat = 184; onLat = 88; }   // 2 + 1 + 0.5 ms and the interpolation / 0.5 + 0.5 + 0.5 ms and the interpolation
-        if (code == "CS04") { const clap_id lim = idOf("Limit"); if (lim == CLAP_INVALID_ID) { fail("CS04: no Limit"); return; } ev.set(lim, 1.0); run.process(3, 7, ev); restart(); offLat = 48; onLat = 1; }   // the limiter's look-ahead: 1 ms / 1 sample
+        auto msN = [&](double t) { return static_cast<uint32_t>(std::lround(t * 0.001 * kSr)); };   // look-aheads are milliseconds (the run may be at another sample rate: --rate)
+        if (code == "MS01") { offLat = msN(2.0) + 16; onLat = msN(0.5) + 16; }   // look-ahead 2 ms + true-peak interpolation (16) / 0.5 ms + the same interpolation
+        if (code == "MS03") { offLat = msN(2.0) + msN(1.0) + msN(0.5) + 16; onLat = 3 * msN(0.5) + 16; }   // 2 + 1 + 0.5 ms and the interpolation / 0.5 + 0.5 + 0.5 ms and the interpolation
+        if (code == "CS04") { const clap_id lim = idOf("Limit"); if (lim == CLAP_INVALID_ID) { fail("CS04: no Limit"); return; } ev.set(lim, 1.0); run.process(3, 7, ev); restart(); offLat = msN(1.0); onLat = 1; }   // the limiter's look-ahead: 1 ms / 1 sample
         const uint32_t before = lat->get(p); const int req0 = gRestartRequests;
         if (before != offLat) fail(code + ": the delay with Low lat Off should be " + std::to_string(offLat) + ", it is " + std::to_string(before));
         ev.set(ll, 1.0); run.process(3, 7, ev);
