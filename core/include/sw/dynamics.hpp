@@ -130,14 +130,19 @@ public:
         dpos_ = 0;
         ch_.assign(static_cast<size_t>(nch_), State{});
         for (auto& s : ch_) { s.qv.assign(static_cast<size_t>(L_ + 2 * M_ + 2), 1.0); s.qi.assign(static_cast<size_t>(L_ + 2 * M_ + 2), 0); s.box.assign(static_cast<size_t>(L_), 1.0); s.sum = L_; }
-        n_ = 0;
+        n_ = 0; sustained_ = 0; autoRel_ = false;
     }
     void set(double ceilingDb, double releaseMs, double link) {
         ceil_ = std::pow(10.0, ceilingDb / 20.0);
-        rel_ = Ballistics::coef(fs_, releaseMs);
+        rel_ = Ballistics::coef(fs_, releaseMs); autoRel_ = false;   // a fixed release; setAutoRelease() after this turns the automatic one on
         link_ = std::clamp(link, 0.0, 1.0);
     }
-    void setReleaseMs(double ms) { rel_ = Ballistics::coef(fs_, ms); }
+    void setReleaseMs(double ms) { rel_ = Ballistics::coef(fs_, ms); autoRel_ = false; }
+    // Auto release: short reductions recover with fastMs, ones that have lasted (gain below -1 dB for more than 100 ms) with slowMs. Decided per sample, so it does not depend on how the host cuts the audio
+    void setAutoRelease(double fastMs, double slowMs) {
+        autoRel_ = true; relFast_ = Ballistics::coef(fs_, fastMs); relSlow_ = Ballistics::coef(fs_, slowMs); sustainLimit_ = static_cast<long long>(0.1 * fs_);
+        rel_ = sustained_ > sustainLimit_ ? relSlow_ : relFast_;
+    }
     int latencySamples() const { return L_ + D_ + M_; }
     double gainReductionDb() const { return 20.0 * std::log10(std::max(1e-9, lastGain_)); }
     long long limitEvents() const { return events_; }
@@ -179,6 +184,7 @@ public:
                 if (g < 0.999) limiting = true;
                 if (c == 0) lastGain_ = g;
             }
+            if (autoRel_) { sustained_ = lastGain_ < 0.8912509381337456 ? sustained_ + 1 : 0; rel_ = sustained_ > sustainLimit_ ? relSlow_ : relFast_; }   // -1 dB
             if (limiting && !wasLimiting_) ++events_;
             wasLimiting_ = limiting;
             dpos_ = (dpos_ + 1) % (L_ + D_ + M_);
@@ -194,10 +200,10 @@ private:
         double r = 1.0, sum = 0;
         int bpos = 0, sinceRecalc = 0;
     };
-    double fs_ = 48000, ceil_ = 1, rel_ = 0, link_ = 1, lastGain_ = 1;
+    double fs_ = 48000, ceil_ = 1, rel_ = 0, link_ = 1, lastGain_ = 1, relFast_ = 0, relSlow_ = 0;
     int nch_ = 2, L_ = 1, D_ = 0, M_ = 0, dpos_ = 0;
-    bool tp_ = false, wasLimiting_ = false;
-    long long n_ = 0, events_ = 0;
+    bool tp_ = false, wasLimiting_ = false, autoRel_ = false;
+    long long n_ = 0, events_ = 0, sustained_ = 0, sustainLimit_ = 0;
     std::vector<TruePeakDetector> tpd_;
     std::vector<std::vector<float>> delay_;
     std::vector<State> ch_;

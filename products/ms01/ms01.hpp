@@ -48,7 +48,7 @@ private:
     std::array<Svf, 2> guard_{};
     IntegratedLoudness meter_;
     std::array<double, 6> hist_{};   // integrated loudness once a second, for the stability check
-    int histPos_ = 0, histFill_ = 0, sustained_ = 0;
+    int histPos_ = 0, histFill_ = 0;
     double histClock_ = 0;
     std::vector<float> chunk_;
     uint32_t rng_ = 0x12345678u;

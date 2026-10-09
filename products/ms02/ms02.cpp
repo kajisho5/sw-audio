@@ -34,13 +34,13 @@ void Processor::prepare(double sampleRate, int) {
     const int la = std::max(1, static_cast<int>(std::lround(target_[LookaheadMs] * 0.001 * fs_)));
     lim_.prepare(fs_, 2, la, target_[TruePeak] > 0.5, static_cast<int>(target_[Isp]));
     gain_.reset(fs_, 20.0, std::pow(10.0, target_[Gain] / 20.0));
-    sustained_ = 0;
     applyLimiterSettings();
 }
 
 void Processor::applyLimiterSettings() {
     const bool autoRel = target_[Release] >= specs()[Release].max;
-    lim_.set(target_[Ceiling] - 0.02, autoRel ? 30.0 : target_[Release], target_[Link] / 100.0);  // 0.02 dB guard band
+    lim_.set(target_[Ceiling] - 0.02, target_[Release], target_[Link] / 100.0);  // 0.02 dB guard band
+    if (autoRel) lim_.setAutoRelease(30.0, 300.0);   // short reductions recover fast (30 ms), sustained ones slowly (300 ms)
 }
 
 void Processor::setParam(int id, double v) {
@@ -59,11 +59,6 @@ void Processor::process(float** ch, int numCh, int n) {
         for (int c = 0; c < nch; ++c) ch[c][i] = static_cast<float>(ch[c][i] * g);
     }
     lim_.process(ch, nch, n);
-    // Auto release: short reductions recover fast (30 ms), sustained ones slowly (300 ms)
-    if (target_[Release] >= specs()[Release].max) {
-        sustained_ = lim_.gainReductionDb() < -1.0 ? sustained_ + n : 0;
-        lim_.setReleaseMs(sustained_ > static_cast<int>(0.1 * fs_) ? 300.0 : 30.0);
-    }
     const int bits = static_cast<int>(target_[Dither]);
     if (bits > 0) {  // TPDF dither + requantization
         const double q = std::ldexp(1.0, bits - 1);

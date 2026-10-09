@@ -35,6 +35,10 @@ public:
 
 private:
     static constexpr int kControl = 64;
+    void control(int nch);
+    int ph_ = 0;                                  // samples into the control block (the grid is the stream's, not the host block's)
+    double vSum_ = 0, rawSum_ = 0, mSum_ = 0;     // the sums of the control block being played
+    bool scPresent_ = false;
     double fs_ = 48000.0, rideDb_ = 0, gainFrom_ = 1.0, gainTo_ = 1.0, vocMs_ = 0, vocRaw_ = 0, musMs_ = 0, vocC_ = 0, fastC_ = 0, musC_ = 0, peakDb_ = -200, sent_ = 0;
     long musAge_ = 0, vocAge_ = 0;
     std::array<double, kNumParams> target_{};

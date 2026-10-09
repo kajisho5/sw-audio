@@ -32,7 +32,7 @@ void Processor::prepare(double sampleRate, int) {
     vocMs_ = vocRaw_ = musMs_ = 0; musAge_ = vocAge_ = 0; peakDb_ = -200; listening_ = false;
     rideDb_ = target_[Write] > 0.5 ? 0.0 : target_[Ride];
     gainFrom_ = gainTo_ = std::pow(10.0, rideDb_ / 20.0);
-    open_ = false; dirty_ = false; moving_ = false; sent_ = rideDb_;
+    open_ = false; dirty_ = false; moving_ = false; sent_ = rideDb_; ph_ = 0; vSum_ = rawSum_ = mSum_ = 0.0;
 }
 
 void Processor::setParam(int id, double v) {
@@ -57,60 +57,67 @@ int Processor::takeParamWrite(int& id, double& plain) {
 
 void Processor::processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh) {
     const int nch = std::min(numCh, 2), nsc = sc ? std::min(scCh, 2) : 0;
-    const bool writing = target_[Write] > 0.5;
-    const int sens = static_cast<int>(target_[Sensitivity] + 0.5);
-    const double tau = kTau[sens], dead = kDead[sens], range = target_[Range];
-    for (int start = 0; start < n; start += kControl) {
-        const int len = std::min(kControl, n - start);
-        double vSum = 0, rawSum = 0, mSum = 0;
+    scPresent_ = nsc > 0;
+    // the control decisions are taken on a grid of the stream (every kControl samples, wherever the host's block starts), not per host block: the result does not depend on the block size.
+    // The ride found at the end of a control block is ramped in over the next one.
+    for (int start = 0; start < n;) {
+        const int len = std::min(kControl - ph_, n - start);
         for (int i = start; i < start + len; ++i) {
             for (int c = 0; c < nch; ++c) {
                 const double x = ch[c][i];
                 double w = kv_[static_cast<size_t>(c)].process(x);
                 auto& h = hp_[static_cast<size_t>(c)]; auto& l = lp_[static_cast<size_t>(c)];
                 w = l[1].process(l[0].process(h[1].process(h[0].process(w))));
-                vSum += w * w; rawSum += x * x;
+                vSum_ += w * w; rawSum_ += x * x;
             }
-            for (int c = 0; c < nsc; ++c) { const double w = km_[static_cast<size_t>(c)].process(sc[c][i]); mSum += w * w; }
-        }
-        const double af = std::pow(fastC_, len);
-        vocRaw_ = af * vocRaw_ + (1.0 - af) * rawSum / (len * std::max(1, nch));   // fast level (40 ms): gate and breath decisions
-        const double vocDb = vocRaw_ > 1e-20 ? 10.0 * std::log10(vocRaw_) : -200.0;
-        peakDb_ = std::max(vocDb, peakDb_ - kPeakFall * len / fs_);
-        const bool breath = target_[BreathSkip] > 0.5 && vocDb < peakDb_ - kBreathDb;
-        const bool active = vocDb > kQuiet && !breath;
-        if (active) {   // the vocal's level is the level while it is singing: pauses and breaths leave it where it was; the first 200 ms are a running mean
-            vocAge_ += len;
-            const double w = std::max(1.0 - std::pow(vocC_, len), static_cast<double>(len) / static_cast<double>(vocAge_));
-            vocMs_ += w * (vSum / len - vocMs_);
-        }
-        if (nsc > 0) {   // without a sidechain the music level is not updated (and not listening)
-            musAge_ += len;
-            const double w = std::max(1.0 - std::pow(musC_, len), static_cast<double>(len) / static_cast<double>(musAge_));   // the first 3 s are a running mean: no ramp up from silence
-            musMs_ += w * (mSum / len - musMs_);
-        }
-        const double musDb = musMs_ > 1e-20 ? 10.0 * std::log10(musMs_) : -200.0;
-        listening_ = nsc > 0 && musDb > kQuiet;
-        if (writing) {
-            if (listening_ && active && musAge_ >= static_cast<long>(fs_)) {   // the first second of music is only a rough estimate: no riding yet
-                const double want = std::clamp(musicLufs() + target_[Target] - vocalLufs(), -range, range);
-                const double err = want - rideDb_;
-                if (std::abs(err) > dead) moving_ = true; else if (std::abs(err) < 0.03) moving_ = false;   // hysteresis: engage beyond the dead band, settle on the wanted value
-                if (moving_) rideDb_ += err * (1.0 - std::exp(-len / (tau * fs_)));   // a ride set by hand / by the host is kept as it is until the controller moves it (Range limits the wanted value, not a value that was set)
-            }
-            if (std::abs(rideDb_ - sent_) >= 0.02) dirty_ = true;
-        }
-        gainFrom_ = gainTo_; gainTo_ = std::pow(10.0, rideDb_ / 20.0);
-        for (int i = 0; i < len; ++i) {
-            const double g = gainFrom_ + (gainTo_ - gainFrom_) * (i + 1) / len;
+            for (int c = 0; c < nsc; ++c) { const double w = km_[static_cast<size_t>(c)].process(sc[c][i]); mSum_ += w * w; }
+            const double g = gainFrom_ + (gainTo_ - gainFrom_) * (ph_ + (i - start) + 1) / kControl;
             for (int c = 0; c < nch; ++c) {
-                double y = ch[c][start + i] * g;
+                double y = ch[c][i] * g;
                 if (!std::isfinite(y)) y = 0.0;
                 if (std::abs(y) < 1e-30) y = 0.0;
-                ch[c][start + i] = static_cast<float>(y);
+                ch[c][i] = static_cast<float>(y);
             }
         }
+        ph_ += len; start += len;
+        if (ph_ >= kControl) { ph_ = 0; control(nch); }
     }
+}
+
+void Processor::control(int nch) {
+    const bool writing = target_[Write] > 0.5;
+    const int sens = static_cast<int>(target_[Sensitivity] + 0.5);
+    const double tau = kTau[sens], dead = kDead[sens], range = target_[Range];
+    const int len = kControl;
+    const double vSum = vSum_, rawSum = rawSum_, mSum = mSum_; vSum_ = rawSum_ = mSum_ = 0.0;
+    const double af = std::pow(fastC_, len);
+    vocRaw_ = af * vocRaw_ + (1.0 - af) * rawSum / (len * std::max(1, nch));   // fast level (40 ms): gate and breath decisions
+    const double vocDb = vocRaw_ > 1e-20 ? 10.0 * std::log10(vocRaw_) : -200.0;
+    peakDb_ = std::max(vocDb, peakDb_ - kPeakFall * len / fs_);
+    const bool breath = target_[BreathSkip] > 0.5 && vocDb < peakDb_ - kBreathDb;
+    const bool active = vocDb > kQuiet && !breath;
+    if (active) {   // the vocal's level is the level while it is singing: pauses and breaths leave it where it was; the first 200 ms are a running mean
+        vocAge_ += len;
+        const double w = std::max(1.0 - std::pow(vocC_, len), static_cast<double>(len) / static_cast<double>(vocAge_));
+        vocMs_ += w * (vSum / len - vocMs_);
+    }
+    if (scPresent_) {   // without a sidechain the music level is not updated (and not listening)
+        musAge_ += len;
+        const double w = std::max(1.0 - std::pow(musC_, len), static_cast<double>(len) / static_cast<double>(musAge_));   // the first 3 s are a running mean: no ramp up from silence
+        musMs_ += w * (mSum / len - musMs_);
+    }
+    const double musDb = musMs_ > 1e-20 ? 10.0 * std::log10(musMs_) : -200.0;
+    listening_ = scPresent_ && musDb > kQuiet;
+    if (writing) {
+        if (listening_ && active && musAge_ >= static_cast<long>(fs_)) {   // the first second of music is only a rough estimate: no riding yet
+            const double want = std::clamp(musicLufs() + target_[Target] - vocalLufs(), -range, range);
+            const double err = want - rideDb_;
+            if (std::abs(err) > dead) moving_ = true; else if (std::abs(err) < 0.03) moving_ = false;   // hysteresis: engage beyond the dead band, settle on the wanted value
+            if (moving_) rideDb_ += err * (1.0 - std::exp(-len / (tau * fs_)));   // a ride set by hand / by the host is kept as it is until the controller moves it (Range limits the wanted value, not a value that was set)
+        }
+        if (std::abs(rideDb_ - sent_) >= 0.02) dirty_ = true;
+    }
+    gainFrom_ = gainTo_; gainTo_ = std::pow(10.0, rideDb_ / 20.0);
 }
 
 }  // namespace sw::vo05

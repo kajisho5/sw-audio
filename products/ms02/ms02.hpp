@@ -30,7 +30,6 @@ private:
     std::array<double, kNumParams> target_{};
     PeakLimiter lim_;
     LinearSmoother gain_;
-    int sustained_ = 0;
     uint32_t rng_ = 0x12345678u;
 };
 

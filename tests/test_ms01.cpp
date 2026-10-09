@@ -14,7 +14,6 @@ std::vector<float> loop(double peak, double seconds) {
     for (size_t i = 0; i < x.size(); ++i) { const double t = static_cast<double>(i % 12000) / kFs; x[i] = static_cast<float>(peak * std::exp(-t * 18) * (std::sin(2 * kPi * 90 * t) + 0.15 * nz.gauss())); }
     return x;
 }
-double crestDb(const std::vector<float>& y, size_t from) { return peakDb(y, from, y.size()) - rmsDb(y, from, y.size()); }
 }
 
 TEST_CASE("MS01 table follows the spec") {

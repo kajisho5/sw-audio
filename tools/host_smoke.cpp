@@ -537,71 +537,6 @@ struct Loaded {
     // [peers, spectrum of the others] from a poll
     std::vector<double> link() { const auto a = updateArrays(m->send(p, "p")); return a.size() > 5 ? a[5] : std::vector<double>{}; }
 };
-// The same input in blocks of different sizes: what comes out must not depend on how the host cuts the audio (the buffer size of a DAW, an offline bounce, a host that splits a block at every automation point).
-// The reference is blocks of 256; the others are 1, 7, 64, 509, 1024 and a mix (1, 2, 3, 5, 8 ... 987). The input is the same noise, three parameter events (random parameters, random values) fall at the same absolute samples in
-// every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
-struct TimedParam { size_t at; clap_id id; double v; };
-struct Cut { const char* name; std::vector<uint32_t> sizes; };
-void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
-    const size_t total = in[0].size(); uint32_t maxSize = 1; for (uint32_t z : sizes) maxSize = std::max(maxSize, z);
-    std::vector<float> bi[2], bo[2]; for (int c = 0; c < 2; ++c) { bi[c].resize(maxSize); bo[c].resize(maxSize); out[c].assign(total, 0.0f); }
-    size_t pos = 0, k = 0, ti = 0;
-    while (pos < total) {
-        const uint32_t n = static_cast<uint32_t>(std::min<size_t>(sizes[k++ % sizes.size()], total - pos));
-        EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { ev.set(tp[ti].id, tp[ti].v, static_cast<uint32_t>(tp[ti].at - pos)); ++ti; }
-        for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); }
-        float* ip[2] = {bi[0].data(), bi[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
-        clap_audio_buffer_t ib{}; ib.channel_count = 2; ib.data32 = ip; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
-        clap_output_events_t oe{nullptr, outTryPush}; clap_process_t pr{};
-        pr.steady_time = -1; pr.frames_count = n; pr.audio_inputs = &ib; pr.audio_inputs_count = 1; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
-        if (a.p->process(a.p, &pr) == CLAP_PROCESS_ERROR) bad = true;
-        for (int c = 0; c < 2; ++c) for (uint32_t i = 0; i < n; ++i) { out[c][pos + i] = bo[c][i]; if (!std::isfinite(bo[c][i])) bad = true; }
-        pos += n;
-    }
-}
-bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& differ) {
-    bool ok = true; differ = 0;
-    const size_t total = static_cast<size_t>(kSr * 0.7);
-    const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
-    for (const auto& f : files) {
-        const std::string name = f.stem().string();
-        std::vector<float> in[2]; { Rng rng(77); for (int c = 0; c < 2; ++c) { in[c].resize(total); for (auto& x : in[c]) x = rng.next() * 0.1732f; } }
-        std::vector<TimedParam> tp; bool bad = false; std::string why;
-        auto runCut = [&](const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool withEvents) -> bool {
-            Loaded a; if (!a.open(f, why, 1024)) return false;
-            if (withEvents && tp.empty()) {   // chosen once, from the first plug-in instance: three random writable parameters
-                const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS)); Rng rr(0xB10C ^ std::hash<std::string>()(name));
-                std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
-                const size_t at[3] = {total / 7, total / 3 + 11, total / 2 + 301};
-                for (int e = 0; e < 3 && !info.empty(); ++e) {
-                    const uint32_t i = static_cast<uint32_t>((rr.next() * 0.5f + 0.5f) * static_cast<float>(info.size())) % static_cast<uint32_t>(info.size()); if (info[i].flags & CLAP_PARAM_IS_READONLY) continue;
-                    double v = info[i].min_value + (rr.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
-                    tp.push_back({at[e], info[i].id, v});
-                }
-            }
-            processCut(a, in, withEvents ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
-        };
-        std::string row[2]; double worstAll = -400.0; bool failed = false;
-        for (int withEvents = 0; withEvents < 2 && !failed; ++withEvents) {
-            std::vector<float> ref[2];
-            if (!runCut({256}, ref, withEvents != 0)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
-            double peak = 1e-9; for (int c = 0; c < 2; ++c) for (float x : ref[c]) peak = std::max(peak, static_cast<double>(std::fabs(x)));
-            for (const auto& cut : cuts) {
-                std::vector<float> o[2];
-                if (!runCut(cut.sizes, o, withEvents != 0)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
-                double err = 0; for (int c = 0; c < 2; ++c) for (size_t i = 0; i < total; ++i) err = std::max(err, static_cast<double>(std::fabs(o[c][i] - ref[c][i])));
-                const double db = 20.0 * std::log10(std::max(err / peak, 1e-20)); worstAll = std::max(worstAll, db);
-                char b[32]; std::snprintf(b, sizeof b, " %s:%.0f", cut.name, db); row[withEvents] += b;
-            }
-        }
-        if (failed) continue;
-        const bool differs = worstAll > -90.0; if (differs) ++differ;
-        if (bad) { lines.push_back("FAIL  " + name + "   NaN / Inf or a process() error"); ok = false; }
-        else if (!differs) { char b[200]; std::snprintf(b, sizeof b, "ok    %-26s the same in every block size (worst %.0f dB re peak)", name.c_str(), worstAll); lines.push_back(b); }
-        else { lines.push_back("DIFF  " + name + "\n        steady settings (dB re peak, blocks of 256 as the reference):" + row[0] + "\n        with three parameter events:                                 " + row[1]); }
-    }
-    return ok;
-}
 // Unit A / B / C through the real plug-in: with flat default settings the only thing Unit B / C change is the gain tolerance of the output stage, a different one per channel (the Shell, routed by the adapter's kUnitParam):
 // the level of each channel against Unit A must move by the tolerance sw::Unit gives that channel
 bool unitChecks(const std::vector<fs::path>& files) {
@@ -871,6 +806,82 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
     return ok;
 }
 
+// The same input in blocks of different sizes: what comes out must not depend on how the host cuts the audio (the buffer size of a DAW, an offline bounce, a host that splits a block at every automation point).
+// The reference is blocks of 256; the others are 1, 7, 64, 509, 1024 and a mix (1, 2, 3, 5, 8 ... 987). The input is the same noise, three parameter events (random parameters, random values) fall at the same absolute samples in
+// every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
+struct TimedParam { size_t at; clap_id id; double v; };
+struct Cut { const char* name; std::vector<uint32_t> sizes; };
+void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
+    const size_t total = in[0].size(); uint32_t maxSize = 1; for (uint32_t z : sizes) maxSize = std::max(maxSize, z);
+    std::vector<float> bi[2], bo[2]; for (int c = 0; c < 2; ++c) { bi[c].resize(maxSize); bo[c].resize(maxSize); out[c].assign(total, 0.0f); }
+    size_t pos = 0, k = 0, ti = 0;
+    while (pos < total) {
+        const uint32_t n = static_cast<uint32_t>(std::min<size_t>(sizes[k++ % sizes.size()], total - pos));
+        EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { ev.set(tp[ti].id, tp[ti].v, static_cast<uint32_t>(tp[ti].at - pos)); ++ti; }
+        for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); }
+        float* ip[2] = {bi[0].data(), bi[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
+        clap_audio_buffer_t ib{}; ib.channel_count = 2; ib.data32 = ip; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
+        clap_output_events_t oe{nullptr, outTryPush}; clap_process_t pr{};
+        pr.steady_time = -1; pr.frames_count = n; pr.audio_inputs = &ib; pr.audio_inputs_count = 1; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
+        if (a.p->process(a.p, &pr) == CLAP_PROCESS_ERROR) bad = true;
+        for (int c = 0; c < 2; ++c) for (uint32_t i = 0; i < n; ++i) { out[c][pos + i] = bo[c][i]; if (!std::isfinite(bo[c][i])) bad = true; }
+        pos += n;
+    }
+}
+bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& differ) {
+    bool ok = true; differ = 0;
+    const size_t total = static_cast<size_t>(kSr * 0.7);
+    const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
+    struct Scenario { const char* name; float level; bool events; };
+    const Scenario scenarios[] = {{"steady, -20 dBFS noise", 0.1732f, false}, {"steady, loud (peaks over 0 dBFS)", 1.0f, false}, {"-20 dBFS noise + 3 parameter events", 0.1732f, true}};
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        std::vector<TimedParam> tp; bool bad = false; std::string why; std::vector<uint8_t> state;   // the state of the first instance goes into every other one (SA02: the seed of its component tolerances is saved with the project)
+        std::vector<std::string> rows; double worstAll = -400.0; bool failed = false, differs = false;
+        for (const auto& sc : scenarios) {
+            std::vector<float> in[2]; { Rng rng(77); for (int c = 0; c < 2; ++c) { in[c].resize(total); for (auto& x : in[c]) x = rng.next() * sc.level; } }
+            auto runCut = [&](const std::vector<uint32_t>& sizes, std::vector<float> out[2]) -> bool {
+                Loaded a; if (!a.open(f, why, 1024)) return false;
+                const auto* st = static_cast<const clap_plugin_state_t*>(a.p->get_extension(a.p, CLAP_EXT_STATE));
+                if (st) { if (state.empty()) { MemOut o; if (st->save(a.p, &o.s)) state = o.d; } else { MemIn in(state, state.size()); st->load(a.p, &in.s); } }
+                if (sc.events && tp.empty()) {   // chosen once, from the first plug-in instance: three random writable parameters
+                    const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS)); Rng rr(0xB10C ^ std::hash<std::string>()(name));
+                    std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
+                    const size_t at[3] = {total / 7, total / 3 + 11, total / 2 + 301};
+                    for (int e = 0; e < 3 && !info.empty(); ++e) {
+                        const uint32_t i = static_cast<uint32_t>((rr.next() * 0.5f + 0.5f) * static_cast<float>(info.size())) % static_cast<uint32_t>(info.size()); if (info[i].flags & CLAP_PARAM_IS_READONLY) continue;
+                        double v = info[i].min_value + (rr.next() * 0.5 + 0.5) * (info[i].max_value - info[i].min_value); if (info[i].flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                        tp.push_back({at[e], info[i].id, v});
+                    }
+                }
+                processCut(a, in, sc.events ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
+            };
+            std::vector<float> ref[2];
+            if (!runCut({256}, ref)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
+            double peak = 1e-9; for (int c = 0; c < 2; ++c) for (float x : ref[c]) peak = std::max(peak, static_cast<double>(std::fabs(x)));
+            std::string row = std::string("  ") + sc.name + ":";
+            for (const auto& cut : cuts) {
+                std::vector<float> o[2];
+                if (!runCut(cut.sizes, o)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
+                double err = 0; for (int c = 0; c < 2; ++c) for (size_t i = 0; i < total; ++i) err = std::max(err, static_cast<double>(std::fabs(o[c][i] - ref[c][i])));
+                const double db = 20.0 * std::log10(std::max(err / peak, 1e-20)); worstAll = std::max(worstAll, db);
+                if (db > (sc.events ? -50.0 : -90.0)) differs = true;   // steady: nothing may depend on the cut; with parameter events the coefficient ramps start on the product's own control grid (a few -60 .. -100 dB)
+                char b[32]; std::snprintf(b, sizeof b, " %s:%.0f", cut.name, db); row += b;
+            }
+            if (failed) break;
+            rows.push_back(row);
+        }
+        if (failed) continue;
+        if (differs) ++differ;
+        // the IR of GT02 / RV04 / ST05 is rebuilt one step per process() call, so when a new IR takes over depends on the block size (README "ブロック長に依存しないこと"): known; any other product is a failure
+        const bool known = name == "SW GT02 Cab IR" || name == "SW RV04 Convolution" || name == "SW ST05 Phones";
+        if (differs && !known) ok = false;
+        if (bad) { lines.push_back("FAIL  " + name + "   NaN / Inf or a process() error"); ok = false; }
+        else if (!differs) { char b[200]; std::snprintf(b, sizeof b, "ok    %-26s the same in every block size, within the limits (worst %.0f dB re peak)", name.c_str(), worstAll); lines.push_back(b); }
+        else { std::string t = "DIFF  " + name + "   (dB re peak, blocks of 256 as the reference; * = longer than max_frames)"; for (const auto& r : rows) t += "\n      " + r; lines.push_back(t); }
+    }
+    return ok;
+}
 }   // namespace
 
 int main(int argc, char** argv) {
@@ -900,7 +911,7 @@ int main(int argc, char** argv) {
     if (blocksOnly) {   // --blocks: only the block-size check
         std::vector<std::string> lines; int differ = 0; const bool ok = blockChecks(files, lines, differ);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
-        std::printf("blocks: %zu plug-ins, %d differ from the blocks of 256 by more than -90 dB, %s\n", files.size(), differ, ok ? "no failure" : "FAILURES");
+        std::printf("blocks: %zu plug-ins, %d differ from the blocks of 256 (more than -90 dB in a steady run, more than -50 dB with parameter events), %s\n", files.size(), differ, ok ? "no failure" : "FAILURES");
         return ok ? 0 : 1;
     }
     if (soakSeconds > 0) {   // --soak=SECONDS: only the long run

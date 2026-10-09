@@ -23,7 +23,7 @@ const std::vector<ParamSpec>& specs() {
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 void Processor::prepare(double sampleRate, int) {
-    fs_ = sampleRate; meter_.setup(fs_, 2); gDb_ = 0; lim_ = 1; rms_ = 0; dist_ = 0; shelfDb_ = 0; seen_ = 0; tick_ = 0;
+    fs_ = sampleRate; meter_.setup(fs_, 2); gDb_ = 0; lim_ = 1; rms_ = 0; dist_ = 0; shelfDb_ = 0; seen_ = 0; tick_ = 0; ph_ = 0; blockPow_ = 0; gA_ = gB_ = 1.0;
     for (size_t c = 0; c < 2; ++c) {
         hi_[c].setup(Svf::Mode::HighPass, 3000.0, fs_, 0.70710678, 0);
         mid_[c].setup(Svf::Mode::BandPass, 1000.0, fs_, 0.5, 0);
@@ -36,13 +36,21 @@ void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cas
 
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || numCh < 1 || n <= 0) return;
-    const bool stereo = numCh > 1;
+    // the gain is decided on a grid of the stream (every kRun samples, wherever the host's block starts), not once per host block: the result does not depend on the block size
+    for (int off = 0; off < n;) {
+        const int m = std::min(n - off, kRun - ph_);
+        float* p[2] = {ch[0] + off, numCh > 1 ? ch[1] + off : ch[0] + off};
+        part(p, numCh > 1, m);
+        off += m;
+    }
+}
+
+void Processor::part(float** ch, bool stereo, int n) {
     { const float* in[2] = {ch[0], stereo ? ch[1] : ch[0]}; meter_.process(in, 2, n); }
     // gate level and the near / far features (mono sum, per sample)
-    double blockPow = 0;
     for (int i = 0; i < n; ++i) {
         const double m = stereo ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i];
-        blockPow += m * m;
+        blockPow_ += m * m;
         const double h = hi_[0].process(m), b = mid_[0].process(m);
         eHi_ += h * h; eMid_ += b * b; frameE_ += m * m;
         if (++frameN_ >= frameLen_) {
@@ -53,8 +61,26 @@ void Processor::process(float** ch, int numCh, int n) {
             if (hiMidN_ > 300) { hiMid_ *= 0.5; hiMidN_ /= 2; }
         }
     }
-    rms_ = 10.0 * std::log10(blockPow / n + 1e-12);
-    seen_ += n; tick_ += static_cast<unsigned>(n);
+    // the gain: the ramp from the last control block's value to the one decided at its end, then the shelf and the limiter, per sample
+    const double ceil = 0.89125093813374556, relC = std::exp(-1.0 / (0.08 * fs_));
+    for (int i = 0; i < n; ++i) {
+        const double g = gA_ + (gB_ - gA_) * (ph_ + i + 1) / kRun;
+        double y[2] = {ch[0][i] * g, stereo ? ch[1][i] * g : 0.0};
+        if (shelfDb_ > 0.05) { y[0] = pres_[0].process(y[0]); if (stereo) y[1] = pres_[1].process(y[1]); }
+        double pk = std::abs(y[0]); if (stereo) pk = std::max(pk, std::abs(y[1]));
+        const double need = pk > ceil ? ceil / pk : 1.0;
+        lim_ = need < lim_ ? need : relC * lim_ + (1 - relC) * need;
+        if (lim_ * pk > ceil) lim_ = ceil / pk;
+        for (int c = 0; c < (stereo ? 2 : 1); ++c) { const float o = static_cast<float>(y[c] * lim_); ch[c][i] = std::abs(o) < 1e-30f ? 0.0f : o; }
+    }
+    ph_ += n;
+    if (ph_ >= kRun) { ph_ = 0; controlBlock(); }
+}
+
+// every kRun samples of the stream: the gate level, near / far, the shelf, and the gain for the next control block
+void Processor::controlBlock() {
+    rms_ = 10.0 * std::log10(blockPow_ / kRun + 1e-12); blockPow_ = 0;
+    seen_ += kRun; tick_ += static_cast<unsigned>(kRun);
     if (tick_ >= static_cast<unsigned>(0.1 * fs_)) {   // near / far, every ~100 ms
         const double dt = static_cast<double>(tick_) / fs_; tick_ = 0;
         scratch_.clear(); for (int i = 0; i < nFrames_; ++i) if (frames_[static_cast<size_t>(i)] > -90.0f) scratch_.push_back(frames_[static_cast<size_t>(i)]);
@@ -72,21 +98,12 @@ void Processor::process(float** ch, int numCh, int n) {
     const double mom = meter_.momentary(), gateOn = rms_ > target_[Gate];
     const double useF[3] = {1.0, 1.5, 0.6}, up[3] = {2, 6, 15}, down[3] = {6, 12, 30};
     const int sp = std::clamp(static_cast<int>(target_[Speed]), 0, 2), us = std::clamp(static_cast<int>(target_[Use]), 0, 2);
-    const double stepUp = up[sp] * useF[us] * n / fs_, stepDown = down[sp] * useF[us] * n / fs_;
+    const double stepUp = up[sp] * useF[us] * kRun / fs_, stepDown = down[sp] * useF[us] * kRun / fs_;
     if (target_[Freeze] < 0.5 && seen_ > 0.4 * fs_) {
         if (gateOn && mom > -70.0) { const double want = std::clamp(target_[Target] - mom, -12.0, target_[MaxGain] + 3.0 * dist_); gDb_ += std::clamp(want - gDb_, -stepDown, stepUp); }
-        else if (target_[TalkerHold] < 0.5) { const double st = 3.0 * n / fs_; gDb_ += std::clamp(0.0 - gDb_, -st, st); }
+        else if (target_[TalkerHold] < 0.5) { const double st = 3.0 * kRun / fs_; gDb_ += std::clamp(0.0 - gDb_, -st, st); }
     }
-    const double g = std::pow(10.0, gDb_ / 20.0), ceil = 0.89125093813374556, relC = std::exp(-1.0 / (0.08 * fs_));
-    for (int i = 0; i < n; ++i) {
-        double y[2] = {ch[0][i] * g, stereo ? ch[1][i] * g : 0.0};
-        if (shelfDb_ > 0.05) { y[0] = pres_[0].process(y[0]); if (stereo) y[1] = pres_[1].process(y[1]); }
-        double pk = std::abs(y[0]); if (stereo) pk = std::max(pk, std::abs(y[1]));
-        const double need = pk > ceil ? ceil / pk : 1.0;
-        lim_ = need < lim_ ? need : relC * lim_ + (1 - relC) * need;
-        if (lim_ * pk > ceil) lim_ = ceil / pk;
-        for (int c = 0; c < (stereo ? 2 : 1); ++c) { const float o = static_cast<float>(y[c] * lim_); ch[c][i] = std::abs(o) < 1e-30f ? 0.0f : o; }
-    }
+    gA_ = gB_; gB_ = std::pow(10.0, gDb_ / 20.0);
 }
 
 }  // namespace sw::lv07

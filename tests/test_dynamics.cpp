@@ -89,6 +89,22 @@ TEST_CASE("peak limiter: signals below the ceiling pass unchanged, delayed by th
     float* c[2] = {l.data(), r.data()}; lim.process(c, 2, 4096);
     for (int i = L; i < 4096; ++i) REQUIRE(l[i] == doctest::Approx(in[i - L]).epsilon(1e-6));
 }
+TEST_CASE("peak limiter Auto release: short reductions recover fast, sustained ones (more than 100 ms below -1 dB) slowly, whatever the block size") {
+    auto recoveryMs = [](double burstMs, int block) {
+        PeakLimiter lim; lim.prepare(kFs, 2, 72, false, 4); lim.set(-1.0, 30.0, 1.0); lim.setAutoRelease(30.0, 300.0);
+        const int burst = static_cast<int>(burstMs * 0.001 * kFs), total = burst + static_cast<int>(1.5 * kFs);
+        std::vector<float> l(static_cast<size_t>(total)), r;
+        for (int i = 0; i < total; ++i) l[static_cast<size_t>(i)] = i < burst ? 2.0f : 0.3f;
+        r = l;
+        for (int off = 0; off < total; off += block) { const int n = std::min(block, total - off); float* c[2] = {l.data() + off, r.data() + off}; lim.process(c, 2, n); }
+        // the output is 0.3 x the gain once the burst is over (and the lookahead has passed): the time until the gain is back above 0.9
+        for (int i = burst + 200; i < total; ++i) if (l[static_cast<size_t>(i)] > 0.27f) return (i - burst) * 1000.0 / kFs;
+        return 9999.0;
+    };
+    const double shortMs = recoveryMs(30.0, 256), longMs = recoveryMs(500.0, 256);
+    CHECK(shortMs < 120.0); CHECK(longMs > 3.0 * shortMs); CHECK(longMs > 300.0);
+    CHECK(recoveryMs(30.0, 1) == doctest::Approx(shortMs)); CHECK(recoveryMs(500.0, 1) == doctest::Approx(longMs)); CHECK(recoveryMs(500.0, 37) == doctest::Approx(longMs));
+}
 TEST_CASE("true peak limiter keeps the true peak at the ceiling (reference 32x)") {
     PeakLimiter lim; lim.prepare(kFs, 2, 72, true, 8); lim.set(-1.0, 50.0, 1.0);
     std::vector<float> l(24000), r(24000);

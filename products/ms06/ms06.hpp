@@ -44,8 +44,11 @@ public:
     void resetMeters();
 
 private:
-    static constexpr int kChunk = 256;
+    static constexpr int kChunk = 256;   // the largest piece a stage works on at once (a run is never longer than kRun)
+    static constexpr int kRun = 32;      // the control grid: gain match and its ramps are decided every 32 samples of the stream, not of the host's blocks
+    static constexpr int kFade = 256;    // an order change: this many samples fading out, then the same fading in
     void runChunk(float** ch, int nch, int n);
+    void controlBlock();
     void stageEq(int nch, int n); void stageComp(int nch, int n); void stageSat(int nch, int n); void stageWidth(int nch, int n); void stageLimit(int nch, int n);
     void updateEq(int ramp);
     void measureOut(float** ch, int nch, int n);
@@ -53,7 +56,8 @@ private:
     LoudnessMeter outMeter_; LoudnessRange lra_; std::array<TruePeakDetector, 2> outTpd_; long long outSamples_ = 0; int sinceLra_ = 0;   // the output meters
     std::array<double, kNumParams> target_{};
     std::array<int, kStages> order_{0, 1, 2, 3, 4};
-    int pendingOrder_ = 0, fade_ = 0;           // fade_: 0 none, 1 fading out into the new order, 2 fading in
+    int pendingOrder_ = 0, fade_ = 0, fadePos_ = 0;   // fade_: 0 none, 1 fading out into the new order, 2 fading in (fadePos_ samples into it)
+    int ph_ = 0;                                       // samples into the current control block (persistent: the grid is the stream's)
     bool limitActive_ = false, eqDirty_ = true;
     std::array<std::vector<double>, 2> buf_, dry_;
     std::array<LinearSmoother, kStages> on_;
@@ -71,11 +75,10 @@ private:
     std::array<Svf, 2> sideHp_{}, midLp_{}, midHp_{};   // Mono below: LR4 high-pass on the sides, the same crossover's all-pass on the mid
     // Limit
     PeakLimiter lim_;
-    int limSustained_ = 0;
     // gain match
     std::array<std::array<KWeighting, 2>, kStages + 1> kw_{};
-    std::array<double, kStages + 1> ms_{};
-    std::array<double, kStages> match_{}, matchPrev_{};
+    std::array<double, kStages + 1> ms_{}, acc_{};      // K-weighted power: the smoothed value per tap, the sum of the control block being played
+    std::array<double, kStages> match_{}, gA_{}, gB_{};  // the correction (dB) per stage; its gain (linear) at the start and at the end of the ramp over the control block
     double msC_ = 0, matchC_ = 0;
 };
 

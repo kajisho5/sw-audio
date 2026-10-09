@@ -47,7 +47,7 @@ void Processor::prepare(double sampleRate, int) {
     envC_ = Ballistics::coef(fs_, 10.0);
     for (auto& g : guard_) g.setup(Svf::Mode::LowShelf, kGuardHz, fs_, 0.70710678, kGuardDb);
     meter_.setup(fs_, 2, kForgetS);
-    env_ = {0, 0}; slowGr_ = 0; sustained_ = 0;
+    env_ = {0, 0}; slowGr_ = 0;
     for (auto& b : slowBall_) b.reset(0.0);
     restartLock();
     applyLimiter(); applySlow();
@@ -57,7 +57,8 @@ void Processor::restartLock() { locked_ = false; lockClock_ = 0; lockTick_ = 0; 
 
 void Processor::applyLimiter() {
     const bool autoRel = target_[Release] >= specs()[Release].max;
-    lim_.set(target_[Ceiling] - 0.02, autoRel ? 40.0 : target_[Release], target_[Stereo] / 100.0);
+    lim_.set(target_[Ceiling] - 0.02, target_[Release], target_[Stereo] / 100.0);
+    if (autoRel) lim_.setAutoRelease(40.0, 400.0);   // Auto: short reductions recover fast (40 ms), sustained ones slowly (400 ms)
 }
 
 void Processor::applySlow() {
@@ -104,10 +105,6 @@ void Processor::process(float** ch, int numCh, int n) {
         }
     }
     lim_.process(ch, nch, n);
-    if (target_[Release] >= specs()[Release].max) {   // Auto: short reductions recover fast (40 ms), sustained ones slowly (400 ms)
-        sustained_ = lim_.gainReductionDb() < -1.0 ? sustained_ + n : 0;
-        lim_.setReleaseMs(sustained_ > static_cast<int>(0.1 * fs_) ? 400.0 : 40.0);
-    }
     if (lockOn) {   // measure the output, move Gain toward Target every 100 ms
         const float* c2[2] = {ch[0], nch > 1 ? ch[1] : ch[0]};
         meter_.process(c2, 2, n);

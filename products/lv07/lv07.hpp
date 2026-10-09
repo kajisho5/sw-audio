@@ -32,11 +32,15 @@ public:
     double loudnessLufs() const { return meter_.momentary(); }
 
 private:
+    static constexpr int kRun = 32;   // the control grid of the stream: the gate level, near / far and the gain are decided every 32 samples, wherever the host's block starts
+    void part(float** ch, bool stereo, int n);
+    void controlBlock();
     double fs_ = 48000.0;
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};
     LoudnessMeter meter_;
-    double gDb_ = 0, lim_ = 1, rms_ = 0, dist_ = 0, shelfDb_ = 0, seen_ = 0;
+    double gDb_ = 0, lim_ = 1, rms_ = 0, dist_ = 0, shelfDb_ = 0, seen_ = 0, blockPow_ = 0, gA_ = 1.0, gB_ = 1.0;   // gA_ -> gB_: the gain ramp over the control block
+    int ph_ = 0;                                                                                                       // samples into the control block
     // near / far
     std::array<Svf, 2> hi_{}, mid_{}, pres_{};
     double eHi_ = 0, eMid_ = 0, frameE_ = 0; int frameN_ = 0, frameLen_ = 960, nFrames_ = 0, head_ = 0;

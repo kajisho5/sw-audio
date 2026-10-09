@@ -30,7 +30,7 @@ public:
     int latencySamples() const { return 0; }
     // the instance's seed is hidden state: saved with the project through the plugin layer's extra-state block
     int seed() const { return seed_; }
-    void setSeed(int seed) { seed_ = std::clamp(seed, 1, 65535); applySeed(); }
+    void setSeed(int seed) { seed_ = std::clamp(seed, 1, 65535); applySeed(); rng_ = static_cast<uint32_t>(seed_) * 747796405u + 2891336453u; }   // the noise starts from the seed, too (as in prepare())
     void saveExtra(std::vector<uint8_t>& out) const { out = {static_cast<uint8_t>(seed_ & 255), static_cast<uint8_t>(seed_ >> 8)}; }
     void loadExtra(const uint8_t* d, size_t n) { if (n >= 2) setSeed(d[0] | (d[1] << 8)); }
 
