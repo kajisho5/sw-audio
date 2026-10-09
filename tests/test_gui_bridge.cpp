@@ -16,6 +16,7 @@ struct Fake {
     void end(int i) { log.push_back("e" + std::to_string(i)); }
     void set(int i, double x) { v[static_cast<size_t>(i)] = x; log.push_back("s" + std::to_string(i)); }
     double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; } int nro = 0; int numReadouts() { return nro; } double readout(int i) { return -23.5 + i; } void stereo(double* o) { o[0] = 0.5; for (int i = 1; i < 1 + 2 * gui::kGonioPts; ++i) o[i] = 0.25; }
+    int nlk = 1; int link(double* o) { o[0] = 2; for (int i = 0; i < gui::kSpecBands; ++i) o[1 + i] = -70.0 + i; return nlk; }   // SW Link: 2 peers (+ their spectrum when nlk is 65)
     void call(const std::string& n, const std::string& a) { log.push_back("c:" + n + ":" + a); }
 };
 }
@@ -41,6 +42,9 @@ TEST_CASE("GUI session: values and gestures reach the plug-in; a poll answers wi
     s.onMessage("s 9 1"); s.onMessage("b 9"); s.onMessage("e 9"); s.onMessage("garbage"); CHECK(f.log.size() == 3);   // out of range or malformed: ignored
     s.onMessage("c tap 1 2"); CHECK(f.log.back() == "c:tap:1 2");
     const std::string a = s.onMessage("p"); CHECK(a.rfind("SWHOST.update([1,5.5,3],1.5,-1,[-20,-21,-22,-23],[-80.0,-79.0,", 0) == 0); CHECK(a.substr(a.size() - 2) == ");"); CHECK(s.onMessage("r") == a);
+    // SW Link is the last argument: the number of other instances, and the spectrum of them when the page asked
+    CHECK(a.size() > 9); CHECK(a.substr(a.size() - 8) == ",[2.0]);");
+    f.nlk = 1 + gui::kSpecBands; const std::string b = s.onMessage("p"); CHECK(b.find(",[2.0,-70.0,-69.0,") != std::string::npos); CHECK(b.substr(b.size() - 8) == ",-7.0]);"); CHECK(b.find("nan") == std::string::npos);
 }
 
 TEST_CASE("GUI page: the parameter table of a product is in it, valid and safe") {

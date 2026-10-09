@@ -12,7 +12,7 @@
 
 ### EQ
 - [x] EQ01 Passive 進化版 — Contour turns the boost-and-dip trick into one knob
-- [x] EQ02 Surgical 進化版 — Assist finds resonances（実装済み）、Unmask shows clashes with other tracks（SW Link 待ち）
+- [x] EQ02 Surgical 進化版 — Assist finds resonances、Unmask shows clashes with other tracks（SW Link の最初の部分で実装済み）
 - [x] EQ03 Mid Shaper — Peak band rides with the vocal level automatically
 - [x] EQ04 Inductor — Iron saturation scales with each band's boost
 - [x] EQ05 Console — Match copies the tone curve of a reference track
@@ -201,7 +201,8 @@
 ## 製品のあと
 
 - 画面（キャンバス docs/design/canvas/project/<コード>.dc.html を WebView で流用）。共通機能のうちモーフ（A/B）・EVO バー・Unit A/B/C・Low lat は画面と一緒に。
-- 解析・学習系の EVO（区分 B／C：EQ02 Unmask（Assist と EQ07 Auto thresh は済）、CS02 被り学習、CS03 入力レベル合わせ、DY04 Learn など）。
+- SW Link の残り（最初の部分＝誰がいるか・出力スペクトルは `plugin/clap/swlink.hpp` で済）：ラウドネスとトラック種別の共有、LV05 の Key 選択・LV15/LV11 の他製品との連携・EQ05 Match の参照元（UT03）・MT05 の 0 VU 基準の共有を、この登録簿の上に載せる。
+- 解析・学習系の EVO（区分 B／C：EQ02 Assist／Unmask と EQ07 Auto thresh は済。残り：CS02 被り学習、CS03 入力レベル合わせ、DY04 Learn など）。
 - SW AUDIO for OBS（GPL の薄い OBS フィルタ＋非公開エンジン、共有メモリ、フェイルオープン。公開前に弁護士確認）。
 - MIDI・フットスイッチ入力（ホストのノート入力をプラグイン層に通す）：MD05 Rotary の Speed 切替（CC64・CC1・Note）、VO03 Harmony、CR04 Freeze、IN04 Bass、LV25 Live Delay など。
 - EQ08・EQ02 Linear のカーネル再計算を別スレッドへ（仕様書どおり）。
@@ -237,4 +238,5 @@
 - [x] 画面：A／B のモーフのスライダーを動くように（補間は画面側）
 - [x] 画面：コアを呼ぶボタン（12 製品）をデザインの画面でも動くように。機能が無い部品（Low lat・2× OS・Unit A/B/C・履歴・100%・LIVE の Main show/Remote/Lock）は薄く表示
 - [x] プリセット（自分の設定の保存・呼び出し・削除。画面のメニュー、Documents/SW AUDIO/Presets）。残り：工場出荷のプリセットの中身
+- [x] 画面：Undo／Redo をジェスチャー単位に（つまみのドラッグも対象に）、履歴ボタン（直近の変更の一覧から戻る）
 - [ ] 共通機能の実装（画面の部品はある）：Low lat（EQ02・EQ07・EQ08・DY05・DY08・MS02 は済。CS04・MS01・MS03・MS04・RS01 は DSP の作り込みが要る）、オーバーサンプリング 1×/2×/4×、Unit A/B/C、拡大率（LV23 のログの書き出しは実装済み）

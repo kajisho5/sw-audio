@@ -52,7 +52,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 tools/setup_linux.sh                       # 初回：ビルド道具・clap-validator・Steinberg validator を用意
 cmake -S . -B build-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
 tools/validate_all.sh                      # ビルド＋単体テスト＋全プラグインの両 validator（1行ずつ結果）
-build-cmake/sw-host-smoke build-cmake/plugins   # ホスト経由の音声経路テスト（Linux。Output ゲイン・Bypass・Mix 0 %・In Off・NaN。窓のページのメッセージを窓なしで送る試験（`plugin/clap/sw_message.h`）：更新スクリプトの形、プリセット、UT03 の参照曲・RV04 の IR を断片で送る。validate_all.sh も実行）
+build-cmake/sw-host-smoke build-cmake/plugins   # ホスト経由の音声経路テスト（Linux。Output ゲイン・Bypass・Mix 0 %・In Off・NaN。窓のページのメッセージを窓なしで送る試験（`plugin/clap/sw_message.h`）：更新スクリプトの形、プリセット、UT03 の参照曲・RV04 の IR を断片で送る、EQ02 の Assist、**SW Link：実際の .clap を 3 つ別々に読み込んで互いが見える・片方をアンロードしても登録簿が残る**（`plugin/clap/swlink.hpp`：製品ごとに別バイナリなので、登録簿は OS から直接取ったメモリのアドレスを環境変数 `SW_AUDIO_LINK` に書いて共有する）。validate_all.sh も実行）
 python3 tools/gen_skins.py && python3 tools/check_skins.py   # 画面とパラメータ表の突き合わせ（つまみのラベルと結び付き先、共通パラメータへの誤結合、重複、結び付かない部品。CI の Linux ジョブでも実行）
 node tests/ui/refload.test.js   # UT03・RV04 の読み込み（ページが作る WAV・base64 の断片・概観）。curves・traits・shapes と同じく CI の Linux ジョブで走る
 NODE_PATH=$(npm root -g) node tools/audit_static_text.js [コード]   # 画面で数字が動かない文字（デザインの例の数字の残り）を探す（preview を http.server で配っておく）

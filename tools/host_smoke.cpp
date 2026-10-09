@@ -98,6 +98,7 @@ struct Run {
     bool bad = false;
     double peak = 0;
     double seconds = 0, audioSeconds = 0;
+    double toneHz = 0, toneDb = -20.0; uint64_t toneN = 0;   // toneHz > 0: a sine instead of noise (the SW Link checks)
 
     // processes `blocks` blocks of noise (seeded), appending to inAll/outAll; events go into the first block
     void process(int blocks, uint64_t seed, EventList& events) {
@@ -105,7 +106,8 @@ struct Run {
         for (int b = 0; b < blocks; ++b) {
             for (int c = 0; c < 2; ++c) {
                 for (uint32_t i = 0; i < kBlock; ++i) {
-                    const float x = rng.next() * 0.1732f;   // uniform noise, ~ -20 dBFS RMS
+                    float x = rng.next() * 0.1732f;   // uniform noise, ~ -20 dBFS RMS
+                    if (toneHz > 0) x = static_cast<float>(std::pow(10.0, toneDb / 20.0) * std::sin(6.283185307179586 * toneHz * static_cast<double>(toneN + i) / kSr));
                     in[c][i] = x; sc[c][i] = x * 0.5f; out[c][i] = 0.f;
                 }
             }
@@ -128,7 +130,7 @@ struct Run {
             seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
             audioSeconds += kBlock / kSr;
             if (st == CLAP_PROCESS_ERROR) bad = true;
-            events.ev.clear();
+            events.ev.clear(); toneN += kBlock;
             for (int c = 0; c < 2; ++c) {
                 for (uint32_t i = 0; i < kBlock; ++i) {
                     const float y = out[c][i];
@@ -426,6 +428,63 @@ Result testOne(const fs::path& path) {
     return r;
 }
 
+// SW Link between plug-in binaries: the registry is made by whichever product is loaded first and has to outlive it. Loads three products (A, B, C) as a host would, each from its own file:
+//   A (loaded first, makes the registry) and B see each other; B hears A's tone in the spectrum it gets for its screen; A is destroyed and its library unloaded; B no longer sees A; C is
+//   loaded afterwards, finds the same registry (it was not freed with A's library) and sees B.
+struct Loaded {
+    void* lib = nullptr; const clap_plugin_entry_t* entry = nullptr; const clap_plugin_t* p = nullptr; const sw_plugin_message_t* m = nullptr; Run run; EventList ev;
+    bool open(const fs::path& path, std::string& why) {
+        lib = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL); if (!lib) { why = std::string("dlopen: ") + dlerror(); return false; }
+        entry = static_cast<const clap_plugin_entry_t*>(dlsym(lib, "clap_entry")); if (!entry || !entry->init(path.c_str())) { why = "no clap_entry"; return false; }
+        auto* fac = static_cast<const clap_plugin_factory_t*>(entry->get_factory(CLAP_PLUGIN_FACTORY_ID)); if (!fac || fac->get_plugin_count(fac) < 1) { why = "no factory"; return false; }
+        const clap_plugin_descriptor_t* d = fac->get_plugin_descriptor(fac, 0);
+        p = fac->create_plugin(fac, &gHost, d->id);
+        if (!p || !p->init(p) || !p->activate(p, kSr, 16, kBlock) || !p->start_processing(p)) { why = "create/init/activate"; return false; }
+        m = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE)); if (!m) { why = "no message hook"; return false; }
+        run.p = p; run.nIn = 1; for (int c = 0; c < 2; ++c) { run.in[c].resize(kBlock); run.out[c].resize(kBlock); run.sc[c].resize(kBlock); }
+        return true;
+    }
+    void close() {
+        if (p) { p->stop_processing(p); p->deactivate(p); p->destroy(p); p = nullptr; }
+        if (entry) { entry->deinit(); entry = nullptr; }
+        if (lib) { dlclose(lib); lib = nullptr; }
+    }
+    // [peers, spectrum of the others] from a poll
+    std::vector<double> link() { const auto a = updateArrays(m->send(p, "p")); return a.size() > 5 ? a[5] : std::vector<double>{}; }
+};
+bool linkChecks(const std::vector<fs::path>& files) {
+    auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
+    const fs::path fa = find("DY08"), fb = find("EQ02"), fc = find("EQ07");
+    if (fa.empty() || fb.empty() || fc.empty()) return true;   // a partial set of plug-ins: nothing to check
+    bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link: %s\n", t.c_str()); ok = false; };
+    Loaded a, b, c; std::string why;
+    if (!a.open(fa, why)) { fail("A " + why); return false; }
+    if (!b.open(fb, why)) { fail("B " + why); a.close(); return false; }
+    // before anybody listens only the count is sent
+    { const auto l = b.link(); if (l.size() != 1 || l[0] != 1.0) fail("B should see 1 other instance (A), got " + std::to_string(l.empty() ? -9.0 : l[0]) + " values " + std::to_string(l.size())); }
+    { const auto l = a.link(); if (l.size() != 1 || l[0] != 1.0) fail("A should see 1 other instance (B)"); }
+    // A plays a 1 kHz tone at -20 dBFS (DY08 at its defaults passes it), B asks for the spectrum of the others
+    a.run.toneHz = 1000.0; EventList none; a.run.process(60, 1, none); b.run.process(10, 2, none);
+    b.m->send(b.p, "c linkwatch 1"); a.run.process(8, 1, none); b.run.process(8, 2, none);
+    { const auto l = b.link();
+      if (l.size() != 65 || l[0] != 1.0) fail("B should get [1, 64 values], got " + std::to_string(l.size()) + " values");
+      else {
+          int pk = 1; for (int k = 1; k <= 64; ++k) if (l[static_cast<size_t>(k)] > l[static_cast<size_t>(pk)]) pk = k; const int band = pk - 1;
+          const double f = 20.0 * std::pow(1000.0, (band + 0.5) / 64.0);
+          if (std::fabs(std::log2(f / 1000.0)) > 0.12 || l[static_cast<size_t>(pk)] < -30.0 || l[static_cast<size_t>(pk)] > -10.0) fail("B should hear A's 1 kHz tone at about -20 dB, got " + std::to_string(f) + " Hz at " + std::to_string(l[static_cast<size_t>(pk)]) + " dB");
+      } }
+    b.m->send(b.p, "c linkwatch 0"); { const auto l = b.link(); if (l.size() != 1) fail("after linkwatch 0 only the count should be sent"); }
+    // A is destroyed and its library unloaded: the registry must survive it
+    a.close();
+    { b.run.process(8, 2, none); const auto l = b.link(); if (l.size() != 1 || l[0] != 0.0) fail("B should see nobody after A was unloaded"); }
+    if (!c.open(fc, why)) { fail("C " + why); b.close(); return false; }
+    { const auto l = c.link(); if (l.size() != 1 || l[0] != 1.0) fail("C should find the registry again and see B"); }
+    { const auto l = b.link(); if (l.size() != 1 || l[0] != 1.0) fail("B should see C"); }
+    c.close(); b.close();
+    if (ok) std::printf("ok    SW Link: three products in one process (%s, %s, %s): peers, spectrum of the others, and the registry survives an unloaded library\n", fa.stem().string().c_str(), fb.stem().string().c_str(), fc.stem().string().c_str());
+    return ok;
+}
+
 }   // namespace
 
 int main(int argc, char** argv) {
@@ -464,6 +523,7 @@ int main(int argc, char** argv) {
         for (const auto& n : r.notes) std::printf("        %s\n", n.c_str());
         if (!r.fail) ++pass;
     }
+    if (!linkChecks(files)) ++fails;
     std::printf("\n%zu plug-ins: %d ok, %d FAIL, %d with warnings; Output gain checked on %d, Bypass on %d, Mix 0 %% on %d, In Off on %d; slowest %s (%.1f%% of one core, noisy)\n",
                 files.size(), pass, fails, warns, outTested, bypassTested, mixTested, inTested, worstCpuName.c_str(), worstCpu);
     std::printf("bit-exact pass-through at the defaults (%zu):", passNames.size());

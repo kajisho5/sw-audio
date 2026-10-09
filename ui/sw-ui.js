@@ -86,28 +86,52 @@
   }
 
   function mount(root, opt) {
-    const prod = opt.product, specs = opt.params, tr = opt.traits || {}, bridge = opt.bridge;
+    const prod = opt.product, specs = opt.params, tr = opt.traits || {}, rawBridge = opt.bridge;
     const host = specs.map((p, i) => ({ p, i, c: makeCurve(p) }));
     if (tr.autoGain) host.push({ p: { id: 'common.autogain', name: 'Auto gain', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
     if (tr.delta) host.push({ p: { id: 'common.delta', name: 'Delta', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
     if (tr.bypass) host.push({ p: { id: 'common.bypass', name: 'Bypass', min: 0, max: 1, def: 0, curve: 'step', steps: [0, 1], labels: ['Off', 'On'], auto: true }, i: host.length, extra: true });
     host.forEach(h => { if (!h.c) h.c = makeCurve(h.p); });
-    const vals = bridge.values().slice();
+    const vals = rawBridge.values().slice();
+    // ---- undo / redo: one entry per gesture (everything between begin and end of the same parameters, not one per movement); a preset, A/B or Init is one entry for all the parameters it moved.
+    // The window's bridge is wrapped to see the gestures: whatever the controls send goes through here. Undo and redo themselves talk to the raw bridge (they are not recorded).
+    const undo = [], redo = [], gest = new Map(), gsets = new Map(); let pend = [], pendScheduled = false, lastRec = 0;
+    const kUndo = 100;
+    function record(items, label) {
+      if (!items.length) return;
+      const now = Date.now(), top = undo[undo.length - 1];
+      // turning a wheel or clicking the same control again and again (gestures of one movement at most) is one step, within 0.6 s; a drag is always a step of its own
+      const fine = items.length === 1 && !label && items[0].fine === true;
+      if (fine && top && top.fine && top.items[0].i === items[0].i && now - lastRec < 600) top.items[0].to = items[0].to;
+      else { undo.push({ items, label, fine }); if (undo.length > kUndo) undo.shift(); }
+      lastRec = now; redo.length = 0; refreshTb();
+    }
+    function flushPending() { pendScheduled = false; const items = pend; pend = []; if (items.length) record(items); }
+    function endGesture(i) {
+      const from = gest.get(i), fine = (gsets.get(i) || 0) <= 1; gest.delete(i); gsets.delete(i);
+      if (from === undefined || vals[i] === from) return;
+      pend.push({ i, from, to: vals[i], fine }); if (!pendScheduled) { pendScheduled = true; Promise.resolve().then(flushPending); }   // the ends of one drag (an EQ dot: frequency and gain) arrive together
+    }
+    const bridge = Object.assign({}, rawBridge, { begin: i => { gest.set(i, vals[i]); gsets.set(i, 0); rawBridge.begin(i); }, set: (i, v) => { if (gsets.has(i)) gsets.set(i, gsets.get(i) + 1); rawBridge.set(i, v); }, end: i => { rawBridge.end(i); endGesture(i); } });
     const widgets = new Map();       // host index -> update(plain)
     const addWidget = (i, f) => { const prev = widgets.get(i); widgets.set(i, prev ? v => { prev(v); f(v); } : f); };   // several widgets may show one parameter (the design's control and the all-parameters drawer)
-    const undo = [], redo = []; let ab = 'A'; const slots = { A: null, B: null };
+    let ab = 'A'; const slots = { A: null, B: null };
 
     root.classList.add('p');
     root.style.setProperty('--acc', prod.acc); root.style.setProperty('--acc2', prod.hi); root.style.setProperty('--ring', prod.ring);
     root.innerHTML = '';
     const box = el('div', 'root'); root.appendChild(box);
 
-    function setValue(i, v, record) {
+    function setValue(i, v, rec) {
       const h = host[i]; v = h.p.curve === 'step' ? h.c.value(h.c.norm(v)) : clamp(v, Math.min(h.p.min, h.p.max), Math.max(h.p.min, h.p.max));
-      if (record !== false && vals[i] !== v) { undo.push({ i, from: vals[i], to: v }); if (undo.length > 200) undo.shift(); redo.length = 0; refreshTb(); }
+      if (rec !== false && vals[i] !== v && !gest.has(i)) record([{ i, from: vals[i], to: v }]);   // outside a gesture: one step of its own
       vals[i] = v; bridge.set(i, v); const w = widgets.get(i); if (w) w(v);
     }
-    function applyAll(values) { values.forEach((v, i) => { if (i < host.length && vals[i] !== v) { vals[i] = v; bridge.begin(i); bridge.set(i, v); bridge.end(i); const w = widgets.get(i); if (w) w(v); } }); }
+    function applyAll(values, label) {   // label: this is one step for undo ("Preset", "A / B", "Init"); without it nothing is recorded (the morph slider records its own gesture)
+      const items = [];
+      values.forEach((v, i) => { if (i < host.length && vals[i] !== v) { items.push({ i, from: vals[i], to: v }); vals[i] = v; rawBridge.begin(i); rawBridge.set(i, v); rawBridge.end(i); const w = widgets.get(i); if (w) w(v); } });
+      if (label) record(items, label);
+    }
 
     // ---- toolbar (the design's own in skin mode)
     let bA, bB, bU, bR, skinBox = null;
@@ -132,12 +156,14 @@
       box.append(tb, el('div', 'strip'));
     }
     function refreshTb() { bU.disabled = !undo.length; bR.disabled = !redo.length; if (skinBox) { bU.style.opacity = undo.length ? '' : '.4'; bR.style.opacity = redo.length ? '' : '.4'; } }
-    bU.onclick = () => { const e = undo.pop(); if (!e) return; redo.push(e); vals[e.i] = e.from; bridge.begin(e.i); bridge.set(e.i, e.from); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.from); refreshTb(); };
-    bR.onclick = () => { const e = redo.pop(); if (!e) return; undo.push(e); vals[e.i] = e.to; bridge.begin(e.i); bridge.set(e.i, e.to); bridge.end(e.i); const w = widgets.get(e.i); if (w) w(e.to); refreshTb(); };
+    const putItems = (items, key) => items.forEach(it => { vals[it.i] = it[key]; rawBridge.begin(it.i); rawBridge.set(it.i, it[key]); rawBridge.end(it.i); const w = widgets.get(it.i); if (w) w(it[key]); });
+    const stepBack = () => { const e = undo.pop(); if (!e) return; redo.push(e); putItems(e.items, 'from'); lastRec = 0; refreshTb(); };
+    const stepForward = () => { const e = redo.pop(); if (!e) return; undo.push(e); putItems(e.items, 'to'); lastRec = 0; refreshTb(); };
+    bU.onclick = stepBack; bR.onclick = stepForward;
     let morphed = false, drawMorph = () => {};
     function pickAB(which) {
       if (which === ab && !morphed) return; if (!morphed) slots[ab] = vals.slice(); if (!slots[which]) slots[which] = vals.slice();
-      morphed = false; ab = which; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); applyAll(slots[which]); drawMorph(ab === 'A' ? 0 : 1);
+      morphed = false; ab = which; bA.classList.toggle('on', ab === 'A'); bB.classList.toggle('on', ab === 'B'); applyAll(slots[which], 'A / B ' + which); drawMorph(ab === 'A' ? 0 : 1);
     }
     bA.onclick = () => pickAB('A'); bB.onclick = () => pickAB('B'); if (skinBox) { bA.classList.add('on'); bB.classList.remove('on'); } refreshTb();
     // ---- morph slider of the design: between the A and B settings (continuous parameters move in their own scale, stepped ones switch at the middle); the slots themselves stay as they were
@@ -169,9 +195,37 @@
     const applyValues = body => {   // the pairs of a body onto the current values (a parameter the body lacks stays); what is not a number or an id of this product is ignored
       const next = vals.slice();
       body.split(';').forEach(kv => { const e = kv.indexOf('='); if (e < 1) return; const i = idx.get(kv.slice(0, e)), v = parseFloat(kv.slice(e + 1)); if (i !== undefined && isFinite(v)) { const h = host[i]; next[i] = h.p.curve === 'step' ? h.c.value(h.c.norm(v)) : clamp(v, Math.min(h.p.min, h.p.max), Math.max(h.p.min, h.p.max)); } });
-      morphed = false; applyAll(next);
+      morphed = false; applyAll(next, 'Preset');
     };
     const presetBtn = skinBox && bridge.onPreset && skinBox.querySelector('button[data-preset]');
+    // History (the clock of the EVO bar): the last changes, newest first. Pressing one goes back to the state before it (as many undo steps as that takes); Redo brings them back.
+    const histBtn = skinBox && skinBox.querySelector('button[data-history]');
+    if (histBtn) {
+      let pop = null;
+      const labelOf = e => {
+        if (e.label) return e.label;
+        const it = e.items[0], h = host[it.i]; if (!h) return 'Change';
+        return e.items.length === 1 ? h.p.name + ': ' + format(h.p, it.from, h.c) + ' \u2192 ' + format(h.p, it.to, h.c) : h.p.name + ' and ' + (e.items.length - 1) + ' more';
+      };
+      const close = () => { if (pop) { pop.remove(); pop = null; histBtn.classList.remove('on'); } };
+      histBtn.addEventListener('click', ev => {
+        ev.stopPropagation(); if (pop) { close(); return; }
+        const a = skinBox.getBoundingClientRect(), b = histBtn.getBoundingClientRect(), k = skinBox.offsetWidth ? a.width / skinBox.offsetWidth : 1;
+        pop = document.createElement('div');
+        pop.style.cssText = 'position:absolute;z-index:70;min-width:220px;max-width:340px;max-height:260px;overflow:auto;background:#1c1d21;border:1px solid #2f3137;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.5);padding:4px 0;font:12px "Barlow Condensed",sans-serif;color:#e8e8e8;'
+          + 'right:' + Math.max(4, (a.right - b.right) / k).toFixed(0) + 'px;bottom:' + ((a.bottom - b.top) / k + 6).toFixed(0) + 'px';
+        const head = document.createElement('div'); head.textContent = undo.length ? 'Go back to before ...' : 'Nothing has been changed yet'; head.style.cssText = 'padding:3px 10px;color:#8a8c92;font-size:11px'; pop.append(head);
+        undo.slice().reverse().forEach((e, n) => {
+          const row = document.createElement('div'); row.textContent = labelOf(e); row.title = labelOf(e);
+          row.style.cssText = 'padding:4px 10px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+          row.onmouseenter = () => { row.style.background = '#2a2c31'; }; row.onmouseleave = () => { row.style.background = ''; };
+          row.onclick = () => { for (let j = 0; j <= n; j++) stepBack(); close(); };
+          pop.append(row);
+        });
+        skinBox.append(pop); histBtn.classList.add('on');
+      });
+      document.addEventListener('pointerdown', e => { if (pop && !(e.target && histBtn.contains(e.target))) { const p = e.composedPath ? e.composedPath() : []; if (!p.includes(pop)) close(); } });
+    }
     // Lock (the LIVE header): a see-through sheet over everything below the header takes the presses, so a stray touch during a show changes nothing; the host's own automation still moves the parameters
     const lockBtn = skinBox && skinBox.querySelector('button[data-lock]');
     if (lockBtn) {
@@ -205,7 +259,7 @@
       const row = (text, onClick, cur) => { const d = el('div', cur ? 'cur' : '', text); d.style.cssText = 'padding:5px 12px;cursor:pointer;white-space:nowrap;font-size:13px;letter-spacing:.04em;border-radius:3px' + (cur ? ';color:var(--acc)' : ''); d.onmouseenter = () => { d.style.background = 'var(--acc)'; d.style.color = '#0c0c0d'; }; d.onmouseleave = () => { d.style.background = ''; d.style.color = cur ? 'var(--acc)' : ''; }; d.onclick = onClick; return d; };
       const buildMenu = () => {
         if (!menu) return; menu.innerHTML = '';
-        menu.append(row('Init (default settings)', () => { morphed = false; applyAll(vals.map((v, i) => (host[i] && !host[i].extra ? host[i].p.def : v))); current = null; snap = null; draw(); closeMenu(); }));
+        menu.append(row('Init (default settings)', () => { morphed = false; applyAll(vals.map((v, i) => (host[i] && !host[i].extra ? host[i].p.def : v)), 'Init'); current = null; snap = null; draw(); closeMenu(); }));
         if (names.length) {
           const sep = el('div'); sep.style.cssText = 'height:1px;background:#3f4045;margin:4px 0;padding:0'; menu.append(sep);
           names.forEach(n => {
@@ -500,8 +554,18 @@
       band: () => selBand,
       call: (name, arg) => bridge.call(name, arg === undefined ? '' : arg),
       selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); else if (bandHook) bandHook(k); } }) : null;
+    // the SW Link lamp of the bottom bar: lit while other SW AUDIO instances are in this host process (info.link[0], see plugin/clap/swlink.hpp)
+    const linkLamp = skinBox ? skinBox.querySelector('.evr[data-link]') : null, linkDot = linkLamp ? linkLamp.querySelector('.evd') : null;
+    function refreshLink(inf) {
+      if (!linkLamp) return;
+      const n = inf.link ? inf.link[0] : -2, on = n > 0;
+      if (linkDot) { linkDot.style.background = on ? '' : '#55575c'; linkDot.style.boxShadow = on ? '' : 'none'; }
+      const t = n === -2 ? 'SW Link' : n < 0 ? 'SW Link: this instance is not connected' : n === 0 ? 'SW Link: no other SW AUDIO plug-in is running in this project' : 'SW Link: ' + n + ' other SW AUDIO instance' + (n === 1 ? '' : 's') + ' in this project';
+      if (linkLamp.title !== t) linkLamp.title = t;
+    }
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
+      refreshLink(inf);
       if (disp) disp.update(inf);
       if (presetDraw) presetDraw();
       if (skinBox) {   // the LIVE designs' own chip ("LIVE 0.0 ms", with the CPU in LV03's) and the CPU text of their bar show the real latency and CPU

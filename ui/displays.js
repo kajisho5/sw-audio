@@ -551,6 +551,35 @@
     } };
   }
 
+  // ---- EQ02 "Unmask" (SW Link, plugin/clap/swlink.hpp): info.link = [the other SW AUDIO instances in this process, then - once the button asked for it ("c linkwatch 1") - the sum of their output spectra,
+  // 64 dB values]. Where this track and the others are both strong, their energy overlaps and one masks the other: those bands are shaded red behind the curve (the darker, the more both are at their
+  // loudest there). "Strong" is judged against each side's own loudest band, so a quiet track against a loud one still shows where it competes: a band counts when both are within 12 dB of their own peak
+  // (a design value; spec: "両方のエネルギーが高い帯域を重なりとして表示する"), and at least -70 dBFS.
+  function unmaskOverlay(box, ctx, eq) {
+    const btn = box.querySelector('button[data-call="linkwatch"]'); if (btn) btn.classList.remove('on');
+    if (!btn || !eq || !eq.svg) return null;
+    const svg = eq.svg, [, , W, H] = vbOf(svg), g = mkEl('g', { 'pointer-events': 'none' }), note = mkEl('text', { x: 16, y: H - 26, fill: '#9a9ca2', 'font-size': 11, 'font-family': 'Barlow Condensed, sans-serif' });
+    svg.insertBefore(g, svg.firstChild); svg.append(note);
+    const own = Smooth(), oth = Smooth(); let key = '', msg = '';
+    const clear = () => { if (key !== '') { g.innerHTML = ''; key = ''; } if (msg !== '') { note.textContent = ''; msg = ''; } };
+    const say = t => { if (msg !== t) { msg = t; note.textContent = t; } };
+    return { update(info) {
+      if (!btn.classList.contains('on')) { clear(); return; }
+      const lk = info && info.link, sp = info && info.spectrum;
+      if (!lk || lk[0] < 0) { g.innerHTML = ''; key = ''; say('Unmask: this instance is not connected to SW Link'); return; }
+      if (lk[0] === 0) { g.innerHTML = ''; key = ''; say('Unmask: no other SW AUDIO plug-in is running in this project'); return; }
+      if (lk.length < 65 || !sp) { say('Unmask: listening ...'); return; }
+      const a = own.feed(sp), x = oth.feed(lk.slice(1, 65)), ma = Math.max(...a), mx = Math.max(...x);
+      if (ma < -70 || mx < -70) { g.innerHTML = ''; key = ''; say('Unmask: nothing to compare yet (this track or the others are silent)'); return; }
+      const s = []; let n = 0;
+      for (let b = 0; b < 64; b++) { const o = Math.min(a[b] - ma, x[b] - mx), v = a[b] > -70 && x[b] > -70 ? Math.max(0, (o + 12) / 12) : 0; s.push(v); if (v > 0.05) n++; }
+      const k = s.map(v => Math.round(v * 10)).join(''); say('Unmask: ' + lk[0] + ' other instance' + (lk[0] === 1 ? '' : 's') + (n ? ', overlap in ' + n + ' of 64 bands (red)' : ', no overlap'));
+      if (k === key) return; key = k;
+      let h = ''; for (let b = 0; b < 64; b++) if (s[b] > 0.05) { const x0 = eq.fx(20 * Math.pow(1000, b / 64)), x1 = eq.fx(20 * Math.pow(1000, (b + 1) / 64)); h += '<rect x="' + x0.toFixed(1) + '" y="8" width="' + (x1 - x0 + 0.5).toFixed(1) + '" height="' + (H - 34) + '" fill="#e5484d" fill-opacity="' + (0.06 + 0.34 * s[b]).toFixed(2) + '"/>'; }
+      g.innerHTML = h;
+    } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1894,7 +1923,7 @@
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     MS03: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     LV12: faderBank,
-    EQ02: (box, ctx) => { const e = eqDisplay(box, ctx); return combine(e, assistMarks(box, ctx, e)); }, EQ07: (box, ctx) => combine(eqDisplay(box, ctx), learnButton(box, ctx)),
+    EQ02: (box, ctx) => { const e = eqDisplay(box, ctx); return combine(e, assistMarks(box, ctx, e), unmaskOverlay(box, ctx, e)); }, EQ07: (box, ctx) => combine(eqDisplay(box, ctx), learnButton(box, ctx)),
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL01: echoLcdDisplay,
     DL02: (box, ctx) => reelDisplay(box, ctx, null),

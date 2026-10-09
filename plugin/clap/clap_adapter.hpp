@@ -14,6 +14,7 @@
 #include "sw_message.h"
 #include "gui_paths.hpp"
 #include "gui_view.hpp"
+#include "swlink.hpp"
 #ifdef SW_SKIN_HEADER
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
 #endif
@@ -170,7 +171,13 @@ private:
         void stereo(double* out) { pl.spec_.stereo(out); }
         int numReadouts() { if constexpr (HasReadouts<P>::value) return P::kReadouts; else return 0; }
         double readout(int i) { return pl.ro_[static_cast<size_t>(i)].load(std::memory_order_relaxed); }
-        void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
+        void call(const std::string& name, const std::string& arg) { if (name == "linkwatch") { pl.link_watch_.store(arg == "1"); return; } pl.guiCall(name, arg); }
+        // SW Link for the screen: [the other instances alive, then (only while a screen part asked for it: "linkwatch 1") the sum of their output spectra, 64 dB values]; returns how many values
+        int link(double* out) {
+            out[0] = pl.link_.joined() ? pl.link_.peers() : -1;   // -1: this instance is not in the registry (no room, or a layout it does not know)
+            if (out[0] < 0 || !pl.link_watch_.load()) return 1;
+            pl.link_.others(out + 1); return 1 + gui::kSpecBands;
+        }
     };
     // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
     void guiPush(uint8_t kind, int id) {
@@ -249,7 +256,7 @@ private:
         reply = session.onMessage(msg ? msg : "");
         return reply.c_str();
     }
-    void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); }
+    void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); link_watch_.store(false); }
     static void guiDestroy(const clap_plugin_t* p) { self(p)->guiDestroyView(); }
     static bool guiSetScale(const clap_plugin_t* p, double scale) { self(p)->scale_ = scale > 0.0 ? scale : 1.0; return true; }
     static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { const char* api = gui::platformApi(); const bool logical = api && !std::strcmp(api, "cocoa"); const double k = logical ? 1.0 : self(p)->scale_; *w = static_cast<uint32_t>(kGuiW * k + 0.5); *h = static_cast<uint32_t>(kGuiH * k + 0.5); return true; }
@@ -268,11 +275,11 @@ private:
     static bool guiHide(const clap_plugin_t* p) { Plugin* s = self(p); if (!s->view_) return false; s->view_->setVisible(false); return true; }
 
     // ---- plugin
-    static bool init(const clap_plugin_t*) { return true; }
+    static bool init(const clap_plugin_t* p) { Plugin* s = self(p); const std::string code = gui::codeOf(P::descriptor()->id); s->link_.join(s->spec_.view(), code.c_str()); return true; }
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr;
+        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr; s->link_.setSampleRate(sr);
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -552,6 +559,8 @@ private:
     std::array<std::atomic<double>, gui::kMaxReadouts> ro_{};   // the core's measured values for the screen (trait readouts)
     void publishReadouts() { if constexpr (HasReadouts<P>::value) { static_assert(P::kReadouts <= gui::kMaxReadouts); double v[P::kReadouts > 0 ? P::kReadouts : 1] = {}; P::readouts(shell_.core(), v); for (int i = 0; i < P::kReadouts; ++i) ro_[static_cast<size_t>(i)].store(v[i], std::memory_order_relaxed); } }
     gui::SpectrumTap spec_;   // the output spectrum for the screen (audio thread writes, GUI thread reads)
+    link::Member link_;       // SW Link: the other SW AUDIO instances of this process read the ring above (declared after it: leaves before the ring is destroyed)
+    std::atomic<bool> link_watch_{false};   // a part of the screen wants the others' spectrum (Unmask)
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
 };
 

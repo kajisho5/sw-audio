@@ -1,7 +1,7 @@
 /* The page of a plug-in window: the bridge between the screen (sw-ui.js) and the native side.
    The native side exposes one function to post a text message — webkit.messageHandlers.sw (macOS) or chrome.webview (Windows) — and calls SWHOST.update(...) with text it composed.
    Messages to native (space separated): "s <i> <plain>" a value, "b <i>" / "e <i>" gesture begin / end, "c <name> <arg...>" a button, "p" poll, "r" ready.
-   Poll answer (native -> page): SWHOST.update([plain values], latencyMs, cpu, [inL, inR, outL, outR in dBFS], [64 band levels of the output in dB, log-spaced 20 Hz - 20 kHz], [the values the core measures: PLUGIN readouts trait, only for products that have one], [stereo: correlation, then L R of 160 recent samples]). A poll is sent every 50 ms while the page is visible. */
+   Poll answer (native -> page): SWHOST.update([plain values], latencyMs, cpu, [inL, inR, outL, outR in dBFS], [64 band levels of the output in dB, log-spaced 20 Hz - 20 kHz], [the values the core measures: PLUGIN readouts trait, only for products that have one], [stereo: correlation, then L R of 160 recent samples], [SW Link: the number of other SW AUDIO instances in this process (-1: not in the registry), then - after the page sent "c linkwatch 1" - the sum of their output spectra, 64 dB values]). A poll is sent every 50 ms while the page is visible. */
 (function () {
   const post = m => { try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sw) window.webkit.messageHandlers.sw.postMessage(m); else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(m); } catch (e) {} };
   let vals = SWBOOT.values.slice(), info = { latencyMs: SWBOOT.latencyMs || 0 }; const listeners = [], presetListeners = []; const pending = new Set();
@@ -18,8 +18,8 @@
     presetLoaded(n, body) { presetListeners.forEach(cb => cb('loaded', n, body)); },
     presetPasted(body) { presetListeners.forEach(cb => cb('pasted', body)); },
     presetError(t) { presetListeners.forEach(cb => cb('error', t)); },
-    update(v, lat, cpu, m, sp, ro, st) {
-      info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m, spectrum: sp, readouts: ro, stereo: st };
+    update(v, lat, cpu, m, sp, ro, st, lk) {
+      info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m, spectrum: sp, readouts: ro, stereo: st, link: lk };
       v.forEach((x, i) => { if (!pending.has(i) && vals[i] !== x) { vals[i] = x; listeners.forEach(cb => cb(i, x)); } });
       pending.clear();
     }

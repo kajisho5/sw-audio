@@ -100,7 +100,7 @@ inline std::string page(const std::string& code, const std::vector<ParamSpec>& s
     return h;
 }
 
-inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu, const double* meters, const double* spectrum = nullptr, const double* readouts = nullptr, int numReadouts = 0, const double* stereo = nullptr) {
+inline std::string updateScript(const std::vector<double>& plain, double latencyMs, double cpu, const double* meters, const double* spectrum = nullptr, const double* readouts = nullptr, int numReadouts = 0, const double* stereo = nullptr, const double* link = nullptr, int numLink = 0) {
     std::string s = "SWHOST.update([";
     for (size_t i = 0; i < plain.size(); ++i) s += (i ? "," : "") + num(plain[i]);
     s += "]," + num(latencyMs) + "," + num(cpu) + ",[";
@@ -109,6 +109,7 @@ inline std::string updateScript(const std::vector<double>& plain, double latency
     if (spectrum) { s += ",["; for (int i = 0; i < kSpecBands; ++i) { char b[16]; std::snprintf(b, sizeof b, "%.1f", spectrum[i]); s += (i ? "," : ""); s += b; } s += "]"; }
     if (spectrum) { s += ",["; for (int i = 0; i < numReadouts && readouts; ++i) s += (i ? "," : "") + num(readouts[i]); s += "]"; }
     if (spectrum && stereo) { s += ",["; for (int i = 0; i < 1 + 2 * kGonioPts; ++i) { char b[16]; std::snprintf(b, sizeof b, "%.3g", stereo[i]); s += (i ? "," : ""); s += b; } s += "]"; }
+    if (spectrum && stereo && link && numLink > 0) { s += ",["; for (int i = 0; i < numLink; ++i) { char b[16]; std::snprintf(b, sizeof b, "%.1f", link[i]); s += (i ? "," : ""); s += b; } s += "]"; }
     return s + ");";
 }
 
@@ -131,7 +132,7 @@ inline bool parseMessage(const std::string& m, Message& out) {
     return true;
 }
 
-// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), spectrum(double* kSpecBands dB), numReadouts(), readout(i), stereo(double* 1 + 2 * kGonioPts), call(name, args).
+// A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), spectrum(double* kSpecBands dB), numReadouts(), readout(i), stereo(double* 1 + 2 * kGonioPts), link(double* 1 + kSpecBands) -> how many values (SW Link: peers, then the others' spectrum), call(name, args).
 template <class F>
 class Session {
 public:
@@ -150,7 +151,7 @@ public:
         }
         return "";
     }
-    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[kMaxReadouts] = {}; const int nro = std::min(kMaxReadouts, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); double st[1 + 2 * kGonioPts]; f_.stereo(st); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro, st); }
+    std::string snapshot() { std::vector<double> v(static_cast<size_t>(f_.numParams())); for (size_t i = 0; i < v.size(); ++i) v[i] = f_.plain(static_cast<int>(i)); double m[4]; for (int k = 0; k < 4; ++k) m[k] = f_.meter(k); double sp[kSpecBands]; f_.spectrum(sp); double ro[kMaxReadouts] = {}; const int nro = std::min(kMaxReadouts, f_.numReadouts()); for (int k = 0; k < nro; ++k) ro[k] = f_.readout(k); double st[1 + 2 * kGonioPts]; f_.stereo(st); double lk[1 + kSpecBands] = {}; const int nlk = f_.link(lk); return updateScript(v, f_.latencyMs(), f_.cpu(), m, sp, ro, nro, st, lk, nlk); }
 private:
     // the preset menu of the page: presetlist, presetsave <percent-encoded name> <body>, presetload <name>, presetdelete <name>. The page writes and reads the body (id=value pairs); this stores it.
     // Replies (scripts for the page): SWHOST.presets([names], selected), SWHOST.presetLoaded(name, body), SWHOST.presetError(text)

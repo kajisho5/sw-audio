@@ -58,8 +58,13 @@ inline void spectrumOf(const float* x, double sampleRate, double* out) {
     }
 }
 
+// what another plug-in of the suite needs to read the ring (SW Link, swlink.hpp): the samples, the write position and the size - 1 (a power of two). Nothing else of SpectrumTap is shared,
+// so builds of different versions can read each other's rings.
+struct RingView { const std::atomic<float>* data = nullptr; const std::atomic<size_t>* head = nullptr; size_t mask = 0; };
+
 class SpectrumTap {
 public:
+    RingView view() const { return {ring_, &head_, kRing - 1}; }
     // audio thread
     void push(float* const* d, uint32_t nch, uint32_t frames) {
         if (!nch) return;

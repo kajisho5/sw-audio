@@ -437,7 +437,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'unmask', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair', 'truncation check'}
-    bound = ('data-p', 'data-set', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave', 'data-addband', 'data-lock')
+    bound = ('data-p', 'data-set', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave', 'data-addband', 'data-lock', 'data-history')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -459,6 +459,8 @@ def mark_inert(root):
             b['data-compare'] = '1'; b['title'] = 'Keep the current spectrum as the reference curve; press again to clear it'; continue
         if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown
             b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
+        if (b.get('aria-label') or '').lower() == 'history':   # the list of the last changes, to step back to (the page: sw-ui.js)
+            b['data-history'] = '1'; b['title'] = 'History: the last changes; click one to go back to before it'; continue
         in_evo = b.find_parent(class_='evob') is not None
         if t in inert or (b.get('aria-label') or '').lower() == 'history' or (in_evo and t in ('a', 'b', 'c')):
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'
@@ -681,10 +683,10 @@ def build(code, report):
     if code == 'CS04':
         cs04_bind(root, params)
     mark_inert(root)
-    # the SW Link lamp of the bottom bar: SW Link is not part of this version (README), so the lamp is not green
+    # the SW Link lamp of the bottom bar: grey until the page hears that other SW AUDIO instances are in the process (ui/sw-ui.js: data-link; the plug-in's readings: plugin/clap/swlink.hpp)
     for evr in root.select('.evob .evr'):
         if 'SW Link' in evr.get_text():
-            evr['title'] = 'SW Link is not part of this version'
+            evr['title'] = 'SW Link'; evr['data-link'] = '1'
             d = evr.select_one('.evd')
             if d is not None:
                 d['style'] = (d.get('style') or '') + ';background:#55575c;box-shadow:none'
