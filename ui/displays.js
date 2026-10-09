@@ -846,7 +846,38 @@
     } };
   }
 
+
+  // ---- bit crusher (SA08): two cycles of a sine as the crusher makes them: Bits quantises the level (2^Bits steps, shown up to 64), Rate holds the value (the window is 2 ms, so 48 kHz = 96 points)
+  function crusherDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')]; if (ps.length < 2) return null;
+    const [, , W, H] = vbOf(svg), C = H / 2, A = C - 14; let last = '';
+    return { update() {
+      const bits = ctx.value('Bits') || 8, rate = ctx.value('Rate') || 48000, key = bits + '|' + rate; if (key === last) return; last = key;
+      const levels = Math.min(64, Math.pow(2, Math.max(1, Math.round(bits)))), n = clamp(Math.round(rate * 0.002), 2, 240), q = v => levels <= 2 ? (v >= 0 ? 1 : -1) : Math.round((v * 0.5 + 0.5) * (levels - 1)) / (levels - 1) * 2 - 1;
+      let d = ''; for (let i = 0; i < n; i++) { const u0 = i / n, u1 = (i + 1) / n, v = q(Math.sin(2 * Math.PI * 2 * u0)), y = (C - v * A).toFixed(1); d += (i ? ' L' : 'M') + (u0 * W).toFixed(1) + ' ' + y + ' L' + (u1 * W).toFixed(1) + ' ' + y; }
+      ps.forEach(p => p.setAttribute('d', d));
+    } };
+  }
+
+
+  // ---- speaker triangle (ST05): the two speakers at the Angle between them (0 - 60 degrees, symmetric about the listener's forward direction), fixed distance on the drawing
+  function speakerTriangleDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const lis = svg.querySelector(':scope > circle'), rects = [...svg.querySelectorAll(':scope > rect')].filter(r => +r.getAttribute('width') < 40), lines = [...svg.querySelectorAll(':scope > line[stroke-dasharray]')];
+    if (!lis || rects.length < 2 || lines.length < 2) return null;
+    const cx = +lis.getAttribute('cx'), cy = +lis.getAttribute('cy'), rw = +rects[0].getAttribute('width'), rh = +rects[0].getAttribute('height'), D = 84; let last = null;
+    return { update() {
+      const a = ctx.value('Angle'); if (a === undefined || a === last) return; last = a; const half = a / 2 * Math.PI / 180;
+      [-1, 1].forEach((sgn, k) => { const x = cx + sgn * D * Math.sin(half), y = cy - D * Math.cos(half);
+        rects[k].setAttribute('x', (x - rw / 2).toFixed(1)); rects[k].setAttribute('y', (y - rh / 2).toFixed(1));
+        lines[k].setAttribute('x1', x.toFixed(1)); lines[k].setAttribute('y1', (y + rh / 2).toFixed(1)); lines[k].setAttribute('x2', (cx + sgn * 14 * Math.sin(half)).toFixed(1)); lines[k].setAttribute('y2', (cy - 20 * Math.cos(half)).toFixed(1)); });
+    } };
+  }
+
   const registry = {
+    ST05: speakerTriangleDisplay,
+    SA08: crusherDisplay,
     LV18: catcherDisplay,
     LV21: generatorDisplay,
     MS02: ceilingDisplay,

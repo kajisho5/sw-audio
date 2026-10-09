@@ -1093,6 +1093,8 @@ LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`�
 | MS02 | トゥルーピークリミッターの Ceiling とレベル | Ceiling の線と文字は Ceiling パラメータ、波形は出力ピークの履歴（鏡像）。デザインの「Inter-sample peaks caught」の印と数はコアが公開していないため外した |
 | LV21 | テスト信号の波形 | Signal（Sine は 4 周期、Pink／White は固定の乱数、Sweep は上がる掃引、Polarity は正のクリック）を Level の振幅で描く（周波数・掃引時間の長さは縮尺どおりではない）。Arm・Running の状態は未表示 |
 | LV18 | ハンドリングノイズの検出 | 3 つの印にコアの検出数（Plug pop・Wind・Handling。`caught()`）、オフの種類は薄く、検出の瞬間に光る。灰色の面は出力レベルの履歴。「Last 30 s」ではなく起動からの累計（Plosive は画面に印がない） |
+| SA08 | ビットクラッシャーの波形 | 2 ms の窓に正弦波 2 周期を、Bits（段数 2^Bits、表示は 64 段まで）と Rate（保持の間隔。48 kHz で 96 点）どおりに量子化・サンプルホールドして描く |
+| ST05 | スピーカーの三角形 | 2 つのスピーカーを Angle（0〜60°、スピーカー間の角度とみなす。距離は図の固定値）で左右対称に置く。Room・Speakers・Head size は反映しない。RV07 の同じ絵は Distance・Angle の意味が仕様から読み取れないため、そのまま |
 | DL04・LV25 | ディレイの繰り返しの棒 | DL04 は Tap 1〜6 の On・Time・Level、LV25 は Time の整数倍に Feedback の累乗の高さ。Clock が Tap／MIDI／BPM のときの実際の時間は反映しない（Time の値で描く） |
 | LV16 | ゲート／ダッカー | しきい値の線（上下ドラッグで Threshold）、入力ピークの履歴（同じ目盛り）、Open／Closed（Duck では Ducking／Idle）は入力ピークがしきい値を超えたかで判定。Key HPF 通過後の値ではない |
 | ST01 | バンドごとのステレオ幅 | 棒の幅が各バンドの Width（左右にドラッグ、ダブルクリックで既定値） |
