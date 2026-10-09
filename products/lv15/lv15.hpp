@@ -29,12 +29,18 @@ public:
     int micNumber() const { return link_.index() + 1; }   // 1..8, 0 when the instance is not in the group
     double gain() const { return g_; }
     double levelDb() const { return 20.0 * std::log10(std::max(lvl_, 1e-9)); }
+    // for the screen: every mic of the group (index 0..7): in the group, its mixer gain now (dB; the gain it is heading for) and whether it is among the open mics
+    bool micUsed(int i) const { return used_[static_cast<size_t>(i)]; }
+    bool micOpen(int i) const { return open_[static_cast<size_t>(i)]; }
+    double micGainDb(int i) const { return shownDb_[static_cast<size_t>(i)]; }
 
 private:
     double fs_ = 48000.0;
     bool prepared_ = false;
     std::array<double, kNumParams> target_{};
     double g_ = 1.0, ms_ = 0, lvl_ = 0;
+    std::array<double, 8> shownDb_{};
+    std::array<bool, 8> used_{}, open_{};
     LinkMember<LinkTag> link_;
     LinkWatch<LinkTag> watch_;
 };

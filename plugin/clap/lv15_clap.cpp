@@ -9,6 +9,8 @@ struct Lv15 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 17;   // this instance's mic number (1..8, 0 = none), then for mic 1..8 its gain (dB, -999 = not in the group) and 1 / 0 = among the open mics
+    static void readouts(const Core& c, double* o) { o[0] = c.micNumber(); for (int i = 0; i < 8; ++i) { o[1 + i] = c.micGainDb(i); o[9 + i] = c.micOpen(i) ? 1.0 : 0.0; } }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

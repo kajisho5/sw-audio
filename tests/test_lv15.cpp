@@ -77,3 +77,17 @@ TEST_CASE("LV15 mono, odd blocks, before prepare, the ninth mic") {
     for (float x : m) REQUIRE(std::isfinite(x));
     Processor z; std::vector<float> a(256, 0.3f); float* cz[1] = {a.data()}; z.process(cz, 1, 256); CHECK(a[0] == 0.3f);
 }
+
+TEST_CASE("LV15 every instance can tell the screen the gain of all mics of the group") {
+    Processor a = make(), b = make(), c = make();
+    const auto talk = sine(-20, 2.0, 220), quiet = std::vector<float>(talk.size(), 0.0f);
+    runMics({&a, &b, &c}, {talk, quiet, quiet});
+    for (Processor* p : {&a, &b, &c}) {
+        CHECK(p->micUsed(0)); CHECK(p->micUsed(1)); CHECK(p->micUsed(2)); CHECK_FALSE(p->micUsed(3));
+        CHECK(p->micOpen(0)); CHECK_FALSE(p->micOpen(1));
+        NEAR(p->micGainDb(0), 0.0, 0.5);                  // the talker is alone: gain 1
+        NEAR(p->micGainDb(1), -15.0, 0.5);                // the others sit at Off atten
+        CHECK(p->micGainDb(3) < -900.0);                  // a mic that is not there
+    }
+    NEAR(20.0 * std::log10(std::max(1e-9, a.gain())), 0.0, 1.0);   // what the instance itself applies agrees with its own entry
+}

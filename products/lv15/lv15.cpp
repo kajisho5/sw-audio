@@ -49,14 +49,20 @@ void Processor::process(float** ch, int numCh, int n) {
     bool open[8] = {false, false, false, false, false, false, false, false}; int cnt = 0;
     if (prio >= 0 && prio < 8 && act[prio]) { open[prio] = true; ++cnt; }
     while (cnt < nom) { int best = -1; for (int i = 0; i < 8; ++i) if (act[i] && !open[i] && (best < 0 || lv[i] > lv[best])) best = i; if (best < 0) break; open[best] = true; ++cnt; }
-    double target = off;
-    if (cnt > 0) {
-        if (target_[Mode] > 0.5) target = open[me] ? 1.0 : off;
-        else { double sum = 0; for (int i = 0; i < 8; ++i) if (open[i]) sum += lv[i] * (i == prio ? 3.0 : 1.0); target = open[me] ? std::max(off, lv[me] * (me == prio ? 3.0 : 1.0) / sum) : off; }
-    } else {   // nobody active
-        if (target_[LastMicHold] > 0.5) { int last = -1; for (int i = 0; i < 8; ++i) if (used[i] && (last < 0 || since[i] < since[last])) last = i; target = last == me ? 1.0 : off; }
-        else target = target_[Mode] > 0.5 ? off : 1.0 / std::max(1, nUsed);
-    }
+    // the gain every mic of the group would get now (the screen shows all eight; this instance applies its own)
+    auto targetFor = [&](int who) {
+        double t = off;
+        if (cnt > 0) {
+            if (target_[Mode] > 0.5) t = open[who] ? 1.0 : off;
+            else { double sum = 0; for (int i = 0; i < 8; ++i) if (open[i]) sum += lv[i] * (i == prio ? 3.0 : 1.0); t = open[who] ? std::max(off, lv[who] * (who == prio ? 3.0 : 1.0) / sum) : off; }
+        } else {   // nobody active
+            if (target_[LastMicHold] > 0.5) { int last = -1; for (int i = 0; i < 8; ++i) if (used[i] && (last < 0 || since[i] < since[last])) last = i; t = last == who ? 1.0 : off; }
+            else t = target_[Mode] > 0.5 ? off : 1.0 / std::max(1, nUsed);
+        }
+        return t;
+    };
+    for (int i = 0; i < 8; ++i) { used_[static_cast<size_t>(i)] = used[i]; open_[static_cast<size_t>(i)] = open[i]; shownDb_[static_cast<size_t>(i)] = used[i] ? 20.0 * std::log10(std::max(targetFor(i), 1e-6)) : -999.0; }
+    const double target = targetFor(me);
     const int sp = std::clamp(static_cast<int>(target_[Response] + 0.5), 0, 2);
     static constexpr double kUp[3] = {100, 40, 15}, kDown[3] = {400, 150, 60};
     const double ms = target > g_ ? kUp[sp] : kDown[sp], c = std::exp(-static_cast<double>(n) / (0.001 * ms * fs_));

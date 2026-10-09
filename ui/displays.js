@@ -1431,6 +1431,22 @@
   }
 
 
+  // ---- LV15 auto mixer: the eight mic columns. The instances of the product in one process share their levels (README: this stands in for SW Link), so each one can show the gain every mic of the
+  // group gets now (readouts: this instance's mic number, then for mics 1..8 the gain in dB (-999 = not in the group) and 1 / 0 = open). A mic that is not there shows a dash; the column of this instance is marked.
+  function autoMixerDisplay(box, ctx) {
+    const cols = [...box.querySelectorAll('.disp > div > div')].filter(c => c.querySelector('.rl') && c.querySelector('.rv')); if (cols.length !== 8) return null;
+    const parts = cols.map(c => ({ fill: c.querySelector(':scope > div > div'), lab: c.querySelector('.rl'), val: c.querySelector('.rv') }));
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 17) return; const me = Math.round(r[0]);
+      parts.forEach((p, i) => {
+        const db = r[1 + i], used = db > -900, open = r[9 + i] > 0.5;
+        p.fill.style.height = (used ? clamp(Math.pow(10, db / 20), 0, 1) * 100 : 0).toFixed(1) + '%'; p.fill.style.background = open ? '#f2f2f2' : '#5a5c60';
+        p.val.textContent = used ? (Math.abs(db) < 0.5 ? '0 dB' : Math.round(db) + ' dB') : '—'; p.lab.textContent = 'Mic ' + (i + 1) + (me === i + 1 ? ' •' : ''); p.lab.style.opacity = used ? '' : '.4'; p.lab.title = me === i + 1 ? 'This instance' : '';
+      });
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1472,6 +1488,7 @@
     RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     CS04: modularStripDisplay,
+    LV15: autoMixerDisplay,
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
