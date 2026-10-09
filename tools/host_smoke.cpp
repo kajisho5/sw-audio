@@ -121,6 +121,7 @@ struct Run {
     double peak = 0;
     double seconds = 0, audioSeconds = 0;
     double toneHz = 0, toneDb = -20.0; uint64_t toneN = 0;   // toneHz > 0: a sine instead of noise (the SW Link checks)
+    int64_t impulse = -1;                                    // >= 0: silence with one impulse (0.5) at that sample (the latency check)
 
     // processes `blocks` blocks of noise (seeded), appending to inAll/outAll; events go into the first block
     void process(int blocks, uint64_t seed, EventList& events) {
@@ -129,6 +130,7 @@ struct Run {
             for (int c = 0; c < 2; ++c) {
                 for (uint32_t i = 0; i < kBlock; ++i) {
                     float x = rng.next() * 0.1732f;   // uniform noise, ~ -20 dBFS RMS
+                    if (impulse >= 0) x = (static_cast<int64_t>(toneN) + i == impulse) ? 0.5f : 0.0f;
                     if (toneHz > 0) x = static_cast<float>(std::pow(10.0, toneDb / 20.0) * std::sin(6.283185307179586 * toneHz * static_cast<double>(toneN + i) / kSr));
                     in[c][i] = x; sc[c][i] = x * 0.5f; out[c][i] = 0.f;
                 }
@@ -545,6 +547,35 @@ bool linkChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// The reported latency against what a plug-in really does: an impulse at the defaults, the position of the largest output sample against the latency the plug-in reports. A host delays the
+// other tracks by the reported number (plug-in delay compensation): a wrong number puts the track out of time with the rest and combs against a parallel copy. Only plug-ins whose impulse
+// response has a clear main peak can be judged (a reverb or a delay has none: the peak is then not compared). Differences are WARN lines, not failures: an IIR filter's own group delay is a few samples.
+void impulseChecks(const std::vector<fs::path>& files, int& warns, std::vector<std::string>& lines) {
+    for (const auto& f : files) {
+        Loaded l; std::string why; if (!l.open(f, why)) continue;
+        const auto* lat = static_cast<const clap_plugin_latency_t*>(l.p->get_extension(l.p, CLAP_EXT_LATENCY));
+        const double reported = lat ? lat->get(l.p) : 0.0;
+        const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(l.p->get_extension(l.p, CLAP_EXT_AUDIO_PORTS));
+        l.run.nIn = ports ? std::min<uint32_t>(2, ports->count(l.p, true)) : 1;
+        if (l.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(l.p, true, 1, &pi)) l.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+        l.run.impulse = 4 * kBlock;                        // after a few blocks of silence (smoothers settle)
+        EventList none; const int blocks = static_cast<int>((4 * kBlock + reported + 8192) / kBlock) + 2; l.run.process(blocks, 1, none);
+        const auto& y = l.run.outAll[0]; double pk = 0, sumsq = 0; size_t at = 0;
+        for (size_t i = 0; i < y.size(); ++i) { const double a = std::fabs(static_cast<double>(y[i])); sumsq += a * a; if (a > pk) { pk = a; at = i; } }
+        const double rms = std::sqrt(sumsq / std::max<size_t>(1, y.size()));
+        const double got = static_cast<double>(at) - static_cast<double>(l.run.impulse);
+        const std::string name = f.stem().string();
+        if (pk < 1e-3) { lines.push_back("  (no clear impulse: " + name + ")"); l.close(); continue; }             // a gate / dynamics that does not let a lone click through at the defaults
+        // a main peak: far above the rest of the response (an impulse spread over many samples, like a reverb, has no single position)
+        if (pk < 20.0 * rms) { lines.push_back("  (no single peak: " + name + ")"); l.close(); continue; }
+        const double tol = std::max(8.0, 0.02 * reported);
+        if (std::fabs(got - reported) > tol) {
+            char b[200]; std::snprintf(b, sizeof b, "WARN %-30s the impulse comes out %6.0f samples late, the plug-in reports %6.0f", name.c_str(), got, reported); lines.push_back(b); ++warns;
+        }
+        l.close();
+    }
+}
+
 }   // namespace
 
 int main(int argc, char** argv) {
@@ -589,6 +620,7 @@ int main(int argc, char** argv) {
         if (!r.fail) ++pass;
     }
     if (!linkChecks(files)) ++fails;
+    { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
     std::printf("\n%zu plug-ins: %d ok, %d FAIL, %d with warnings; Output gain checked on %d, Bypass on %d, Mix 0 %% on %d, In Off on %d; slowest %s (%.1f%% of one core, noisy)\n",
                 files.size(), pass, fails, warns, outTested, bypassTested, mixTested, inTested, worstCpuName.c_str(), worstCpu);
     std::printf("bit-exact pass-through at the defaults (%zu):", passNames.size());
