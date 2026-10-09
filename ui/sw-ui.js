@@ -291,6 +291,26 @@
         t.addEventListener('click', () => { const other = h.p.steps.find(v => Math.abs(v - up) > 1e-9), isUp = Math.abs(vals[i] - up) < 1e-9; bridge.begin(i); setValue(i, isUp ? other : up); bridge.end(i); });
         reg(i, () => t.classList.toggle('dn', Math.abs(vals[i] - up) > 1e-9));
       });
+      // GT03 "Add pedal": the first empty slot becomes a Comp pedal and is scrolled into view
+      skinBox.querySelectorAll('button[data-addslot]').forEach(b => b.addEventListener('click', () => {
+        const slots = JSON.parse(b.dataset.addslot), k = slots.findIndex(i => Math.round(vals[i]) === 0); if (k < 0) return; const i = slots[k];
+        bridge.begin(i); setValue(i, hostOf(i).p.steps[1]); bridge.end(i);
+        const peds = skinBox.querySelectorAll('.pedal'); if (peds[k] && peds[k].scrollIntoView) peds[k].scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      }));
+      // GT03: drag a pedal (by its body) onto another one to swap their slots (type, on, A, B, C)
+      const pedals = [...skinBox.querySelectorAll('.pedal[data-slot]')];
+      pedals.forEach(ped => {
+        let drag = null;
+        ped.addEventListener('pointerdown', e => { if (e.target !== ped) return; ped.setPointerCapture(e.pointerId); drag = { x: e.clientX }; });
+        ped.addEventListener('pointermove', e => { if (drag && Math.abs(e.clientX - drag.x) > 6) { ped.style.opacity = '.6'; ped.style.cursor = 'grabbing'; } });
+        const end = e => {
+          if (!drag) return; const moved = Math.abs(e.clientX - drag.x) > 6; drag = null; ped.style.opacity = ''; ped.style.cursor = 'grab'; if (!moved) return;
+          const to = pedals.find(p => { if (p === ped) return false; const r = p.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right; }); if (!to) return;
+          const A = JSON.parse(ped.dataset.slot), B = JSON.parse(to.dataset.slot), va = A.map(i => vals[i]), vb = B.map(i => vals[i]);
+          A.concat(B).forEach(i => bridge.begin(i)); A.forEach((i, k) => setValue(i, vb[k])); B.forEach((i, k) => setValue(i, va[k])); A.concat(B).forEach(i => bridge.end(i));
+        };
+        ped.addEventListener('pointerup', end); ped.addEventListener('pointercancel', () => { drag = null; ped.style.opacity = ''; });
+      });
       const sel = [...skinBox.querySelectorAll('button[data-band]')];
       const drawSel = () => sel.forEach(b => b.classList.toggle('on', +b.dataset.band === band));
       sel.forEach(b => b.addEventListener('click', () => { band = +b.dataset.band; drawSel(); dyn.forEach(f => f()); }));

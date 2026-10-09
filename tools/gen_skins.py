@@ -172,18 +172,23 @@ def gt03_pedals(root, params):
     for c in list(holder.children):
         if getattr(c, 'decompose', None):
             c.decompose()
-    holder['style'] = 'display:flex;justify-content:space-evenly;align-items:center;height:100%;padding:0 12px'
+    holder['style'] = 'display:flex;justify-content:flex-start;gap:14px;align-items:center;height:100%;padding:0 14px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:#3a3b40 #0b0b0c'   # eight slots: the row scrolls
     labels = next(p['labels'] for p in params if p['name'] == 'Pedal 1 Type')
     idx = {p['name']: p['i'] for p in params}
-    for k in range(1, 7):
+    types = []
+    for k in range(1, 9):
         t, on, a, b, c = (idx['Pedal %d %s' % (k, n)] for n in ('Type', 'On', 'A', 'B', 'C'))
+        types.append(t)
         knobs = ''.join(
             '<div class="ctl" data-p="%d" title="%s" style="position:absolute"><div class="pk" data-dial="1">'
             '<div class="pcap"></div><div class="ptr"><i></i></div></div></div>' % (i, nm) for i, nm in ((a, 'A'), (b, 'B'), (c, 'C')))
-        html = ('<div class="pedal" data-typep="%d" data-names=\'%s\' style="position:relative;width:140px;height:226px;flex:none">'
+        html = ('<div class="pedal" data-typep="%d" data-names=\'%s\' data-slot="' + json.dumps([t, on, a, b, c]).replace('"', '&quot;') + '" style="position:relative;width:140px;height:226px;flex:none;cursor:grab">'
                 '<div class="pshell"></div><span class="pname" title="Type">Comp</span>%s'
                 '<button class="pled" data-p="%d" data-toggle="1"></button><button class="pstomp" data-p="%d" data-toggle="1"></button></div>') % (t, json.dumps(labels), knobs, on, on)
         holder.append(BeautifulSoup(html, 'html.parser'))
+    for bt in root.find_all('button'):
+        if bt.get_text().strip() == 'Add pedal':
+            bt['data-addslot'] = json.dumps(types)
     css = ('.pedal .ctl{background:none;border:0;padding:0;margin:0;display:block;box-shadow:none}.pk{position:relative;width:30px;height:30px;cursor:ns-resize}.pk .pcap{position:absolute;inset:0;background:url(@@KNOB@@) center/100% 100% no-repeat;filter:drop-shadow(0 2px 2px rgba(0,0,0,.45));pointer-events:none}'
            '.pk .ptr{position:absolute;inset:0;pointer-events:none}.pk .ptr i{position:absolute;left:50%;top:4px;width:2px;height:7px;margin-left:-1px;border-radius:1px;background:#e8e8ea}'
            '.pedal .pshell{position:absolute;left:-14px;top:-14px;width:168px;height:254px;background-size:100% 100%;pointer-events:none}'
