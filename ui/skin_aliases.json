@@ -72,6 +72,14 @@
    "start": 0,
    "stride": 9,
    "count": 24
+  },
+  "btn:low lat": {
+   "set": [
+    [
+     "Phase",
+     0
+    ]
+   ]
   }
  },
  "EQ07": {
@@ -79,6 +87,14 @@
    "start": 0,
    "stride": 9,
    "count": 6
+  },
+  "btn:low lat": {
+   "set": [
+    [
+     "Spectral",
+     0
+    ]
+   ]
   }
  },
  "EQ08": {
@@ -86,6 +102,14 @@
    "start": 0,
    "stride": 5,
    "count": 24
+  },
+  "btn:low lat": {
+   "set": [
+    [
+     "Phase",
+     1
+    ]
+   ]
   }
  },
  "DY10": {
@@ -368,7 +392,15 @@
     "p": 6,
     "prefix": "Link"
    }
-  ]
+  ],
+  "btn:low lat": {
+   "set": [
+    [
+     "Lookahead",
+     0.5
+    ]
+   ]
+  }
  },
  "LV27": {
   "_valchip": [
@@ -418,6 +450,26 @@
   "btn:tap": {
    "tap": "Time",
    "off": "Sync"
+  }
+ },
+ "DY05": {
+  "btn:low lat": {
+   "set": [
+    [
+     "Lookahead",
+     0
+    ]
+   ]
+  }
+ },
+ "DY08": {
+  "btn:low lat": {
+   "set": [
+    [
+     "Lookahead",
+     0
+    ]
+   ]
   }
  }
 }
