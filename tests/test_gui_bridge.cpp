@@ -88,6 +88,6 @@ TEST_CASE("GUI spectrum: a sine reads its own level in the right band, silence i
 
 TEST_CASE("GUI readouts: the values a core measures follow the spectrum in the update script") {
     Fake f; f.v = {1.0}; f.nro = 3; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
-    CHECK(u.size() > 30); CHECK(u.substr(u.size() - 18) == ",[-23.5,-22.5,-21.5]);");
+    CHECK(u.size() > 30); const std::string tail = ",[-23.5,-22.5,-21.5]);"; CHECK(u.substr(u.size() - tail.size()) == tail);
     Fake g; g.v = {1.0}; gui::Session<Fake> t(g); const std::string w = t.onMessage("p"); CHECK(w.substr(w.size() - 3) == "]);"); CHECK(w.find("-23.5") == std::string::npos);
 }
