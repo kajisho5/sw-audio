@@ -1084,6 +1084,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 | LV22 | 極性ゲージ | 針はコアの相関（−1〜+1、左端〜右端）、左上に r と遅れ（ms） |
 | LV05・LV29 | ダッキングのゲイン履歴とブロック | コアのゲイン（LV05 は BGM、LV29 は Floor）と、キーの有無（声／通訳の発話）を 30 秒分。デザインの見本の線・ブロックは置き換え |
 | MD02・MD04 | LFO の波形 | 直近 1.5 秒（右端が「いま」）。周期は実際に使われている Rate（Sync ではノート長から。コアの `rateHz()`）、振幅は Depth、MD04 は Shape（Sine／Triangle／Square／Ramp）、MD02 はコアの LFO 位相に同期して流れる。Through zero・Feedback の影響は描かない |
+| CR05 | テープストップの速度曲線 | Action（Stop＝1−w、Start＝w、Spin back＝1−3w）と Curve（Lin／Exp／Log）から、`products/cr05` と同じ式で描く（時間軸は動作の長さ全体。実際の秒数・いまの位置は出さない） |
 | DY03 | GR メーターの針 | デザイン独自の目盛り（右が 0、左が 20 dB）に合わせる。GR は「入力ピーク＋Makeup−出力ピーク」から出す（コア内部の値ではない） |
 | DY01・DY02・DY06・MT05 | VU 針 | 目盛りの角度に合わせる。基準は 0 VU ＝ −15 dBFS（ピーク）の設計値、GR は入出力の差 |
 | DL02・SA01・MD05 | リール・ホーンとドラムの回転 | 音が通っている間（DL02・SA01）、Speed と Accel のモデル（MD05） |

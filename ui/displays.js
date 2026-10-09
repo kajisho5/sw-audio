@@ -709,7 +709,22 @@
     } };
   }
 
+
+  // ---- tape stop (CR05): the speed over the action, drawn from Action, Curve and the times (the same formulas as products/cr05: Stop 1-w, Start w, Spin back 1-3w, w = u, u*u or sqrt(u))
+  function tapeStopDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const ps = [...svg.querySelectorAll(':scope > path')], texts = [...svg.querySelectorAll(':scope > text')], endT = texts.find(t => t.getAttribute('text-anchor') === 'end'); if (ps.length < 2) return null;
+    const X0 = 10, X1 = 722, YT = 20, YB = 185; let last = '';
+    return { update() {
+      const act = Math.round(ctx.value('Action') || 0), cv = Math.round(ctx.value('Curve') || 0), key = act + '|' + cv; if (key === last) return; last = key;
+      const w = u => cv === 1 ? u * u : cv === 2 ? Math.sqrt(u) : u, sp = u => act === 0 ? 1 - w(u) : act === 1 ? w(u) : 1 - 3 * w(u), smin = act === 2 ? -2 : 0, y = s => YT + (1 - s) / (1 - smin) * (YB - YT);
+      let d = ''; for (let i = 0; i <= 60; i++) { const u = i / 60; d += (i ? ' L' : 'M') + (X0 + u * (X1 - X0)).toFixed(1) + ' ' + y(sp(u)).toFixed(1); }
+      ps.forEach(p => p.setAttribute('d', d)); if (endT) { endT.textContent = ['Stop', 'Normal speed', 'Spin back'][act]; endT.setAttribute('y', act === 1 ? '16' : '192'); }
+    } };
+  }
+
   const registry = {
+    CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
