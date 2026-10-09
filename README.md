@@ -1009,7 +1009,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 
 | 項目 | Linux x86_64（このクラウド環境） | Windows x64・macOS（GitHub Actions） |
 | --- | --- | --- |
-| 単体テスト（1483件） | 全合格（**AddressSanitizer・UBSan 付きでも全合格**：commit 429ec7c の 1474 件〔畳み込みの積和ループ・BleedLearner・DY04 と CS02 の Learn を含む〕、その後に足した CS03・LevelLearner・RV08 Learn の 9 件は、Learn 系の他のテストと一緒に単独で実行して合格）。`test_swlink` は ThreadSanitizer でも合格。全 132 製品の ThreadSanitizer ストレス試験は下の「データ競合の検査」） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 166（commit 133be74。ブロック長〔`--blocks`〕・テール〔`--tails`〕・`reset()`〔`--reset`〕・壊れた入力・CR04 の修正・v0.14.0 を含む。全 132 本）** |
+| 単体テスト（1488件） | 全合格（**AddressSanitizer・UBSan 付きでも全合格**：commit 429ec7c の 1474 件〔畳み込みの積和ループ・BleedLearner・DY04 と CS02 の Learn を含む〕、その後に足した 14 件〔CS03 の Set input と LevelLearner、RV08 の Learn、DY10 の Auto と CrossoverFinder〕は、それぞれの製品の既存のテストと一緒に単独で実行して合格）。`test_swlink` は ThreadSanitizer でも合格。全 132 製品の ThreadSanitizer ストレス試験は下の「データ競合の検査」） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 166（commit 133be74。ブロック長〔`--blocks`〕・テール〔`--tails`〕・`reset()`〔`--reset`〕・壊れた入力・CR04 の修正・v0.14.0 を含む。全 132 本）** |
 | CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 166：成功） |
 | VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 166：成功） |
 | AU：auval | — | macOS で実行（run 166：成功。aufx の効果 128 本と、MIDI を受ける aumf の 4 本〔CR04・LV25・MD05・VO03〕を、auval が登録している種類で） |
