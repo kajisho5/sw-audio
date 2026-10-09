@@ -1716,6 +1716,14 @@
     }
     pickFile(input, 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac', f => { if (!st.busy) load(selSlot(), f); });
     const lane = (hs, c, amp) => { let top = '', bot = ''; for (let k = 0; k < hs.length; k++) { const x = (k / (hs.length - 1) * W).toFixed(1), a = hs[k] * amp; top += (k ? ' L' : 'M') + x + ' ' + (c - a).toFixed(1); bot = ' L' + x + ' ' + (c + a).toFixed(1) + bot; } return top + bot + ' Z'; };
+    // Loop = Custom: drag across the lower lane to choose the region (seconds of the file; the core keeps it with setLoopRegion)
+    let drag = null, curLen = 0;
+    const xOf = e => { const b = svg.getBoundingClientRect(); return clamp((e.clientX - b.left) / b.width, 0, 1); };
+    svg.style.touchAction = 'none';
+    svg.addEventListener('pointerdown', e => { if (!(curLen > 0) || Math.round(ctx.value('Loop') || 0) !== 3) return; const b = svg.getBoundingClientRect(); if ((e.clientY - b.top) / b.height < 0.5) return; svg.setPointerCapture(e.pointerId); drag = { x0: xOf(e), x1: xOf(e) }; });
+    svg.addEventListener('pointermove', e => { if (drag) drag.x1 = xOf(e); });
+    const endDrag = () => { if (!drag) return; const a = Math.min(drag.x0, drag.x1) * curLen, b = Math.max(drag.x0, drag.x1) * curLen; drag = null; if (b - a > 0.05) ctx.call('looprange', a.toFixed(3) + ' ' + b.toFixed(3)); };
+    svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', () => { drag = null; });
     return { update(info) {
       const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 12) return; lastR = r;
       const now = Date.now(), k = selSlot(), len = r[4 + 3 * (k - 1)], rs = r[5 + 3 * (k - 1)], re = r[6 + 3 * (k - 1)];
@@ -1730,7 +1738,9 @@
       note.textContent = st.status || (loaded ? (st.ov[k] ? '' : 'Loaded (the file name is not known to this window)') : 'Load a reference file (WAV, AIFF, MP3, FLAC …)');
       labB.textContent = (k === 2 ? 'C  ' : 'B  ') + (st.name[k] || (k === 2 ? 'Reference 2' : 'Reference')) + (loaded ? '  ' + mmss(len) : '');
       loopRect.style.display = loopT.style.display = loaded ? '' : 'none';
-      if (loaded) { loopRect.setAttribute('x', (rs / len * W).toFixed(1)); loopRect.setAttribute('width', Math.max(2, (re - rs) / len * W).toFixed(1)); loopT.setAttribute('x', ((rs + re) / 2 / len * W).toFixed(1)); loopT.textContent = 'Loop: ' + (LOOPS[Math.round(ctx.value('Loop') || 0)] || '').toLowerCase(); }
+      curLen = len;
+      if (loaded && drag) { loopRect.setAttribute('x', (Math.min(drag.x0, drag.x1) * W).toFixed(1)); loopRect.setAttribute('width', Math.max(2, Math.abs(drag.x1 - drag.x0) * W).toFixed(1)); }
+      else if (loaded) { loopRect.setAttribute('x', (rs / len * W).toFixed(1)); loopRect.setAttribute('width', Math.max(2, (re - rs) / len * W).toFixed(1)); loopT.setAttribute('x', ((rs + re) / 2 / len * W).toFixed(1)); loopT.textContent = 'Loop: ' + (LOOPS[Math.round(ctx.value('Loop') || 0)] || '').toLowerCase(); }
       loadBtn.textContent = 'Load ' + (k === 2 ? 'C' : 'B') + ' …'; loadBtn.disabled = st.busy; loadBtn.style.opacity = st.busy ? '.5' : '1';
       clearBtn.style.display = loaded ? '' : 'none'; clearBtn.textContent = 'Clear'; loadBtn.style.right = loaded ? '80px' : '10px';
     } };

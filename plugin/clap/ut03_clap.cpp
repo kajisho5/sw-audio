@@ -1,6 +1,7 @@
 // SW UT03 Reference — CLAP plugin traits
 #include "clap_adapter.hpp"
 #include "ut03/ut03.hpp"
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -26,6 +27,7 @@ struct Ut03 {
         else if (!std::strcmp(n, "refend")) c.stageCommit();
         else if (!std::strcmp(n, "refabort")) c.stageAbort();
         else if (!std::strcmp(n, "refclear")) c.clearReference(std::atoi(a));
+        else if (!std::strcmp(n, "looprange")) { double s = 0.0, e = 0.0; if (std::sscanf(a, "%lf %lf", &s, &e) == 2) c.setLoopRegion(s, e); }   // the Custom loop region, dragged on the screen (seconds)
     }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
