@@ -740,6 +740,8 @@ Processor::Processor() : slots_(static_cast<size_t>(kSlots)) {
 }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
+    staging_ = false; fading_ = false;
+    applyStaged();     // a patch change that was waiting goes in now (nothing sounds after a prepare)
     (void)minBlep();   // build the tables here, not on the audio thread
     (void)waveBank(); (void)sampleBank(); (void)sineTable(); (void)sincTable();
     fs_ = sampleRate;
@@ -792,6 +794,95 @@ void Processor::setParam(int id, double v) {
     if (id < 0 || id >= kNumParams) return;
     const auto& sp = specs()[static_cast<size_t>(id)];
     v = sp.toValue(sp.toNorm(v));
+    if (staging_ || fading_) {   // part of a patch change, or set while one fades: waits for the change
+        staged_[static_cast<size_t>(id)] = v; stagedSet_[static_cast<size_t>(id)] = true; anyStaged_ = true;
+        return;
+    }
+    setNow(id, v);
+}
+
+void Processor::applyStaged() {
+    if (!anyStaged_) return;
+    anyStaged_ = false;
+    for (int i = 0; i < kNumParams; ++i)
+        if (stagedSet_[static_cast<size_t>(i)]) { stagedSet_[static_cast<size_t>(i)] = false; setNow(i, staged_[static_cast<size_t>(i)]); }
+}
+
+void Processor::endPatch() {
+    staging_ = false;
+    if (fading_) return;   // a fade under way takes these values too
+    if (!prepared_ || fresh_ || (!active() && fxIdle_ > 0)) { applyStaged(); return; }   // silent (no voice, effects under -120 dBFS): at once
+    fadeLen_ = std::max(1, static_cast<int>(std::lround(kPatchFadeMs * 1e-3 * fs_)));
+    fadeLeft_ = fadeLen_;
+    fading_ = true;
+}
+
+// the end of a patch change's fade (the output is silent here): the new values go in, the voices and the effects start again from
+// silence, and the notes still held (keys, or the pedal) play again with the new patch, oldest first. Notes that do not play again
+// (released, in their tail) end and are reported; the ones that do keep their note ids and are not reported.
+void Processor::swapPatch() {
+    struct Again { int key, channel, noteId, slot; double vel; bool held; };
+    std::array<Again, kSlots + 128> again{};
+    int na = 0;
+    if (mode_ == Poly) {
+        for (int i = 0; i < kSlots; ++i) {
+            const Slot& s = slots_[static_cast<size_t>(i)];
+            if (s.key >= 0 && !s.stolen && (s.held || s.sustained)) again[static_cast<size_t>(na++)] = {s.key, s.channel, s.noteId, i, s.vel, s.held};
+        }
+        std::sort(again.begin(), again.begin() + na, [&](const Again& a, const Again& b) {
+            return slots_[static_cast<size_t>(a.slot)].age < slots_[static_cast<size_t>(b.slot)].age; });
+    } else {
+        const Slot* ms = monoSlot_ >= 0 ? &slots_[static_cast<size_t>(monoSlot_)] : nullptr;
+        if (ms && (ms->key < 0 || ms->stolen)) ms = nullptr;
+        for (size_t k = 0; k < held_.size(); ++k) {   // the keys held, in order; the sounding one keeps its slot's id
+            const bool top = ms && ms->key == held_[k];
+            again[static_cast<size_t>(na++)] = {held_[k], top ? ms->channel : 0, top ? ms->noteId : -1, top ? monoSlot_ : -1, top ? ms->vel : lastVel_, true};
+        }
+        if (held_.empty() && ms && ms->sustained)   // only the pedal holds it
+            again[static_cast<size_t>(na++)] = {ms->key, ms->channel, ms->noteId, monoSlot_, ms->vel, false};
+    }
+    // silence: every voice; the notes that do not come back end
+    const int newMode = static_cast<int>(std::lround(stagedSet_[Mode] ? staged_[Mode] : target_[Mode]));
+    for (int i = 0; i < kSlots; ++i) {
+        Slot& s = slots_[static_cast<size_t>(i)];
+        for (auto& x : s.v) x.reset();
+        if (s.key < 0) continue;
+        bool back = false;   // poly: every note in the list sounds again; mono / legato: only the last one
+        for (int a = 0; a < na; ++a)
+            if (again[static_cast<size_t>(a)].slot == i && (newMode == Poly || a == na - 1)) back = true;
+        if (back) { s.key = -1; s.held = s.sustained = s.stolen = false; }
+        else end(s);
+    }
+    held_.clear(); monoSlot_ = -1;
+    fading_ = false;
+    const bool pedal = pedal_;
+    applyStaged();      // (a change of Mode lets all notes go, the pedal too: it is still down)
+    pedal_ = pedal;
+    level_.reset(fs_, 20.0, dbToGain(target_[Level]));
+    fx_.restart();
+    fxIdle_ = 0;
+    // play again: poly, every note (no glide between them); mono / legato, the last one, with the others held behind it
+    if (na == 0) return;
+    if (mode_ == Poly) {
+        for (int a = 0; a < na; ++a) {
+            const Again& g = again[static_cast<size_t>(a)];
+            Slot* s = allocate();
+            start(*s, g.key, g.vel, g.channel, g.noteId, -1.0);
+            if (!g.held) release(*s);   // the pedal holds it
+        }
+    } else {
+        for (int a = 0; a + 1 < na; ++a) if (again[static_cast<size_t>(a)].held && held_.size() < held_.capacity()) held_.push_back(again[static_cast<size_t>(a)].key);
+        const Again& g = again[static_cast<size_t>(na - 1)];
+        Slot* s = allocate();
+        start(*s, g.key, g.vel, g.channel, g.noteId, -1.0);
+        monoSlot_ = static_cast<int>(s - slots_.data());
+        if (g.held) { if (held_.size() < held_.capacity()) held_.push_back(g.key); }
+        else release(*s);
+    }
+    lastKey_ = again[static_cast<size_t>(na - 1)].key;
+}
+
+void Processor::setNow(int id, double v) {
     target_[static_cast<size_t>(id)] = v;
     if (id == PresetSelect) return;   // kept only: the plug-in layer loads presets
     if (id >= kFxEnd) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
@@ -879,7 +970,7 @@ void Processor::end(Slot& s) {
 }
 
 void Processor::start(Slot& s, int key, double vel, int channel, int noteId, double glideFrom) {
-    s.key = key; s.channel = channel; s.noteId = noteId;
+    s.key = key; s.channel = channel; s.noteId = noteId; s.vel = vel;
     s.held = true; s.sustained = false; s.stolen = false; s.age = ++clock_;
     for (int l = 0; l < kLayers; ++l)
         if (layerOn_[static_cast<size_t>(l)]) s.v[static_cast<size_t>(l)].noteOn(key, vel, glideFrom);
@@ -980,7 +1071,7 @@ void Processor::monoOn(int key, double vel, int channel, int noteId) {
         double cur = -1.0;   // the (gliding) key in use: a glide continues from where it is
         for (const auto& x : s->v) if (x.active()) { cur = x.keyInUse(); break; }
         if (s->key != key || s->noteId != noteId) pushEnded(s->key, s->channel, s->noteId);   // the old note has no voice any more
-        s->key = key; s->channel = channel; s->noteId = noteId; s->held = true; s->sustained = false; s->age = ++clock_;
+        s->key = key; s->channel = channel; s->noteId = noteId; s->vel = vel; s->held = true; s->sustained = false; s->age = ++clock_;
         if (mode_ == Legato && legatoHeld) {
             for (auto& x : s->v) if (x.active()) x.legato(key, cur);
         } else {
@@ -1068,8 +1159,9 @@ void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || n <= 0) return;
     fresh_ = false;
     const int cap = static_cast<int>(l_.size());
-    for (int off = 0; off < n; off += cap) {
-        const int m = std::min(cap, n - off);
+    for (int off = 0; off < n;) {
+        int m = std::min(cap, n - off);
+        if (fading_) m = std::min(m, fadeLeft_);   // the patch change happens at the end of its fade
         std::fill(l_.begin(), l_.begin() + m, 0.0f);
         std::fill(r_.begin(), r_.begin() + m, 0.0f);
         // the slots that sound (notes only start between calls, so the list holds for this block)
@@ -1101,7 +1193,8 @@ void Processor::process(float** ch, int numCh, int n) {
             std::fill(r_.begin(), r_.begin() + m, 0.0f);
         }
         for (int i = 0; i < m; ++i) {
-            const double g = level_.next();
+            double g = level_.next();
+            if (fading_) g *= static_cast<double>(fadeLeft_ - 1 - i) / fadeLen_;   // down to 0 at the fade's last sample
             double yl = l_[static_cast<size_t>(i)] * g, yr = r_[static_cast<size_t>(i)] * g;
             if (std::abs(yl) < 1e-30) yl = 0.0;
             if (std::abs(yr) < 1e-30) yr = 0.0;
@@ -1109,6 +1202,8 @@ void Processor::process(float** ch, int numCh, int n) {
             ch[0][off + i] = static_cast<float>(yl);
             if (numCh > 1) ch[1][off + i] = static_cast<float>(yr);
         }
+        if (fading_) { fadeLeft_ -= m; if (fadeLeft_ <= 0) swapPatch(); }
+        off += m;
     }
 }
 

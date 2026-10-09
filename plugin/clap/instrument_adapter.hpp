@@ -9,6 +9,8 @@
 //   no allocation); static void warmUp() (activate: build tables). Needs Core::param(id) (plain values) to read the loaded values back.
 //   When the host changes the selector, the preset is loaded and every value it changed is reported to the host (CLAP param value events);
 //   a restored state sets the selector without loading (the session keeps its own values).
+//   optional on Core: beginPatch() / endPatch(): a program load, a preset from the host's browser and a restored state go in as one patch
+//   (the core fades and starts the held notes again with it: no step).
 //   optional, preset files (CLAP preset-load and the preset-discovery factory: a host's browser lists the factory presets and the user's
 //   files, and loads them): kPresetVendor / kPresetProduct (the user folder, plugin/clap/user_presets.hpp), factoryPresetCount(),
 //   factoryPresetName(i), factoryPresetCategory(i), factoryPresetValues(i, plain), userPresetValues(text, plain, meta, error).
@@ -51,6 +53,9 @@ template <class C, class = void> struct HasModWheel : std::false_type {};
 template <class C> struct HasModWheel<C, std::void_t<decltype(std::declval<C&>().modWheel(0.0))>> : std::true_type {};
 template <class C, class = void> struct HasAftertouch : std::false_type {};
 template <class C> struct HasAftertouch<C, std::void_t<decltype(std::declval<C&>().aftertouch(0.0))>> : std::true_type {};
+// optional on Core: beginPatch() / endPatch() around a whole patch (a preset, a restored state): the core changes it without a step
+template <class C, class = void> struct HasPatch : std::false_type {};
+template <class C> struct HasPatch<C, std::void_t<decltype(std::declval<C&>().beginPatch()), decltype(std::declval<C&>().endPatch())>> : std::true_type {};
 template <class T, class = void> struct HasProgram : std::false_type {};
 template <class T> struct HasProgram<T, std::void_t<decltype(T::kProgramParam), decltype(T::loadProgram(std::declval<typename T::Core&>(), 0))>> : std::true_type {};
 template <class T, class = void> struct HasWarmUp : std::false_type {};
@@ -100,8 +105,12 @@ private:
     static Plugin* self(const clap_plugin_t* p) { return static_cast<Plugin*>(p->plugin_data); }
 
     void applyPending() {
+        const bool patch = patch_.exchange(false);   // a preset or a state from the main thread: one patch change (no step)
+        if constexpr (HasPatch<typename P::Core>::value) if (patch) core_.beginPatch();
         for (int i = 0; i < numParams(); ++i)
             if (dirty_[static_cast<size_t>(i)].exchange(false)) core_.setParam(i, hostToPlain(i, host_values_[static_cast<size_t>(i)].load()));
+        if constexpr (HasPatch<typename P::Core>::value) if (patch) core_.endPatch();
+        (void)patch;
     }
     void handleEvent(const clap_event_header_t* h) {
         if (h->space_id != CLAP_CORE_EVENT_SPACE_ID) return;
@@ -114,7 +123,12 @@ private:
                 host_values_[static_cast<size_t>(id)].store(v);
                 core_.setParam(id, hostToPlain(id, v));
                 if constexpr (HasProgram<P>::value)
-                    if (id == P::kProgramParam) { P::loadProgram(core_, static_cast<int>(std::lround(v))); syncFromCore(); }
+                    if (id == P::kProgramParam) {
+                        if constexpr (HasPatch<typename P::Core>::value) core_.beginPatch();
+                        P::loadProgram(core_, static_cast<int>(std::lround(v)));
+                        if constexpr (HasPatch<typename P::Core>::value) core_.endPatch();
+                        syncFromCore();
+                    }
                 return;
             }
             case CLAP_EVENT_NOTE_ON: {
@@ -334,6 +348,7 @@ private:
     // ---- presets from the host's browser (preset-load): the values go in as a restored state's do (main thread -> host values -> the audio
     // thread applies them at its next block); a factory preset also moves the selector (without loading it twice: only an event loads)
     void loadValuesFromMainThread(const std::vector<double>& plain, int program) {
+        patch_.store(true);   // first: the audio thread takes what follows as one patch (values that arrive during its fade wait for it)
         for (int i = 0; i < numParams(); ++i) {
             if constexpr (HasProgram<P>::value)
                 if (i == P::kProgramParam) {
@@ -407,6 +422,7 @@ private:
         std::vector<double> vals(count);              // read whole before anything changes: a cut state changes nothing
         for (uint32_t i = 0; i < count; ++i) if (!readAll(s, &vals[i], 8)) return false;
         Plugin* pl = self(p);
+        pl->patch_.store(true);
         for (uint32_t i = 0; i < count && i < static_cast<uint32_t>(numParams()); ++i) {
             pl->host_values_[i].store(sanitizeHost(static_cast<int>(i), vals[i])); pl->dirty_[i].store(true);
         }
@@ -423,6 +439,7 @@ private:
     typename P::Core core_;
     std::vector<std::atomic<double>> host_values_;
     std::vector<std::atomic<bool>> dirty_;
+    std::atomic<bool> patch_{false};   // the dirty values form one patch (a preset or a state from the main thread)
     std::vector<uint8_t> changed_;   // values a program load changed, not yet reported to the host
     bool anyChanged_ = false;
     bool active_ = false;

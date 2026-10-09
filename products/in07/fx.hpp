@@ -70,6 +70,15 @@ public:
     void setParams(const FxParams& p) { p_ = p; }
     // switch states jump (no fade) when nothing has been processed since prepare
     void snapSwitches() { for (int f = 0; f < kFx; ++f) gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; }
+    // start again from silence with the current settings (a new patch): every effect's memory cleared, switches, mixes and the delay
+    // time at their targets at once. No allocation (audio thread).
+    void restart() {
+        for (int f = 0; f < kFx; ++f) { gain_[static_cast<size_t>(f)] = p_.on[static_cast<size_t>(f)] ? 1.0 : 0.0; clear(f); }
+        for (auto& o : osDry_) o.reset();
+        delaySamples_ = -1.0; ctl_ = 0; first_ = true;
+        control();
+        g0_ = gain_;
+    }
 
     // in place, n samples of left and right
     // the highest peak into the limiter (after its Gain) since the last reset: how hard it works (a meter; tests and the preset tool)

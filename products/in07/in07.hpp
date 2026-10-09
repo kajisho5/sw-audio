@@ -217,7 +217,10 @@ public:
     Processor();
     void prepare(double sampleRate, int maxBlock);
     void setParam(int id, double plainValue);
-    double param(int id) const { return (id >= 0 && id < kNumParams) ? target_[static_cast<size_t>(id)] : 0.0; }
+    double param(int id) const {   // the value last set (one waiting for a patch change included)
+        if (id < 0 || id >= kNumParams) return 0.0;
+        return stagedSet_[static_cast<size_t>(id)] ? staged_[static_cast<size_t>(id)] : target_[static_cast<size_t>(id)];
+    }
     void snapToTargets() { fx_.snapSwitches(); }
     void setTempo(double bpm) { if (bpm > 0.0) { bpm_ = std::clamp(bpm, 30.0, 300.0); fx_.setTempo(bpm); } }   // the host tempo (delay, LFO sync); 120 until told
     std::array<int, kFx> fxOrder() const { return fx_.order(); }
@@ -234,6 +237,14 @@ public:
     void allNotesOff();                                 // release everything (the pedal is lifted too)
     void allSoundOff();                                 // silent at once
     void process(float** ch, int numCh, int n);         // writes (replaces) the output
+    // a whole patch (a preset): beginPatch(), setParam() for each of its values, endPatch(). Nothing sounding (or not prepared): the values
+    // go in at once. Otherwise the change waits: the output fades out over kPatchFadeMs, then the values go in, every voice and effect
+    // starts again from silence, and the keys still held (and the notes the pedal holds) play again with the new patch (no step, and the
+    // held chord sounds as the new patch, not a mix of both). Values set during the fade wait for it too; param() reports them at once.
+    static constexpr double kPatchFadeMs = 8.0;
+    void beginPatch() { staging_ = true; }
+    void endPatch();
+    bool patchPending() const { return staging_ || fading_; }
     int latencySamples() const { return 0; }
     bool active() const;                                // any voice sounding (the effects' tails are not counted)
     bool fxAsleep() const;                              // the effects are idle (no voice, tails under -120 dBFS for 0.5 s)
@@ -245,6 +256,7 @@ private:
     struct Slot {
         std::array<Voice, kLayers> v;
         int key = -1, channel = 0, noteId = -1;
+        double vel = 1.0;
         bool held = false, sustained = false, stolen = false;
         uint64_t age = 0;
         bool sounding() const;
@@ -257,6 +269,9 @@ private:
     void monoOn(int key, double vel, int channel, int noteId);
     void monoOff(int key);
     double p(int id) const { return target_[static_cast<size_t>(id)]; }
+    void setNow(int id, double v);                      // a (normalised) value goes in
+    void applyStaged();                                 // the values a patch change held back go in
+    void swapPatch();                                   // the end of the fade: the new patch, the held notes again
     void updateFx();                                    // the effects' parameters and order from the table
     void updateMod();                                   // the matrix, the macros and the flyby settings into Shared
     void tick();                                        // the global sources, every 32 samples
@@ -286,6 +301,10 @@ private:
     std::array<double, 2> lfoPhase_{}, lfoValue_{};
     std::array<uint32_t, 2> lfoSeed_{{0x1234567u, 0x7654321u}};                                // samples with no voice and the effects' output under -120 dBFS
     bool fresh_ = true;                                 // nothing processed since prepare: switching an effect does not fade
+    std::array<double, kNumParams> staged_{};           // a patch change: the values waiting for the fade
+    std::array<bool, kNumParams> stagedSet_{};
+    bool staging_ = false, fading_ = false, anyStaged_ = false;
+    int fadeLen_ = 1, fadeLeft_ = 0;                    // the fade before a patch change (samples)
 };
 
 }  // namespace sw::in07

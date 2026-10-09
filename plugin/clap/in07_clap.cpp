@@ -9,8 +9,8 @@ struct In07 {
     static const std::vector<sw::ParamSpec>& specs() { return sw::in07::specs(); }
     // the preset selector: step 0 = Init, then the factory presets
     static constexpr int kProgramParam = sw::in07::PresetSelect;
-    static void loadProgram(Core& c, int step) { if (step <= 0) sw::in07::applyInit(c); else sw::in07::applyPreset(c, step - 1); }
-    static void warmUp() { (void)sw::in07::factoryPresets(); }
+    static void loadProgram(Core& c, int step) { if (step <= 0) sw::in07::applyInit(c); else sw::in07::applyPreset(c, step - 1); }   // no allocation (after warmUp)
+    static void warmUp() { (void)sw::in07::factoryPresets(); (void)sw::in07::presetPlain(0); }
     // preset files: the host's preset browser lists the factory presets and the user's (CLAP preset-discovery), and loads them (preset-load)
     static constexpr const char* kPresetVendor = "SEVENTHWELL";
     static constexpr const char* kPresetProduct = "SWINGBY";

@@ -5,8 +5,9 @@
 //   build/in07_eval poly <preset> <n> [fs] # n notes held (Voices = n)
 //   build/in07_eval rates                # audition-phrase loudness at 44.1 / 96 kHz against 48 kHz (every preset)
 //   build/in07_eval rate192              # the same at 192 kHz for seven presets
-//   build/in07_eval switch               # 60 random preset changes under a held chord: the largest 2nd difference in the 5 ms after the
-//                                        # change against the 99.9th percentile of both presets' own sound (ratio > 4 is printed: a step)
+//   build/in07_eval switch               # 60 random preset changes under a held chord (beginPatch / endPatch, as the plug-in): the largest
+//                                        # 2nd difference in the 20 ms after the change against the larger of the 99.9th percentile of both
+//                                        # presets' own sound and the new preset's own attack from silence (ratio > 2 is printed: a step; the restarted attack alone reaches about 1.6)
 #include "in07/in07.hpp"
 #include "in07/presets.hpp"
 #include <algorithm>
@@ -89,21 +90,29 @@ int main(int argc, char** argv) {
             std::vector<float> L, R, l(64), r(64); float* c[2] = {l.data(), r.data()};
             const int pre = static_cast<int>(1.0 * fs / 64), post = static_cast<int>(0.2 * fs / 64);
             for (int i = 0; i < pre + post; ++i) {
-                if (i == pre) applyPreset(p, b);
+                if (i == pre) { p.beginPatch(); applyPreset(p, b); p.endPatch(); }   // as the plug-in loads a preset
                 p.process(c, 2, 64); L.insert(L.end(), l.begin(), l.end()); R.insert(R.end(), r.begin(), r.end());
             }
             const size_t sw = static_cast<size_t>(pre) * 64;
             auto d2 = [&](size_t i) -> double { return std::max(std::fabs(L[i] - 2 * L[i - 1] + L[i - 2]), std::fabs(R[i] - 2 * R[i - 1] + R[i - 2])); };
+            double attack = 0.0;   // the new preset's own attack: the chord from silence, its first 20 ms
+            {
+                Processor q; applyPreset(q, b); q.prepare(fs, 256); q.setTempo(120);
+                for (int k : chord) q.noteOn(k, 0.8);
+                std::vector<float> QL, QR, ql(64), qr(64); float* qc[2] = {ql.data(), qr.data()};
+                for (int i = 0; i < static_cast<int>(0.02 * fs / 64); ++i) { q.process(qc, 2, 64); QL.insert(QL.end(), ql.begin(), ql.end()); QR.insert(QR.end(), qr.begin(), qr.end()); }
+                for (size_t i = 2; i < QL.size(); ++i) attack = std::max(attack, std::max(std::fabs(QL[i] - 2.0 * QL[i - 1] + QL[i - 2]), std::fabs(QR[i] - 2.0 * QR[i - 1] + QR[i - 2])));
+            }
             std::vector<double> d;   // the new preset's own texture: 30..200 ms after the change, and the old one's: the 0.3 s before
             for (size_t i = sw + static_cast<size_t>(0.03 * fs); i < sw + static_cast<size_t>(0.2 * fs) - 1; ++i) d.push_back(d2(i));
             for (size_t i = sw - static_cast<size_t>(0.3 * fs); i < sw; ++i) d.push_back(d2(i));
             std::sort(d.begin(), d.end());
-            const double ref = d[static_cast<size_t>(d.size() * 0.999)] + 1e-6;
+            const double ref = std::max(d[static_cast<size_t>(d.size() * 0.999)], attack) + 1e-6;
             double after = 0.0;
-            for (size_t i = sw; i < sw + static_cast<size_t>(0.005 * fs); ++i) after = std::max(after, d2(i));
+            for (size_t i = sw; i < sw + static_cast<size_t>(0.02 * fs); ++i) after = std::max(after, d2(i));
             ++total;
             const double ratio = after / ref;
-            if (ratio > 4.0) { ++flagged; std::printf("%-20s -> %-20s  ratio %.1f\n", pr[static_cast<size_t>(a)].name.c_str(), pr[static_cast<size_t>(b)].name.c_str(), ratio); }
+            if (ratio > 2.0) { ++flagged; std::printf("%-20s -> %-20s  ratio %.1f\n", pr[static_cast<size_t>(a)].name.c_str(), pr[static_cast<size_t>(b)].name.c_str(), ratio); }
         }
         std::printf("flagged %d / %d\n", flagged, total);
     } else if (mode == "rate192") {

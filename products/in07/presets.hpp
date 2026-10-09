@@ -33,6 +33,7 @@ const std::vector<Preset>& factoryPresets();      // the PLAY screen's ten first
 const std::vector<std::string>& presetNames();    // their names (for the selector's labels; does not need the parameter table)
 const std::vector<std::string>& presetErrors();   // ids, labels or values in the table that did not resolve (empty when it is right)
 void applyPreset(Processor& p, int index);       // every parameter but the selector: defaults, then the preset's values, then its trim
+const std::vector<double>& presetPlain(int index);   // the same as plain values, built once (empty out of range): no allocation after the first call
 void applyInit(Processor& p);                     // every parameter but the selector back to its default
 
 // the audition phrase of a category: (start s, length s, key); velocity 0.8, tempo 120

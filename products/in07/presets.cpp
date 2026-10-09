@@ -382,10 +382,23 @@ void applyPreset(Processor& p, int index, const PresetLevels& lv) {
     for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
 }
 
+// every factory preset as plain values, built once (the plug-in builds it on the main thread when it activates): loading a preset on
+// the audio thread then allocates nothing
+const std::vector<double>& presetPlain(int index) {
+    static const std::vector<std::vector<double>> table = [] {
+        std::vector<std::vector<double>> t(factoryPresets().size());
+        for (size_t i = 0; i < t.size(); ++i) presetValues(static_cast<int>(i), t[i]);
+        return t;
+    }();
+    static const std::vector<double> none;
+    if (index < 0 || index >= static_cast<int>(table.size())) return none;
+    return table[static_cast<size_t>(index)];
+}
+
 void applyPreset(Processor& p, int index) {
-    if (index < 0 || index >= static_cast<int>(factoryPresets().size())) return;
-    const Preset& pr = factoryPresets()[static_cast<size_t>(index)];
-    applyPreset(p, index, PresetLevels{pr.trim, pr.level, pr.boost});
+    const auto& plain = presetPlain(index);
+    if (plain.size() != static_cast<size_t>(kNumParams)) return;
+    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
 }
 
 // ---- user presets
