@@ -905,7 +905,7 @@
 
   const registry = {
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
-    LV01: (box, ctx) => textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }]),
+    LV01: (box, ctx) => textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^GR \d+(\.\d+)?$/, text: () => 'GR —' }]),
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
     LV04: (box, ctx) => textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }]),
     UT03: (box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
