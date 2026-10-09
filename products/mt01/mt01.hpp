@@ -40,7 +40,6 @@ public:
     const std::vector<float>& history() const { return history_; }   // the short-term value once a second, oldest first, at most kHistory
 
 private:
-    static constexpr size_t kLraBins = 701;
     double fs_ = 48000.0, momentary_ = -200.0, shortTerm_ = -200.0, integrated_ = -200.0, tp_ = 0.0;
     int sinceHist_ = 0, sinceLra_ = 0;
     bool prepared_ = false;
@@ -48,7 +47,7 @@ private:
     LoudnessMeter meter_;
     IntegratedLoudness integ_;
     std::array<TruePeakDetector, 2> tpd_;
-    std::vector<double> lraCount_, lraSum_;
+    LoudnessRange lra_;
     std::vector<float> history_;
 };
 

@@ -91,3 +91,17 @@ TEST_CASE("MS06 silence stays silent, extreme input finite") {
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : run(p, x)) REQUIRE(std::isfinite(v));
 }
+
+TEST_CASE("MS06 output meters (the screen's LUFS / TP / LRA): short-term loudness, true peak, loudness range") {
+    // the chain at its defaults is transparent: the output meter agrees with a reference meter on the input
+    const auto x = sine(-20, 6.0, 1000.0);
+    { auto p = make(); run(p, x); LoudnessMeter ref; ref.setup(kFs, 2); std::vector<float> l = x, r = x; for (size_t off = 0; off < l.size(); off += 256) { const int n = static_cast<int>(std::min<size_t>(256, l.size() - off)); const float* c[2] = {l.data() + off, r.data() + off}; ref.process(c, 2, n); }
+      NEAR(p.outShortTermLufs(), ref.shortTerm(), 0.3); CHECK(p.outShortTermLufs() > -40.0); }
+    // true peak: a sine of -6.02 dBFS RMS peaks at -3.01 dBFS
+    { auto p = make(); run(p, sine(-6.02, 2.0, 1000.0)); NEAR(p.outTruePeakDb(), -3.01, 0.15); p.resetMeters(); CHECK(p.outTruePeakDb() < -150.0); CHECK(p.outShortTermLufs() < -150.0); }
+    // silence: nothing measured
+    { auto p = make(); run(p, std::vector<float>(48000, 0.0f)); CHECK(p.outShortTermLufs() < -150.0); CHECK(p.outTruePeakDb() < -150.0); CHECK(p.outRangeLu() == 0.0); }
+    // a steady tone has no range; two levels 10 LU apart give about 10 LU
+    { auto p = make(); run(p, sine(-25, 20.0, 1000.0)); CHECK(p.outRangeLu() < 0.5); }
+    { auto p = make(); auto a = sine(-30, 20.0, 1000.0), b = sine(-20, 20.0, 1000.0); a.insert(a.end(), b.begin(), b.end()); run(p, a); NEAR(p.outRangeLu(), 10.0, 1.5); }
+}

@@ -21,13 +21,13 @@ void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     meter_.setup(fs_, 2); integ_.setup(fs_, 2, 0.0);
     for (auto& t : tpd_) t.setup(4);
-    lraCount_.assign(kLraBins, 0.0); lraSum_.assign(kLraBins, 0.0); history_.clear(); history_.reserve(kHistory + 1);
+    lra_.reset(); history_.clear(); history_.reserve(kHistory + 1);
     reset(); prepared_ = true;
 }
 
 void Processor::reset() {
     meter_.reset(); integ_.reset(); for (auto& t : tpd_) t.reset();
-    std::fill(lraCount_.begin(), lraCount_.end(), 0.0); std::fill(lraSum_.begin(), lraSum_.end(), 0.0); history_.clear();
+    lra_.reset(); history_.clear();
     momentary_ = shortTerm_ = integrated_ = -200.0; tp_ = 0.0; sinceHist_ = sinceLra_ = 0;
 }
 
@@ -39,15 +39,7 @@ void Processor::setParam(int id, double v) {
 
 double Processor::truePeakDb() const { return tp_ > 1e-9 ? 20.0 * std::log10(tp_) : -200.0; }
 
-double Processor::range() const {
-    double c = 0, s = 0; for (size_t b = 0; b < kLraBins; ++b) { c += lraCount_[b]; s += lraSum_[b]; }
-    if (c < 1.0) return 0.0;
-    const double gate = LoudnessMeter::lufs(s / c) - 20.0;
-    double total = 0; for (size_t b = 0; b < kLraBins; ++b) if (-70.0 + 0.1 * static_cast<double>(b) >= gate) total += lraCount_[b];
-    if (total < 1.0) return 0.0;
-    auto pct = [&](double p) { double acc = 0; for (size_t b = 0; b < kLraBins; ++b) { if (-70.0 + 0.1 * static_cast<double>(b) < gate) continue; acc += lraCount_[b]; if (acc >= p * total) return -70.0 + 0.1 * static_cast<double>(b); } return 0.0; };
-    return pct(0.95) - pct(0.10);
-}
+double Processor::range() const { return lra_.range(); }
 
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || target_[Pause] > 0.5 || n <= 0) return;
@@ -59,7 +51,7 @@ void Processor::process(float** ch, int numCh, int n) {
     sinceLra_ += n; sinceHist_ += n;
     while (sinceLra_ >= static_cast<int>(0.1 * fs_)) {   // a short-term value every 100 ms, once 3 s are there
         sinceLra_ -= static_cast<int>(0.1 * fs_);
-        if (integ_.blocks() >= 30 && shortTerm_ > -70.0) { const size_t b = std::min(kLraBins - 1, static_cast<size_t>(std::lround((shortTerm_ + 70.0) * 10.0))); lraCount_[b] += 1.0; lraSum_[b] += std::pow(10.0, (shortTerm_ + 0.691) / 10.0); }
+        if (integ_.blocks() >= 30) lra_.add(shortTerm_);
     }
     while (sinceHist_ >= static_cast<int>(fs_)) { sinceHist_ -= static_cast<int>(fs_); history_.push_back(static_cast<float>(shortTerm_)); if (static_cast<int>(history_.size()) > kHistory) history_.erase(history_.begin()); }
 }

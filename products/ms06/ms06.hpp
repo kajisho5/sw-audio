@@ -12,6 +12,7 @@
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
 #include <array>
+#include <cmath>
 #include <vector>
 
 namespace sw::ms06 {
@@ -35,13 +36,21 @@ public:
     int latencySamples() const;
     double matchDb(int stage) const { return match_[static_cast<size_t>(stage)]; }
     double compReductionDb() const { return compGr_; }
+    // the meters of the screen's top line, on the chain's output: short-term loudness (K-weighted, 3 s, LUFS; -200 while silent), the true peak since the start / resetMeters() (dBTP; -200: none yet)
+    // and the loudness range (LU, EBU Tech 3342)
+    double outShortTermLufs() const { return outShort_; }
+    double outTruePeakDb() const { return outTp_ > 1e-9 ? 20.0 * std::log10(outTp_) : -200.0; }
+    double outRangeLu() const { return lra_.range(); }
+    void resetMeters();
 
 private:
     static constexpr int kChunk = 256;
     void runChunk(float** ch, int nch, int n);
     void stageEq(int nch, int n); void stageComp(int nch, int n); void stageSat(int nch, int n); void stageWidth(int nch, int n); void stageLimit(int nch, int n);
     void updateEq(int ramp);
-    double fs_ = 48000.0, compGr_ = 0;
+    void measureOut(float** ch, int nch, int n);
+    double fs_ = 48000.0, compGr_ = 0, outShort_ = -200.0, outTp_ = 0.0;
+    LoudnessMeter outMeter_; LoudnessRange lra_; std::array<TruePeakDetector, 2> outTpd_; long long outSamples_ = 0; int sinceLra_ = 0;   // the output meters
     std::array<double, kNumParams> target_{};
     std::array<int, kStages> order_{0, 1, 2, 3, 4};
     int pendingOrder_ = 0, fade_ = 0;           // fade_: 0 none, 1 fading out into the new order, 2 fading in

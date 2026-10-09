@@ -83,6 +83,7 @@ int Processor::latencySamples() const {
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
+    outMeter_.setup(fs_, 2); for (auto& t : outTpd_) t.setup(4); resetMeters();
     for (auto& b : buf_) b.assign(kChunk, 0.0);
     for (auto& b : dry_) b.assign(kChunk, 0.0);
     const double on[kStages] = {target_[EqOn], target_[CompOn], target_[SatOn], target_[WidthOn], target_[LimitOn]};
@@ -214,6 +215,22 @@ void Processor::process(float** ch, int numCh, int n) {
         float* p[2] = {ch[0] + off, nch > 1 ? ch[1] + off : ch[0] + off};
         runChunk(p, nch, std::min(kChunk, n - off));
     }
+    measureOut(ch, nch, n);
+}
+
+// the meters on what leaves the chain: short-term loudness, true peak, loudness range (a short-term value every 100 ms once 3 s have passed)
+void Processor::measureOut(float** ch, int nch, int n) {
+    const float* in[2] = {ch[0], ch[nch > 1 ? 1 : 0]};
+    outMeter_.process(in, nch, n);
+    for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) outTp_ = std::max(outTp_, outTpd_[static_cast<size_t>(c)].process(ch[c][i]));
+    outShort_ = outMeter_.shortTerm();
+    outSamples_ += n; sinceLra_ += n;
+    const int hop = static_cast<int>(0.1 * fs_);
+    while (sinceLra_ >= hop) { sinceLra_ -= hop; if (outSamples_ >= static_cast<long long>(3.0 * fs_)) lra_.add(outShort_); }
+}
+void Processor::resetMeters() {
+    outMeter_.reset(); for (auto& t : outTpd_) t.reset(); lra_.reset();
+    outShort_ = -200.0; outTp_ = 0.0; outSamples_ = 0; sinceLra_ = 0;
 }
 
 void Processor::runChunk(float** ch, int nch, int n) {

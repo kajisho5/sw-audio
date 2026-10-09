@@ -1755,11 +1755,20 @@
       clearBtn.style.display = loaded ? '' : 'none'; clearBtn.textContent = 'Clear'; loadBtn.style.right = loaded ? '80px' : '10px';
     } };
   }
+  // the loudness / true peak / range texts of MS06's top line: press one to start measuring again (call resetmeters)
+  function meterReset(box, ctx) {
+    const els = [...box.querySelectorAll('*')].filter(e => !e.children.length && /^(-?\d+(\.\d+)? LUFS|— LUFS|TP -?\d.*|TP —|LRA \d.*|LRA —)$/.test(e.textContent.trim()));
+    els.forEach(e => { e.style.cursor = 'pointer'; e.title = 'Press to start measuring again'; e.addEventListener('click', () => ctx.call('resetmeters', '')); });
+    return null;
+  }
+
   const lufs = v => (v > -150 ? v.toFixed(1) : '—');
   const combine = (...ds) => { const l = ds.filter(Boolean); return l.length ? { update(i) { l.forEach(d => d.update && d.update(i)); }, destroy() { l.forEach(d => d.destroy && d.destroy()); } } : null; };
 
   const registry = {
-    MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
+    MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$|^— LUFS$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[1] > -150 ? r[1].toFixed(1) + ' LUFS' : '— LUFS') : null; } },
+      { re: /^TP -?\d|^TP —$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[2] > -150 ? 'TP ' + r[2].toFixed(1) : 'TP —') : null; } },
+      { re: /^LRA \d|^LRA —$/, text: info => { const r = info && info.readouts; return r && r.length >= 4 ? (r[3] > 0 ? 'LRA ' + r[3].toFixed(1) : 'LRA —') : null; } }]), meterReset(box, ctx)),
     LV01: voiceStripDisplay,
     DY09: transientDisplay,
     RS05: declipDisplay,

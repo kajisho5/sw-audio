@@ -104,6 +104,33 @@ private:
     size_t head_ = 0, filled_ = 0;
 };
 
+// Loudness range (EBU Tech 3342): short-term values (the caller adds one every 100 ms once 3 s of signal are there) in 0.1 LU bins; LRA = the 95th - the 10th percentile of what is above the
+// relative gate (the power mean - 20 LU). Values at or below the absolute gate (-70 LUFS) are not counted.
+class LoudnessRange {
+public:
+    LoudnessRange() { reset(); }
+    void reset() { count_.assign(kBins, 0.0); sum_.assign(kBins, 0.0); }
+    void add(double shortTermLufs) {
+        if (!(shortTermLufs > -70.0)) return;
+        const size_t b = std::min(kBins - 1, static_cast<size_t>(std::lround((shortTermLufs + 70.0) * 10.0)));
+        count_[b] += 1.0; sum_[b] += std::pow(10.0, (shortTermLufs + 0.691) / 10.0);
+    }
+    double range() const {
+        double c = 0, s = 0; for (size_t b = 0; b < kBins; ++b) { c += count_[b]; s += sum_[b]; }
+        if (c < 1.0) return 0.0;
+        const double gate = LoudnessMeter::lufs(s / c) - 20.0;
+        double total = 0; for (size_t b = 0; b < kBins; ++b) if (bin(b) >= gate) total += count_[b];
+        if (total < 1.0) return 0.0;
+        auto pct = [&](double p) { double acc = 0; for (size_t b = 0; b < kBins; ++b) { if (bin(b) < gate) continue; acc += count_[b]; if (acc >= p * total) return bin(b); } return 0.0; };
+        return pct(0.95) - pct(0.10);
+    }
+
+private:
+    static constexpr size_t kBins = 701;   // -70.0 .. 0.0 LUFS in 0.1 LU steps
+    static double bin(size_t b) { return -70.0 + 0.1 * static_cast<double>(b); }
+    std::vector<double> count_, sum_;
+};
+
 // BS.1770-4 gated integrated loudness: 400 ms blocks every 100 ms, absolute gate -70 LUFS, relative gate -10 LU.
 // Block energies go into 0.1 LU histogram bins (fixed memory, any length). forgetSeconds > 0 lets old blocks fade out
 // (exponential weight per block) so that a controller can follow a level change; 0 keeps everything (plain integrated).
