@@ -19,8 +19,9 @@ dst.mkdir(parents=True)
 # ---- the plug-ins (bundles copied whole, links kept: a signed macOS bundle must stay as it was signed)
 exts = ['.vst3', '.clap'] + (['.component'] if plat.startswith('macos') else [])
 found = []
+where = build / 'plugins' if (build / 'plugins').is_dir() else build   # CMake's plug-in output (Windows: plugins/CLAP/Release, plugins/VST3/...)
 for e in exts:
-    for p in build.rglob('SW IN07 SWINGBY' + e):
+    for p in sorted(where.rglob('SW IN07 SWINGBY' + e), key=lambda x: len(x.parts)):   # the outermost first (a VST3 bundle holds a file of the same name)
         if 'cpm' in p.parts or '_deps' in p.parts or p in found or any(q in p.parents for q in found):
             continue
         if p.is_dir():

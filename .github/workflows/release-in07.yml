@@ -83,7 +83,7 @@ jobs:
           chmod +x "$CV"
           cd ..
           X="preset-discovery-(crawl|load)"; if [ "$RUNNER_OS" = "Windows" ]; then X="preset-discovery"; fi   # as in build.yml
-          "cv/$CV" validate -x "$X" "$(find build -maxdepth 3 -name 'SW IN07 SWINGBY.clap' -not -path '*/cpm/*' | head -1)"
+          "cv/$CV" validate -x "$X" "$(find build -maxdepth 5 -name 'SW IN07 SWINGBY.clap' -not -path '*/cpm/*' | head -1)"
 
       - name: Sign and notarize (macOS, when the secrets are set)
         if: runner.os == 'macOS' && env.HAVE_MAC_SIGNING == 'true'
