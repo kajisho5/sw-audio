@@ -1,5 +1,5 @@
 // sw-host-stress — the audio thread and the window's thread on one plug-in at the same time, to be built with ThreadSanitizer (tools/stress_tsan.sh).
-//   The audio thread processes noise in blocks of 256 and now and then receives parameter events (the host's automation); a second thread plays the window: it polls ("p"), moves parameters
+//   The audio thread processes noise in blocks of 256 and now and then receives parameter events (the host's automation) and a reset() (the transport stopped or jumped); a second thread plays the window: it polls ("p"), moves parameters
 //   ("s <i> <v>" with the gesture messages around them) and presses the buttons a screen can press ("c <name> <arg>": every call any product knows, with plausible arguments). The main thread
 //   waits and stops them. What it finds is data races (TSan prints them and the exit code is not 0), crashes, and an audio thread that fails or sees NaN.
 //   usage: sw-host-stress <plug-in.clap> [seconds = 6]
@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
             clap_audio_buffer_t ib[2]{}; ib[0].channel_count = 2; ib[0].data32 = ip; ib[1].channel_count = scCh; ib[1].data32 = sp;
             clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op; clap_output_events_t oe{nullptr, outTryPush};
             clap_process_t pr{}; pr.steady_time = -1; pr.frames_count = kBlock; pr.audio_inputs = ib; pr.audio_inputs_count = nIn; pr.audio_outputs = &ob; pr.audio_outputs_count = 1; pr.in_events = &ev.in; pr.out_events = &oe;
+            if (rng.next() < 0.004) p->reset(p);   // the host stopped or jumped (audio thread, between two blocks)
             if (p->process(p, &pr) == CLAP_PROCESS_ERROR) bad = true;
             for (int c = 0; c < 2; ++c) for (uint32_t i = 0; i < kBlock; ++i) if (!std::isfinite(out[c][i])) bad = true;
             ++blocks; std::this_thread::sleep_for(std::chrono::microseconds(300));   // faster than real time, but leave the other thread room
