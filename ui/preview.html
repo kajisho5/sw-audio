@@ -17,7 +17,8 @@
   const sim = new URLSearchParams(location.search).get('sim') === '1'; let t0 = 0;
   const simMeters = () => { t0 += 1; const a = -30 + 22 * Math.sin(t0 / 9) * Math.sin(t0 / 23), th = vals[0] === undefined ? -20 : vals[0], r = vals[1] || 2, o = a > th ? th + (a - th) / r : a; return [a, a - 1, o + 2, o + 1]; };
   const listeners = [];
-  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2, meters: sim ? simMeters() : [-18, -22, -6, -0.5] }) };
+  const simSpec = () => Array.from({ length: 64 }, (_, b) => -28 - 5.5 * b / 64 * 10 / 3 + 9 * Math.sin(b / 5 + t0 / 11) + 5 * Math.sin(b * 1.7 + t0 / 3) - (b > 56 ? (b - 56) * 4 : 0));
+  const bridge = { values: () => vals, set: (i, v) => { vals[i] = v; }, begin() {}, end() {}, call() {}, onChange: cb => listeners.push(cb), info: () => ({ latencyMs: 0, cpu: 1.2, meters: sim ? simMeters() : [-18, -22, -6, -0.5], spectrum: sim ? simSpec() : undefined }) };
   window.screen_ = SWUI.mount(document.getElementById('app'), { product: P[code], params, traits, bridge, skin: K[code] && { html: K[code].html, css: (K._base ? K._base.css : '') + K[code].css } });
   document.title = 'SW ' + code; window.ready = true;
 })();

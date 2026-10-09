@@ -141,6 +141,7 @@ private:
         double latencyMs() { return 1000.0 * pl.shell_.latencySamples() / pl.sr_; }
         double cpu() { return pl.cpu_.load(); }
         double meter(int k) { const float v = pl.peaks_[static_cast<size_t>(k)].load(); return v > 1e-5f ? 20.0 * std::log10(static_cast<double>(v)) : -100.0; }
+        void spectrum(double* out) { pl.spec_.compute(pl.sr_, out); }
         void call(const std::string& name, const std::string& arg) { pl.guiCall(name, arg); }
     };
     // GUI thread -> audio thread: gesture begin (0), value (1), gesture end (2); the value itself is read from host_values_ when the event is written
@@ -321,6 +322,7 @@ private:
     // peak meters of the screen: block peak with a ~0.3 s fall (slot 0/1 input L/R, 2/3 output L/R)
     void measure(float* const* d, uint32_t nch, uint32_t frames, int slot) {
         if (frames == 0) return;
+        if (slot == 2) spec_.push(d, nch, frames);
         const float fall = std::exp(-static_cast<float>(frames) / static_cast<float>(0.3 * sr_));
         for (uint32_t c = 0; c < 2; ++c) {
             const float* x = d[std::min(c, nch - 1)]; float pk = 0.f;
@@ -502,6 +504,7 @@ private:
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
     std::array<std::atomic<float>, 4> peaks_{};
+    gui::SpectrumTap spec_;   // the output spectrum for the screen (audio thread writes, GUI thread reads)
     std::atomic<double> cpu_{-1.0};   // measured: the time of a block over its length, in percent (smoothed)
 };
 

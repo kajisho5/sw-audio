@@ -13,7 +13,7 @@ struct Fake {
     void begin(int i) { log.push_back("b" + std::to_string(i)); }
     void end(int i) { log.push_back("e" + std::to_string(i)); }
     void set(int i, double x) { v[static_cast<size_t>(i)] = x; log.push_back("s" + std::to_string(i)); }
-    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; }
+    double latencyMs() { return 1.5; } double cpu() { return -1; } double meter(int k) { return -20.0 - k; } void spectrum(double* o) { for (int i = 0; i < gui::kSpecBands; ++i) o[i] = -80.0 + i; }
     void call(const std::string& n, const std::string& a) { log.push_back("c:" + n + ":" + a); }
 };
 }
@@ -38,7 +38,7 @@ TEST_CASE("GUI session: values and gestures reach the plug-in; a poll answers wi
     CHECK(f.v[1] == 5.5); CHECK(f.log == std::vector<std::string>{"b1", "s1", "e1"});
     s.onMessage("s 9 1"); s.onMessage("b 9"); s.onMessage("e 9"); s.onMessage("garbage"); CHECK(f.log.size() == 3);   // out of range or malformed: ignored
     s.onMessage("c tap 1 2"); CHECK(f.log.back() == "c:tap:1 2");
-    const std::string a = s.onMessage("p"); CHECK(a == "SWHOST.update([1,5.5,3],1.5,-1,[-20,-21,-22,-23]);"); CHECK(s.onMessage("r") == a);
+    const std::string a = s.onMessage("p"); CHECK(a.rfind("SWHOST.update([1,5.5,3],1.5,-1,[-20,-21,-22,-23],[-80.0,-79.0,", 0) == 0); CHECK(a.substr(a.size() - 2) == ");"); CHECK(s.onMessage("r") == a);
 }
 
 TEST_CASE("GUI page: the parameter table of a product is in it, valid and safe") {
@@ -64,4 +64,24 @@ TEST_CASE("GUI specs JSON: every field of every product's parameters, and escapi
 TEST_CASE("GUI meta: known products carry their colours, unknown ones fall back") {
     const std::string m = gui::metaJson("EQ05"); CHECK(m.find("\"code\":\"EQ05\"") != std::string::npos); CHECK(m.find("#3b7fe6") != std::string::npos);
     const std::string u = gui::metaJson("ZZ99"); CHECK(u.find("\"code\":\"ZZ99\"") != std::string::npos); CHECK(u.find("#f0ad3d") != std::string::npos);
+}
+
+TEST_CASE("GUI spectrum: a sine reads its own level in the right band, silence is the floor, the update script carries 64 values") {
+    const double fs = 48000.0;
+    auto sine = [&](double f, double amp) { std::vector<float> x(gui::kSpecFft); for (int i = 0; i < gui::kSpecFft; ++i) x[static_cast<size_t>(i)] = static_cast<float>(amp * std::sin(2.0 * 3.14159265358979323846 * f * i / fs)); return x; };
+    for (double f : {100.0, 1000.0, 5000.0, 12000.0}) {
+        const auto x = sine(f, 0.5); double out[gui::kSpecBands];
+        gui::spectrumOf(x.data(), fs, out);
+        int pk = 0; for (int b = 1; b < gui::kSpecBands; ++b) if (out[b] > out[pk]) pk = b;
+        CHECK(std::abs(gui::specBandFreq(pk) / f - 1.0) < 0.12);     // the loudest band is the sine's (band width is 11 %)
+        CHECK(std::abs(out[pk] - (-6.02)) < 1.6);                    // 0.5 amplitude = -6 dB re full scale
+    }
+    { std::vector<float> z(gui::kSpecFft, 0.f); double out[gui::kSpecBands]; gui::spectrumOf(z.data(), fs, out); for (double v : out) CHECK(v <= -119.0); }
+    { gui::SpectrumTap tap; std::vector<float> a(10000), b(10000); for (size_t i = 0; i < a.size(); ++i) { a[i] = static_cast<float>(0.25 * std::sin(2.0 * 3.14159265358979323846 * 2000.0 * static_cast<double>(i) / fs)); b[i] = a[i]; }
+      float* ch[2] = {a.data(), b.data()}; tap.push(ch, 2, 5000); tap.push(ch, 2, 5000);        // more than the ring holds in two pushes, wrapping
+      double out[gui::kSpecBands]; tap.compute(fs, out); int pk = 0; for (int i = 1; i < gui::kSpecBands; ++i) if (out[i] > out[pk]) pk = i; CHECK(std::abs(gui::specBandFreq(pk) / 2000.0 - 1.0) < 0.12); }
+    Fake f; f.v = {1.0, 2.0}; gui::Session<Fake> s(f); const std::string u = s.onMessage("p");
+    CHECK(u.rfind("SWHOST.update([", 0) == 0);
+    size_t commas = 0, start = u.rfind(",["); for (size_t i = start; i < u.size(); ++i) commas += u[i] == ',';
+    CHECK(commas == gui::kSpecBands);                                // the last array: 64 values -> 63 commas + the one that opens it
 }

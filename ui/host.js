@@ -1,7 +1,7 @@
 /* The page of a plug-in window: the bridge between the screen (sw-ui.js) and the native side.
    The native side exposes one function to post a text message — webkit.messageHandlers.sw (macOS) or chrome.webview (Windows) — and calls SWHOST.update(...) with text it composed.
    Messages to native (space separated): "s <i> <plain>" a value, "b <i>" / "e <i>" gesture begin / end, "c <name> <arg...>" a button, "p" poll, "r" ready.
-   Poll answer (native -> page): SWHOST.update([plain values], latencyMs, cpu, [inL, inR, outL, outR in dBFS]). A poll is sent every 50 ms while the page is visible. */
+   Poll answer (native -> page): SWHOST.update([plain values], latencyMs, cpu, [inL, inR, outL, outR in dBFS], [64 band levels of the output in dB, log-spaced 20 Hz - 20 kHz]). A poll is sent every 50 ms while the page is visible. */
 (function () {
   const post = m => { try { if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sw) window.webkit.messageHandlers.sw.postMessage(m); else if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(m); } catch (e) {} };
   let vals = SWBOOT.values.slice(), info = { latencyMs: SWBOOT.latencyMs || 0 }; const listeners = []; const pending = new Set();
@@ -13,8 +13,8 @@
     onChange: cb => listeners.push(cb), info: () => info
   };
   window.SWHOST = {
-    update(v, lat, cpu, m) {
-      info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m };
+    update(v, lat, cpu, m, sp) {
+      info = { latencyMs: lat, cpu: cpu < 0 ? undefined : cpu, meters: m, spectrum: sp };
       v.forEach((x, i) => { if (!pending.has(i) && vals[i] !== x) { vals[i] = x; listeners.forEach(cb => cb(i, x)); } });
       pending.clear();
     }

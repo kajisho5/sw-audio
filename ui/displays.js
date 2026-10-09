@@ -456,7 +456,65 @@
     } };
   }
 
+
+  // ======== spectrum (the plug-in sends 64 log-spaced bands of the output, 20 Hz - 20 kHz, in dB: plugin/clap/gui_spectrum.hpp) ========
+  function Smooth() { const a = new Array(64).fill(-120); return { a, feed(sp) { for (let b = 0; b < 64; b++) { const v = sp[b] === undefined ? -120 : sp[b]; a[b] += (v - a[b]) * (v > a[b] ? 0.6 : 0.2); } return a; } }; }
+  const specDb = (v, lo) => clamp((v - lo) / -lo, 0, 1);       // lo .. 0 dB -> 0 .. 1
+
+  // the design's grey spectrum area is replaced by the measured one (MT02, MD06, LV09, LV08, LV02, LO01, SA05, DY05)
+  function spectrumPath(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const cand = [...svg.querySelectorAll(':scope > path')].filter(e => e.getAttribute('fill') && e.getAttribute('fill') !== 'none');
+    const area = cand.sort((a, b) => (b.getAttribute('d') || '').length - (a.getAttribute('d') || '').length)[0];
+    if (!area || (area.getAttribute('d') || '').split('L').length < 20) return null;
+    const [, , W, H] = vbOf(svg), sm = Smooth(), TOP = H * 0.06;
+    return { update(info) {
+      const sp = info && info.spectrum; if (!sp) return; const a = sm.feed(sp); let d = 'M0 ' + H;
+      for (let b = 0; b < 64; b++) d += ' L' + ((b + 0.5) / 64 * W).toFixed(1) + ' ' + (H - specDb(a[b], -90) * (H - TOP)).toFixed(1);
+      area.setAttribute('d', d + ' L' + W + ' ' + H + ' Z');
+    } };
+  }
+
+  // 31 third-octave bars with peak holds (LV20)
+  function spectrumBars(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const rs = [...svg.querySelectorAll(':scope > rect')], bars = rs.filter(r => +r.getAttribute('height') > 4), ticks = rs.filter(r => +r.getAttribute('height') <= 4);
+    if (bars.length !== 31 || ticks.length !== 31) return null;
+    bars.sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x')); ticks.sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x'));
+    const base = +bars[0].getAttribute('y') + +bars[0].getAttribute('height'), full = Math.max(...bars.map(r => +r.getAttribute('height'))) * 1.05, th = +ticks[0].getAttribute('height');
+    const sm = Smooth(), hold = new Array(31).fill(0);
+    return { update(info) {
+      const sp = info && info.spectrum; if (!sp) return; const a = sm.feed(sp);
+      for (let k = 0; k < 31; k++) {                                          // third-octave k covers 20 * 10^((k-0.5)/10) .. 20 * 10^((k+0.5)/10); our band b spans 20 * 1000^(b/64)
+        const f0 = 20 * Math.pow(10, (k - 0.5) / 10), f1 = 20 * Math.pow(10, (k + 0.5) / 10), b0 = Math.max(0, Math.floor(Math.log(f0 / 20) / Math.log(1000) * 64)), b1 = Math.min(63, Math.max(b0, Math.ceil(Math.log(f1 / 20) / Math.log(1000) * 64) - 1));
+        let v = -120; for (let b = b0; b <= b1; b++) v = Math.max(v, a[b]);
+        const x = specDb(v, -80), h = Math.max(1, x * full); bars[k].setAttribute('y', (base - h).toFixed(1)); bars[k].setAttribute('height', h.toFixed(1));
+        hold[k] = Math.max(x, hold[k] - 0.012); ticks[k].setAttribute('y', (base - hold[k] * full - th).toFixed(1));
+      }
+    } };
+  }
+
+  // a grid of cells lit up to the level of each column (MT03, RS04, RS07): columns = frequency, rows = level; the design's cell colours are kept
+  function spectrumCells(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const cells = [...svg.querySelectorAll(':scope > rect')].filter(r => r.getAttribute('fill') !== 'none' && !r.getAttribute('stroke'));
+    if (cells.length < 100) return null;
+    const xs = [...new Set(cells.map(r => r.getAttribute('x')))].sort((a, b) => a - b), ys = [...new Set(cells.map(r => r.getAttribute('y')))].sort((a, b) => a - b);
+    if (xs.length * ys.length !== cells.length) return null;
+    const grid = xs.map(() => new Array(ys.length)); cells.forEach(r => { grid[xs.indexOf(r.getAttribute('x'))][ys.indexOf(r.getAttribute('y'))] = { e: r, o: r.getAttribute('fill-opacity') || r.style.opacity || '1' }; });
+    const C = xs.length, R = ys.length, sm = Smooth(), lit = grid.map(c => c.map(() => true));
+    return { update(info) {
+      const sp = info && info.spectrum; if (!sp) return; const a = sm.feed(sp);
+      for (let j = 0; j < C; j++) {
+        const b0 = Math.floor(j * 64 / C), b1 = Math.max(b0, Math.floor((j + 1) * 64 / C) - 1); let v = -120; for (let b = b0; b <= b1; b++) v = Math.max(v, a[b]);
+        for (let r = 0; r < R; r++) { const rowDb = -80 + (R - 1 - r) / (R - 1) * 80, on = v >= rowDb; if (on !== lit[j][r]) { lit[j][r] = on; const c = grid[j][r]; c.e.setAttribute('fill-opacity', on ? c.o : '0.04'); } }
+      }
+    } };
+  }
+
   const registry = {
+    MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
+    LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
     RS06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Tail length' }),
