@@ -1046,13 +1046,26 @@ void memoryChecks(const std::vector<fs::path>& files, std::vector<std::string>& 
     for (size_t i = 0; i < out.size() && i < 8; ++i) { char b[120]; std::snprintf(b, sizeof b, "%8.1f MB per instance   %s", out[i].first, out[i].second.c_str()); lines.push_back(b); }
     char b[160]; std::snprintf(b, sizeof b, "one instance of every plug-in together: %.0f MB (%zu plug-ins, sample rate %.0f Hz)", sum, out.size(), kSr); lines.push_back(b);
 }
+// Create / activate / process / deactivate / destroy over and over (a host does it every time a project is opened, a track is added or the sample rate changes): the resident memory must not keep growing.
+// 4 rounds to warm the allocator up, then 40 rounds; the growth over those 40 is the leak (a few hundred KB are the allocator's, more is ours).
+void leakChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& leaking) {
+    leaking = 0;
+    for (const auto& f : files) {
+        auto round = [&]() { Loaded a; std::string why; if (!a.open(f, why)) return false; EventList none; a.run.process(8, 1, none); a.close(); return true; };
+        bool ok = true; for (int i = 0; i < 4 && ok; ++i) ok = round();
+        if (!ok) continue;
+        const double r0 = residentMB(); for (int i = 0; i < 40 && ok; ++i) ok = round();
+        const double grown = residentMB() - r0;
+        if (grown > 4.0) { ++leaking; char b[160]; std::snprintf(b, sizeof b, "FAIL  %-26s the resident memory grew by %.1f MB over 40 create / process / destroy rounds", f.stem().string().c_str(), grown); lines.push_back(b); }
+    }
+}
 }   // namespace
 
 int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1063,6 +1076,7 @@ int main(int argc, char** argv) {
         if (opt == "--blocks") { blocksOnly = true; continue; }
         if (opt == "--reset") { resetOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
+        if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
@@ -1075,6 +1089,12 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (leaksOnly) {   // --leaks: create / destroy rounds
+        std::vector<std::string> lines; int leaking = 0; leakChecks(files, lines, leaking);
+        for (const auto& l : lines) std::printf("%s\n", l.c_str());
+        std::printf("leaks: %zu plug-ins, %d grow over 40 create / process / destroy rounds\n", files.size(), leaking);
+        return leaking ? 1 : 0;
+    }
     if (memoryOnly) {   // --memory: only the memory per instance
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());

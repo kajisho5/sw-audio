@@ -97,6 +97,8 @@ jobs:
           build/sw-host-smoke --tails=2 build/plugins
           # reset() (the host stopped or jumped): no reverb tail or repeat of the old position comes out afterwards
           build/sw-host-smoke --reset build/plugins
+          # create / process / destroy over and over (a host does it for every project that is opened): the resident memory must not keep growing
+          build/sw-host-smoke --leaks build/plugins
 
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
