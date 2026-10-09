@@ -84,7 +84,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、EQ08・EQ02 Linear のカーネル再設計を音声スレッドから外す（確保は直した。計算そのものが L ＝ 8192 で約 5 ms 以上）、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り・OBS 連携（LV27）・EQ05 の Match、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、EQ08・EQ02 Linear のカーネル再設計を音声スレッドから外す（確保は直し、設計は 2〜6 倍速くした。計算そのものは 24 バンドで 3〜8 ms）、GT02・RV04・ST05 の IR の作り直しをサンプル数で進める、ホストのトラック名・SW Link の残り・OBS 連携（LV27）・EQ05 の Match、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）
