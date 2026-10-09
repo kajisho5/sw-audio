@@ -6,7 +6,7 @@ namespace {
 struct Dy10 {
     using Core = sw::dy10::Processor;
     static const std::vector<sw::ParamSpec>& specs() { return sw::dy10::specs(); }
-    static constexpr int kOutputParam = sw::dy10::Output;
+    static constexpr int kOutputParam = -1;   // the core applies Output itself (routing it to the shell as well doubled the gain)
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
     static const clap_plugin_descriptor_t* descriptor() {

@@ -6,7 +6,7 @@ namespace {
 struct Sa02 {
     using Core = sw::sa02::Processor;
     static const std::vector<sw::ParamSpec>& specs() { return sw::sa02::specs(); }
-    static constexpr int kOutputParam = sw::sa02::Output;
+    static constexpr int kOutputParam = -1;   // the core applies Output itself (routing it to the shell as well doubled the gain)
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
     static const clap_plugin_descriptor_t* descriptor() {
