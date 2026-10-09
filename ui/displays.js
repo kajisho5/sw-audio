@@ -1363,6 +1363,15 @@
   }
 
 
+  // ---- LV05: the second dashed line and its label ("-12 dB") are the ducking Depth: they move with the parameter (the first one is 0 dB, the background's own level)
+  function depthLineDisplay(box, ctx, y) {
+    const svg = svgOf(box); if (!svg) return null;
+    const lines = [...svg.querySelectorAll(':scope > line[stroke-dasharray]')], lab = [...svg.querySelectorAll(':scope > text')].find(t => /^-?\d+ dB$/.test(t.textContent.trim()));
+    if (lines.length < 2 || !lab) return null; let last = null;
+    return { update() { const d = ctx.value('Depth'); if (!Number.isFinite(d) || d === last) return; last = d; const yy = y(d); lines[1].setAttribute('y1', yy.toFixed(1)); lines[1].setAttribute('y2', yy.toFixed(1)); lab.setAttribute('y', (yy - 6).toFixed(1)); lab.textContent = Math.round(d) + ' dB'; } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1396,17 +1405,21 @@
     LV14: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), alignGraphDisplay(box, ctx)),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
-    LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
+    LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90))), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
+    RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
+    RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
-    MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
+    MT02: spectrumPath, MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
     CR04: spectrumPath, RS01: spectrumPath,
-    LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
+    LV20: spectrumBars, RS07: spectrumCells,
+    MT03: (box, ctx) => { const d = spectrumCells(box, ctx), btn = [...box.querySelectorAll('button')].find(b => /^Pause$/i.test(b.textContent.trim())); if (!d || !btn) return d; let paused = false; btn.title = 'Freezes the picture (the screen only)'; btn.addEventListener('click', () => { paused = !paused; btn.classList.toggle('on', paused); }); return { update(i) { if (!paused) d.update(i); } }; },
+    RS04: (box, ctx) => combine(spectrumCells(box, ctx), textRules(box, ctx, [{ re: /^Repaired \d+ events$/, text: info => 'Repaired ' + (info.readouts && info.readouts.length >= 1 ? Math.round(info.readouts[0]) : '—') + ' events' }])),
     RV04: convolutionDisplay,
     VO01: (box, ctx) => combine(pitchGraphDisplay(box, ctx), keyChips(box, ctx, 'VO01')),
     VO03: (box, ctx) => combine(harmonyGraphDisplay(box, ctx), keyChips(box, ctx, 'VO03')),

@@ -397,5 +397,14 @@
    0,
    3
   ]
+ },
+ "MT02": {
+  "_valchip": [
+   {
+    "text": "Tilt",
+    "p": 3,
+    "prefix": "Tilt"
+   }
+  ]
  }
 }
