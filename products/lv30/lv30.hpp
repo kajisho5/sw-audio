@@ -41,6 +41,8 @@ public:
     bool start();                 // false: no folder / already running / not prepared
     void stop();                  // writes the last data, the cue points and the final header
     bool recording() const { return running_.load(); }
+    int marksMade() const { return marksMade_.load(); }   // marks since this recording started (the screen draws a triangle for each new one)
+    double hostRate() const { return fs_; }
     void mark(const std::string& label = "");
     std::string currentFile() const { std::lock_guard<std::mutex> l(m_); return file_; }
     int filesWritten() const { return files_.load(); }
@@ -66,6 +68,7 @@ private:
     std::atomic<uint64_t> framesPushed_{0}, dropped_{0};
     std::atomic<bool> running_{false}, stopReq_{false}, lowDisk_{false};
     std::atomic<int> files_{0};
+    std::atomic<int> marksMade_{0};
     std::thread thread_;
     mutable std::mutex m_;
     std::string folder_, file_;

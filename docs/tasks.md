@@ -191,7 +191,7 @@
 - [x] 共通ランタイム：ノブ・ボタン・セレクター・フェーダー、値の入力、A/B、Undo/Redo、Auto gain／Delta、EVO バー、レイテンシと CPU の表示（`ui/`、全 132 製品を Chromium で描画して確認）。
 - [x] 曲線と値の書式が C++ と一致することのテスト（`tests/ui/curves.test.js`、8055 点）。
 - [x] プラグイン側：CLAP の gui 拡張、画面→ホストのジェスチャ（begin／value／end）の待ち行列、CPU の実測、macOS／Windows のビュー（`gui_mac.mm`／`gui_win.cpp`）。**macOS と Windows での実機確認は未実施（CI のビルドとバリデータだけ）**。
-- [~] 製品ごとの専用表示：EQ カーブ・スペクトラム・ステレオスコープ・ラウドネス・GR など約 70 製品が動いた（README「画面の中央の表示」の表）。残り（静的な絵のまま）：CR03・CS04・DL05・DY09・LV03（EQ の小曲線）・LV04（Last limit）・LV15・LV27・LV28・LV30・MS06（一部）・RS02・RS05・ST03・UT03（一部）
+- [~] 製品ごとの専用表示：EQ カーブ・スペクトラム・ステレオスコープ・ラウドネス・GR など約 70 製品が動いた（README「画面の中央の表示」の表）。残り（静的な絵のまま）：CR03・CS04・DL05・DY09・LV03（EQ の小曲線）・LV04（Last limit）・LV15・LV27・LV28・MS06（一部）・RS02・RS05・ST03・UT03（一部）
 - [x] 製品ごとのボタン（コアのメソッドを呼ぶもの）：デザインの画面でも動くように接続（12 製品）。残り：DL01 Tap（仕様にない）、LV08 Forget・LV21 Arm・LV30 Record・UT01 Remember gain（デザインにない）
 - [ ] Blender 描画のノブ・パネル素材（デザインシステムの画像）、ラックイヤー・LIVE 筐体の意匠。
 - [ ] Linux の画面（X11 への埋め込み）、ウィンドウの拡大縮小。

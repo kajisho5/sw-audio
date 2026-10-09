@@ -91,7 +91,7 @@ void Processor::process(float** ch, int numCh, int n) {
 
 bool Processor::start() {
     if (!prepared_ || running_.load()) return false;
-    { std::lock_guard<std::mutex> l(m_); if (folder_.empty()) return false; std::error_code ec; fs::create_directories(folder_, ec); if (ec) return false; marks_.clear(); }
+    { std::lock_guard<std::mutex> l(m_); if (folder_.empty()) return false; std::error_code ec; fs::create_directories(folder_, ec); if (ec) return false; marks_.clear(); marksMade_ = 0; }
     head_ = tail_ = 0; framesPushed_ = 0; stopReq_ = false; bitsAtStart_ = target_[Bits] < 0.5 ? 16 : target_[Bits] < 1.5 ? 24 : 32;
     running_ = true; thread_ = std::thread([this] { writer(); }); return true;
 }
@@ -99,7 +99,7 @@ void Processor::stop() {
     if (!running_.load() && !thread_.joinable()) return;
     stopReq_ = true; if (thread_.joinable()) thread_.join(); running_ = false;
 }
-void Processor::mark(const std::string& label) { if (!running_.load()) return; std::lock_guard<std::mutex> l(m_); marks_.push_back({static_cast<double>(framesPushed_.load()) / fs_, label}); }
+void Processor::mark(const std::string& label) { if (!running_.load()) return; std::lock_guard<std::mutex> l(m_); marks_.push_back({static_cast<double>(framesPushed_.load()) / fs_, label}); ++marksMade_; }
 
 void Processor::writer() {
     WavFile wav; std::string base; int fileIndex = 0; uint64_t fileFrames = 0, totalFrames = 0; std::vector<std::pair<uint64_t, std::string>> cues; std::vector<uint8_t> bytes;

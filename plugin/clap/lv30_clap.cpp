@@ -14,6 +14,8 @@ struct Lv30 {
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static constexpr bool kGuiCallOnGuiThread = true;   // file I/O: not on the audio thread
+    static constexpr int kReadouts = 6;   // recording (1 / 0), seconds recorded, low disk (1 / 0), files written, marks made, the host's sample rate
+    static void readouts(const Core& c, double* o) { o[0] = c.recording() ? 1.0 : 0.0; o[1] = c.secondsRecorded(); o[2] = c.lowDisk() ? 1.0 : 0.0; o[3] = c.filesWritten(); o[4] = c.marksMade(); o[5] = c.hostRate(); }
     static void guiCall(Core& c, const char* n, const char* a) {
         if (!std::strcmp(n, "record")) {
             if (a[0] == '1') {

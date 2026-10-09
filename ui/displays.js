@@ -1193,6 +1193,42 @@
   }
 
 
+  // ---- LV30 recorder: the recording badge (a click starts or stops the recording), the input level of the last minute with a triangle for every mark, the file format the plug-in really writes
+  // readouts: [recording (1 / 0), seconds recorded, low disk (1 / 0), files written, marks made, the host's sample rate]. The design's example numbers (Rec 01:23:45, Disk free 412 GB) are gone:
+  // the disk is shown as OK / LOW while recording (the core only knows "under 200 MB"), not as a size.
+  function recorderDisplay(box, ctx) {
+    const svg = svgOf(box), stat = box.querySelector('.stat'); if (!svg || !stat) return null;
+    const dot = stat.querySelector('.dot'), txt = [...stat.childNodes].find(n => n.nodeType === 3);
+    const area = svg.querySelector(':scope > path'), now = svg.querySelector(':scope > line'), tris = [...svg.querySelectorAll(':scope > path')].slice(1);
+    const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), disk = rb.find(x => /^Disk/i.test(x[0].textContent)), fmt = rb.find(x => /^Format/i.test(x[0].textContent));
+    if (!area || !now || !txt) return null;
+    tris.forEach(t => t.remove()); if (disk) disk[0].textContent = 'Disk';
+    const [, , W, H] = vbOf(svg), XN = +now.getAttribute('x1'), X0 = 14, N = 120, STEP = 500, SPAN = N * STEP, CY = (H - 12) / 2, AMP = CY - 6, hist = Ring(N, -90), pool = [], marks = [];
+    let t0 = 0, peak = -90, lastMarks = 0, lastRec = false; stat.style.cursor = 'pointer';
+    stat.addEventListener('click', () => { if (ctx.call) ctx.call('record', lastRec ? '0' : '1'); });
+    const hms = sec => { const s = Math.floor(sec); return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(v => String(v).padStart(2, '0')).join(':'); };
+    const tri = k => pool[k] || (pool[k] = svg.insertBefore(mkEl('path', { fill: '#f0c93d' }), svg.querySelector(':scope > text:last-of-type')));
+    return { update(info) {
+      const m = info && info.meters, r = info && info.readouts; if (!m || !r || r.length < 6) return; const t = performance.now(); if (!t0) t0 = t;
+      peak = Math.max(peak, m[0], m[1]); if (t - t0 >= STEP) { hist.push(peak); peak = -90; t0 = t; }
+      const rec = r[0] > 0.5; lastRec = rec;
+      if (r[4] > lastMarks) for (let k = lastMarks; k < r[4]; k++) marks.push(t); lastMarks = r[4]; if (r[4] === 0) marks.length = 0;
+      if (dot) { dot.style.background = rec ? '#e0443e' : '#55575c'; dot.style.boxShadow = rec ? '0 0 6px #e0443e' : 'none'; }
+      txt.textContent = rec ? 'Rec ' + hms(r[1]) : 'Stopped';
+      stat.title = rec ? 'Click to stop the recording' : 'Click to start recording (into Documents/SW AUDIO until a folder has been chosen)';
+      let up = '', dn = '';
+      for (let i = 0; i < N; i++) { const x = X0 + i / (N - 1) * (XN - X0), a = clamp((hist.a[i] + 60) / 60, 0, 1) * AMP; up += (i ? ' L' : 'M') + x.toFixed(1) + ' ' + (CY - a).toFixed(1); dn = ' L' + x.toFixed(1) + ' ' + (CY + a * 0.9).toFixed(1) + dn; }
+      area.setAttribute('d', up + dn + ' Z');
+      while (marks.length && t - marks[0] > SPAN) marks.shift();
+      marks.forEach((mt, k) => { const x = XN - (t - mt) / SPAN * (XN - X0), p = tri(k); p.setAttribute('d', 'M' + (x - 5).toFixed(1) + ' ' + (H - 4) + ' L' + (x + 5).toFixed(1) + ' ' + (H - 4) + ' L' + x.toFixed(1) + ' ' + (H - 12) + ' Z'); p.style.display = ''; });
+      for (let k = marks.length; k < pool.length; k++) pool[k].style.display = 'none';
+      if (disk) disk[1].textContent = rec ? (r[2] > 0.5 ? 'LOW' : 'OK') : '—';
+      if (fmt) { const flac = ctx.value('Format') > 0.5, bits = ['16-bit', '24-bit', '32-bit float'][Math.round(ctx.value('Bit depth'))] || '', fs = r[5] > 0 ? r[5] : 48000;
+        fmt[1].textContent = 'WAV ' + (fs / 1000).toFixed(fs % 1000 ? 1 : 0) + 'k ' + bits + (flac ? '*' : ''); fmt[1].title = flac ? 'FLAC is not written yet: the file is WAV' : 'The file has the host\'s sample rate'; }
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1242,6 +1278,7 @@
     VO08: breathDisplay,
     CR01: filterResponseDisplay,
     CR02: stutterGridDisplay,
+    LV30: recorderDisplay,
     LO03: lowFocusDisplay,
     RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),

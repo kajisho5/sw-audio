@@ -91,3 +91,10 @@ TEST_CASE("LV30 mono input goes to both channels; odd blocks; before prepare") {
     const auto b = slurp(files(t.dir, ".wav")[0]); for (size_t i = 3000; i < 20000; i += 211) { const size_t o = 80 + i * 6; CHECK(b[o] == b[o + 3]); }
     Processor z; std::vector<float> a(256, 0.3f); float* c[1] = {a.data()}; z.process(c, 1, 256); CHECK(a[0] == 0.3f); z.mark("x"); z.stop();
 }
+
+TEST_CASE("LV30 counts the marks made in a recording for the screen (a mark outside a recording is not counted)") {
+    Tmp t; Processor p; p.setFolder(t.dir.string()); prep(p, {{AutoStart, 0}});
+    p.mark("early"); CHECK(p.marksMade() == 0);
+    REQUIRE(p.start()); feed(p, sine(-12, 0.5, 440)); p.mark(); p.mark("x"); CHECK(p.marksMade() == 2); CHECK(p.hostRate() == doctest::Approx(48000.0));
+    p.stop(); REQUIRE(p.start()); CHECK(p.marksMade() == 0); p.stop();
+}

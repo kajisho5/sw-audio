@@ -361,6 +361,7 @@
       value: name => { const h = host.find(x => x.p.name === name); return h ? vals[h.i] : undefined; },
       params: host.map(h => ({ name: h.p.name, i: h.i, p: h.p, c: h.c })), get: i => vals[i], set: (i, v) => setValue(i, v, false), begin: i => bridge.begin(i), end: i => bridge.end(i),
       band: () => selBand,
+      call: (name, arg) => bridge.call(name, arg === undefined ? '' : arg),
       selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); } }) : null;
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
