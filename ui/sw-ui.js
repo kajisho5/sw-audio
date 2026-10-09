@@ -293,6 +293,35 @@
       });
       const draws = new Map();                  // host index -> [draw functions]
       const reg = (i, f) => { (draws.get(i) || draws.set(i, []).get(i)).push(f); };
+      // a vertical fader (LV03 Out): the cap (data-fader = the host index) slides inside its parent (top = 0 at the highest value), the module's .rv prints the value
+      skinBox.querySelectorAll('[data-fader]').forEach(cap => {
+        const i = +cap.dataset.fader, h = hostOf(i); if (!h) return;
+        const track = cap.parentElement, rv = (cap.closest('.mod') || skinBox).querySelector('.rv'), capH = cap.style.height || '26px';
+        const span = () => Math.max(1, track.clientHeight - parseFloat(capH));
+        const draw = () => { cap.style.top = 'calc((100% - ' + capH + ') * ' + (1 - h.c.norm(vals[i])).toFixed(4) + ')'; if (rv) rv.textContent = format(h.p, vals[i], h.c); };
+        cap.style.touchAction = 'none'; cap.style.cursor = 'ns-resize'; let drag = null;
+        cap.addEventListener('pointerdown', e => { cap.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: h.c.norm(vals[i]) }; bridge.begin(i); });
+        cap.addEventListener('pointermove', e => { if (drag) setValue(i, h.c.value(clamp(drag.x0 + (drag.y - e.clientY) / span() * (e.shiftKey ? 0.2 : 1), 0, 1)), false); });
+        const end = () => { if (!drag) return; drag = null; bridge.end(i); }; cap.addEventListener('pointerup', end); cap.addEventListener('pointercancel', end);
+        cap.addEventListener('dblclick', () => { bridge.begin(i); setValue(i, h.p.def); bridge.end(i); });
+        reg(i, draw);
+      });
+      // a chip or tile that prints a parameter and its value ("Mix 50%", "NOM limit 4 mics"): a stepped parameter steps on a click, a continuous one is dragged like a knob (wheel and double click work too)
+      skinBox.querySelectorAll('[data-valchip]').forEach(el => {
+        const i = +el.dataset.valchip, h = hostOf(i); if (!h) return;
+        const tv = el.querySelector('.tv'), pre = el.dataset.prefix || '', suf = el.dataset.suffix || '', stepped = h.p.curve === 'step';
+        const draw = () => { const t = (pre ? pre + ' ' : '') + format(h.p, vals[i], h.c) + suf; if (tv) tv.textContent = t; else el.textContent = t; };
+        el.style.touchAction = 'none'; el.style.cursor = stepped ? 'pointer' : 'ns-resize'; let drag = null;
+        if (stepped) el.addEventListener('click', () => { const st = h.p.steps, k = st.findIndex(v => Math.abs(v - vals[i]) < 1e-9); bridge.begin(i); setValue(i, st[(k + 1) % st.length]); bridge.end(i); });
+        else {
+          el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: h.c.norm(vals[i]) }; bridge.begin(i); });
+          el.addEventListener('pointermove', e => { if (drag) setValue(i, h.c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
+          const end = () => { if (!drag) return; drag = null; bridge.end(i); }; el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+          el.addEventListener('dblclick', () => { bridge.begin(i); setValue(i, h.p.def); bridge.end(i); });
+          el.addEventListener('wheel', e => { e.preventDefault(); bridge.begin(i); setValue(i, h.c.value(clamp(h.c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
+        }
+        reg(i, draw);
+      });
       const list = o => JSON.parse(o.dataset.pb);
       skinBox.querySelectorAll('.ctl[data-p], .rc[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
       skinBox.querySelectorAll('.ctl[data-pb], .rc[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });

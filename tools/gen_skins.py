@@ -57,7 +57,7 @@ def match_knob(label, params, alias):
     cand = [p for p in params if set(lt) <= set(toks(p['name']))]
     if len(cand) == 1:
         return cand[0]['i']
-    cand = [p for p in params if norm(p['name']).startswith(n) or n.startswith(norm(p['name']))]
+    cand = [p for p in params if norm(p['name']) and (norm(p['name']).startswith(n) or n.startswith(norm(p['name'])))]   # (a name like 'Ø' normalises to '' and would match every label)
     return cand[0]['i'] if len(cand) == 1 else None
 
 
@@ -298,7 +298,16 @@ def geq_faders(root, params):
     return ''
 
 
-HOOKS = {'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
+def lv03_fader(root, params):
+    """LV03's Out fader: the cap (the element drawn with the fader image) becomes a bound fader (data-fader = the Out parameter)."""
+    out = next((p for p in params if p['id'] == 'lv03.out'), None)
+    cap = next((e for e in root.find_all(style=True) if 'r-fader' in e.get('style', '')), None)
+    if out and cap:
+        cap['data-fader'] = str(out['i'])
+    return ''
+
+
+HOOKS = {'LV03': lv03_fader, 'LV12': geq_faders, 'MD05': rotary_rotors, 'GT03': gt03_pedals, 'DL02': tape_reels, 'SA01': tape_reels}
 
 
 
@@ -381,6 +390,8 @@ def mark_inert(root):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip().lower()
+        if t.startswith(('auto align', 'low cpu')):   # tiles for features the product does not have (LV14 Auto align, LV24 Low CPU)
+            b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'; b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1; continue
         if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown
             b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
         in_evo = b.find_parent(class_='evob') is not None
@@ -558,6 +569,14 @@ def build(code, report):
             b['data-set'] = json.dumps([[idx[nm], v] for nm, v in al['set']]); nbb += 1; continue
         if al is not None:
             b['data-p'] = str(al[0]); b['data-v'] = str(al[1]); nbb += 1; continue
+        vc = next((e for e in alias.get('_valchip', []) if n.startswith(norm(e['text']))), None)   # a chip / tile that prints a parameter and its value ("Mix 50%"): drag or click to change it
+        if vc is not None:
+            b['data-valchip'] = str(vc['p'])
+            if vc.get('prefix'):
+                b['data-prefix'] = vc['prefix']
+            if vc.get('suffix'):
+                b['data-suffix'] = vc['suffix']
+            nbb += 1; continue
         if n in names and len(names[n]) == 1:
             b['data-p'] = str(names[n][0]); b['data-toggle'] = '1'; nbb += 1; continue
         if n in opts and len(opts[n]) == 1:

@@ -326,5 +326,57 @@
   "btn:lpf": {
    "toggle": "Key LPF"
   }
+ },
+ "LV03": {
+  "thresh": [
+   4,
+   11
+  ],
+  "mid": 7
+ },
+ "LV04": {
+  "btn:zero0 0 ms": [
+   0,
+   0
+  ],
+  "btn:true peak1 5 ms": [
+   0,
+   1
+  ]
+ },
+ "MD02": {
+  "_valchip": [
+   {
+    "text": "Mix",
+    "p": 6,
+    "prefix": "Mix"
+   }
+  ]
+ },
+ "MS02": {
+  "_valchip": [
+   {
+    "text": "Link",
+    "p": 6,
+    "prefix": "Link"
+   }
+  ]
+ },
+ "LV27": {
+  "_valchip": [
+   {
+    "text": "Fade between",
+    "p": 1
+   }
+  ]
+ },
+ "LV15": {
+  "_valchip": [
+   {
+    "text": "NOM limit",
+    "p": 5,
+    "suffix": " mics"
+   }
+  ]
  }
 }
