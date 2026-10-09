@@ -9,6 +9,8 @@ struct Ut03 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 4;   // match (dB), input integrated LUFS, reference 1 LUFS, reference 2 LUFS
+    static void readouts(const Core& c, double* o) { o[0] = c.matchDb(); o[1] = c.inputLufs(); o[2] = c.referenceLufs(1); o[3] = c.referenceLufs(2); }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

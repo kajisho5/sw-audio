@@ -28,7 +28,7 @@
     const svg = disp.querySelector('svg'); if (!svg) return null;
     const paths = svg.querySelectorAll(':scope > path'), dot = svg.querySelector(':scope > circle');
     const hist = svg.querySelector(':scope > svg');
-    if (paths.length < 2 || !dot || !hist) return null;
+    if (paths.length < 1 || !dot || !hist) return null;                    // DY08 draws the curve twice (glow + line), MS06 once
     const hp = hist.querySelectorAll(':scope > path');                    // level (up), level (down), gain reduction
     if (hp.length < 3) return null;
     const X0 = 14, X1 = 216, Y0 = 216, Y1 = 14, LO = -60, HI = 0;         // the square: input and output -60 .. 0 dB
@@ -42,7 +42,7 @@
         if (thr === undefined || ratio === undefined) return;
         let d = '';
         for (let i = 0; i <= 40; i++) { const x = LO + (HI - LO) * i / 40, y = compCurve(x, thr, ratio, knee) + mk; d += (i ? ' L' : 'M') + px(x).toFixed(1) + ' ' + py(y).toFixed(1); }
-        paths[0].setAttribute('d', d); paths[1].setAttribute('d', d);
+        paths.forEach(p => p.setAttribute('d', d));
         const i = peakDb(m), o = outDb(m);
         dot.setAttribute('cx', px(i).toFixed(1)); dot.setAttribute('cy', py(o > -99 ? o : compCurve(i, thr, ratio, knee) + mk).toFixed(1));
         if (++tick % 2) return;                                          // the history moves at ~30 Hz
@@ -891,7 +891,26 @@
     } };
   }
 
+
+  // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
+  // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
+  function textRules(box, ctx, rules) {
+    const leaves = [...box.querySelectorAll('span, div, text, b')].filter(e => !e.children.length && e.textContent.trim());
+    const hit = rules.map(r => ({ r, els: leaves.filter(e => r.re.test(e.textContent.trim())) })).filter(h => h.els.length);
+    if (!hit.length) return null;
+    return { update(info) { hit.forEach(h => h.els.forEach(e => { const t = h.r.text(info || {}, ctx, e.textContent.trim().match(h.r.re)); if (t !== null && t !== undefined && e.textContent !== t) e.textContent = t; })); } };
+  }
+  const lufs = v => (v > -150 ? v.toFixed(1) : '—');
+  const combine = (...ds) => { const l = ds.filter(Boolean); return l.length ? { update(i) { l.forEach(d => d.update && d.update(i)); }, destroy() { l.forEach(d => d.destroy && d.destroy()); } } : null; };
+
   const registry = {
+    MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
+    LV01: (box, ctx) => textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }]),
+    EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
+    LV04: (box, ctx) => textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }]),
+    UT03: (box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
+      return { update(info) { const r = info && info.readouts; if (!r || r.length < 4) return; if (mix) mix[1].textContent = lufs(r[1]) + ' LUFS'; if (ref) ref[1].textContent = lufs(Math.max(r[2], r[3])) + ' LUFS'; if (matchV) matchV.textContent = r[1] > -150 ? (r[0] >= 0 ? '+' : '') + r[0].toFixed(1) + ' LU' : '— LU'; } }; },
+    LV19: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'), textRules(box, ctx, [{ re: /^\d+(\.\d+)? ms late$/, text: info => info.readouts && info.readouts.length >= 5 ? (info.readouts[4] > 0.5 ? info.readouts[3].toFixed(0) + ' ms late' : 'in sync') : null }])),
     GT02: micPositionDisplay,
     ST05: speakerTriangleDisplay,
     SA08: crusherDisplay,
@@ -901,7 +920,7 @@
     LV17: grHistoryDisplay,
     LV10: xyPadDisplay, VO06: xyPadDisplay,
     RV01: reverbDisplay,
-    LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), LV19: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'),
+    LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
@@ -926,7 +945,7 @@
     DY11: (box, ctx) => multibandDisplay(box, ctx, 'centre'),
     MS03: (box, ctx) => multibandDisplay(box, ctx, 'xover'),
     LV12: faderBank,
-    EQ02: eqDisplay, EQ07: eqDisplay, EQ08: eqDisplay,
+    EQ02: eqDisplay, EQ07: eqDisplay,
     MD05: (box, ctx) => rotaryDisplay(box, ctx),
     DL02: (box, ctx) => reelDisplay(box, ctx, null),
     SA01: (box, ctx) => reelDisplay(box, ctx, c => { const v = c.value('Speed ips'); return v ? v / 15 : 1; }),
@@ -935,7 +954,7 @@
     DY03: (box, ctx) => vuDisplay(box, ctx, 'gr3'),
     DY06: (box, ctx) => vuDisplay(box, ctx, 'gr'),
     MT05: (box, ctx) => vuDisplay(box, ctx, 'outLR'),
-    DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' })
+    DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' }),
   };
 
   global.SWDISP = { attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
