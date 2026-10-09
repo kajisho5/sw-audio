@@ -580,6 +580,27 @@
     } };
   }
 
+  // ---- UT01 EVO "Remembers gain staging per track type" (core: setTrackName / setTrackKind / rememberGain / suggestedGainDb; the host's track information comes through CLAP track-info; readouts = the kind of
+  // track (-1: the host has not said), whether a Gain is remembered for it, that Gain in dB). The design has only this line of text, so the line is the control: a click remembers the current Gain for this
+  // kind of track, a shift-click puts the remembered one on the Gain knob.
+  function trackGain(box, ctx) {
+    const evt = box.querySelector('.evob .evt'); if (!evt) return null;
+    const kinds = ['Vocal', 'Drums', 'Bass', 'Guitar', 'Keys', 'Bus', 'Other'], gain = ctx.params.find(q => q.name === 'Gain');
+    let last = { k: -1, has: false, db: 0 };
+    evt.style.cursor = 'pointer'; evt.title = 'Click: remember the current Gain for this kind of track. Shift-click: use the Gain remembered for it';
+    evt.addEventListener('click', e => {
+      if (e.shiftKey) { if (last.has && gain) { ctx.begin(gain.i); ctx.set(gain.i, last.db); ctx.end(gain.i); } }
+      else ctx.call('remember');
+    });
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 3) return;
+      last = { k: Math.round(r[0]), has: r[1] > 0.5, db: r[2] };
+      const db = (last.db >= 0 ? '+' : '\u2212') + Math.abs(last.db).toFixed(1) + ' dB';
+      const t = (last.k < 0 ? 'Track kind unknown (the host does not tell)' : kinds[Math.min(6, last.k)] + ' track') + ': ' + (last.has ? 'Gain ' + db + ' remembered (shift-click to use it)' : 'no Gain remembered yet (click to remember this one)');
+      if (evt.textContent !== t) evt.textContent = t;
+    } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1887,7 +1908,7 @@
     LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90))), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
     MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
     DY05: deesserDisplay,
-    MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
+    MT04: stereoScope, UT02: stereoScope, UT01: trackGain, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
     RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,

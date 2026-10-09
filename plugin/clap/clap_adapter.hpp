@@ -23,6 +23,7 @@
 #include "sw/shell.hpp"
 #include "sw/text.hpp"
 #include <clap/clap.h>
+#include <clap/ext/track-info.h>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -75,6 +76,9 @@ template <class P> struct HasGuiCallGui<P, std::void_t<decltype(P::guiOnGui(""))
 
 template <class P, class = void> struct HasGuiCall : std::false_type {};
 template <class P> struct HasGuiCall<P, std::void_t<decltype(P::guiCall(std::declval<typename P::Core&>(), "", ""))>> : std::true_type {};
+// optional trait: static void trackInfo(Core&, const char* name /* "" = the host gave none */, uint64_t flags /* CLAP_TRACK_INFO_* */): the host's track information (main thread; the core's side must be thread-safe)
+template <class P, class = void> struct HasTrackInfo : std::false_type {};
+template <class P> struct HasTrackInfo<P, std::void_t<decltype(P::trackInfo(std::declval<typename P::Core&>(), "", uint64_t(0)))>> : std::true_type {};
 template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
 template <class P> struct GuiCallOnGuiThread<P, std::void_t<decltype(P::kGuiCallOnGuiThread)>> : std::bool_constant<P::kGuiCallOnGuiThread> {};
 
@@ -279,7 +283,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr; s->link_.setSampleRate(sr);
+        s->shell_.prepare(sr, static_cast<int>(maxFrames), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -391,10 +395,24 @@ private:
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
+        if constexpr (HasTrackInfo<P>::value) { static const clap_plugin_track_info_t trackInfoExt = {trackInfoChanged}; if (!std::strcmp(id, CLAP_EXT_TRACK_INFO) || !std::strcmp(id, CLAP_EXT_TRACK_INFO_COMPAT)) return &trackInfoExt; }
         if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
     }
     static void onMainThread(const clap_plugin_t*) {}
+
+    // ---- the host's track information (CLAP track-info; VST3 hosts through clap-wrapper's IInfoListener): asked for at activation and whenever the host says it changed
+    static void trackInfoChanged(const clap_plugin_t* p) { self(p)->pullTrackInfo(); }
+    void pullTrackInfo() {
+        if constexpr (HasTrackInfo<P>::value) {
+            if (!host_) return;
+            const auto* h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO));
+            if (!h) h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO_COMPAT));
+            clap_track_info_t ti{}; if (!h || !h->get || !h->get(host_, &ti)) return;
+            ti.name[CLAP_NAME_SIZE - 1] = 0;
+            P::trackInfo(shell_.core(), (ti.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME) ? ti.name : "", ti.flags);
+        }
+    }
 
     // ---- audio ports: one stereo in, one stereo out (+ a stereo sidechain input when the core accepts one)
     static constexpr bool kSidechain = AcceptsSidechain<typename P::Core>::value;

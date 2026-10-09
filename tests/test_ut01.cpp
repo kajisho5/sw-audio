@@ -59,3 +59,13 @@ TEST_CASE("UT01 Gain per kind of track: classify, remember, suggest, save") {
 TEST_CASE("UT01 mono input and extreme values stay finite") {
     auto p = make({{Gain, 24}, {Width, 200}, {Balance, 100}}); std::vector<float> l = noise(6, 1.0, 9); float* c[1] = {l.data()}; p.process(c, 1, static_cast<int>(l.size())); for (float v : l) CHECK(std::isfinite(v));
 }
+
+TEST_CASE("UT01 track info: the kind of track is unknown until the host says, then follows the name (or a bus flag)") {
+    auto p = make(); CHECK_FALSE(p.trackKnown()); CHECK(p.trackKind() == Other);
+    p.setTrackName("Drum OH"); CHECK(p.trackKnown()); CHECK(p.trackKind() == Drums);
+    p.setTrackKind(Bus); CHECK(p.trackKind() == Bus); CHECK(p.trackKnown());           // the host says it is a bus track whatever the name
+    p.setTrackKind(99); CHECK(p.trackKind() == Other); p.setTrackKind(-3); CHECK(p.trackKind() == Other);   // nonsense is Other
+    // the kind picks which remembered Gain is offered
+    auto q = make({{Gain, -2.0}}); q.setTrackName("Vocal"); q.rememberGain(); double db = 0;
+    q.setTrackKind(Vocal); CHECK(q.suggestedGainDb(db)); q.setTrackKind(Drums); CHECK_FALSE(q.suggestedGainDb(db));
+}

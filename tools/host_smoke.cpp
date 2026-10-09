@@ -14,6 +14,7 @@
 #include "sw_message.h"
 
 #include <clap/clap.h>
+#include <clap/ext/track-info.h>
 
 #include <dlfcn.h>
 
@@ -39,7 +40,10 @@ constexpr int kPhaseBlocks = 563;   // ~3 s
 constexpr int kMeasureBlocks = 188; // last ~1 s of a phase
 
 // ---- minimal host
-const void* hostGetExtension(const clap_host_t*, const char*) { return nullptr; }
+// the host's track information (CLAP track-info): a track called "Lead Vocal" (UT01 sorts its Gain by the kind of track)
+bool hostTrackInfoGet(const clap_host_t*, clap_track_info_t* i) { std::memset(i, 0, sizeof *i); i->flags = CLAP_TRACK_INFO_HAS_TRACK_NAME; std::strcpy(i->name, "Lead Vocal"); return true; }
+const clap_host_track_info_t gHostTrackInfo = {hostTrackInfoGet};
+const void* hostGetExtension(const clap_host_t*, const char* id) { return id && !std::strcmp(id, CLAP_EXT_TRACK_INFO) ? &gHostTrackInfo : nullptr; }
 void hostNop(const clap_host_t*) {}
 clap_host_t gHost = {CLAP_VERSION_INIT, nullptr, "sw-host-smoke", "SEVENTHWELL", "", "1", hostGetExtension, hostNop, hostNop, hostNop};
 
@@ -247,6 +251,13 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
         m->send(p, "c assist 0");
         const auto b = readouts(2);
         if (b.size() < 13 || b[0] != 0.0) fail("EQ02: Assist did not turn off");
+    } else if (code == "UT01") {   // the host's track name reaches the core (CLAP track-info, asked for at activation), and a call from the screen reaches the audio thread
+        const auto base = readouts(2);
+        if (base.size() < 3) { fail("UT01 read-outs missing"); return; }
+        if (base[0] != 0.0 || base[1] != 0.0) fail("UT01: the host's track \"Lead Vocal\" was not taken as a Vocal track with nothing remembered (kind " + std::to_string(base[0]) + ")");
+        m->send(p, "c remember");
+        const auto a = readouts(2);
+        if (a.size() < 3 || a[1] != 1.0) fail("UT01: Remember gain did not reach the audio thread");
     } else if (code == "RV04") {
         const auto base = readouts(2);
         if (base.size() < 3) { fail("RV04 read-outs missing"); return; }
