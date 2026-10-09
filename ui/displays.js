@@ -1683,6 +1683,7 @@
   }
   // a file chosen in the window, decoded by the web view (it gives it at REF_RATE): { l, r, n, rate }. Refuses what is longer than maxSeconds
   async function decodeFile(file, maxSeconds) {
+    if (file.size > 300 * 1024 * 1024) throw new Error('The file is too large (over 300 MB)');   // decoding holds the whole file and its samples in the window's memory
     const buf = await file.arrayBuffer(), OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) throw new Error('This window cannot decode audio files');
     const ab = await new Promise((res, rej) => { const p = new OAC(2, 1, REF_RATE).decodeAudioData(buf, res, rej); if (p && p.catch) p.catch(rej); });
