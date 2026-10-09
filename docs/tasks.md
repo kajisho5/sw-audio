@@ -77,6 +77,7 @@
 - [x] RV02 Plate — Pre-delay syncs to tempo and ducks under vocals
 - [x] RV03 Spring — Drip reacts to transients, not to sustain
 - [x] RV04 Convolution — IR length trims itself to the song tempo
+  - [x] 「Load IR」（Custom の IR をファイルから。画面でデコードして断片で送る、郵便受け方式で音声スレッドを止めない）。実機のホストでの確認は依頼者待ち
 - [x] RV05 Chamber — Mic distance morphs the chamber realistically
 - [x] RV06 Shimmer — Freeze holds a chord pad on demand
 - [x] RV07 Early — Place the source in the room by dragging

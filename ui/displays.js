@@ -944,15 +944,22 @@
     let e = 0; for (const rt of c.rt) { const a = Math.exp(-6.907755 * pos / rt); e += a * a; }
     let a = Math.sqrt(e / c.rt.length); const f0 = lt - fade; if (pos > f0) a *= 0.5 * (1 + Math.cos(Math.PI * (pos - f0) / fade)); return a;
   }
-  function convolutionDisplay(box, ctx) {
+  function convolutionDisplay(box, ctx, cu) {   // cu: the IR this window sent (cu.env overview, cu.sec seconds, cu.v counter), when there is one
     const svg = svgOf(box); if (!svg) return null;
     const bars = [...svg.querySelectorAll(':scope > line')].filter(l => (l.getAttribute('stroke') || '').toLowerCase() === '#9a8df0'); if (bars.length < 20) return null;
     const endT = [...svg.querySelectorAll(':scope > text')].find(t => t.getAttribute('text-anchor') === 'end'), title = [...box.querySelectorAll('.val')].find(e => /, [\d.]+ s$/.test(e.textContent));
     const base = +bars[0].getAttribute('y1'), full = base - 12, x0 = 14, x1 = 924; let last = '';
     return { update() {
       const cat = Math.round(ctx.value('Category')), pre = (ctx.value('Pre-delay') || 0) / 1000, len = ctx.value('Length') || 100, size = ctx.value('Size') || 100, rev = (ctx.value('Reverse') || 0) > 0.5;
-      if (!Number.isFinite(cat)) return; const key = [cat, pre, len, size, rev].join('|'); if (key === last) return; last = key;
-      if (cat < 0 || cat > 3) { bars.forEach(b => b.setAttribute('y2', base)); if (title) title.textContent = 'Custom IR'; if (endT) endT.textContent = ''; return; }   // a loaded IR is not known to the screen
+      if (!Number.isFinite(cat)) return; const key = [cat, pre, len, size, rev, cu ? cu.v : 0].join('|'); if (key === last) return; last = key;
+      if (cat < 0 || cat > 3) {   // Custom: the overview of the IR this window sent (an IR the window did not send is not known to it)
+        if (!(cu && cu.env)) { bars.forEach(b => b.setAttribute('y2', base)); if (title) title.textContent = 'Custom IR'; if (endT) endT.textContent = ''; return; }
+        const irLen = Math.min(10, cu.sec * len / 100 * size / 100), T = pre + irLen, E = cu.env.length, hs = [];
+        bars.forEach(b => { const t = ((+b.getAttribute('x1')) - x0) / (x1 - x0) * T, s = t - pre; if (s < 0 || s > irLen) { hs.push(0); return; } const src = (rev ? irLen - s : s) / (size / 100), v = cu.env[Math.min(E - 1, Math.max(0, Math.round(src / cu.sec * (E - 1))))]; hs.push(Math.pow(10, (v * 50 - 50) / 20)); });
+        const mx = Math.max(...hs, 1e-9);
+        bars.forEach((b, i) => { const db = hs[i] > 0 ? 20 * Math.log10(hs[i] / mx) : -999; b.setAttribute('y2', (base - clamp((db + 60) / 60, 0, 1) * full).toFixed(1)); });
+        if (endT) endT.textContent = T.toFixed(1) + ' s'; if (title) title.textContent = 'Custom IR, ' + irLen.toFixed(1) + ' s'; return;
+      }
       const c = RV04_CAT[cat], irLen = c.sec * len / 100 * size / 100, T = pre + irLen, hs = [];
       bars.forEach(b => { const t = ((+b.getAttribute('x1')) - x0) / (x1 - x0) * T, s = t - pre; hs.push(s < 0 || s > irLen ? 0 : rv04Envelope(cat, len, size, rev ? irLen - s : s)); });
       const mx = Math.max(...hs, 1e-9);
@@ -961,6 +968,35 @@
     } };
   }
 
+
+  // ---- the "Load IR" button of RV04: the page decodes the file (any format the web view knows, up to 30 s) and sends it as 32 bit float samples (interleaved) in base64 pieces: irbegin <channels> <rate>,
+  // irdata ..., irend. readouts = IRs that worked / failed, an IR is in place. After it worked the Category is set to Custom. cu = what convolutionDisplay draws (the overview of this file)
+  function irLoader(box, ctx, cu) {
+    const btn = [...box.querySelectorAll('button')].find(b => /^Load IR$/i.test(b.textContent.trim())); if (!btn) return null;
+    const input = document.createElement('input'); btn.parentNode.append(input);
+    let busy = false, lastR = null, pend = null; const label = btn.textContent.trim();
+    const say = (t, ms) => { btn.textContent = t; if (ms) setTimeout(() => { if (!busy) btn.textContent = label; }, ms); };
+    pickFile(input, 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac', async file => {
+      if (busy) return; busy = true; say('Decoding …');
+      try {
+        const d = await decodeFile(file, 30), inter = new Float32Array(d.n * d.channels);
+        if (d.channels === 2) for (let i = 0; i < d.n; i++) { inter[2 * i] = d.l[i]; inter[2 * i + 1] = d.r[i]; } else inter.set(d.l);
+        ctx.call('irbegin', d.channels + ' ' + d.rate);
+        await sendPieces(ctx, 'irdata', new Uint8Array(inter.buffer), f => say('Sending ' + Math.round(100 * f) + ' %'));
+        pend = { done0: lastR ? lastR[0] : 0, failed0: lastR ? lastR[1] : 0, t: Date.now(), env: overviewOf(d.l, d.r, d.n, 121), sec: d.n / d.rate };
+        say('Reading …'); ctx.call('irend', '');
+      } catch (e) { busy = false; pend = null; say('Could not load', 3000); ctx.call('irabort', ''); }
+    });
+    btn.addEventListener('click', () => { if (!busy) input.click(); });
+    return { update(info) {
+      const r = info && info.readouts; if (!r || r.length < 3) return; lastR = r; if (!pend) return;
+      if (r[0] > pend.done0) {
+        cu.env = pend.env; cu.sec = pend.sec; cu.v = (cu.v || 0) + 1; pend = null; busy = false; say('IR loaded', 2500);
+        const c = ctx.params.find(p => p.name === 'Category'); if (c) { ctx.begin(c.i); ctx.set(c.i, 4); ctx.end(c.i); }
+      } else if (r[1] > pend.failed0) { pend = null; busy = false; say('Could not read it', 3000); }
+      else if (Date.now() - pend.t > 60000) { pend = null; busy = false; say('No answer', 3000); }
+    } };
+  }
 
   // ---- RV07 early reflections: the room from above (back wall at the bottom, the listener faces up). The circle is the listener, the square the source at Distance and Angle (+ = right);
   // the room is the one the plug-in uses (products/rv07/rv07.cpp geometry(): the same shape, grown when the source is farther than the room allows). Press or drag in the room to place the source (sets Distance and Angle).
@@ -1635,6 +1671,24 @@
     for (let b = 0; b < bins; b++) { const a = Math.floor(b * n / bins), e = Math.max(a + 1, Math.floor((b + 1) * n / bins)); let sum = 0; for (let i = a; i < e; i++) sum += 0.5 * (l[i] * l[i] + r[i] * r[i]); const db = 10 * Math.log10(sum / (e - a) + 1e-12); o[b] = clamp((db + 50) / 50, 0, 1); }
     return o;
   }
+  // a file chosen in the window, decoded by the web view (it gives it at REF_RATE): { l, r, n, rate }. Refuses what is longer than maxSeconds
+  async function decodeFile(file, maxSeconds) {
+    const buf = await file.arrayBuffer(), OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) throw new Error('This window cannot decode audio files');
+    const ab = await new Promise((res, rej) => { const p = new OAC(2, 1, REF_RATE).decodeAudioData(buf, res, rej); if (p && p.catch) p.catch(rej); });
+    if (ab.duration > maxSeconds) throw new Error('Too long (the limit is ' + Math.round(maxSeconds / 60) + ' minutes)');
+    const l = ab.getChannelData(0);
+    return { l, r: ab.numberOfChannels > 1 ? ab.getChannelData(1) : l, n: ab.length, rate: ab.sampleRate, channels: ab.numberOfChannels > 1 ? 2 : 1 };
+  }
+  // bytes as base64 pieces of REF_PIECE: ctx.call(name, piece) for each, with a short pause between them (the window stays responsive); progress(0 .. 1)
+  async function sendPieces(ctx, name, bytes, progress) {
+    for (let off = 0; off < bytes.length; off += REF_PIECE) {
+      ctx.call(name, b64(bytes.subarray(off, Math.min(bytes.length, off + REF_PIECE))));
+      progress(Math.min(1, (off + REF_PIECE) / bytes.length));
+      await new Promise(res => setTimeout(res, 3));
+    }
+  }
+  const pickFile = (input, accept, onFile) => { input.type = 'file'; input.accept = accept; input.style.display = 'none'; input.addEventListener('change', () => { const f = input.files && input.files[0]; input.value = ''; if (f) onFile(f); }); };
   function referenceDisplay(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
     const paths = [...svg.querySelectorAll(':scope > path')], loopRect = svg.querySelector(':scope > rect'), texts = [...svg.querySelectorAll(':scope > text')];
@@ -1644,36 +1698,23 @@
     const note = mkEl('text', { x: W / 2, y: CB + 4, 'text-anchor': 'middle', 'font-family': 'Barlow Condensed, sans-serif', 'font-size': 13, fill: '#9a9a9a' }); svg.append(note);
     const wrap = svg.parentElement; wrap.style.position = 'relative';
     const mkBtn = (right, onClick) => { const b = document.createElement('button'); b.style.cssText = 'position:absolute;top:116px;right:' + right + 'px;font:600 11px "Space Mono",monospace;color:#cfcfcf;background:#161617;border:1px solid #3a3a3d;padding:4px 8px;border-radius:3px;cursor:pointer;z-index:2'; b.addEventListener('click', onClick); wrap.append(b); return b; };
-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac'; input.style.display = 'none'; wrap.append(input);
+    const input = document.createElement('input'); wrap.append(input);
     const st = { ov: [null, null, null], name: ['', '', ''], busy: false, status: '', pending: null }, hist = Ring(120, -90); let last = 0, lastR = null;
     const selSlot = () => (ctx.value('Source') === 2 ? 2 : 1);
     const loadBtn = mkBtn(80, () => { if (!st.busy) input.click(); }), clearBtn = mkBtn(10, () => { const k = selSlot(); ctx.call('refclear', String(k)); st.ov[k] = null; st.name[k] = ''; st.status = ''; });
-    async function decode(file) {
-      const buf = await file.arrayBuffer(), OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-      if (!OAC) throw new Error('This window cannot decode audio files');
-      const c = new OAC(2, 1, REF_RATE);
-      return new Promise((res, rej) => { const p = c.decodeAudioData(buf, res, rej); if (p && p.catch) p.catch(rej); });
-    }
     async function load(slot, file) {
       st.busy = true; st.status = 'Decoding ' + file.name + ' …';
       try {
-        const ab = await decode(file);
-        if (ab.duration > REF_MAX_S) throw new Error('Too long (the limit is ' + REF_MAX_S / 60 + ' minutes)');
-        const n = ab.length, l = ab.getChannelData(0), r = ab.numberOfChannels > 1 ? ab.getChannelData(1) : l;
-        const ov = overviewOf(l, r, n, BINS), bytes = wav16(l, r, n, ab.sampleRate);
+        const d = await decodeFile(file, REF_MAX_S), ov = overviewOf(d.l, d.r, d.n, BINS), bytes = wav16(d.l, d.r, d.n, d.rate);
         ctx.call('refbegin', String(slot));
-        for (let off = 0; off < bytes.length; off += REF_PIECE) {
-          ctx.call('refdata', b64(bytes.subarray(off, Math.min(bytes.length, off + REF_PIECE))));
-          st.status = 'Sending ' + file.name + ' … ' + Math.round(100 * Math.min(1, (off + REF_PIECE) / bytes.length)) + ' %';
-          await new Promise(res => setTimeout(res, 3));
-        }
+        await sendPieces(ctx, 'refdata', bytes, f => { st.status = 'Sending ' + file.name + ' … ' + Math.round(100 * f) + ' %'; });
         const base = lastR || [];
         st.pending = { slot, ov, name: file.name, done0: base[10] || 0, failed0: base[11] || 0, t: Date.now() };
         st.status = 'Reading ' + file.name + ' …';
         ctx.call('refend', '');
       } catch (e) { st.busy = false; st.status = 'Could not load: ' + (e && e.message ? e.message : 'unknown file'); ctx.call('refabort', ''); }
     }
-    input.addEventListener('change', () => { const f = input.files && input.files[0]; input.value = ''; if (f && !st.busy) load(selSlot(), f); });
+    pickFile(input, 'audio/*,.wav,.wave,.aif,.aiff,.mp3,.flac,.ogg,.m4a,.aac', f => { if (!st.busy) load(selSlot(), f); });
     const lane = (hs, c, amp) => { let top = '', bot = ''; for (let k = 0; k < hs.length; k++) { const x = (k / (hs.length - 1) * W).toFixed(1), a = hs[k] * amp; top += (k ? ' L' : 'M') + x + ' ' + (c - a).toFixed(1); bot = ' L' + x + ' ' + (c + a).toFixed(1) + bot; } return top + bot + ' Z'; };
     return { update(info) {
       const r = info && info.readouts, m = info && info.meters; if (!r || r.length < 12) return; lastR = r;
@@ -1742,7 +1783,7 @@
     LV20: spectrumBars, RS07: spectrumCells,
     MT03: (box, ctx) => { const d = spectrumCells(box, ctx), btn = [...box.querySelectorAll('button')].find(b => /^Pause$/i.test(b.textContent.trim())); if (!d || !btn) return d; let paused = false; btn.title = 'Freezes the picture (the screen only)'; btn.addEventListener('click', () => { paused = !paused; btn.classList.toggle('on', paused); }); return { update(i) { if (!paused) d.update(i); } }; },
     RS04: (box, ctx) => combine(spectrumCells(box, ctx), textRules(box, ctx, [{ re: /^Repaired \d+ events$/, text: info => 'Repaired ' + (info.readouts && info.readouts.length >= 1 ? Math.round(info.readouts[0]) : '—') + ' events' }])),
-    RV04: convolutionDisplay,
+    RV04: (box, ctx) => { const cu = {}; return combine(convolutionDisplay(box, ctx, cu), irLoader(box, ctx, cu)); },
     VO01: (box, ctx) => combine(pitchGraphDisplay(box, ctx), keyChips(box, ctx, 'VO01')),
     VO03: (box, ctx) => combine(harmonyGraphDisplay(box, ctx), keyChips(box, ctx, 'VO03')),
     VO08: breathDisplay,

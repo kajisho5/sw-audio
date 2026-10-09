@@ -1,6 +1,9 @@
 #include "doctest.h"
 #include "rv04/rv04.hpp"
 #include "tu.hpp"
+#include <atomic>
+#include <cstring>
+#include <thread>
 using namespace sw;
 using namespace sw::rv04;
 using namespace tu;
@@ -111,4 +114,43 @@ TEST_CASE("RV04 changing a setting builds the new IR in steps without stopping t
     const auto a = impulse(p, 2.0), b = impulse(fresh, 2.0);
     double worstd = 0, mx = 0; for (size_t i = 0; i < a.size(); ++i) { worstd = std::max(worstd, double(std::abs(a[i] - b[i]))); mx = std::max(mx, double(std::abs(b[i]))); }
     CHECK(worstd < 1e-3 * mx + 1e-6);
+}
+
+namespace {
+std::string b64(const std::vector<uint8_t>& v, size_t a, size_t n) {
+    static const char* T = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"; std::string o;
+    for (size_t i = a; i < a + n; i += 3) { const uint32_t x = (uint32_t(v[i]) << 16) | (i + 1 < a + n ? uint32_t(v[i + 1]) << 8 : 0) | (i + 2 < a + n ? v[i + 2] : 0); o += T[x >> 18]; o += T[(x >> 12) & 63]; o += i + 1 < a + n ? T[(x >> 6) & 63] : '='; o += i + 2 < a + n ? T[x & 63] : '='; }
+    return o;
+}
+std::vector<uint8_t> floatBytes(const std::vector<float>& f) { std::vector<uint8_t> b(f.size() * 4); std::memcpy(b.data(), f.data(), b.size()); return b; }
+}
+TEST_CASE("RV04 an IR sent from the screen (float samples as base64 pieces) is the same as loadIr") {
+    std::vector<float> ir(6000, 0.0f); ir[10] = 1.0f; ir[2000] = 0.5f; ir[5000] = -0.25f;
+    auto a = make(clean(Custom)); a.loadIr(ir.data(), ir.size(), 1, kFs); a.snapToTargets();
+    auto b = make(clean(Custom));
+    CHECK_FALSE(b.irAppendBase64("AAAA")); CHECK_FALSE(b.irCommit());   // nothing open
+    CHECK_FALSE(b.irBegin(3, kFs)); CHECK_FALSE(b.irBegin(1, 0.0));
+    REQUIRE(b.irBegin(1, kFs)); const auto by = floatBytes(ir);
+    for (size_t off = 0; off < by.size(); off += 3000) REQUIRE(b.irAppendBase64(b64(by, off, std::min<size_t>(3000, by.size() - off)).c_str()));
+    REQUIRE(b.irCommit()); b.snapToTargets(); CHECK(b.irLoaded()); CHECK(b.irLoadsDone() == 1); CHECK(b.irLoadsFailed() == 0);
+    const auto ha = impulse(a, 0.3), hb = impulse(b, 0.3); for (size_t i = 0; i < ha.size(); ++i) REQUIRE(std::abs(ha[i] - hb[i]) < 1e-6);
+    // stereo, and a file whose size does not fit its channels or whose text is damaged: refused, the IR in place stays
+    { std::vector<float> st(2 * 1000, 0.1f); const auto sb = floatBytes(st); REQUIRE(b.irBegin(2, 44100.0)); REQUIRE(b.irAppendBase64(b64(sb, 0, sb.size()).c_str())); CHECK(b.irCommit()); b.snapToTargets(); CHECK(b.irLoaded()); }
+    REQUIRE(b.irBegin(2, kFs)); REQUIRE(b.irAppendBase64(b64(by, 0, 12).c_str())); CHECK(b.irAppendBase64(b64(by, 0, 3).c_str())); CHECK_FALSE(b.irCommit()); CHECK(b.irLoadsFailed() == 1); CHECK(b.irLoaded());
+    REQUIRE(b.irBegin(1, kFs)); CHECK_FALSE(b.irAppendBase64("AB!D")); CHECK_FALSE(b.irCommit()); CHECK(b.irLoadsFailed() == 2);
+    REQUIRE(b.irBegin(1, kFs)); b.irAbort(); CHECK_FALSE(b.irCommit());
+}
+TEST_CASE("RV04 an IR can be loaded while the audio thread plays (the screen's thread against the audio thread)") {
+    Gauss g(11); std::vector<float> ir1(30000), ir2(50000); for (size_t i = 0; i < ir1.size(); ++i) ir1[i] = static_cast<float>(0.02 * g.gauss() * std::exp(-double(i) / 8000.0)); for (size_t i = 0; i < ir2.size(); ++i) ir2[i] = static_cast<float>(0.02 * g.gauss() * std::exp(-double(i) / 12000.0));
+    auto p = make(clean(Custom)); p.loadIr(ir1.data(), ir1.size(), 1, kFs); p.snapToTargets();
+    std::atomic<bool> stop{false};
+    std::thread t([&] { for (int i = 0; i < 15; ++i) { const auto& v = (i & 1) ? ir1 : ir2; p.loadIr(v.data(), v.size(), 1, kFs); } stop = true; });
+    std::vector<float> l(256), r(256); size_t blocks = 0; bool finite = true; double mx = 0;
+    while (!stop || blocks < 300) {
+        for (size_t i = 0; i < 256; ++i) l[i] = r[i] = static_cast<float>(0.1 * std::sin(0.01 * static_cast<double>(blocks * 256 + i)));
+        float* ch[2] = {l.data(), r.data()}; p.process(ch, 2, 256);
+        for (size_t i = 0; i < 256; ++i) { finite = finite && std::isfinite(l[i]) && std::isfinite(r[i]); mx = std::max(mx, static_cast<double>(std::abs(l[i]))); }
+        ++blocks;
+    }
+    t.join(); CHECK(finite); CHECK(mx < 4.0); CHECK(p.irLoaded());
 }

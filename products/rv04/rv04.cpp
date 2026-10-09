@@ -1,6 +1,8 @@
 #include "rv04/rv04.hpp"
+#include "sw/base64.hpp"
 #include <algorithm>
 #include <cmath>
+#include <thread>
 #include <cstring>
 
 namespace sw::rv04 {
@@ -54,6 +56,7 @@ void Processor::prepare(double sampleRate, int) {
     baseLen_ = 0; synthCat_ = -1; stage_ = Idle; need_ = 2;
     updateFilters();
     prepared_ = true;
+    adoptIr();
     runAllSync();
 }
 
@@ -72,6 +75,7 @@ void Processor::setParam(int id, double v) {
 
 void Processor::snapToTargets() {
     if (!prepared_) return;
+    if (stage_ == Idle) adoptIr();
     updateFilters();
     preLen_ = target_[PreDelay] * 0.001 * fs_;
     if (categoryOf() != synthCat_ || categoryOf() == Custom) markSynth(); else markTransform();
@@ -246,22 +250,71 @@ void Processor::transformChunk() {
     }
 }
 
-void Processor::loadIr(const float* data, size_t frames, int channels, double sourceRate) {
-    channels = std::clamp(channels, 1, 2);
-    custom_.assign(data, data + frames * static_cast<size_t>(channels));
-    customCh_ = channels; customRate_ = sourceRate > 0.0 ? sourceRate : 48000.0;
-    if (prepared_ && categoryOf() == Custom) markSynth();
+bool Processor::adoptIr() {
+    int s = 2;
+    if (!pendState_.v.compare_exchange_strong(s, 3)) return false;
+    custom_.swap(pend_.v); customCh_ = pend_.ch; customRate_ = pend_.rate;   // the old samples are now in the mailbox, for the loading thread to reuse or free
+    pendState_.store(0);
+    return true;
 }
 
-void Processor::saveExtra(std::vector<uint8_t>& out) const {
-    out.clear();
-    if (custom_.empty()) return;
-    const uint32_t frames = static_cast<uint32_t>(custom_.size() / static_cast<size_t>(customCh_)); const float rate = static_cast<float>(customRate_);
-    out = {'R', '4', 'I', 'R', static_cast<uint8_t>(customCh_), static_cast<uint8_t>(frames), static_cast<uint8_t>(frames >> 8), static_cast<uint8_t>(frames >> 16), static_cast<uint8_t>(frames >> 24)};
-    uint8_t rb[4]; std::memcpy(rb, &rate, 4); out.insert(out.end(), rb, rb + 4);
-    const size_t at = out.size(); out.resize(at + custom_.size() * 4);
-    std::memcpy(out.data() + at, custom_.data(), custom_.size() * 4);
+void Processor::loadIr(const float* data, size_t frames, int channels, double sourceRate) {
+    channels = std::clamp(channels, 1, 2);
+    const double rate = sourceRate > 0.0 ? sourceRate : 48000.0;
+    // the project state keeps the IR as it came
+    {
+        const uint32_t fr = static_cast<uint32_t>(frames); const float rf = static_cast<float>(rate);
+        savedIr_.clear();
+        if (frames > 0) {
+            savedIr_ = {'R', '4', 'I', 'R', static_cast<uint8_t>(channels), static_cast<uint8_t>(fr), static_cast<uint8_t>(fr >> 8), static_cast<uint8_t>(fr >> 16), static_cast<uint8_t>(fr >> 24)};
+            uint8_t rb[4]; std::memcpy(rb, &rf, 4); savedIr_.insert(savedIr_.end(), rb, rb + 4);
+            const size_t at = savedIr_.size(); savedIr_.resize(at + frames * static_cast<size_t>(channels) * 4);
+            std::memcpy(savedIr_.data() + at, data, frames * static_cast<size_t>(channels) * 4);
+        }
+    }
+    // the mailbox: a ready IR that the audio thread has not taken yet is replaced; while the audio thread is taking one (a moment) or another loader writes, wait
+    for (;;) {
+        int s = 0; if (pendState_.v.compare_exchange_strong(s, 1)) break;
+        s = 2; if (pendState_.v.compare_exchange_strong(s, 1)) break;
+        std::this_thread::yield();
+    }
+    const size_t n = frames * static_cast<size_t>(channels);
+    pend_.v.assign(data, data + n);
+    for (float& x : pend_.v) if (!std::isfinite(x)) x = 0.0f;
+    pend_.ch = channels; pend_.rate = rate;
+    pendState_.store(2);
 }
+
+bool Processor::irBegin(int channels, double sourceRate) {
+    irOpen_ = false; irBytes_.clear(); irBytes_.shrink_to_fit();
+    if (channels < 1 || channels > 2 || !(sourceRate > 0.0)) return false;
+    irCh_ = channels; irRate_ = sourceRate; irOpen_ = true; irBroken_ = false;
+    return true;
+}
+bool Processor::irAppendBase64(const char* text) {
+    if (!irOpen_ || irBroken_) return false;
+    std::vector<uint8_t> bytes; bytes.reserve(text ? std::strlen(text) / 4 * 3 : 0);
+    if (!base64Decode(text, bytes) || irBytes_.size() + bytes.size() > irLimit_) { irBroken_ = true; irBytes_.clear(); irBytes_.shrink_to_fit(); return false; }
+    irBytes_.insert(irBytes_.end(), bytes.begin(), bytes.end());
+    return true;
+}
+bool Processor::irCommit() {
+    if (!irOpen_) return false;
+    irOpen_ = false;
+    const size_t frameBytes = 4 * static_cast<size_t>(irCh_);
+    bool ok = false;
+    if (!irBroken_ && !irBytes_.empty() && irBytes_.size() % frameBytes == 0) {
+        std::vector<float> f(irBytes_.size() / 4); std::memcpy(f.data(), irBytes_.data(), irBytes_.size());
+        loadIr(f.data(), f.size() / static_cast<size_t>(irCh_), irCh_, irRate_);
+        ok = true;
+    }
+    if (ok) irDone_.store(irDone_.load() + 1); else irFailed_.store(irFailed_.load() + 1);
+    irBytes_.clear(); irBytes_.shrink_to_fit();
+    return ok;
+}
+void Processor::irAbort() { irOpen_ = false; irBytes_.clear(); irBytes_.shrink_to_fit(); }
+
+void Processor::saveExtra(std::vector<uint8_t>& out) const { out = savedIr_; }
 
 void Processor::loadExtra(const uint8_t* d, size_t n) {
     if (n < 13 || d[0] != 'R' || d[1] != '4' || d[2] != 'I' || d[3] != 'R') return;
@@ -277,6 +330,7 @@ void Processor::loadExtra(const uint8_t* d, size_t n) {
 void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);
+    if (stage_ == Idle && adoptIr() && categoryOf() == Custom) markSynth();   // an IR the screen has sent
     if (stage_ == Idle && need_ > 0) startJob();
     if (stage_ != Idle) stepJob();
     const size_t preSz = pre_[0].size();
