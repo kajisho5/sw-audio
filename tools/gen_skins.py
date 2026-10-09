@@ -604,6 +604,13 @@ def build(code, report):
             nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
     mark_inert(root)
+    # the EVO label of the bottom bar switches the product's evolution feature (an `.evo.on`-style parameter) when no other control on the screen does
+    used_p = {int(x) for x in re.findall(r'data-p="(\d+)"', str(root))}
+    evo_p = [p for p in params if '.evo' in p['id'] and p['curve'] == 'step' and len(p['steps']) == 2]
+    if len(evo_p) == 1 and evo_p[0]['i'] not in used_p:
+        for chip in root.select('.evob .evo'):
+            chip['data-p'] = str(evo_p[0]['i']); chip['data-toggle'] = '1'; chip['title'] = 'EVO: ' + evo_p[0]['name'] + ' (click to switch it)'
+            nbb += 1
     for ctl in root.select('.ctl, .rc'):
         if ctl.select_one('.dk, .knob, .rk') and ctl.select_one('.lbl, .rl') and not ctl.get('data-p') and not ctl.get('data-pb'):
             st = alias.get('_static', {}).get(norm(ctl.select_one('.lbl, .rl').get_text()))
@@ -611,7 +618,7 @@ def build(code, report):
                 make_static(ctl, st)    # no parameter: it is not drawn as a knob any more
                 continue
             report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl, .rl').get_text())
-    style = re.sub(r'@import[^;]*;', '', style) + extra_css
+    style = re.sub(r'@import[^;]*;', '', style) + extra_css + '\n.evo[data-p]{cursor:pointer}.evo[data-p].on{background:var(--acc,#fff);color:#0c0c0d}\n'
     m = re.match(r'<div[^>]*style="([^"]*)"', str(root))
     st = m.group(1) if m else ''
     mw, mh = re.search(r'(?:^|;)\s*width:(\d+)px', st), re.search(r'(?:^|;)\s*height:(\d+)px', st)

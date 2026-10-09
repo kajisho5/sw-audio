@@ -325,7 +325,7 @@
       const list = o => JSON.parse(o.dataset.pb);
       skinBox.querySelectorAll('.ctl[data-p], .rc[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
       skinBox.querySelectorAll('.ctl[data-pb], .rc[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
-      skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
+      skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p], .evo[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
       skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       // the 3-D toggle switches: lever up = the value in data-up, down = the other one (class dn)
       skinBox.querySelectorAll('.tog[data-tog]').forEach(t => {
