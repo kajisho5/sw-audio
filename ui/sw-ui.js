@@ -252,12 +252,12 @@
         const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr, .kn'), val = ctl.querySelector('.val, .rv');   // .rc/.rk/.kn/.rv: the LIVE line's knobs
         const draw = () => { const i = cur(), h = hostOf(i); if (!h) return; const x = h.c.norm(vals[i]), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(h.p, vals[i], h.c); };
         let drag = null; dial.style.touchAction = 'none'; dial.style.cursor = 'ns-resize';
-        dial.addEventListener('pointerdown', e => { const i = cur(); dial.setPointerCapture(e.pointerId); drag = { i, y: e.clientY, x0: hostOf(i).c.norm(vals[i]) }; bridge.begin(i); });
+        dial.addEventListener('pointerdown', e => { const i = cur(); if (!hostOf(i)) return; dial.setPointerCapture(e.pointerId); drag = { i, y: e.clientY, x0: hostOf(i).c.norm(vals[i]) }; bridge.begin(i); });
         dial.addEventListener('pointermove', e => { if (!drag) return; setValue(drag.i, hostOf(drag.i).c.value(clamp(drag.x0 + (drag.y - e.clientY) / (e.shiftKey ? 1000 : 180), 0, 1)), false); });
         const end = () => { if (!drag) return; const i = drag.i; drag = null; bridge.end(i); };
         dial.addEventListener('pointerup', end); dial.addEventListener('pointercancel', end);
-        dial.addEventListener('dblclick', () => { const i = cur(); bridge.begin(i); setValue(i, hostOf(i).p.def); bridge.end(i); });
-        dial.addEventListener('wheel', e => { e.preventDefault(); const i = cur(), c = hostOf(i).c; bridge.begin(i); setValue(i, c.value(clamp(c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
+        dial.addEventListener('dblclick', () => { const i = cur(); if (!hostOf(i)) return; bridge.begin(i); setValue(i, hostOf(i).p.def); bridge.end(i); });
+        dial.addEventListener('wheel', e => { e.preventDefault(); const i = cur(); if (!hostOf(i)) return; const c = hostOf(i).c; bridge.begin(i); setValue(i, c.value(clamp(c.norm(vals[i]) - Math.sign(e.deltaY) * (e.shiftKey ? 0.005 : 0.02), 0, 1))); bridge.end(i); }, { passive: false });
         return draw;
       }
       function attachButton(b, cur) {

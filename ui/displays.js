@@ -1372,6 +1372,65 @@
   }
 
 
+  // ---- CS04 modular strip: six module cards (click = choose the module whose five knobs are shown below, the dot = the module's On, drag a card = the order of the six, the Order parameter) and the EQ curve.
+  // The design shows the EQ module only; the other modules' knobs use the same row (README: a design extension, the cores' parameters were not on screen). The knobs themselves are bound by
+  // tools/gen_skins.py (cs04_bind: data-pb per module); this code draws the cards, the labels and the EQ curve (low shelf 100 Hz, bell at Mid freq Q 1, high shelf 10 kHz; as products/cs04).
+  const CS04_MODS = [
+    { n: 'Gate', lab: ['Thresh', 'Range', 'Release'], col: '#f0ad3d' }, { n: 'EQ', lab: ['Low', 'Mid freq', 'Mid', 'High', 'Output'], col: '#5f9bff' },
+    { n: 'Comp', lab: ['Thresh', 'Ratio', 'Attack', 'Release', 'Makeup'], col: '#f0ad3d' }, { n: 'Saturate', lab: ['Drive', 'Mix'], col: '#ff8a5c' },
+    { n: 'De-ess', lab: ['Freq', 'Thresh', 'Range'], col: '#f0ad3d' }, { n: 'Limit', lab: ['Ceiling', 'Release'], col: '#f0ad3d' }];
+  function modularStripDisplay(box, ctx) {
+    const discs = [...box.querySelectorAll('.disp')], strip = discs.find(d => d.querySelectorAll(':scope > div > div').length === 6), graph = discs.find(d => d.querySelector('svg'));
+    if (!strip || !graph) return null;
+    const holder = strip.firstElementChild, cards = [...holder.children], byName = {}; cards.forEach(c => { const l = c.querySelector('.lbl'); if (l) byName[l.textContent.trim()] = c; });
+    if (CS04_MODS.some(m => !byName[m.n])) return null;
+    const P = n => ctx.params.find(q => q.name === n), pOrder = P('Order'), on = CS04_MODS.map(m => P(m.n)), ctls = [...box.querySelectorAll('.ctl')].filter(c => c.querySelector('.dk')); if (!pOrder || on.some(x => !x) || ctls.length !== 5) return null;
+    const svg = graph.querySelector('svg'), paths = [...svg.querySelectorAll(':scope > path')], dots = [...svg.querySelectorAll(':scope > circle')], nums = [...svg.querySelectorAll(':scope > text')].filter(t => t.getAttribute('text-anchor') === 'middle'), caption = [...svg.querySelectorAll(':scope > text')].find(t => t.getAttribute('text-anchor') === 'start');
+    const note = document.createElement('div'); note.style.cssText = 'height:100%;display:none;align-items:center;justify-content:center;font:12px "Space Mono",monospace;color:#8a8c92;text-align:center;padding:12px'; graph.append(note);
+    const W = 380, H = 150, Y0 = 75, PXDB = 6.25, N = 120, xOf = f => Math.log10(f / 20) / 3 * W;
+    let seq = [0, 1, 2, 3, 4, 5], dragging = null, last = '';
+    const orderOf = () => { const lab = (pOrder.p.labels || [])[Math.round(pOrder.c.norm(ctx.get(pOrder.i)) * ((pOrder.p.steps || []).length - 1))] || ''; const idx = lab.split(' > ').map(n => CS04_MODS.findIndex(m => m.n === n)); return idx.length === 6 && idx.every(i => i >= 0) ? idx : [0, 1, 2, 3, 4, 5]; };
+    const toggleOn = k => { const p = on[k]; ctx.begin(p.i); ctx.set(p.i, ctx.get(p.i) > 0.5 ? p.p.steps[0] : p.p.steps[1]); ctx.end(p.i); };
+    CS04_MODS.forEach((m, k) => {
+      const c = byName[m.n], dot = c.querySelector('span:not(.lbl)'); c.style.cursor = 'grab'; c.style.touchAction = 'none'; c.title = 'Click: choose the module · drag: change the order · dot: On / Off';
+      if (dot) { dot.style.cursor = 'pointer'; dot.style.padding = '4px'; dot.style.backgroundClip = 'content-box'; dot.addEventListener('pointerdown', e => e.stopPropagation()); dot.addEventListener('click', e => { e.stopPropagation(); toggleOn(k); }); }
+      c.addEventListener('pointerdown', e => { if (e.target === dot) return; c.setPointerCapture(e.pointerId); dragging = { k, x0: e.clientX, moved: false }; });
+      c.addEventListener('pointermove', e => {
+        if (!dragging || dragging.k !== k) return; if (!dragging.moved && Math.abs(e.clientX - dragging.x0) < 6) return; dragging.moved = true; c.style.opacity = '.7';
+        const r = holder.getBoundingClientRect(), pos = clamp(Math.floor((e.clientX - r.left) / r.width * 6), 0, 5), cur = seq.indexOf(k);
+        if (pos !== cur) { seq.splice(cur, 1); seq.splice(pos, 0, k); seq.forEach((i, at) => { byName[CS04_MODS[i].n].style.order = at; }); }   // CSS order: moving the node in the DOM would drop the pointer capture
+      });
+      const end = () => {
+        if (!dragging || dragging.k !== k) return; const d = dragging; dragging = null; c.style.opacity = '';
+        if (!d.moved) { ctx.selectBand(k); return; }
+        const label = seq.map(i => CS04_MODS[i].n).join(' > '), idx = (pOrder.p.labels || []).indexOf(label);
+        if (idx >= 0) { ctx.begin(pOrder.i); ctx.set(pOrder.i, pOrder.p.steps[idx]); ctx.end(pOrder.i); }
+      };
+      c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    });
+    return { update() {
+      if (dragging && dragging.moved) return;
+      const sel = Math.max(0, Math.min(5, ctx.band ? ctx.band() : 1)), ord = orderOf(), ons = on.map(p => ctx.get(p.i) > 0.5), g = n => ctx.value(n);
+      const key = [ord.join(''), ons.join(''), sel, g('Low'), g('Mid freq'), g('Mid'), g('High'), g('EQ Output')].join('|'); if (key === last) return; last = key; seq = ord.slice();
+      ord.forEach((i, at) => { byName[CS04_MODS[i].n].style.order = at; });
+      CS04_MODS.forEach((m, k) => {
+        const c = byName[m.n], dot = c.querySelector('span:not(.lbl)'), bar = c.lastElementChild;
+        c.style.background = k === sel ? '#1f2a3d' : '#1a1b1e'; c.style.borderColor = k === sel ? '#5f9bff' : '#2a2c30';
+        if (dot) dot.style.background = ons[k] ? m.col : '#3a3b3f'; if (bar) { bar.style.background = m.col; bar.style.opacity = ons[k] ? 1 : 0.25; }
+      });
+      const lab = CS04_MODS[sel].lab; ctls.forEach((c, i) => { const l = c.querySelector('.lbl'); if (l) l.textContent = lab[i] || ''; c.style.visibility = lab[i] ? '' : 'hidden'; c.style.pointerEvents = lab[i] ? '' : 'none'; });
+      const isEq = sel === 1; svg.style.display = isEq ? '' : 'none'; note.style.display = isEq ? 'none' : 'flex'; note.textContent = CS04_MODS[sel].n.toUpperCase() + (ons[sel] ? '' : '  (off)');
+      if (isEq) {
+        const lo = g('Low'), mf = g('Mid freq'), md = g('Mid'), hi = g('High'), out = g('EQ Output') || 0; let d = '';
+        for (let k = 0; k <= N; k++) { const f = 20 * Math.pow(1000, k / N), db = biquadMag('lowshelf', 100, lo, 0.70710678, f) + biquadMag('bell', mf, md, 1.0, f) + biquadMag('highshelf', 10000, hi, 0.70710678, f) + out; d += (k ? ' L' : 'M') + (k / N * W).toFixed(1) + ' ' + clamp(Y0 - db * PXDB, 2, H - 2).toFixed(1); }
+        if (paths.length >= 3) { paths[0].setAttribute('d', d + ' L' + W + ' ' + Y0 + ' L0 ' + Y0 + ' Z'); paths[1].setAttribute('d', d); paths[2].setAttribute('d', d); }
+        [[100, lo], [mf, md], [10000, hi]].forEach(([f, gdb], k) => { if (dots[k]) { const x = xOf(f), y = clamp(Y0 - (gdb + out) * PXDB, 6, H - 6); dots[k].setAttribute('cx', x.toFixed(1)); dots[k].setAttribute('cy', y.toFixed(1)); if (nums[k]) { nums[k].setAttribute('x', x.toFixed(1)); nums[k].setAttribute('y', (y + 3.5).toFixed(1)); } } });
+        if (caption) caption.textContent = 'EQ module' + (ons[1] ? '' : ' (off)');
+      }
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1412,6 +1471,7 @@
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),
     RV08: (box, ctx) => textRules(box, ctx, [{ re: /^Threshold -?\d+ dB$/, text: (info, c) => { const t = c.value('Threshold'); return Number.isFinite(t) ? 'Threshold ' + Math.round(t * 6 - 60) + ' dBFS' : null; } }]),
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
+    CS04: modularStripDisplay,
     LV27: (box, ctx) => offlineStub(box, ctx, 'LV27'), LV28: (box, ctx) => offlineStub(box, ctx, 'LV28'),
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: (box, ctx) => combine(spectrumPath(box, ctx), textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }])), LV08: spectrumPath, LV02: (box, ctx) => combine(spectrumPath(box, ctx), feedbackFiltersDisplay(box, ctx)), LO01: spectrumPath, SA05: spectrumPath,

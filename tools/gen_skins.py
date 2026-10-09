@@ -298,6 +298,26 @@ def geq_faders(root, params):
     return ''
 
 
+def cs04_bind(root, params):
+    """CS04: the five knobs under the module cards follow the selected module (hidden band buttons 0..5 = Gate, EQ, Comp, Saturate, De-ess, Limit choose it; ui/displays.js draws the cards, the
+    labels and the EQ curve). Slot k of each module is a parameter (or -1: the module has fewer knobs); the design shows the EQ module only, the other modules use the same row."""
+    by = {p['name']: p['i'] for p in params}
+    cols = [['Gate Thresh', 'Low', 'Comp Thresh', 'Sat Drive', 'De-ess Freq', 'Ceiling'],
+            ['Gate Range', 'Mid freq', 'Comp Ratio', 'Sat Mix', 'De-ess Thresh', 'Limit Release'],
+            ['Gate Release', 'Mid', 'Comp Attack', None, 'De-ess Range', None],
+            [None, 'High', 'Comp Release', None, None, None],
+            [None, 'EQ Output', 'Comp Makeup', None, None, None]]
+    ctls = [c for c in root.select('.ctl') if c.select_one('.dk, .knob')]
+    if len(ctls) != 5 or not all(n in by for col in cols for n in col if n):
+        return
+    for c, col in zip(ctls, cols):
+        if c.has_attr('data-p'):
+            del c['data-p']
+        c['data-pb'] = json.dumps([by[n] if n else -1 for n in col])
+    box = BeautifulSoup('<div style="display:none">' + ''.join('<button data-band="%d"%s></button>' % (k, ' class="on"' if k == 1 else '') for k in range(6)) + '</div>', 'html.parser').find()   # EQ first
+    ctls[0].parent.append(box)
+
+
 def lv03_fader(root, params):
     """LV03's Out fader: the cap (the element drawn with the fader image) becomes a bound fader (data-fader = the Out parameter)."""
     out = next((p for p in params if p['id'] == 'lv03.out'), None)
@@ -603,6 +623,8 @@ def build(code, report):
                 b['data-lower'] = '1'
             nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
+    if code == 'CS04':
+        cs04_bind(root, params)
     mark_inert(root)
     # the EVO label of the bottom bar switches the product's evolution feature (an `.evo.on`-style parameter) when no other control on the screen does
     used_p = {int(x) for x in re.findall(r'data-p="(\d+)"', str(root))}
