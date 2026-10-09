@@ -16,7 +16,7 @@ struct Lv12 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv12", "SW LV12 Geq 31", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.0", "31-band graphic EQ with feedback guard", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "31-band graphic EQ with feedback guard", f};
         return &d;
     }
 };

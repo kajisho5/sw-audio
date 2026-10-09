@@ -13,7 +13,7 @@ struct Vo02 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_PITCH_CORRECTION, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.vo02", "SW VO02 Tune Rt", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.0", "Pitch correction for live singing", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Pitch correction for live singing", f};
         return &d;
     }
 };

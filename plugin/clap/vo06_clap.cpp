@@ -12,7 +12,7 @@ struct Vo06 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_PITCH_SHIFTER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.vo06", "SW VO06 Formant", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.0", "Pitch and formant, timing kept", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Pitch and formant, timing kept", f};
         return &d;
     }
 };
