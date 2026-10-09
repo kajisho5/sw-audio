@@ -127,6 +127,7 @@ struct Run {
     double seconds = 0, audioSeconds = 0;
     double toneHz = 0, toneDb = -20.0; uint64_t toneN = 0;   // toneHz > 0: a sine instead of noise (the SW Link checks)
     int64_t impulse = -1;                                    // >= 0: silence with one impulse (0.5) at that sample (the latency check)
+    int64_t poisonAt = -1; float poison = 0.0f;              // >= 0: that input sample (left channel) is `poison` (NaN or an infinity) instead of what it would be
 
     // processes `blocks` blocks of noise (seeded), appending to inAll/outAll; events go into the first block
     void process(int blocks, uint64_t seed, EventList& events) {
@@ -137,6 +138,7 @@ struct Run {
                     float x = rng.next() * 0.1732f;   // uniform noise, ~ -20 dBFS RMS
                     if (impulse >= 0) x = (static_cast<int64_t>(toneN) + i == impulse) ? 0.5f : 0.0f;
                     if (toneHz > 0) x = static_cast<float>(std::pow(10.0, toneDb / 20.0) * std::sin(6.283185307179586 * toneHz * static_cast<double>(toneN + i) / kSr));
+                    if (poisonAt >= 0 && c == 0 && static_cast<int64_t>(toneN) + i == poisonAt) x = poison;
                     in[c][i] = x; sc[c][i] = x * 0.5f; out[c][i] = 0.f;
                 }
             }
@@ -782,7 +784,7 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
     bool ok = true; int tested = 0;
     for (const auto& f : files) {
         const std::string name = f.stem().string();
-        for (int seed = 1; seed <= 3; ++seed) {
+        for (int seed = 1; seed <= 4; ++seed) {   // seed 4: hostile values (NaN, infinities, far out of range) such as a broken automation lane can send
             Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  random settings of " + name + ": " + why); ok = false; break; }
             const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
             const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
@@ -793,6 +795,11 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
             for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
                 clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
                 double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                if (seed == 4) {
+                    const double span = pi.max_value - pi.min_value; const int pick = static_cast<int>((rng.next() * 0.5f + 0.5f) * 8.0f) % 8;
+                    const double hostile[8] = {std::nan(""), HUGE_VAL, -HUGE_VAL, 1e30, -1e30, pi.max_value + 1e6 * std::max(span, 1.0), pi.min_value - 1e6 * std::max(span, 1.0), v};
+                    v = hostile[pick];
+                }
                 ev.set(pi.id, v);
             }
             a.run.process(1, 100 + static_cast<uint64_t>(seed), ev);   // the settings arrive; the next blocks are the audio
@@ -803,10 +810,37 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
         }
         ++tested;
     }
-    if (ok) std::printf("ok    random settings: %d plug-ins x 3 seeds: every parameter at a random value, 0.4 s of noise: finite output, no process() error, peak under 1e4\n", tested);
+    if (ok) std::printf("ok    random settings: %d plug-ins x 4 seeds (the 4th: NaN, infinities and values far out of range): every parameter at a random value, 0.4 s of noise: finite output, no process() error, peak under 1e4\n", tested);
     return ok;
 }
 
+// An input sample that is NaN or infinite (an upstream plug-in glitch, a broken file) must not poison the plug-in for good: recursive filters, envelopes and delay lines would keep the NaN for ever.
+// One such sample (NaN, +Inf, -Inf; left channel) is fed in after 0.2 s of noise; the output of the last 0.3 s of the next 0.8 s of noise has to be finite again and not enormous.
+bool poisonChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (const float poison : {std::nanf(""), HUGE_VALF, -HUGE_VALF}) {
+            Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  poisoned input of " + name + ": " + why); ok = false; break; }
+            { const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));   // a sidechain, where there is one, gets the same sample (half of it)
+              a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+              if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); } }
+            EventList none;
+            a.run.process(static_cast<int>(0.2 * kSr / kBlock), 1, none);
+            a.run.bad = false; a.run.poisonAt = static_cast<int64_t>(a.run.toneN) + 3; a.run.poison = poison;
+            a.run.process(1, 2, none); a.run.poisonAt = -1; a.run.bad = false;   // the poisoned block itself may be anything
+            a.run.clearLogs(); a.run.process(static_cast<int>(0.8 * kSr / kBlock), 3, none);
+            const size_t n = a.run.outAll[0].size(), from = n - static_cast<size_t>(0.3 * kSr);
+            bool bad = false; double peak = 0;
+            for (int c = 0; c < 2; ++c) for (size_t i = from; i < n; ++i) { const float y = a.run.outAll[c][i]; if (!std::isfinite(y)) bad = true; else peak = std::max(peak, static_cast<double>(std::fabs(y))); }
+            if (bad || peak > 1e4) { char b[200]; std::snprintf(b, sizeof b, "FAIL  %s: after one %s input sample the output %s", name.c_str(), std::isnan(poison) ? "NaN" : poison > 0 ? "+Inf" : "-Inf", bad ? "stays NaN / Inf" : "is enormous"); problems.push_back(b); ok = false; }
+            a.close();
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    poisoned input: %d plug-ins x (NaN, +Inf, -Inf): one such input sample, then the output is finite again\n", tested);
+    return ok;
+}
 // The same input in blocks of different sizes: what comes out must not depend on how the host cuts the audio (the buffer size of a DAW, an offline bounce, a host that splits a block at every automation point).
 // The reference is blocks of 256; the others are 1, 7, 64, 509, 1024 and a mix (1, 2, 3, 5, 8 ... 987). The input is the same noise, three parameter events (random parameters, random values) fall at the same absolute samples in
 // every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
@@ -1040,6 +1074,7 @@ int main(int argc, char** argv) {
     }
     if (!linkChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }

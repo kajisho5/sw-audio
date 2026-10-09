@@ -339,7 +339,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
+        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -387,15 +387,22 @@ private:
             }
             s->shell_.core().setPlayhead(sec, playing);
         }
-        s->measure(ib.data32, nch, frames, 0);
         for (uint32_t c = 0; c < nch; ++c)
             if (ob.data32[c] != ib.data32[c]) std::memcpy(ob.data32[c], ib.data32[c], frames * sizeof(float));
+        // a NaN, an infinity or an absurd value (more than 120 dB over full scale) in the input is a glitch upstream: left in, it would stay in every recursive filter, envelope and delay line for good (RS05 even looped for ever)
+        for (uint32_t c = 0; c < nch; ++c) cleanInput(ob.data32[c], frames);
+        s->measure(ob.data32, nch, frames, 0);
         // optional sidechain (host may leave it unconnected)
         const float* scBase[2] = {nullptr, nullptr};
         int scCh = 0;
         if (kSidechain && pr->audio_inputs_count >= 2 && pr->audio_inputs[1].data32 && pr->audio_inputs[1].channel_count > 0) {
             scCh = static_cast<int>(std::min<uint32_t>(2, pr->audio_inputs[1].channel_count));
-            for (int c = 0; c < scCh; ++c) scBase[c] = pr->audio_inputs[1].data32[c];
+            for (int c = 0; c < scCh; ++c) {
+                scBase[c] = pr->audio_inputs[1].data32[c];
+                if (!isClean(scBase[c], frames) && frames <= s->scClean_[static_cast<size_t>(c)].size()) {   // the host's buffer is read-only: the cleaned copy goes to a scratch buffer
+                    float* d = s->scClean_[static_cast<size_t>(c)].data(); std::memcpy(d, scBase[c], frames * sizeof(float)); cleanInput(d, frames); scBase[c] = d;
+                }
+            }
         }
         const uint32_t nev = pr->in_events->size(pr->in_events);
         uint32_t ev = 0, pos = 0;
@@ -626,6 +633,8 @@ private:
     }
 
     // ---- latency
+    static bool isClean(const float* x, uint32_t n) { for (uint32_t i = 0; i < n; ++i) if (!(std::fabs(x[i]) <= 1.0e6f)) return false; return true; }   // NaN fails the comparison too
+    static void cleanInput(float* x, uint32_t n) { for (uint32_t i = 0; i < n; ++i) if (!(std::fabs(x[i]) <= 1.0e6f)) x[i] = 0.0f; }
     // tail = what the core says it rings on for plus the delay the plug-in reports (the sound leaves that much later); INT32_MAX: it never stops
     void updateTail() {
         if constexpr (HasTail<typename P::Core>::value) {
@@ -658,6 +667,7 @@ private:
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
     double scale_ = 1.0, sr_ = 48000.0;
+    std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
     std::atomic<uint32_t> tail_{0};   // the tail in samples, kept up to date by the audio thread (the host asks from any thread)
     uint32_t maxFrames_ = 4096;   // the largest block activate() promised the buffers for (process() cuts a longer block, which the CLAP rules forbid but a host can still send)
     std::array<std::atomic<float>, 4> peaks_{};

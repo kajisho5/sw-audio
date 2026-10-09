@@ -60,7 +60,7 @@ void Processor::analyse(Chan& c, int64_t t) {
     Run runs[32]; int nr = 0;
     for (int i = rstart; i < rend && nr < 32;) {
         const double v = w_[static_cast<size_t>(i)];
-        if (std::abs(v) < clip) { ++i; continue; }
+        if (!(std::abs(v) >= clip)) { ++i; continue; }
         const bool pos = v > 0.0; int j = i;
         while (j < kWin && std::abs(w_[static_cast<size_t>(j)]) >= clip && ((w_[static_cast<size_t>(j)] > 0.0) == pos)) ++j;
         const int m = j - i;
@@ -73,7 +73,7 @@ void Processor::analyse(Chan& c, int64_t t) {
         //    clipped signal would be learnt otherwise) and the runs are interpolated again from the original samples
         std::vector<double>& orig = tmp_;
         for (int i = 0; i < kWin; ++i) orig[static_cast<size_t>(i)] = w_[static_cast<size_t>(i)];
-        auto allRuns = [&](std::vector<Run>& out) { for (int i = p; i < kWin;) { const double v = orig[static_cast<size_t>(i)]; if (std::abs(v) < clip) { ++i; continue; } const bool pos = v > 0.0; int j = i; while (j < kWin && std::abs(orig[static_cast<size_t>(j)]) >= clip && ((orig[static_cast<size_t>(j)] > 0.0) == pos)) ++j; if (j - i >= 2 && j - i <= kMaxRun && j + p <= kWin) out.push_back({i, j - i, pos}); i = j; } };
+        auto allRuns = [&](std::vector<Run>& out) { for (int i = p; i < kWin;) { const double v = orig[static_cast<size_t>(i)]; if (!(std::abs(v) >= clip)) { ++i; continue; } const bool pos = v > 0.0; int j = i; while (j < kWin && std::abs(orig[static_cast<size_t>(j)]) >= clip && ((orig[static_cast<size_t>(j)] > 0.0) == pos)) ++j; if (j - i >= 2 && j - i <= kMaxRun && j + p <= kWin) out.push_back({i, j - i, pos}); i = j; } };
         std::vector<Run>& all = runsAll_; all.clear(); allRuns(all);
         auto interpolateAll = [&](int order) {
             arFit(w_.data(), kWin, order, a_, win_.data(), r_);

@@ -92,3 +92,14 @@ TEST_CASE("RS05 scope: the screen sees what came in and what goes out (restored 
     // after a reset (prepare) the window is empty again
     p.prepare(kFs, 256); p.scope(in, out); for (int b = 0; b < Processor::kScopeBins; ++b) CHECK(out[b] == 0.0);
 }
+
+TEST_CASE("RS05 a NaN or an infinity in the input does not hang the run finder (the audio thread looped for ever on a NaN), and the output comes back to normal") {
+    for (const float bad : {std::nanf(""), HUGE_VALF, -HUGE_VALF}) {
+        auto x = clip(tonal(0.9, 1.0), 0.5);
+        x[20000] = bad;
+        auto p = make();
+        const auto y = run(p, x);    // would never return with the old run finder
+        bool finiteAfter = true; for (size_t i = 30000; i < y.size(); ++i) if (!std::isfinite(y[i])) finiteAfter = false;
+        CHECK(finiteAfter);
+    }
+}
