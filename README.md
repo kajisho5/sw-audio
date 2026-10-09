@@ -1087,7 +1087,7 @@ GT03 は `kInParam` に **Input（±24 dB のゲイン）を指定していた**
 - **押している間だけ効くボタン**（LV01 Hold to mute＝Mute、LV11 Hold to cough）、パネルの **In ボタン**（DY03 など。Bypass を反転して点灯）、**EQ05 の Bell／Shelf**（上の組が HF Shape、下の組が LF Shape）を結び付けた。仕様書で消えている DY03 の **Auto fade は非表示**、EQ02 の Dynamic・Assist・Unmask、EQ07 の Auto thresh、EQ08 の Analyzer、CS04 の Add module・Save chain、LV03 の Copy・Paste、LV14 の Measure、LV27 の Learn current は機能が無いので薄く表示。
 - **値を印刷したチップ**（MS01・MS02 の「Dither off」、MS02 の「ISP 8x」、MT02 の「FFT 4k」など）はクリックで次の選択肢へ（文字も追従）。**MS01 の Character の 4 つのボタン**は Character X／Y の四隅に結び付けた（**設計値**：Transparent＝Clean・Smooth＝(0, 0)、Punch＝Clean・Punch＝(0, 100)、Loud＝Dense・Punch＝(100, 100)、Warm＝Dense・Smooth＝(100, 0)。仕様書は X＝Clean〜Dense、Y＝Smooth〜Punch の 2 軸だけで、4 つの名前との対応は書かれていない）。**Δ で始まるボタン**（RS の「Δ Noise only」など）は共通の Delta に、Δ や Auto gain を持たない製品のそれらは薄く表示。
 - パネルの **Δ の隣の「Auto」ボタン**（40 製品）は共通の Auto gain に結び付けた（ヘッダーの Auto gain と同じパラメータ）。
-- **機能がまだ製品に無い部品**（EVO バーの Low lat（6 製品以外）・2× OS・Unit A／B／C・履歴ボタン・拡大率の「100%」、LIVE の Main show・Remote。Lock は動くようにした）は、動いているふりをしないよう**薄く表示して「Not available yet」の説明を付けた**（仕様書の共通機能で、DSP 側の実装が要る：Low lat＝低遅延版への切り替え、2× OS＝オーバーサンプリングの選択、Unit A／B／C＝部品公差の個体差）。（プリセットのメニューは以前この扱いだったが、自分の設定の保存・呼び出しが動くようになった。上の「プリセット」の行。）
+- **機能がまだ製品に無い部品**（EVO バーの Low lat（6 製品以外）・2× OS・Unit A／B／C・履歴ボタン・拡大率の「100%」、LIVE の Main show・Remote。Lock は動くようにした）は、動いているふりをしないよう**薄く表示して「Not available yet」の説明を付けた**（Low lat・2× OS・100%・Unit A／B／C は、押したときに出る説明に理由を書いた：Low lat は「この製品に低遅延モードは無い」、2× OS は「1×／2×／4× の選択はまだ。非線形段は固定のレートで動く」、100% は「ウィンドウの大きさは固定」、Unit は「部品公差はまだ」）（仕様書の共通機能で、DSP 側の実装が要る：Low lat＝低遅延版への切り替え、2× OS＝オーバーサンプリングの選択、Unit A／B／C＝部品公差の個体差）。（プリセットのメニューは以前この扱いだったが、自分の設定の保存・呼び出しが動くようになった。上の「プリセット」の行。）
 
 ### 設計の絵に印刷されていた見本の数字
 

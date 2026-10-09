@@ -433,6 +433,15 @@ def bind_actions(root, code, report):
             report.setdefault(code, []).append('action-unmatched:' + a['label'])
 
 
+# what the dimmed parts say when pressed on (the designs show them on every screen; the title says why they do nothing here)
+INERT_TITLES = {
+    'low lat': 'No low-latency mode in this plug-in (the products that have one: EQ02, EQ07, EQ08, DY05, DY08, MS02 work; CS04, MS01, MS03, MS04 and RS01 are not built yet)',
+    '2× os': 'A choice of 1x / 2x / 4x oversampling is not built yet (the nonlinear stages of this plug-in, if it has any, run at a fixed rate)',
+    '100%': 'The window size is fixed (zoom is not built yet)',
+    'a': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'b': 'Unit A / B / C (component tolerances of the analog models) is not built yet', 'c': 'Unit A / B / C (component tolerances of the analog models) is not built yet',
+}
+
+
 def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
@@ -464,7 +473,7 @@ def mark_inert(root):
         in_evo = b.find_parent(class_='evob') is not None
         if t in inert or (b.get('aria-label') or '').lower() == 'history' or (in_evo and t in ('a', 'b', 'c')):
             b['style'] = (b.get('style') or '') + ';opacity:.4;cursor:default'
-            b['title'] = 'Not available yet'; b['data-inert'] = '1'; n += 1
+            b['title'] = INERT_TITLES.get(t, 'Not available yet'); b['data-inert'] = '1'; n += 1
         elif b.find_parent(class_='tb') is not None and b.select_one('svg') and t and not b.get('aria-label'):
             b['data-preset'] = '1'   # the preset menu (sw-ui.js: the person's saved settings)
     # a dial that no parameter drives (EQ02's "Range off"): dimmed, not left looking live
