@@ -396,7 +396,11 @@
     function refreshInfo() {
       const inf = (bridge.info && bridge.info()) || {}; const lat = inf.latencyMs || 0;
       if (disp) disp.update(inf);
-      if (skinBox) { /* the design has no latency chip */ } else if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
+      if (skinBox) {   // the LIVE designs' own chip ("LIVE 0.0 ms", with the CPU in LV03's) and the CPU text of their bar show the real latency and CPU
+        const lc = skinBox.querySelector('.live'), ev = [...skinBox.querySelectorAll('.evr')].find(e => /^CPU/.test(e.textContent.trim())), cp = inf.cpu !== undefined ? inf.cpu.toFixed(1) + '%' : null;
+        if (lc && lc.lastChild && lc.lastChild.nodeType === 3) lc.lastChild.textContent = 'LIVE ' + lat.toFixed(1) + ' ms' + (/CPU/.test(lc.textContent) && cp ? '  CPU ' + cp : '');
+        if (ev && cp) ev.textContent = 'CPU ' + cp;
+      } else if (prod.line === 'LIVE' || lat > 0) { live.style.display = ''; live.lastChild.textContent = (prod.line === 'LIVE' ? 'LIVE ' : '') + lat.toFixed(1) + ' ms'; live.classList.toggle('lat', lat > 0); } else live.style.display = 'none';
       const mt = inf.meters; if (mt) { [mi.bars[0], mi.bars[1], mo.bars[0], mo.bars[1]].forEach((b, k) => { b.style.width = lvl(mt[k]); b.classList.toggle('hot', mt[k] > -1); }); }
       cpu.textContent = inf.cpu !== undefined ? 'CPU ' + inf.cpu.toFixed(1) + ' %' : '';
     }

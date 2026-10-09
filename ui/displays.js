@@ -1447,6 +1447,19 @@
   }
 
 
+  // ---- LV03's small EQ curve: the strip's own filters (high-pass at HPF, low shelf 100 Hz, bell at Mid f with Q 1, high shelf 8 kHz; products/lv03) on 20 Hz - 20 kHz, +-12 dB
+  function miniEqCurve(box, ctx) {
+    const svg = box.querySelector('.disp svg'), path = svg && svg.querySelector(':scope > path'); if (!path) return null;
+    const [, , W, H] = vbOf(svg), Y0 = H / 2, PXDB = (H / 2 - 3) / 12, N = 100; let last = '';
+    return { update() {
+      const hp = ctx.value('HPF'), lo = ctx.value('EQ Low'), mf = ctx.value('EQ Mid f'), md = ctx.value('EQ Mid'), hi = ctx.value('EQ High'); if (![hp, lo, mf, md, hi].every(Number.isFinite)) return;
+      const key = [hp, lo, mf, md, hi].join('|'); if (key === last) return; last = key; let d = '';
+      for (let k = 0; k <= N; k++) { const f = 20 * Math.pow(1000, k / N), db = biquadMag('lowcut', Math.max(20, hp), 0, 0.70710678, f) + biquadMag('lowshelf', 100, lo, 0.70710678, f) + biquadMag('bell', mf, md, 1.0, f) + biquadMag('highshelf', 8000, hi, 0.70710678, f); d += (k ? ' L' : 'M') + (k / N * W).toFixed(1) + ' ' + clamp(Y0 - db * PXDB, 2, H - 2).toFixed(1); }
+      path.setAttribute('d', d);
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1462,7 +1475,7 @@
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
     LV01: voiceStripDisplay,
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
-    LV03: (box, ctx) => liveStripDisplay(box, ctx, 'LV03'),
+    LV03: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV03'), miniEqCurve(box, ctx)),
     LV04: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }])),
     UT03: (box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
       return { update(info) { const r = info && info.readouts; if (!r || r.length < 4) return; if (mix) mix[1].textContent = lufs(r[1]) + ' LUFS'; if (ref) ref[1].textContent = lufs(Math.max(r[2], r[3])) + ' LUFS'; if (matchV) matchV.textContent = r[1] > -150 ? (r[0] >= 0 ? '+' : '') + r[0].toFixed(1) + ' LU' : '— LU'; } }; },
