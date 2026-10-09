@@ -18,6 +18,7 @@
 #include "sw/param.hpp"
 #include "sw/pitch_tracker.hpp"
 #include <array>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -37,7 +38,7 @@ public:
     Processor();
     void prepare(double sampleRate, int maxBlock);
     void setParam(int id, double plainValue);
-    void snapToTargets() { if (prepared_) { assign(); applyAll(); } }
+    void snapToTargets() { inGain_ = std::pow(10.0, target_[Input] / 20.0); if (prepared_) { assign(); applyAll(); } }
     void process(float** ch, int numCh, int n);
     int latencySamples() const { return 0; }
     double tunerHz() const { return hz_; }

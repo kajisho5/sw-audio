@@ -25,6 +25,16 @@ TEST_CASE("GT03 no pedal on: the signal passes bit for bit; Bypass all too") {
     auto p = make(clear()); const auto x = noise(-20, 1.0, 3), y = run(p, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(y[i] == x[i]);
     auto b = make({{BypassAll, 1}, {slotParam(0, On), 1}}); const auto z = run(b, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(z[i] == x[i]);
 }
+TEST_CASE("GT03 Input is a gain in front of the board (the shell's In is the panel switch, not a trim); Bypass all ignores it") {
+    const auto x = noise(-30, 1.0, 5);
+    auto up = make(with(clear(), {{Input, 12}})); const auto y = run(up, x);
+    for (size_t i = 4800; i < x.size(); ++i) REQUIRE(std::abs(static_cast<double>(y[i]) - 3.98107 * x[i]) < 1e-5 + 1e-4 * std::abs(3.98107 * x[i]));
+    auto dn = make(with(clear(), {{Input, -12}})); const auto z = run(dn, x);
+    for (size_t i = 4800; i < x.size(); ++i) REQUIRE(std::abs(static_cast<double>(z[i]) - 0.251189 * x[i]) < 1e-5 + 1e-4 * std::abs(0.251189 * x[i]));
+    auto by = make({{Input, 12}, {BypassAll, 1}}); const auto w = run(by, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(w[i] == x[i]);
+    auto lv = make(with(clear(), {{Input, 0}})); const auto v = run(lv, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(v[i] == x[i]);   // 0 dB: untouched
+    auto sw = make(clear()); CHECK(sw.latencySamples() == 0);
+}
 TEST_CASE("GT03 Comp: more Sustain, less level") {
     auto lo = make(with(clear(), pedal(0, Comp, 1, 5))), hi = make(with(clear(), pedal(0, Comp, 9, 5))); const auto x = sine(-8, 3.0, 700);
     const auto a = run(lo, x), b = run(hi, x); CHECK(rmsDb(a, 96000, 144000) > rmsDb(b, 96000, 144000) + 3.0); CHECK(rmsDb(b, 96000, 144000) < -8.0);

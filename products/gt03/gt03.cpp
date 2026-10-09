@@ -105,6 +105,13 @@ void Processor::run(float** ch, int numCh, int n) {
     for (int i = 0; i < n; ++i) tracker_.push(numCh > 1 ? 0.5 * (ch[0][i] + ch[1][i]) : ch[0][i]);
     hz_ = tracker_.voiced() ? tracker_.f0() : hz_;
     if (target_[BypassAll] > 0.5) return;
+    // Input: the trim in front of the board (ramped over the block; 0 dB leaves the signal bit for bit). The shell's In is the panel's power switch, so the product handles this knob itself.
+    const double gIn = std::pow(10.0, target_[Input] / 20.0);
+    if (gIn != 1.0 || inGain_ != 1.0) {
+        const double step = (gIn - inGain_) / n;
+        for (int c = 0; c < numCh; ++c) { double g = inGain_; for (int i = 0; i < n; ++i) { g += step; ch[c][i] = static_cast<float>(ch[c][i] * g); } }
+        inGain_ = gIn;
+    }
     // noise gate (the lowest position is Off)
     if (target_[NoiseGate] > -79.99) for (int i = 0; i < n; ++i) { double key = std::abs(ch[0][i]); if (numCh > 1) key = std::max(key, static_cast<double>(std::abs(ch[1][i]))); const double g = gate_.process(key); if (g != 1.0) for (int c = 0; c < numCh; ++c) ch[c][i] = static_cast<float>(ch[c][i] * g); }
     for (int s = 0; s < kSlots; ++s) {

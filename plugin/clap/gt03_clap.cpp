@@ -7,7 +7,7 @@ struct Gt03 {
     using Core = sw::gt03::Processor;
     static const std::vector<sw::ParamSpec>& specs() { return sw::gt03::specs(); }
     static constexpr int kOutputParam = sw::gt03::Output;
-    static constexpr int kInParam = sw::gt03::Input;
+    static constexpr int kInParam = -1;   // Input is a trim the core applies; the shell's In is the panel's power switch (the common Bypass)
     static constexpr int kMixParam = -1;
     static constexpr int kReadouts = 3;   // tuner: Hz (0 = nothing found), nearest MIDI note, cents
     static void readouts(const Core& c, double* o) { o[0] = c.tunerHz(); o[1] = c.tunerNote(); o[2] = c.tunerCents(); }
