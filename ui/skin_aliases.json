@@ -318,5 +318,13 @@
     ]
    ]
   }
+ },
+ "DY04": {
+  "btn:hpf": {
+   "toggle": "Key HPF"
+  },
+  "btn:lpf": {
+   "toggle": "Key LPF"
+  }
  }
 }

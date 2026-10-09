@@ -489,17 +489,23 @@ def build(code, report):
         for k, s in enumerate(p['steps']):
             lbl = p['labels'][k] if p.get('labels') and k < len(p['labels']) else str(s)
             opts.setdefault(norm(lbl), []).append((p['i'], s))
+            w = norm(lbl).split()
+            if len(w) >= 3 and w[-1] in ('oct', 'octave'):                # "1/6 oct" is also "1/6" (norm turns the slash into a space)
+                opts.setdefault(' '.join(w[:-1]), []).append((p['i'], s))
     names = {}
     for p in params:
         if p['curve'] == 'step' and len(p['steps']) == 2:
             names.setdefault(norm(p['name']), []).append(p['i'])
     delta = [p['i'] for p in params if p['id'] == 'common.delta']
+    autogain_ids = [p['i'] for p in params if p['id'] == 'common.autogain']
     autogain = [p['i'] for p in params if p['id'] == 'common.autogain']
     for tb in root.select('.tb'):
         for b in tb.select('button'):
             lab = (b.get('aria-label') or '').lower(); t = b.get_text().strip()
             if lab in ('undo', 'redo'):
                 b['data-act'] = lab
+            elif lab == 'auto gain' and autogain_ids:
+                b['data-p'] = str(autogain_ids[0]); b['data-toggle'] = '1'
             elif t in ('A', 'B') and not b.get('data-act'):
                 b['data-act'] = t
     for b in root.select('button, .btn, .chip, .bigbtn'):
@@ -532,6 +538,10 @@ def build(code, report):
         nbt += 1
         n = norm(t)
         al = alias.get('btn:' + n)
+        if isinstance(al, dict) and al.get('toggle'):   # {"toggle": "Key HPF"}: a button that flips a 2-step parameter
+            tp = next((p for p in params if p['name'] == al['toggle']), None)
+            if tp is not None:
+                b['data-p'] = str(tp['i']); b['data-toggle'] = '1'; nbb += 1; continue
         if isinstance(al, dict) and al.get('set'):     # one button sets several parameters (MS01 Character corners): {"set": [["Character X", 0], ["Character Y", 100]]}
             idx = {p['name']: p['i'] for p in params}
             b['data-set'] = json.dumps([[idx[nm], v] for nm, v in al['set']]); nbb += 1; continue
