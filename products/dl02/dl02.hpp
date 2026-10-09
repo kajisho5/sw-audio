@@ -13,7 +13,7 @@
 
 namespace sw::dl02 {
 
-enum ParamId { Heads, Rate, Intensity, Bass, Treble, Wear, Mix, kNumParams };
+enum ParamId { Heads, Rate, Intensity, Bass, Treble, Wear, Mix, Unit, kNumParams };
 enum HeadsId { H1 = 0, H2 = 1, H3 = 2, H12 = 3, H23 = 4, All = 5 };
 
 const std::vector<ParamSpec>& specs();

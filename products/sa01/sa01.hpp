@@ -7,13 +7,14 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <cstdint>
 #include <vector>
 
 namespace sw::sa01 {
 
-enum ParamId { Speed, Formula, Input, Saturation, Wow, Flutter, Hiss, Output, Repro, Oversample, kNumParams };
+enum ParamId { Speed, Formula, Input, Saturation, Wow, Flutter, Hiss, Output, Repro, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -42,6 +43,8 @@ private:
     std::array<double, 2> z_{}, zOs_{};
     double envC_ = 0;   // the backlash's level follower: 5 ms at the oversampled rate
     void applyOversample();
+    int unit_ = 0;                            // Unit A / B / C (sw/unit.hpp): slots 0 the head bump, 1 the head-gap loss, and the saturation
+    std::array<double, 2> onset_{1.0, 1.0};   // where the tape saturates, per channel (a factor on the saturation gain)
     std::array<double, 2> envOs_{};
     std::array<std::vector<float>, 2> ring_;
     double wowPh_[2] = {0, 0}, flPh_[3] = {0, 0, 0}, drift_ = 0, driftTarget_ = 0;

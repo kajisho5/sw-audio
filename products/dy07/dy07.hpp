@@ -9,7 +9,7 @@
 
 namespace sw::dy07 {
 
-enum ParamId { Threshold, Compress, Output, Snap, Mix, Knee, kNumParams };
+enum ParamId { Threshold, Compress, Output, Snap, Mix, Knee, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

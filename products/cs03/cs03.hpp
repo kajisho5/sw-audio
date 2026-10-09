@@ -10,12 +10,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::cs03 {
 
-enum ParamId { Gain, Impedance, Low, Mid, High, Thresh, Ratio, Knee, Output, Oversample, kNumParams };
+enum ParamId { Gain, Impedance, Low, Mid, High, Thresh, Ratio, Knee, Output, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -31,6 +32,8 @@ public:
 private:
     void updateEq(int ramp);
     void updateSplit();
+    int unit_ = 0;                          // Unit A / B / C (sw/unit.hpp): slots 0 low, 1 mid, 2 high, and the transformer
+    std::array<double, 2> onset_{1.0, 1.0};   // where the transformer saturates, per channel (the signal goes in times k and comes out divided by k: the small-signal gain stays)
     double fs_ = 48000.0;
     std::array<double, kNumParams> target_{};
     LinearSmoother gain_, hiZ_, low_, mid_, high_;

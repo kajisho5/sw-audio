@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa07.bandwidth", "Bandwidth", 3000, 20000, 20000, Curve::Log, 1, {}, "Hz"},
             {"sa07.mono",      "Mono",      0, 100, 0,       Curve::Lin,  1, {}, "%"},
             {"sa07.mix",       "Mix",       0, 100, 100,     Curve::Lin,  1, {}, "%"},
+            unitSpec("sa07.unit"),
         };
         v[Bandwidth].minLabel = "Narrow"; v[Bandwidth].maxLabel = "Full"; v[Mono].minLabel = "Off";
         return v;

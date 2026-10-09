@@ -12,7 +12,7 @@
 
 namespace sw::md03 {
 
-enum ParamId { Stages, Rate, Depth, Feedback, Center, Mix, Sync, NoteFollow, kNumParams };
+enum ParamId { Stages, Rate, Depth, Feedback, Center, Mix, Sync, NoteFollow, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 constexpr double kRefHz = 220.0;

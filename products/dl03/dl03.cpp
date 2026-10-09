@@ -13,6 +13,7 @@ const std::vector<ParamSpec>& specs() {
         {"dl03.grit",     "Grit",      0, 10, 2,     Curve::Lin, 1, {}, ""},
         {"dl03.mix",      "Mix",       0, 100, 25,   Curve::Lin, 1, {}, "%"},
         {"dl03.sync",     "Sync",      0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("dl03.unit"),
     };
     return s;
 }

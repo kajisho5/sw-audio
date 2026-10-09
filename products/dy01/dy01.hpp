@@ -8,13 +8,14 @@
 #include "sw/oversample.hpp"
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
+#include "sw/unit.hpp"
 #include "sw/svf.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::dy01 {
 
-enum ParamId { Drive, Ratio, Speed, Bite, Color, Output, Mix, SchPf, Oversample, kNumParams };
+enum ParamId { Drive, Ratio, Speed, Bite, Color, Output, Mix, SchPf, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double attackMs(double speed);   // 800 .. 20 us (log-linear in Speed)
@@ -50,6 +51,7 @@ private:
     int hold_ = 0;
     double envRel_ = 0, envSlow_ = 0, relaxCoef_ = 0;
     ColorStage color_;
+    std::array<double, 2> unitSat_{1.0, 1.0};   // Unit A / B / C: where the colour stage saturates, per channel (a factor on its gain)
 };
 
 }  // namespace sw::dy01

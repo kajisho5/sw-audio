@@ -90,6 +90,9 @@ struct ParamSpec {
 // ratio controls whose rightmost range means infinity (spec: 右端5 % は ∞)
 inline bool isInfiniteRatio(const ParamSpec& s, double v) { return s.maxLabel != nullptr && s.toNorm(v) >= s.maxLabelNorm - 1e-12; }
 
+// Unit A / B / C (spec common function, analog enclosures): `<code>.unit`, the last parameter (after the oversampling one) of a product that has it. A is the reference; B and C are fixed sets of tolerances (sw/unit.hpp)
+inline ParamSpec unitSpec(const char* id) { return ParamSpec{id, "Unit", 0, 2, 0, Curve::Step, 1, {0, 1, 2}, "", {"A", "B", "C"}}; }
+
 // the common oversampling setting (spec 共通機能「オーバーサンプリング」: 1x / 2x / 4x, default 2x): the last parameter of a product that has a nonlinear stage, `<code>.os`
 inline ParamSpec oversampleSpec(const char* id, double def = 2.0) { return ParamSpec{id, "Oversample", 1, 4, def, Curve::Step, 1, {1, 2, 4}, "", {"1x", "2x", "4x"}}; }
 

@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq04.out",       "Output",   -10, 10, 0,       Curve::Lin,  1, {}, "dB"},
         {"eq04.evo.on",    "Iron",     0, 1, 1,          Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         oversampleSpec("eq04.os"),
+            unitSpec("eq04.unit"),
     };
     return s;
 }
@@ -61,6 +62,7 @@ void Processor::setParam(int id, double v) {
             break;
         }
         case Iron: iron_.setTarget(v); break;
+        case Unit: unit_ = static_cast<int>(v); applyUnit(); update(static_cast<int>(0.02 * fs_)); break;   // the coefficients move over 20 ms
         default: break;
     }
 }
@@ -72,15 +74,18 @@ void Processor::snapToTargets() {
     update(0);
 }
 
+void Processor::applyUnit() { for (int c = 0; c < 2; ++c) drive_.setOnsetDb(c, Unit::satDb(unit_, c, 0)); }
+
 void Processor::update(int ramp) {
     const double hf = std::exp(hpfF_.current() > 0 ? hpfF_.current() : std::log(50.0));
     const double highF = std::min(std::exp(highF_.current()), 0.45 * fs_);
-    for (auto& c : ch_) {
-        c.hp1.setupRamp(OnePole::Mode::HighPass, hf, fs_, ramp);
-        c.hp2.setupRamp(Svf::Mode::HighPass, hf, fs_, 1.0, 0, ramp);  // with the 1st-order stage: 3rd-order Butterworth
-        c.low.setupRamp(Svf::Mode::LowShelf, std::exp(lowF_.current()), fs_, kLowQ, lowG_.current(), ramp);
-        c.mid.setupRamp(Svf::Mode::Bell, std::exp(midF_.current()), fs_, 0.9, midG_.current(), ramp);
-        c.high.setupRamp(Svf::Mode::HighShelf, highF, fs_, 0.70710678, highG_.current(), ramp);
+    for (int k = 0; k < 2; ++k) {   // each channel's parts have their own tolerance (Unit B / C)
+        Ch& c = ch_[static_cast<size_t>(k)];
+        c.hp1.setupRamp(OnePole::Mode::HighPass, hf * Unit::freqMul(unit_, k, 0), fs_, ramp);
+        c.hp2.setupRamp(Svf::Mode::HighPass, hf * Unit::freqMul(unit_, k, 0), fs_, 1.0, 0, ramp);  // with the 1st-order stage: 3rd-order Butterworth
+        c.low.setupRamp(Svf::Mode::LowShelf, std::exp(lowF_.current()) * Unit::freqMul(unit_, k, 1), fs_, kLowQ, lowG_.current(), ramp);
+        c.mid.setupRamp(Svf::Mode::Bell, std::exp(midF_.current()) * Unit::freqMul(unit_, k, 2), fs_, 0.9, midG_.current(), ramp);
+        c.high.setupRamp(Svf::Mode::HighShelf, std::min(highF * Unit::freqMul(unit_, k, 3), 0.45 * fs_), fs_, 0.70710678, highG_.current(), ramp);
     }
 }
 

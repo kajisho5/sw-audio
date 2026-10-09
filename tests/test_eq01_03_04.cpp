@@ -95,9 +95,9 @@ TEST_CASE("EQ04 Iron: harmonics only on boosted bands") {
 }
 
 // ---- the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x): the Drive stage of all three, and EQ04's Iron
-TEST_CASE("EQ01 / EQ03 / EQ04: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x") {
+TEST_CASE("EQ01 / EQ03 / EQ04: the oversampling parameter is the last one but Unit, 1x / 2x / 4x, default 2x") {
     auto check = [](const std::vector<ParamSpec>& s, int os, const char* id) {
-        REQUIRE(s.size() == static_cast<size_t>(os) + 1);
+        REQUIRE(s.size() == static_cast<size_t>(os) + 2);   // Unit A / B / C follows
         const ParamSpec& p = s[static_cast<size_t>(os)];
         CHECK(std::string(p.id) == id); CHECK(p.def == 2.0); CHECK(p.steps == std::vector<double>{1, 2, 4}); CHECK(p.labels == std::vector<std::string>{"1x", "2x", "4x"}); CHECK(p.automatable);
     };

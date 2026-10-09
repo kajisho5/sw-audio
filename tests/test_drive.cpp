@@ -88,3 +88,20 @@ TEST_CASE("drive stage: changing the oversampling while running is clean") {
     int n = 0;
     for (int os : seq) { d.setOversample(os); for (int i = 0; i < 2400; ++i, ++n) { d.tick(); const double v = d.process(0, 0.3 * std::sin(2 * kPi * 1000.0 * n / kFs)); REQUIRE(std::isfinite(v)); REQUIRE(std::abs(v) < 1.0); } }
 }
+
+// Unit A / B / C: where the saturation sets in, per channel (+-0.5 dB on the drive)
+TEST_CASE("drive stage: the saturation onset of a channel moves by its dB, leaves the small-signal gain alone, and does not touch the other channel") {
+    auto runCh = [](double onsetDb0, double onsetDb1, int ch, double amp) {
+        DriveStage d; d.prepare(kFs, 6); d.setOnsetDb(0, onsetDb0); d.setOnsetDb(1, onsetDb1); d.snap();
+        std::vector<double> y(48000);
+        for (int i = 0; i < 48000; ++i) { d.tick(); y[static_cast<size_t>(i)] = d.process(ch, amp * std::sin(2 * kPi * 1000.0 * i / kFs)); }
+        return y;
+    };
+    // +0.5 dB on the drive: more of the 3rd harmonic (about +1 dB: it grows with the drive), 0 dB: exactly as before
+    const double h0 = harmDb(runCh(0, 0, 0, 0.3), 1000, 3), hUp = harmDb(runCh(0.5, 0, 0, 0.3), 1000, 3), hDown = harmDb(runCh(-0.5, 0, 0, 0.3), 1000, 3);
+    INFO("3rd harmonic: -0.5 dB " << hDown << ", 0 dB " << h0 << ", +0.5 dB " << hUp);
+    CHECK(hUp > h0 + 0.3); CHECK(hUp < h0 + 2.0); CHECK(hDown < h0 - 0.3); CHECK(hDown > h0 - 2.0);
+    CHECK(runCh(0, 0, 0, 0.3) == run(6, 1000, 0.3));                         // 0 dB is the stage as it was
+    CHECK(runCh(0.5, -0.5, 1, 0.3) == runCh(0, -0.5, 1, 0.3));               // channel 1 does not hear channel 0's onset
+    for (double db : {-0.5, 0.5}) CHECK(std::abs(20 * std::log10(binAmp(runCh(db, db, 0, 0.001), 1000) / 0.001)) < 0.1);   // small signals still pass at unity
+}

@@ -13,7 +13,7 @@
 
 namespace sw::sa07 {
 
-enum ParamId { Era, Crackle, Dust, Wow, Bandwidth, Mono, Mix, kNumParams };
+enum ParamId { Era, Crackle, Dust, Wow, Bandwidth, Mono, Mix, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

@@ -41,8 +41,9 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 - 共通の処理枠 `sw::Shell`（In → Auto gain → Mix → Output → Δ）。製品の Output／In／Mix は traits で枠へ回す。コンプ部だけの Mix などは製品の中で処理し、traits は -1。量子化する製品は `kAutoGain=false`。
 - 外部サイドチェーン：Core に `processWithSidechain(...)` を書くと、自動で2つ目の入力端子が付く。
 - 遅延が変わる設定（先読み、位相モード、FIR 長など）：`latencySamples()` は「次の prepare で使う値」を返す。prepare 時に確定させる。違えばプラグイン層がホストに再起動を求める。
+- **Unit A／B／C（2U ラック筐体の 42 製品）：最後のパラメータ `unitSpec("<コード>.unit")`、プラグイン層の trait `kUnitParam`（Shell が出力段のゲイン公差を掛ける）。コアの中の周波数は `sw::Unit::freqMul(unit, ch, スロット)`、飽和の効き始めは共通部品の `setOnsetDb(ch, db)` か、段の駆動ゲインに `Unit::satDb` の係数を掛ける。A は偏差ゼロ（左右が完全に同じ）。**
 - 音声スレッドでメモリを確保しない（バッファは prepare で確保）。出力は `|y|<1e-30` を 0 に。
-- **非線形の段は `sw::OsSwitch`（`DriveStage`・`BiasShaper` もその上）を通し、`oversampleSpec("<コード>.os")` を最後の製品パラメータにする**（1x／2x／4x、既定 2x。仕様書が 4× の製品は第 2 引数）。段のループの中にある時間のもの（フィルター係数、DC 除去、包絡の追従）は `os.rate(fs)` で計算する（`fs` 決め打ちや 2×fs 決め打ちは設定を変えると音が変わる）。画面の「2× OS」ボタンは `gen_skins.py` が `.os` に結び付ける。
+- **非線形の段は `sw::OsSwitch`（`DriveStage`・`BiasShaper` もその上）を通し、`oversampleSpec("<コード>.os")` を製品パラメータの末尾（Unit があればその直前）にする**（1x／2x／4x、既定 2x。仕様書が 4× の製品は第 2 引数）。段のループの中にある時間のもの（フィルター係数、DC 除去、包絡の追従）は `os.rate(fs)` で計算する（`fs` 決め打ちや 2×fs 決め打ちは設定を変えると音が変わる）。画面の「2× OS」ボタンは `gen_skins.py` が `.os` に結び付ける。
 - アナログ系の段のヘッドルームは +6 dBFS（決定事項）。
 - **テストの処理ループは端数ブロックを必ず `std::min(256, n - off)` で切る**（配列の外を読む不具合を2回出した）。
 - 有効化前に状態を読み込まれても落ちないこと（prepare 前は `snapToTargets()` で何もしない）。

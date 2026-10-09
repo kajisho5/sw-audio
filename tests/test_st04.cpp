@@ -16,7 +16,7 @@ size_t peakAt(const std::vector<float>& y, size_t a, size_t b) { size_t k = a; f
 TEST_CASE("ST04 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"st04.center", "st04.haas", "st04.side", "st04.lowcenter", "st04.balance", "st04.link", "st04.evo.on"};
+    const char* ids[] = {"st04.center", "st04.haas", "st04.side", "st04.lowcenter", "st04.balance", "st04.link", "st04.evo.on", "st04.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Center].def == 50); CHECK(std::string(s[Center].minLabel) == "Wide"); CHECK(std::string(s[Center].maxLabel) == "Focus");
     CHECK(s[Haas].min == 0); CHECK(s[Haas].max == 40); CHECK(s[Haas].curve == Curve::Skew); CHECK(s[Haas].skew == 2); CHECK(s[Haas].def == 0);

@@ -31,7 +31,7 @@ double maxStep(const std::vector<float>& x, int from, int to) { double m = 0; fo
 TEST_CASE("parameter table follows the spec (count, ranges, defaults)") {
     const auto& s = specs();
     REQUIRE(s.size() == kNumParams);
-    CHECK(kNumParams == 19);   // the 18 of the spec + the common oversampling setting (eq05.os)
+    CHECK(kNumParams == 20);   // the 18 of the spec + the common oversampling setting (eq05.os) + Unit A / B / C
     CHECK(s[HfFreq].def == 8000.0);  CHECK(s[HfFreq].min == 1500.0); CHECK(s[HfFreq].max == 16000.0);
     CHECK(s[HmfFreq].def == 2000.0); CHECK(s[HmfFreq].min == 600.0); CHECK(s[HmfFreq].max == 7000.0);
     CHECK(s[LmfFreq].def == 600.0);  CHECK(s[LmfFreq].min == 200.0); CHECK(s[LmfFreq].max == 2500.0);
@@ -135,8 +135,8 @@ TEST_CASE("EQ05 Drive stage has +6 dBFS headroom: Drive 0 keeps a -7 dBFS peak t
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
 TEST_CASE("EQ05: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the Drive stage follows it") {
     const auto& s = eq05::specs();
-    REQUIRE(s.back().steps == std::vector<double>{1, 2, 4});
-    CHECK(std::string(s.back().id) == "eq05.os"); CHECK(s.back().def == 2.0); CHECK(static_cast<int>(s.size()) - 1 == eq05::Oversample);
+    REQUIRE(s[eq05::Oversample].steps == std::vector<double>{1, 2, 4});
+    CHECK(std::string(s[eq05::Oversample].id) == "eq05.os"); CHECK(s[eq05::Oversample].def == 2.0); CHECK(static_cast<int>(s.size()) - 2 == eq05::Oversample);   // Unit A / B / C follows
     auto alias = [](int os) { eq05::Processor p; p.setParam(eq05::Drive, 10); p.setParam(eq05::Oversample, os); p.prepare(ost::kFs, 256); p.snapToTargets(); return ost::relDb(p, 15000, 3000, 0.3); };
     const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
     INFO("15 kHz at Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");

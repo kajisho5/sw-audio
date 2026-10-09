@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
         {"gt01.bright",   "Bright",   0, 1, 0,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"gt01.evo.on",   "Volume match", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         oversampleSpec("gt01.os", 4.0),   // the spec: 4x OS
+            unitSpec("gt01.unit"),
     };
     return s;
 }
@@ -127,6 +128,7 @@ void Processor::setParam(int id, double v) {
         case Treble: tre_.setTarget(v); break;
         case Master: master_.setTarget(v); break;
         case Presence: if (prepared_) updateFixed(); break;
+        case Unit: unit_ = static_cast<int>(v); for (int k = 0; k < 2; ++k) onset_[static_cast<size_t>(k)] = std::pow(10.0, sw::Unit::satDb(unit_, k, 0) / 20.0); break;
         case VolumeMatch:
             accSq_ = accT_ = blockSq_ = 0; blockN_ = 0; matchDb_ = 0; matchDone_ = false;
             if (prepared_) match_.setTarget(1.0);
@@ -186,8 +188,9 @@ void Processor::process(float** ch, int numCh, int n) {
             Ch& s = c_[static_cast<size_t>(c)];
             double x = ch[c][i] * inGain_;
             if (bright) x = s.bright.process(x);
+            const double a1c = a1 * onset_[static_cast<size_t>(c)];   // Unit B / C: this channel's tube
             double v = s.pre.process(x, [&](double u) {
-                double y = s1 * (std::tanh(a1 * u + d.b1) - tb1);
+                double y = s1 * (std::tanh(a1c * u + d.b1) - tb1);
                 s.dc1 += aHp1 * (y - s.dc1); y -= s.dc1;
                 s.lp1 += aLp * (y - s.lp1); y = s.lp1;
                 double z = s2 * (std::tanh(d.a2 * y + d.b2) - tb2);

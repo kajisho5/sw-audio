@@ -13,7 +13,7 @@
 
 namespace sw::cs02 {
 
-enum ParamId { Ratio, Thresh, Release, GateThresh, GateRange, Hpf, Lpf, Hf, Hmf, Lmf, Lf, Route, Fader, Link, kNumParams };
+enum ParamId { Ratio, Thresh, Release, GateThresh, GateRange, Hpf, Lpf, Hf, Hmf, Lmf, Lf, Route, Fader, Link, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

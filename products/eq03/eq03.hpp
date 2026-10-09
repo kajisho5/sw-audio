@@ -6,12 +6,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::eq03 {
 
-enum ParamId { DipFreq, Dip, PeakFreq, Peak, Width, Drive, Output, Ride, Oversample, kNumParams };
+enum ParamId { DipFreq, Dip, PeakFreq, Peak, Width, Drive, Output, Ride, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -27,6 +28,8 @@ public:
 
 private:
     void update(int ramp);
+    void applyUnit();          // Unit A / B / C: the saturation onset of each channel
+    int unit_ = 0;             // Unit A / B / C (sw/unit.hpp): slot 0 the dip, 1 the peak, and the drive
     double fs_ = 48000.0, ms_ = 0, rideMul_ = 1, att_ = 0, rel_ = 0;
     std::array<double, kNumParams> target_{};
     LinearSmoother dipF_, dipG_, peakF_, peakG_, width_;

@@ -23,7 +23,7 @@ double crest(const std::vector<float>& h, double a, double b) { double mx = 0, e
 TEST_CASE("RV03 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"rv03.springs", "rv03.dwell", "rv03.tone", "rv03.tension", "rv03.drip", "rv03.mix"};
+    const char* ids[] = {"rv03.springs", "rv03.dwell", "rv03.tone", "rv03.tension", "rv03.drip", "rv03.mix", "rv03.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Springs].steps == std::vector<double>{1, 2, 3}); CHECK(s[Springs].def == 2);
     for (int i : {Dwell, Tension, Drip}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 5); }

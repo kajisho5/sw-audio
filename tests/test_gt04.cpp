@@ -25,7 +25,7 @@ double phaseAt(const std::vector<float>& y, const std::vector<float>& x, double 
 TEST_CASE("GT04 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"gt04.gain", "gt04.drive", "gt04.master", "gt04.low", "gt04.lomid", "gt04.himid", "gt04.high", "gt04.midhz", "gt04.di", "gt04.diblend", "gt04.evo.on", "gt04.os"};
+    const char* ids[] = {"gt04.gain", "gt04.drive", "gt04.master", "gt04.low", "gt04.lomid", "gt04.himid", "gt04.high", "gt04.midhz", "gt04.di", "gt04.diblend", "gt04.evo.on", "gt04.os", "gt04.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Gain].def == 5); CHECK(s[Drive].def == 0); CHECK(s[Master].def == 5);
     for (int i : {Low, LoMid, HiMid, High}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 5); }
@@ -104,7 +104,7 @@ TEST_CASE("GT04 the channels are independent and the EQ settings can move withou
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
 TEST_CASE("GT04: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x; the pre and the distortion follow it") {
     const auto& s = specs();
-    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 2);
     auto alias = [](int os) { auto p = make(with(amp(), {{Gain, 10}, {Drive, 10}, {Di, 0}, {Oversample, static_cast<double>(os)}})); return ost::relDb(p, 9000, 3000, 0.3); };
     const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
     INFO("9 kHz through the amp at Gain 10 / Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");

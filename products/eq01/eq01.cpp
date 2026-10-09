@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
             {"eq01.out.level",   "Output",   -10, 10, 0,          Curve::Lin,  1, {}, "dB"},
             {"eq01.mode",        "Mode",     0, 1, 0,             Curve::Step, 1, {0, 1}, "", {"LR", "MS"}},
             oversampleSpec("eq01.os"),
+            unitSpec("eq01.unit"),
         };
         v[Width].reversed = true;  // Narrow (Q 2.0) ... Wide (Q 0.4)
         return v;
@@ -58,6 +59,7 @@ void Processor::setParam(int id, double v) {
         case Drive: drive_.set(v); driveM_.set(v); break;
         case Mode: ms_.setTarget(v); break;
         case Oversample: drive_.setOversample(static_cast<int>(v)); driveM_.setOversample(static_cast<int>(v)); break;
+        case Unit: unit_ = static_cast<int>(v); applyUnit(); update(static_cast<int>(0.02 * fs_)); break;   // the coefficients move over 20 ms
         default: break;  // Output: sw::Shell
     }
 }
@@ -69,12 +71,19 @@ void Processor::snapToTargets() {
     update(0);
 }
 
+void Processor::applyUnit() {
+    for (int c = 0; c < 2; ++c) drive_.setOnsetDb(c, Unit::satDb(unit_, c, 0));
+    driveM_.setOnsetDb(0, Unit::satDb(unit_, 0, 0));   // the mid path is one signal: the left channel's part
+}
+
 void Processor::update(int ramp) {
-    const double lf = std::exp(lowF_.current()), af = std::min(std::exp(airF_.current()), 0.45 * fs_);
-    for (auto& f : low_) f.setupRamp(Svf::Mode::LowShelf, lf, fs_, contourQ(contour_.current()), lowG_.current(), ramp);
-    for (auto& f : air_) f.setupRamp(Svf::Mode::Bell, af, fs_, std::exp(width_.current()), airG_.current(), ramp);
-    lowM_.setupRamp(Svf::Mode::LowShelf, lf, fs_, contourQ(contour_.current()), lowG_.current(), ramp);
-    airM_.setupRamp(Svf::Mode::Bell, af, fs_, std::exp(width_.current()), airG_.current(), ramp);
+    const double lf = std::exp(lowF_.current()), af = std::exp(airF_.current());
+    for (int c = 0; c < 2; ++c) {   // each channel's parts have their own tolerance (Unit B / C)
+        low_[static_cast<size_t>(c)].setupRamp(Svf::Mode::LowShelf, lf * Unit::freqMul(unit_, c, 0), fs_, contourQ(contour_.current()), lowG_.current(), ramp);
+        air_[static_cast<size_t>(c)].setupRamp(Svf::Mode::Bell, std::min(af * Unit::freqMul(unit_, c, 1), 0.45 * fs_), fs_, std::exp(width_.current()), airG_.current(), ramp);
+    }
+    lowM_.setupRamp(Svf::Mode::LowShelf, lf * Unit::freqMul(unit_, 0, 0), fs_, contourQ(contour_.current()), lowG_.current(), ramp);
+    airM_.setupRamp(Svf::Mode::Bell, std::min(af * Unit::freqMul(unit_, 0, 1), 0.45 * fs_), fs_, std::exp(width_.current()), airG_.current(), ramp);
 }
 
 void Processor::process(float** ch, int numCh, int n) {

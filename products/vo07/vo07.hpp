@@ -16,7 +16,7 @@
 
 namespace sw::vo07 {
 
-enum ParamId { Hpf, Deess, Breath, Body, Presence, Air, Comp, Level, Plate, Echo, Output, kNumParams };
+enum ParamId { Hpf, Deess, Breath, Body, Presence, Air, Comp, Level, Plate, Echo, Output, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

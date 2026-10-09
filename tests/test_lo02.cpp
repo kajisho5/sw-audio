@@ -23,7 +23,7 @@ Set with(Set a, Set b) { a.insert(a.end(), b.begin(), b.end()); return a; }
 TEST_CASE("LO02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"lo02.sub", "lo02.rangehz", "lo02.tune", "lo02.punch", "lo02.dry"};
+    const char* ids[] = {"lo02.sub", "lo02.rangehz", "lo02.tune", "lo02.punch", "lo02.dry", "lo02.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Sub].max == 10); CHECK(s[Sub].def == 0);
     CHECK(s[RangeHz].steps == std::vector<double>{30, 45, 60, 90}); CHECK(s[RangeHz].def == 45);

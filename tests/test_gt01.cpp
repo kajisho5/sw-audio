@@ -19,7 +19,7 @@ Set with(Set a, Set b) { a.insert(a.end(), b.begin(), b.end()); return a; }
 TEST_CASE("GT01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"gt01.channel", "gt01.gain", "gt01.bass", "gt01.middle", "gt01.treble", "gt01.presence", "gt01.master", "gt01.bright", "gt01.evo.on", "gt01.os"};
+    const char* ids[] = {"gt01.channel", "gt01.gain", "gt01.bass", "gt01.middle", "gt01.treble", "gt01.presence", "gt01.master", "gt01.bright", "gt01.evo.on", "gt01.os", "gt01.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Channel].labels == std::vector<std::string>{"Clean", "Crunch", "Lead"}); CHECK(s[Channel].def == 1);
     for (int i : {Gain, Bass, Middle, Treble, Presence, Master}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 5); }
@@ -122,7 +122,7 @@ TEST_CASE("GT01 the channels are independent") {
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x; the spec gives this amp 4x, so that is the default)
 TEST_CASE("GT01: the oversampling parameter is the last one, 1x / 2x / 4x, default 4x; the filters in the loops follow the rate") {
     const auto& s = specs();
-    CHECK(std::string(s[Oversample].id) == "gt01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(std::string(s[Oversample].id) == "gt01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 2);
     // the same amp at every setting: the level of a 1 kHz tone stays within 1 dB (the one-pole filters inside the loops are for the oversampled rate)
     double lv[3]; int k = 0;
     for (int os : {1, 2, 4}) { auto p = make(with(amp(1, 6, 5), {{Oversample, double(os)}})); const auto y = run(p, tone(-30, 1000, 1.0)); lv[k++] = at(y, 1000); }

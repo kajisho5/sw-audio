@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
             {"rv05.speakertilt", "Speaker tilt", 0, 10, 5,   Curve::Lin, 1, {}, ""},
             {"rv05.tone",        "Tone",         0, 100, 50, Curve::Lin, 1, {}, "%"},
             {"rv05.mix",         "Mix",          0, 100, 30, Curve::Lin, 1, {}, "%"},
+            unitSpec("rv05.unit"),
         };
         v[MicDistance].minLabel = "Near"; v[MicDistance].maxLabel = "Far"; v[Tone].minLabel = "Dark"; v[Tone].maxLabel = "Bright";
         return v;

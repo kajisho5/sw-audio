@@ -15,6 +15,7 @@ const std::vector<ParamSpec>& specs() {
             {"rv02.monoin",   "Mono in",   0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             {"rv02.sync",     "Pre-delay sync", 0, 4, 0, Curve::Step, 1, {0, 1, 2, 3, 4}, "", {"Off", "1/32", "1/16", "1/8", "1/4"}},
             {"rv02.evo.on",   "Duck",      0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("rv02.unit"),
         };
         v[Damping].minLabel = "Dark"; v[Damping].maxLabel = "Bright"; v[Width].minLabel = "Mono"; v[Width].maxLabel = "Wide";
         return v;

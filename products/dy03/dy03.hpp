@@ -11,7 +11,7 @@
 
 namespace sw::dy03 {
 
-enum ParamId { Threshold, Ratio, Attack, Release, Makeup, Mix, Knee, ScHpf, PunchKeep, kNumParams };
+enum ParamId { Threshold, Ratio, Attack, Release, Makeup, Mix, Knee, ScHpf, PunchKeep, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

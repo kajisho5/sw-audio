@@ -13,7 +13,7 @@
 
 namespace sw::dl03 {
 
-enum ParamId { Time, Feedback, ModDepth, ModRate, Grit, Mix, Sync, kNumParams };
+enum ParamId { Time, Feedback, ModDepth, ModRate, Grit, Mix, Sync, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 constexpr int kStages = 4096;

@@ -9,6 +9,7 @@ struct Sa04 {
     static constexpr int kOutputParam = sw::sa04::Output;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kUnitParam = sw::sa04::Unit;   // Unit A / B / C
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_DISTORTION, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.sa04", "SW SA04 Transformer", "SEVENTHWELL",

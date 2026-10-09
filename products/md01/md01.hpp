@@ -11,7 +11,7 @@
 
 namespace sw::md01 {
 
-enum ParamId { Mode, Rate, Depth, Width, Tone, Mix, kNumParams };
+enum ParamId { Mode, Rate, Depth, Width, Tone, Mix, Unit, kNumParams };
 enum ModeId { I = 0, II = 1, I_II = 2 };
 
 const std::vector<ParamSpec>& specs();

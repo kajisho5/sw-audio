@@ -67,7 +67,7 @@ TEST_CASE("CS01 pre: the iron saturates lows more than highs") {
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
 TEST_CASE("CS01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the iron stage follows it") {
     const auto& s = specs();
-    CHECK(std::string(s[Oversample].id) == "cs01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(std::string(s[Oversample].id) == "cs01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 2);
     auto alias = [](int os) { auto p = make({{Drive, 10}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
     const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
     INFO("15 kHz at Drive 10, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");

@@ -1,9 +1,10 @@
 // SW AUDIO core — common processing frame around a product core (spec 共通章 4「信号の流れ」, 5「共通機能」)
-//   input -> [dry tap, delayed by the core latency] -> core -> Auto gain -> Mix -> Output -> (Δ) -> In crossfade
+//   input -> [dry tap, delayed by the core latency] -> core -> Auto gain -> Unit tolerance (the wet only) -> Mix -> Output -> (Δ) -> In crossfade
 // Core interface: prepare(fs, maxBlock), process(float** ch, int numCh, int n) in place, latencySamples().
 #pragma once
 #include "sw/loudness.hpp"
 #include "sw/smooth.hpp"
+#include "sw/unit.hpp"
 #include <algorithm>
 #include <cmath>
 #include <type_traits>
@@ -43,14 +44,17 @@ public:
         inMix_.reset(fs, 10.0, in_ ? 1.0 : 0.0);
         deltaMix_.reset(fs, 10.0, delta_ ? 1.0 : 0.0);
         mix_.reset(fs, 20.0, mix_.target());
+        for (int c = 0; c < 2; ++c) unitG_[static_cast<size_t>(c)].reset(fs, 20.0, Unit::gainLin(unit_, c, Unit::kOutputSlot));
     }
 
     void setIn(bool on) { in_ = on; inMix_.setTarget(on ? 1.0 : 0.0); }
     void setDelta(bool on) { delta_ = on; deltaMix_.setTarget(on ? 1.0 : 0.0); }
     void setAutoGain(bool on) { autoGain_ = on; agc_.setTarget(on ? dbToGain(agcDb_) : 1.0); }
     void setOutputDb(double db) { out_.setTarget(dbToGain(db)); }
+    // Unit A / B / C (analog enclosures): the gain tolerance of the output stage, on the wet signal after Auto gain (so Auto gain does not take it back), a different one per channel
+    void setUnit(int unit) { unit_ = unit; for (int c = 0; c < 2; ++c) unitG_[static_cast<size_t>(c)].setTarget(Unit::gainLin(unit, c, Unit::kOutputSlot)); }
     void setMix(double fraction) { mix_.setTarget(std::clamp(fraction, 0.0, 1.0)); }  // product Mix (spec step 4)
-    void snap() { for (LinearSmoother* s : {&out_, &agc_, &inMix_, &deltaMix_, &mix_}) s->skip(1 << 30); }
+    void snap() { for (LinearSmoother* s : {&out_, &agc_, &inMix_, &deltaMix_, &mix_, &unitG_[0], &unitG_[1]}) s->skip(1 << 30); }
 
     Core& core() { return core_; }
     const Core& core() const { return core_; }
@@ -92,9 +96,11 @@ public:
             wetMeter_.process(wp, nch, seg);
             for (int k = i; k < i + seg; ++k) {
                 const double a = agc_.next(), o = out_.next(), dm = deltaMix_.next(), im = inMix_.next(), mx = mix_.next();
+                const double ug[2] = {unitG_[0].next(), unitG_[1].next()};
                 for (int c = 0; c < nch; ++c) {
                     const double d = dry_[static_cast<size_t>(c)][static_cast<size_t>(k)];
-                    const double w = mx >= 1.0 ? ch[c][k] * a : d + mx * (ch[c][k] * a - d);  // Auto gain, then Mix
+                    const double wet = unit_ == 0 && ug[c] == 1.0 ? ch[c][k] * a : ch[c][k] * a * ug[c];           // Auto gain, then the Unit tolerance (A: none)
+                    const double w = mx >= 1.0 ? wet : d + mx * (wet - d);  // Mix
                     double y = w * o;
                     if (dm > 0.0) y += dm * ((w - d) * o - y);       // Δ: changed part only
                     if (im <= 0.0) y = d;                            // In off: dry, bit exact
@@ -123,11 +129,11 @@ private:
 
     Core core_;
     double fs_ = 48000.0, agcDb_ = 0.0;
-    int nch_ = 2, lat_ = 0, dpos_ = 0, block_ = 4800, untilBlock_ = 4800;
+    int nch_ = 2, lat_ = 0, dpos_ = 0, block_ = 4800, untilBlock_ = 4800, unit_ = 0;
     bool in_ = true, delta_ = false, autoGain_ = false;
     std::vector<std::vector<float>> delay_, dry_;
     LoudnessMeter dryMeter_, wetMeter_;
-    LinearSmoother out_, agc_, inMix_, deltaMix_, mix_ = initialised(1.0);
+    LinearSmoother out_, agc_, inMix_, deltaMix_, mix_ = initialised(1.0), unitG_[2] = {initialised(1.0), initialised(1.0)};
     static LinearSmoother initialised(double v) { LinearSmoother s; s.reset(48000.0, 20.0, v); return s; }
 };
 

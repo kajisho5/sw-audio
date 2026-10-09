@@ -10,7 +10,7 @@
 
 namespace sw::st06 {
 
-enum ParamId { Frequency, Slope, SideBoost, Output, Listen, kNumParams };
+enum ParamId { Frequency, Slope, SideBoost, Output, Listen, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

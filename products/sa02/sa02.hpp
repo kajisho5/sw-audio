@@ -8,6 +8,7 @@
 #include "sw/shaper.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -15,7 +16,7 @@
 
 namespace sw::sa02 {
 
-enum ParamId { Color, Drive, Crosstalk, Noise, Width, Output, Group, Oversample, kNumParams };
+enum ParamId { Color, Drive, Crosstalk, Noise, Width, Output, Group, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -55,6 +56,7 @@ private:
     std::array<Tone, 2> tone_{};
     // per-instance deviation (from the seed)
     std::array<double, 2> devGain_{}, devDrive_{};
+    int unit_ = 0;   // Unit A / B / C (sw/unit.hpp): a fixed set of tolerances on top of the instance's own spread - slots 0 shelf, 1 bump, 2 low-pass; the saturation
     double devNoise_ = 0;
     int seed_ = 0;
     Slot slot_;

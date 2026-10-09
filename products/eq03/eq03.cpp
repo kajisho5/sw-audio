@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"eq03.out",         "Output",   -10, 10, 0,      Curve::Lin,  1, {}, "dB"},
             {"eq03.evo.on",      "Ride",     0, 1, 0,         Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             oversampleSpec("eq03.os"),
+            unitSpec("eq03.unit"),
         };
         v[Width].reversed = true;  // Narrow (Q 2.5) ... Wide (Q 0.6)
         return v;
@@ -53,6 +54,7 @@ void Processor::setParam(int id, double v) {
         case Width: width_.setTarget(std::log(v)); break;
         case Drive: drive_.set(v); break;
         case Oversample: drive_.setOversample(static_cast<int>(v)); break;
+        case Unit: unit_ = static_cast<int>(v); applyUnit(); update(static_cast<int>(0.02 * fs_)); break;   // the coefficients move over 20 ms
         default: break;  // Output: sw::Shell, Ride: per sample
     }
 }
@@ -63,10 +65,14 @@ void Processor::snapToTargets() {
     update(0);
 }
 
+void Processor::applyUnit() { for (int c = 0; c < 2; ++c) drive_.setOnsetDb(c, Unit::satDb(unit_, c, 0)); }
+
 void Processor::update(int ramp) {
     const double q = std::exp(width_.current());
-    for (auto& f : dip_) f.setupRamp(Svf::Mode::Bell, std::exp(dipF_.current()), fs_, q, dipG_.current(), ramp);
-    for (auto& f : peak_) f.setupRamp(Svf::Mode::Bell, std::exp(peakF_.current()), fs_, q, peakG_.current() * rideMul_, ramp);
+    for (int c = 0; c < 2; ++c) {   // each channel's parts have their own tolerance (Unit B / C)
+        dip_[static_cast<size_t>(c)].setupRamp(Svf::Mode::Bell, std::exp(dipF_.current()) * Unit::freqMul(unit_, c, 0), fs_, q, dipG_.current(), ramp);
+        peak_[static_cast<size_t>(c)].setupRamp(Svf::Mode::Bell, std::exp(peakF_.current()) * Unit::freqMul(unit_, c, 1), fs_, q, peakG_.current() * rideMul_, ramp);
+    }
 }
 
 void Processor::process(float** ch, int numCh, int n) {

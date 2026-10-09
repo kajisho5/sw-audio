@@ -5,12 +5,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::eq09 {
 
-enum ParamId { Tilt, PivotHz, LowLift, Air, Output, AutoPivot, kNumParams };
+enum ParamId { Tilt, PivotHz, LowLift, Air, Output, AutoPivot, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -26,6 +27,7 @@ public:
 
 private:
     void update(int ramp);
+    int unit_ = 0;             // Unit A / B / C (sw/unit.hpp): slots 0 the tilt pivot, 1 the low shelf, 2 the air shelf
     double fs_ = 48000.0, pivot_ = 1000.0, ex_ = 0, ed_ = 0, prev_[2] = {0, 0}, avgCoef_ = 0, glideCoef_ = 0;
     std::array<double, kNumParams> target_{};
     LinearSmoother tilt_, low_, air_;

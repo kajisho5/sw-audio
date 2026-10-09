@@ -30,7 +30,7 @@ double harmDb(const std::vector<float>& y, double f, int k) { return 20 * std::l
 TEST_CASE("DY01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"dy01.drive", "dy01.ratio", "dy01.speed", "dy01.bite", "dy01.color", "dy01.out", "dy01.mix", "dy01.schpf", "dy01.os"};
+    const char* ids[] = {"dy01.drive", "dy01.ratio", "dy01.speed", "dy01.bite", "dy01.color", "dy01.out", "dy01.mix", "dy01.schpf", "dy01.os", "dy01.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Drive].min == 0); CHECK(s[Drive].max == 10); CHECK(s[Drive].def == 0);
     CHECK(s[Ratio].min == 2); CHECK(s[Ratio].max == 20); CHECK(s[Ratio].def == 4); CHECK(s[Ratio].curve == Curve::Log);
@@ -123,7 +123,7 @@ TEST_CASE("DY01 stays finite and silent for silence and extreme input") {
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x; the spec recommends 4x for Crush)
 TEST_CASE("DY01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the colour stage follows it (Crush runs at 4x unless the setting is 1x)") {
     const auto& s = specs();
-    CHECK(std::string(s[Oversample].id) == "dy01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(std::string(s[Oversample].id) == "dy01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 2);
     auto alias = [](int color, int os) { auto p = make({{Drive, 4}, {Color, double(color)}, {Mix, 100}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
     const double c1 = alias(0, 1), c2 = alias(0, 2), c4 = alias(0, 4);
     INFO("Clean, 15 kHz, alias at 3 kHz: 1x " << c1 << " dB, 2x " << c2 << " dB, 4x " << c4 << " dB");

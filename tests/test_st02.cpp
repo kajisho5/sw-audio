@@ -15,7 +15,7 @@ double level(Processor& p, double f, bool side) { auto t = tone(f, side); const 
 TEST_CASE("ST02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"st02.midlevel", "st02.sidelevel", "st02.sidehpf", "st02.sideair", "st02.midlow", "st02.encode"};
+    const char* ids[] = {"st02.midlevel", "st02.sidelevel", "st02.sidehpf", "st02.sideair", "st02.midlow", "st02.encode", "st02.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[MidLevel].min == -12); CHECK(s[MidLevel].max == 12); CHECK(s[SideLevel].min == -12); CHECK(s[SideLevel].max == 12);
     CHECK(s[SideHpf].min == 20); CHECK(s[SideHpf].max == 500); CHECK(s[SideHpf].curve == Curve::Log); CHECK(std::string(s[SideHpf].minLabel) == "Off");

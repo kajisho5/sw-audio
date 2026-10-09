@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq06.drive",     "Drive",     0, 10, 2,          Curve::Lin,  1, {}, ""},
         {"eq06.out",       "Output",    -10, 10, 0,        Curve::Lin,  1, {}, "dB"},
         oversampleSpec("eq06.os"),
+            unitSpec("eq06.unit"),
     };
     return s;
 }
@@ -52,6 +53,7 @@ void Processor::setParam(int id, double v) {
         case Shape: shelf_.setTarget(v); break;
         case Drive: drive_.setTarget(v * 1.8); break;
         case Oversample: for (auto& c : ch_) c.os.setFactor(static_cast<int>(v)); break;
+        case Unit: unit_ = static_cast<int>(v); update(static_cast<int>(0.02 * fs_)); break;   // the coefficients move over 20 ms
         default: break;  // Output: sw::Shell
     }
 }
@@ -64,12 +66,15 @@ void Processor::snapToTargets() {
 void Processor::update(int ramp) {
     const double lf = std::exp(lowF_.current()), mf = std::exp(midF_.current()), hf = std::exp(highF_.current());
     const double lg = lowG_.current(), mg = midG_.current(), hg = highG_.current();
-    for (auto& c : ch_) {
-        c.lowPk.setupRamp(Svf::Mode::Bell, lf, fs_, propQ(lg), lg, ramp);
-        c.lowSh.setupRamp(Svf::Mode::LowShelf, lf, fs_, 0.70710678, lg, ramp);
-        c.mid.setupRamp(Svf::Mode::Bell, mf, fs_, propQ(mg), mg, ramp);
-        c.highPk.setupRamp(Svf::Mode::Bell, hf, fs_, propQ(hg), hg, ramp);
-        c.highSh.setupRamp(Svf::Mode::HighShelf, hf, fs_, 0.70710678, hg, ramp);
+    for (int k = 0; k < 2; ++k) {   // each channel's parts have their own tolerance (Unit B / C)
+        Ch& c = ch_[static_cast<size_t>(k)];
+        const double lfk = lf * Unit::freqMul(unit_, k, 0), mfk = mf * Unit::freqMul(unit_, k, 1), hfk = std::min(hf * Unit::freqMul(unit_, k, 2), 0.45 * fs_);
+        c.lowPk.setupRamp(Svf::Mode::Bell, lfk, fs_, propQ(lg), lg, ramp);
+        c.lowSh.setupRamp(Svf::Mode::LowShelf, lfk, fs_, 0.70710678, lg, ramp);
+        c.mid.setupRamp(Svf::Mode::Bell, mfk, fs_, propQ(mg), mg, ramp);
+        c.highPk.setupRamp(Svf::Mode::Bell, hfk, fs_, propQ(hg), hg, ramp);
+        c.highSh.setupRamp(Svf::Mode::HighShelf, hfk, fs_, 0.70710678, hg, ramp);
+        c.onset = std::pow(10.0, Unit::satDb(unit_, k, 0) / 20.0);
     }
     sat_.setHeadroom(2.0);  // +6 dBFS, same as every analog output stage (README)
     sat_.setDriveDb(drive_.current());
@@ -92,7 +97,7 @@ void Processor::process(float** chans, int numCh, int n) {
                 x = s.mid.process(x);
                 const double hp = s.highPk.process(x), hs = s.highSh.process(x);
                 x = hp + sh * (hs - hp);
-                double y = s.os.process(x, [&](double u) { return sat_.process(u); });
+                double y = s.os.process(x, [&](double u) { return sat_.process(u, s.onset); });
                 if (std::abs(y) < 1e-30) y = 0.0;
                 chans[c][i] = static_cast<float>(y);
             }

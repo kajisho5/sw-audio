@@ -3,6 +3,7 @@
 //   using Core = ...;                                   // prepare / setParam / snapToTargets / process / latencySamples
 //   static const std::vector<sw::ParamSpec>& specs();   // product parameter table (spec order, never reordered)
 //   static constexpr int kOutputParam, kInParam, kMixParam; // routed to the shell (-1 if absent)
+//   optional: static constexpr int kUnitParam;              // Unit A / B / C: the shell applies the output stage's gain tolerance
 // Optional on Core: void setTempo(double bpm) — receives the host tempo when the transport provides it.
 // Optional on Core: void setPlayhead(double seconds, bool playing) — every block; seconds is -1 when the host gives no time.
 // Optional on Core: void setTransport(bool playing, double beatsToNextBar) — every block; beatsToNextBar is -1 when the host gives no bar position.
@@ -84,6 +85,9 @@ template <class P> struct HasTrackInfo<P, std::void_t<decltype(P::trackInfo(std:
 // kind 0 note off (d1 key, d2 velocity 0..127), 1 note on (a note on with velocity 0 arrives as a note off), 2 control change (d1 controller, d2 value), 3 a system real-time byte (d1 = 0xF8 clock ...)
 template <class P, class = void> struct HasMidi : std::false_type {};
 template <class P> struct HasMidi<P, std::void_t<decltype(P::midi(std::declval<typename P::Core&>(), 0, 0, 0, 0))>> : std::true_type {};
+// optional trait: static constexpr int kUnitParam: the product's Unit A / B / C parameter (the shell applies the gain tolerance of the output stage; the core reads its own copy for the rest)
+template <class P, class = void> struct UnitParamOf : std::integral_constant<int, -1> {};
+template <class P> struct UnitParamOf<P, std::void_t<decltype(P::kUnitParam)>> : std::integral_constant<int, P::kUnitParam> {};
 template <class P, class = void> struct GuiCallOnGuiThread : std::false_type {};
 template <class P> struct GuiCallOnGuiThread<P, std::void_t<decltype(P::kGuiCallOnGuiThread)>> : std::bool_constant<P::kGuiCallOnGuiThread> {};
 
@@ -155,6 +159,7 @@ private:
         if (id == P::kOutputParam) shell_.setOutputDb(plain);
         else if (id == P::kInParam) shell_.setIn(plain > 0.5);
         else if (id == P::kMixParam) shell_.setMix(plain / 100.0);  // Mix is in percent
+        else if (id == UnitParamOf<P>::value) shell_.setUnit(static_cast<int>(plain + 0.5));
         else if (id == autoGainId()) shell_.setAutoGain(plain > 0.5);
         else if (kHasDelta && id == deltaId()) shell_.setDelta(plain > 0.5);
         else if (kHasBypass && id == bypassId()) shell_.setIn(plain < 0.5);   // Bypass On = the product is out (10 ms crossfade, the delay stays)

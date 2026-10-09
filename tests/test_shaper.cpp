@@ -48,3 +48,19 @@ TEST_CASE("BiasShaper: changing the oversampling while running is clean") {
     const int seq[] = {2, 1, 4, 2, 1, 4, 1, 2}; int n = 0;
     for (int os : seq) { s.setOversample(os); for (int i = 0; i < 2400; ++i, ++n) { const double v = s.process(0, 0.5 * std::sin(2 * kPi * 1000.0 * n / kFs), 6.0, 0.3); REQUIRE(std::isfinite(v)); REQUIRE(std::abs(v) < 4.0); } }
 }
+
+// Unit A / B / C: where the saturation sets in, per channel (+-0.5 dB on the drive gain)
+TEST_CASE("BiasShaper: the saturation onset of a channel moves by its dB and leaves the small-signal gain alone") {
+    auto runCh = [](double db0, double db1, int ch) {
+        BiasShaper2x s; s.prepare(kFs); s.setOnsetDb(0, db0); s.setOnsetDb(1, db1); const auto x = sine(-10, 2, 1000); std::vector<float> y(x.size());
+        for (size_t i = 0; i < x.size(); ++i) y[i] = static_cast<float>(s.process(ch, x[i], 4.0, 0.3));
+        return y;
+    };
+    const double h0 = harmDb(runCh(0, 0, 0), 1000, 3), hUp = harmDb(runCh(0.5, 0, 0), 1000, 3), hDown = harmDb(runCh(-0.5, 0, 0), 1000, 3);
+    INFO("3rd harmonic: -0.5 dB " << hDown << ", 0 dB " << h0 << ", +0.5 dB " << hUp);
+    CHECK(hUp > h0 + 0.3); CHECK(hDown < h0 - 0.3);
+    CHECK(runCh(0, 0, 0) == run1(4.0, 0.3, -10));
+    CHECK(runCh(0.5, -0.5, 1) == runCh(0, -0.5, 1));
+    auto small = [&](double db) { BiasShaper2x s; s.prepare(kFs); s.setOnsetDb(0, db); const auto x = sine(-60, 2, 1000); std::vector<float> y(x.size()); for (size_t i = 0; i < x.size(); ++i) y[i] = static_cast<float>(s.process(0, x[i], 4.0, 0.3)); return rmsDb(y) - -60.0; };
+    NEAR(small(0.5), 0.0, 0.1); NEAR(small(-0.5), 0.0, 0.1);
+}

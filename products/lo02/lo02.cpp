@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
             {"lo02.tune",    "Tune",     -12, 12, 0,   Curve::Lin, 1, {}, "st"},
             {"lo02.punch",   "Punch",    0, 10, 0,     Curve::Lin, 1, {}, ""},
             {"lo02.dry",     "Dry",      0, 100, 100,  Curve::Lin, 1, {}, "%"},
+            unitSpec("lo02.unit"),
         };
         v[Dry].minLabel = "Off"; v[Dry].maxLabel = "Full";
         return v;

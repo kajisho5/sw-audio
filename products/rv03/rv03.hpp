@@ -11,7 +11,7 @@
 
 namespace sw::rv03 {
 
-enum ParamId { Springs, Dwell, Tone, Tension, Drip, Mix, kNumParams };
+enum ParamId { Springs, Dwell, Tone, Tension, Drip, Mix, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

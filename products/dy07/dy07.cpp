@@ -13,6 +13,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy07.snap"    ,  "Snap",      -6, 6, 0,    Curve::Lin,  1, {}, "dB"},
             {"dy07.mix",       "Mix",       0, 100, 100, Curve::Lin,  1, {}, "%"},
             {"dy07.knee",      "Knee",      0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Soft knee", "Hard knee"}},
+            unitSpec("dy07.unit"),
         };
         v[Compress].maxLabel = "inf";
         v[Compress].maxLabelNorm = 0.95;  // spec: rightmost 5 % is infinity

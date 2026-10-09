@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"dy12.tone",    "Tone",    -6, 6, 0,     Curve::Lin,  1, {}, "dB"},
         {"dy12.speed",   "Speed",   0, 3, 3,      Curve::Step, 1, {0, 1, 2, 3}, "", {"Fast", "Med", "Slow", "Auto"}},
         {"dy12.out",     "Output",  -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
+            unitSpec("dy12.unit"),
     };
     return s;
 }

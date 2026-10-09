@@ -11,6 +11,7 @@ const std::vector<ParamSpec>& specs() {
         {"vo02.humanize", "Humanize", 0, 10, 3,  Curve::Lin, 1, {}, ""},
         {"vo02.formant",  "Formant",  -3, 3, 0,  Curve::Lin, 1, {}, "st"},
         {"vo02.mix",      "Mix",      0, 100, 100, Curve::Lin, 1, {}, "%"},
+            unitSpec("vo02.unit"),
     };
     return s;
 }

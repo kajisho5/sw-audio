@@ -10,6 +10,7 @@ const std::vector<ParamSpec>& specs() {
         {"st06.sideboost", "Side boost", -6, 6, 0, Curve::Lin, 1, {}, "dB"},
         {"st06.output",    "Output",     -10, 10, 0, Curve::Lin, 1, {}, "dB"},
         {"st06.listen",    "Listen",     0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}, nullptr, nullptr, 1.0, false},
+            unitSpec("st06.unit"),
     };
     return s;
 }

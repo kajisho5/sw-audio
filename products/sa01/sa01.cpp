@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa01.output",     "Output",     -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa01.repro",      "Repro",      0, 1, 1,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             oversampleSpec("sa01.os"),
+            unitSpec("sa01.unit"),
         };
         v[Hiss].minLabel = "Off"; v[Hiss].maxLabel = "Max";
         return v;
@@ -63,9 +64,10 @@ void Processor::prepare(double sampleRate, int) {
 void Processor::updateTone() {
     const int sp = target_[Speed] < 11.0 ? 0 : target_[Speed] < 22.0 ? 1 : 2;
     const bool on = target_[Repro] > 0.5;
-    for (auto& t : tone_) {
-        t.bump.setup(Svf::Mode::Bell, kBumpHz[sp], fs_, 1.0, on ? kBumpDb[sp] : 0.0);
-        t.loss.setup(Svf::Mode::LowPass, std::min(kLossHz[sp], fs_ * 0.45), fs_, 0.70710678, 0);
+    for (int k = 0; k < 2; ++k) {   // each channel's head has its own tolerance (Unit B / C)
+        auto& t = tone_[static_cast<size_t>(k)];
+        t.bump.setup(Svf::Mode::Bell, kBumpHz[sp] * Unit::freqMul(unit_, k, 0), fs_, 1.0, on ? kBumpDb[sp] : 0.0);
+        t.loss.setup(Svf::Mode::LowPass, std::min(kLossHz[sp] * Unit::freqMul(unit_, k, 1), fs_ * 0.45), fs_, 0.70710678, 0);
     }
 }
 
@@ -82,6 +84,11 @@ void Processor::setParam(int id, double v) {
     else if (id == Output) out_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Speed || id == Repro) updateTone();
     else if (id == Oversample) applyOversample();
+    else if (id == Unit) {
+        unit_ = static_cast<int>(v);
+        for (int k = 0; k < 2; ++k) onset_[static_cast<size_t>(k)] = std::pow(10.0, Unit::satDb(unit_, k, 0) / 20.0);
+        updateTone();
+    }
 }
 
 void Processor::startCalibrate() { calLeft_ = static_cast<long>(5.0 * fs_); calSum_ = 0; calCount_ = 0; calPending_ = false; }
@@ -130,11 +137,12 @@ void Processor::process(float** ch, int numCh, int n) {
             // simplified hysteresis: the field is passed through a backlash (play operator) whose width grows with the recent level
             // (small signals see none: the bias linearises them), then through the anhysteretic curve M = tanh(g p) / g; as many samples as the oversampling setting says (2x by default)
             double& z = zOs_[static_cast<size_t>(c)]; double& env = envOs_[static_cast<size_t>(c)];
+            const double gk = g * onset_[static_cast<size_t>(c)];
             const double sat1 = os_[static_cast<size_t>(c)].process(ch[c][i] * gi / ref, [&](double u) {
                 env = std::max(std::abs(u), envC_ * env);
                 const double w = widthScale * kCoerc * env * env / (1.0 + env * env);   // grows with the square of the recent level: nothing for small signals
                 if (u > z + w) z = u - w; else if (u < z - w) z = u + w;
-                return std::tanh(g * z) / g;
+                return std::tanh(gk * z) / gk;
             }) * ref;
             auto& r = ring_[static_cast<size_t>(c)];
             r[static_cast<size_t>(pos_)] = static_cast<float>(sat1);

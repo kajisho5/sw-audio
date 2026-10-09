@@ -13,7 +13,7 @@
 
 namespace sw::gt05 {
 
-enum ParamId { Level, Impedance, Cable, Pickup, Output, PickupSwap, kNumParams };
+enum ParamId { Level, Impedance, Cable, Pickup, Output, PickupSwap, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

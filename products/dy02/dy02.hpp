@@ -12,7 +12,7 @@
 
 namespace sw::dy02 {
 
-enum ParamId { Level, Output, Speed, Target, Emphasis, Mix, Ride, AutoMakeup, kNumParams };
+enum ParamId { Level, Output, Speed, Target, Emphasis, Mix, Ride, AutoMakeup, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

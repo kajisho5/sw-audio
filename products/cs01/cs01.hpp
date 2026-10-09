@@ -8,12 +8,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::cs01 {
 
-enum ParamId { Drive, Hpf, High, MidFreq, Mid, Low, Thresh, Ratio, Release, Order, Mix, Output, Link, Oversample, kNumParams };
+enum ParamId { Drive, Hpf, High, MidFreq, Mid, Low, Thresh, Ratio, Release, Order, Mix, Output, Link, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -32,6 +33,8 @@ private:
     struct Chain { std::array<Eq, 2> eq{}; Comp comp; };
     void updateEq(int ramp);
     void updateSplit();
+    int unit_ = 0;                          // Unit A / B / C (sw/unit.hpp): slots 0 high-pass, 1 low, 2 mid, 3 high, and the iron
+    std::array<double, 2> onset_{1.0, 1.0};   // where the iron saturates, per channel (a factor on the drive gain)
     double eqSample(Eq& e, double x, double hpOn);
     void compSample(Comp& c, double* x, int nch);
     void runChain(Chain& ch, bool eqFirst, double* x, int nch, double hpOn);

@@ -13,7 +13,7 @@
 
 namespace sw::rv05 {
 
-enum ParamId { Room, Decay, MicDistance, Tilt, Tone, Mix, kNumParams };
+enum ParamId { Room, Decay, MicDistance, Tilt, Tone, Mix, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

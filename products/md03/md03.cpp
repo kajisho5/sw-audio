@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
         {"md03.mix",      "Mix",      0, 100, 50,    Curve::Lin, 1, {}, "%"},
         {"md03.sync",     "Sync",     0, 1, 0,       Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"md03.evo.on",   "Note follow", 0, 1, 0,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("md03.unit"),
     };
     return s;
 }

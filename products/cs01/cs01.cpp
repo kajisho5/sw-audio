@@ -20,6 +20,7 @@ const std::vector<ParamSpec>& specs() {
         {"cs01.out",          "Output",  -10, 10, 0,      Curve::Lin,  1, {}, "dB"},
         {"cs01.link",         "Link",    0, 1, 1,         Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         oversampleSpec("cs01.os"),
+            unitSpec("cs01.unit"),
     };
     return s;
 }
@@ -66,6 +67,11 @@ void Processor::setParam(int id, double v) {
         case Order: order_.setTarget(v); break;
         case Mix: mix_.setTarget(v / 100.0); break;
         case Oversample: for (auto& o : os_) o.setFactor(static_cast<int>(v)); updateSplit(); break;
+        case Unit:
+            unit_ = static_cast<int>(v);
+            for (int k = 0; k < 2; ++k) onset_[static_cast<size_t>(k)] = std::pow(10.0, Unit::satDb(unit_, k, 0) / 20.0);
+            updateEq(static_cast<int>(0.02 * fs_));   // the coefficients move over 20 ms
+            break;
         default: break;  // Output: sw::Shell, Link: per sample
     }
 }
@@ -79,12 +85,13 @@ void Processor::snapToTargets() {
 void Processor::updateEq(int ramp) {  // EQ04 circuit: HPF 18 dB/oct, 60 Hz shelf (Q 1.0 bump), mid bell Q 0.9, 12 kHz shelf
     const double hf = std::exp(hpfF_.current() > 0 ? hpfF_.current() : std::log(50.0));
     for (auto& c : chain_)
-        for (auto& e : c.eq) {
-            e.hp1.setupRamp(OnePole::Mode::HighPass, hf, fs_, ramp);
-            e.hp2.setupRamp(Svf::Mode::HighPass, hf, fs_, 1.0, 0, ramp);
-            e.low.setupRamp(Svf::Mode::LowShelf, 60.0, fs_, 1.0, low_.current(), ramp);
-            e.mid.setupRamp(Svf::Mode::Bell, std::exp(midF_.current()), fs_, 0.9, mid_.current(), ramp);
-            e.high.setupRamp(Svf::Mode::HighShelf, std::min(12000.0, 0.45 * fs_), fs_, 0.70710678, high_.current(), ramp);
+        for (int k = 0; k < 2; ++k) {   // each channel's parts have their own tolerance (Unit B / C)
+            Eq& e = c.eq[static_cast<size_t>(k)];
+            e.hp1.setupRamp(OnePole::Mode::HighPass, hf * Unit::freqMul(unit_, k, 0), fs_, ramp);
+            e.hp2.setupRamp(Svf::Mode::HighPass, hf * Unit::freqMul(unit_, k, 0), fs_, 1.0, 0, ramp);
+            e.low.setupRamp(Svf::Mode::LowShelf, 60.0 * Unit::freqMul(unit_, k, 1), fs_, 1.0, low_.current(), ramp);
+            e.mid.setupRamp(Svf::Mode::Bell, std::exp(midF_.current()) * Unit::freqMul(unit_, k, 2), fs_, 0.9, mid_.current(), ramp);
+            e.high.setupRamp(Svf::Mode::HighShelf, std::min(12000.0 * Unit::freqMul(unit_, k, 3), 0.45 * fs_), fs_, 0.70710678, high_.current(), ramp);
         }
 }
 
@@ -133,7 +140,8 @@ void Processor::process(float** ch, int numCh, int n) {
                 OnePole& split = split_[static_cast<size_t>(k)];
                 x[k] = os_[static_cast<size_t>(k)].process(ch[k][i], [&](double u) {
                     const double lo = split.process(u);
-                    return ironStage(lo, g) + ironStage(u - lo, g * kIronHighShare + (1.0 - kIronHighShare));
+                    const double gk = g * onset_[static_cast<size_t>(k)];
+                    return ironStage(lo, gk) + ironStage(u - lo, gk * kIronHighShare + (1.0 - kIronHighShare));
                 });
             }
             double a[2] = {x[0], x[1]}, b[2] = {x[0], x[1]};

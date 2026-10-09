@@ -13,7 +13,7 @@
 
 namespace sw::dl01 {
 
-enum ParamId { Mode, Time, Feedback, Hpf, Lpf, Depth, Rate, Duck, Mix, Sync, PingPong, kNumParams };
+enum ParamId { Mode, Time, Feedback, Hpf, Lpf, Depth, Rate, Duck, Mix, Sync, PingPong, Unit, kNumParams };
 enum ModeId { Tape = 0, Analog = 1, Digital = 2 };
 
 const std::vector<ParamSpec>& specs();

@@ -12,7 +12,7 @@
 
 namespace sw::vo02 {
 
-enum ParamId { Key, Scale, Speed, Humanize, Formant, Mix, kNumParams };
+enum ParamId { Key, Scale, Speed, Humanize, Formant, Mix, Unit, kNumParams };
 enum ScaleId { Maj = 0, Min = 1, Chr = 2 };
 
 const std::vector<ParamSpec>& specs();

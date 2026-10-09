@@ -7,12 +7,13 @@
 #include "sw/shaper.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::sa04 {
 
-enum ParamId { Iron, Gain, Load, LowWeight, TopAir, Output, Pad, Oversample, kNumParams };
+enum ParamId { Iron, Gain, Load, LowWeight, TopAir, Output, Pad, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -32,6 +33,8 @@ private:
     LinearSmoother gain_;
     BiasShaper2x lo_, hi_;
     std::array<double, 2> lp_{};
+    int unit_ = 0;   // Unit A / B / C (sw/unit.hpp): slots 0 weight, 1 air, 2 high-pass, 3 loss, 4 resonance, and the two shapers
+    void applyUnit();
     struct Ch { Svf weight, air, hp, lfLoss, res; };
     std::array<Ch, 2> f_{};
 };

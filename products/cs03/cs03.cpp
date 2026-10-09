@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
         {"cs03.comp.knee",   "Knee",      0, 1, 1,     Curve::Step, 1, {0, 1}, "", {"Hard", "Soft"}},
         {"cs03.out",         "Output",    -10, 10, 0,  Curve::Lin,  1, {}, "dB"},
         oversampleSpec("cs03.os"),
+            unitSpec("cs03.unit"),
     };
     return s;
 }
@@ -64,6 +65,11 @@ void Processor::setParam(int id, double v) {
         case High: high_.setTarget(v); break;
         case Thresh: case Ratio: case Knee: gc_.set(-4.0 * target_[Thresh], target_[Ratio], target_[Knee] > 0.5 ? 6.0 : 0.0); break;
         case Oversample: for (auto& ch : ch_) ch.os.setFactor(static_cast<int>(v)); updateSplit(); break;
+        case Unit:
+            unit_ = static_cast<int>(v);
+            for (int k = 0; k < 2; ++k) onset_[static_cast<size_t>(k)] = std::pow(10.0, sw::Unit::satDb(unit_, k, 0) / 20.0);
+            updateEq(static_cast<int>(0.02 * fs_));   // the coefficients move over 20 ms
+            break;
         default: break;  // Output: sw::Shell
     }
 }
@@ -75,10 +81,11 @@ void Processor::snapToTargets() {
 }
 
 void Processor::updateEq(int ramp) {
-    for (auto& c : ch_) {
-        c.low.setupRamp(Svf::Mode::LowShelf, 100.0, fs_, 0.70710678, low_.current(), ramp);
-        c.mid.setupRamp(Svf::Mode::Bell, 1500.0, fs_, propQ(mid_.current()), mid_.current(), ramp);
-        c.high.setupRamp(Svf::Mode::HighShelf, std::min(10000.0, 0.45 * fs_), fs_, 0.70710678, high_.current(), ramp);
+    for (int k = 0; k < 2; ++k) {   // each channel's parts have their own tolerance (Unit B / C)
+        Ch& c = ch_[static_cast<size_t>(k)];
+        c.low.setupRamp(Svf::Mode::LowShelf, 100.0 * Unit::freqMul(unit_, k, 0), fs_, 0.70710678, low_.current(), ramp);
+        c.mid.setupRamp(Svf::Mode::Bell, 1500.0 * Unit::freqMul(unit_, k, 1), fs_, propQ(mid_.current()), mid_.current(), ramp);
+        c.high.setupRamp(Svf::Mode::HighShelf, std::min(10000.0 * Unit::freqMul(unit_, k, 2), 0.45 * fs_), fs_, 0.70710678, high_.current(), ramp);
     }
 }
 
@@ -94,11 +101,12 @@ void Processor::process(float** chans, int numCh, int n) {
             double x[2] = {0, 0}, level = 0;
             for (int k = 0; k < nch; ++k) {
                 Ch& c = ch_[static_cast<size_t>(k)];
-                double y = c.os.process(chans[k][i] * g, [&](double u) {  // transformer: lows saturate first; Hi Z adds asymmetry (even harmonics)
+                const double ok = onset_[static_cast<size_t>(k)];
+                double y = c.os.process(chans[k][i] * g * ok, [&](double u) {  // transformer: lows saturate first; Hi Z adds asymmetry (even harmonics)
                     const double v = u + hz * kHiZEven * u * u / kHeadroom;
                     const double lo = c.split.process(v);
                     return tf(lo, kLowHeadroom) + tf(v - lo, kHeadroom);
-                });
+                }) / ok;
                 if (hz > 0.0) y = c.dc.process(y) * hz + y * (1.0 - hz);  // the asymmetry's DC is removed on Hi Z
                 if (hz > 0.0) y = y + hz * (c.load.process(y) - y);       // instrument load on the top end
                 y = c.high.process(c.mid.process(c.low.process(y)));

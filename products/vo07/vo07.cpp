@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
         {"vo07.plate",    "Plate",    0, 10, 0,     Curve::Lin, 1, {}, ""},
         {"vo07.echo",     "Echo",     0, 10, 0,     Curve::Lin, 1, {}, ""},
         {"vo07.out",      "Output",   -10, 10, 0,   Curve::Lin, 1, {}, "dB"},
+            unitSpec("vo07.unit"),
     };
     return s;
 }

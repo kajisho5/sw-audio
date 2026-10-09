@@ -27,7 +27,7 @@ double recoveryMs(Processor& p, double frac) {
 TEST_CASE("DY02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"dy02.level", "dy02.out", "dy02.speed", "dy02.target", "dy02.emph", "dy02.mix", "dy02.evo.on", "dy02.automakeup"};
+    const char* ids[] = {"dy02.level", "dy02.out", "dy02.speed", "dy02.target", "dy02.emph", "dy02.mix", "dy02.evo.on", "dy02.automakeup", "dy02.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Level].min == 0); CHECK(s[Level].max == 10); CHECK(s[Level].def == 0);
     CHECK(s[Output].min == -12); CHECK(s[Output].max == 24); CHECK(s[Output].def == 0);

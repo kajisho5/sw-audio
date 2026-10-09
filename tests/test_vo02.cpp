@@ -19,7 +19,7 @@ double meanSemis(const std::vector<double>& t, size_t a, size_t b) { double s = 
 TEST_CASE("VO02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"vo02.key", "vo02.scale", "vo02.speed", "vo02.humanize", "vo02.formant", "vo02.mix"};
+    const char* ids[] = {"vo02.key", "vo02.scale", "vo02.speed", "vo02.humanize", "vo02.formant", "vo02.mix", "vo02.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Key].labels.size() == 12); CHECK(s[Key].def == 0);
     CHECK(s[Scale].labels == std::vector<std::string>{"Maj", "Min", "Chr"}); CHECK(s[Scale].def == 0);

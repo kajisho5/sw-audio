@@ -13,7 +13,7 @@ void go(Processor& p, std::vector<float>& l, std::vector<float>& r) { for (size_
 TEST_CASE("MD01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"md01.mode", "md01.rate", "md01.depth", "md01.width", "md01.tone", "md01.mix"};
+    const char* ids[] = {"md01.mode", "md01.rate", "md01.depth", "md01.width", "md01.tone", "md01.mix", "md01.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Mode].labels == std::vector<std::string>{"I", "II", "I+II"}); CHECK(s[Mode].def == 1);
     CHECK(s[Rate].min == 0.1); CHECK(s[Rate].max == 5); CHECK(s[Rate].def == 0.5); CHECK(s[Rate].curve == Curve::Log);

@@ -9,12 +9,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::gt01 {
 
-enum ParamId { Channel, Gain, Bass, Middle, Treble, Presence, Master, Bright, VolumeMatch, Oversample, kNumParams };
+enum ParamId { Channel, Gain, Bass, Middle, Treble, Presence, Master, Bright, VolumeMatch, Oversample, Unit, kNumParams };
 enum ChannelId { Clean = 0, Crunch = 1, Lead = 2 };
 
 const std::vector<ParamSpec>& specs();
@@ -44,6 +45,8 @@ private:
         double tz[3] = {0, 0, 0};              // tone stack, transposed direct form II
         Svf bright, presence, tHp, tLp, tLp2;  // bright shelf, presence shelf, output transformer
     };
+    int unit_ = 0;                          // Unit A / B / C (sw/unit.hpp): the tube stage of each channel (its gain, so where it saturates)
+    std::array<double, 2> onset_{1.0, 1.0};
     void updateControl();
     void updateTone();
     void updateFixed();

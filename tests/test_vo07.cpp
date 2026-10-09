@@ -13,7 +13,7 @@ double lvl(Set set, double hz, double db = -18.0) { auto p = make(set); const au
 TEST_CASE("VO07 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"vo07.hpf", "vo07.deess", "vo07.breath", "vo07.body", "vo07.presence", "vo07.air", "vo07.comp", "vo07.level", "vo07.plate", "vo07.echo", "vo07.out"};
+    const char* ids[] = {"vo07.hpf", "vo07.deess", "vo07.breath", "vo07.body", "vo07.presence", "vo07.air", "vo07.comp", "vo07.level", "vo07.plate", "vo07.echo", "vo07.out", "vo07.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Hpf].min == 20); CHECK(s[Hpf].max == 300); CHECK(s[Hpf].def == 80); CHECK(s[Hpf].curve == Curve::Log);
     for (int i : {Deess, Breath, Comp, Plate, Echo}) { CHECK(s[static_cast<size_t>(i)].min == 0); CHECK(s[static_cast<size_t>(i)].max == 10); CHECK(s[static_cast<size_t>(i)].def == 0); }

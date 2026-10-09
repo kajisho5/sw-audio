@@ -13,7 +13,7 @@
 
 namespace sw::st04 {
 
-enum ParamId { Center, Haas, Side, LowCenter, Balance, Link, MonoSafe, kNumParams };
+enum ParamId { Center, Haas, Side, LowCenter, Balance, Link, MonoSafe, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double sideGain(double center);            // Center 0 .. 100 -> linear gain of S

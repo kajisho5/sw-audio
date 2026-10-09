@@ -9,6 +9,7 @@ struct Dy12 {
     static constexpr int kOutputParam = sw::dy12::Output;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kUnitParam = sw::dy12::Unit;   // Unit A / B / C
     static constexpr int kReadouts = 1;   // gain reduction of the compressor (dB, <= 0), the core's own value
     static void readouts(const Core& c, double* o) { o[0] = c.gainReductionDb(); }
     static const clap_plugin_descriptor_t* descriptor() {

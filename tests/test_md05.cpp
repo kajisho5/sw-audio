@@ -15,7 +15,7 @@ void run0(Processor& p, double seconds) { std::vector<float> l(static_cast<size_
 TEST_CASE("MD05 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"md05.speed", "md05.accel", "md05.horn", "md05.drum", "md05.micdist", "md05.drive", "md05.mix"};
+    const char* ids[] = {"md05.speed", "md05.accel", "md05.horn", "md05.drum", "md05.micdist", "md05.drive", "md05.mix", "md05.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Speed].labels == std::vector<std::string>{"Stop", "Slow", "Fast"}); CHECK(s[Speed].def == 1);
     CHECK(s[Accel].def == 5); CHECK(s[Horn].def == 7); CHECK(s[Drum].def == 7); CHECK(s[MicDistance].def == 50); CHECK(s[Drive].def == 2); CHECK(s[Mix].def == 100);

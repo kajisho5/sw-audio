@@ -18,6 +18,7 @@ const std::vector<ParamSpec>& specs() {
         {"gt04.diblend",    "DI blend",   0, 100, 50, Curve::Lin, 1, {}, "%"},
         {"gt04.evo.on",     "Phase align", 0, 1, 1,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         oversampleSpec("gt04.os"),
+            unitSpec("gt04.unit"),
     };
     return s;
 }
@@ -51,13 +52,26 @@ void Processor::updateStatic() {
     }
 }
 
+// Unit A / B / C: chain 0 is the left channel, chain 1 the right one, chain 2 the copy the Phase align probe measures (it follows the left)
+void Processor::applyUnit() {
+    const int unit = static_cast<int>(target_[Unit]);
+    for (size_t k = 0; k < chain_.size(); ++k) {
+        const int ch = k == 1 ? 1 : 0;
+        chain_[k].pre.setOnsetDb(0, sw::Unit::satDb(unit, ch, 0)); chain_[k].drv.setOnsetDb(0, sw::Unit::satDb(unit, ch, 1));
+    }
+}
+
 void Processor::updateEq() {
     const double mid = target_[MidHz];
-    for (auto& c : chain_) {
-        c.low.setup(Svf::Mode::LowShelf, 80.0, fs_, 0.70710678, eqDb(target_[Low]));
-        c.lomid.setup(Svf::Mode::Bell, std::max(100.0, mid * 0.5), fs_, 1.0, eqDb(target_[LoMid]));
-        c.himid.setup(Svf::Mode::Bell, mid, fs_, 1.0, eqDb(target_[HiMid]));
-        c.high.setup(Svf::Mode::HighShelf, std::min(3500.0, 0.45 * fs_), fs_, 0.70710678, eqDb(target_[High]));
+    const int unit = static_cast<int>(target_[Unit]);
+    for (size_t k = 0; k < chain_.size(); ++k) {
+        auto& c = chain_[k];
+        const int ch = k == 1 ? 1 : 0;
+        auto fm = [&](int slot, double f) { return std::min(f * sw::Unit::freqMul(unit, ch, slot), 0.45 * fs_); };
+        c.low.setup(Svf::Mode::LowShelf, fm(0, 80.0), fs_, 0.70710678, eqDb(target_[Low]));
+        c.lomid.setup(Svf::Mode::Bell, fm(1, std::max(100.0, mid * 0.5)), fs_, 1.0, eqDb(target_[LoMid]));
+        c.himid.setup(Svf::Mode::Bell, fm(2, mid), fs_, 1.0, eqDb(target_[HiMid]));
+        c.high.setup(Svf::Mode::HighShelf, fm(3, 3500.0), fs_, 0.70710678, eqDb(target_[High]));
     }
 }
 
@@ -104,6 +118,7 @@ void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     for (auto& c : chain_) { c = Chain{}; c.pre.prepare(fs_); c.drv.prepare(fs_); }
     applyOversample(static_cast<int>(target_[Oversample]));
+    applyUnit();
     updateStatic(); updateEq();
     for (auto& d : dline_) d.assign(128, 0.0);
     for (auto& l : diLo_) l.setup(Svf::Mode::LowPass, 150.0, fs_);
@@ -125,7 +140,8 @@ void Processor::setParam(int id, double v) {
         case Master: master_.setTarget(std::pow(10.0, masterDb(v) / 20.0)); break;
         case DiBlend: blend_.setTarget(v * 0.01); break;
         case Low: case LoMid: case HiMid: case High: case MidHz: case Gain: case Drive: case PhaseAlign: eqDirty_ = true; break;
-        case Oversample: applyOversample(static_cast<int>(v)); eqDirty_ = true; break;   // the half-bands' delay changes: measure the phase again
+        case Oversample: applyOversample(static_cast<int>(v)); eqDirty_ = true; break;
+        case Unit: applyUnit(); eqDirty_ = true; break;   // the half-bands' delay changes: measure the phase again
         default: break;
     }
 }

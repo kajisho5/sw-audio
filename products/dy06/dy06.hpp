@@ -7,12 +7,13 @@
 #include "sw/dynamics.hpp"
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::dy06 {
 
-enum ParamId { Input, Threshold, Time, Mu, Mix, Stereo, Density, Oversample, kNumParams };
+enum ParamId { Input, Threshold, Time, Mu, Mix, Stereo, Density, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double inputDb(double knob);   // -10 + 3 * knob

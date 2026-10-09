@@ -37,6 +37,8 @@ public:
         if (fs_ > 0.0) dcA_ = std::exp(-2.0 * 3.14159265358979323846 * kDcHz / (os_[0].factor() * fs_));
     }
     int oversample() const { return os_[0].factor(); }
+    // Unit A / B / C (spec common function): where the saturation sets in, +-0.5 dB on the drive gain of one channel; the stage keeps its small-signal gain of 1 (the 1/g)
+    void setOnsetDb(int ch, double db) { onset_[static_cast<size_t>(ch & 1)] = std::pow(10.0, db / 20.0); }
     void set(double drive010) { drive_.setTarget(drive010 * 1.8); }
     void snap() { drive_.skip(1 << 30); update(drive_.current()); }
     void tick() { if (drive_.isSmoothing()) update(drive_.next()); }  // once per sample, before process()
@@ -52,14 +54,15 @@ private:
         tb_ = std::tanh(b_); s_ = 1.0 / (1.0 - tb_ * tb_);
     }
     double shape(size_t ch, double u) {
-        const double y = kHeadroom * s_ * (std::tanh(g_ * u / kHeadroom + b_) - tb_) / g_;
+        const double g = g_ * onset_[ch];
+        const double y = kHeadroom * s_ * (std::tanh(g * u / kHeadroom + b_) - tb_) / g;
         const double d = y - u;                           // added distortion, incl. the DC shift
         dc_[ch] = dcA_ * dc_[ch] + (1.0 - dcA_) * d;      // its mean
         return u + (d - dc_[ch]);
     }
     LinearSmoother drive_;
     std::array<OsSwitch, 2> os_{};
-    std::array<double, 2> dc_{};
+    std::array<double, 2> dc_{}, onset_{1.0, 1.0};
     double fs_ = 0.0, g_ = 1.0, b_ = 0.0, dcA_ = 0.0, tb_ = 0.0, s_ = 1.0;
 };
 

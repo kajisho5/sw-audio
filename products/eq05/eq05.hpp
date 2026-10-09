@@ -7,6 +7,7 @@
 #include "sw/saturate.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
@@ -14,7 +15,7 @@ namespace sw::eq05 {
 
 enum ParamId {
     HfGain, HfFreq, HfShape, HmfGain, HmfFreq, HmfQ, LmfGain, LmfFreq, LmfQ,
-    LfGain, LfFreq, LfShape, Hpf, Lpf, Drive, DrivePos, Output, In, Oversample, kNumParams
+    LfGain, LfFreq, LfShape, Hpf, Lpf, Drive, DrivePos, Output, In, Oversample, Unit, kNumParams
 };
 
 const std::vector<ParamSpec>& specs();
@@ -34,6 +35,7 @@ private:
         Svf hfShelf, hfBell, hmf, lmf, lfShelf, lfBell, hpf2, lpf;
         OnePole hpf1;
         OsSwitch os;
+        double onset = 1.0;   // Unit A / B / C: where the saturation sets in (a factor on the drive gain)
     };
     struct Ctl {  // smoothed control values shared by both channels
         LinearSmoother hfGain, hfFreqN, hmfGain, hmfFreqN, hmfQN, lmfGain, lmfFreqN, lmfQN,
@@ -41,6 +43,7 @@ private:
         LinearSmoother hfBell, lfBell, hpfOn, lpfOn;  // 10 ms crossfades
     };
     void updateCoefficients(int rampSamples = 0);
+    int unit_ = 0;   // Unit A / B / C (sw/unit.hpp): slots 0 HF, 1 HMF, 2 LMF, 3 LF, 4 high-pass, 5 low-pass, and the drive
     double eq(Chain& c, double x) const;
     double drive(Chain& c, double x) const;
     double runChain(Chain& c, double x, int pos) const;

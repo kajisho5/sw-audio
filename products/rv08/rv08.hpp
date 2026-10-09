@@ -13,7 +13,7 @@
 
 namespace sw::rv08 {
 
-enum ParamId { Size, GateTime, Threshold, Shape, Tone, Mix, Snare, kNumParams };
+enum ParamId { Size, GateTime, Threshold, Shape, Tone, Mix, Snare, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 double thresholdDbfs(double value);                  // 0..10 -> -60..0 dBFS

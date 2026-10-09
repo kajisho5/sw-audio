@@ -10,7 +10,7 @@
 
 namespace sw::dy12 {
 
-enum ParamId { Squash, Blend, Upward, Tone, Speed, Output, kNumParams };
+enum ParamId { Squash, Blend, Upward, Tone, Speed, Output, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

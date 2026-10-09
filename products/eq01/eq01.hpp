@@ -6,12 +6,13 @@
 #include "sw/param.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::eq01 {
 
-enum ParamId { LowFreq, LowGain, Contour, AirFreq, AirGain, Width, Drive, Output, Mode, Oversample, kNumParams };
+enum ParamId { LowFreq, LowGain, Contour, AirFreq, AirGain, Width, Drive, Output, Mode, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -26,7 +27,9 @@ public:
 
 private:
     void update(int ramp);
+    void applyUnit();          // Unit A / B / C: the saturation onset of each channel
     double fs_ = 48000.0;
+    int unit_ = 0;             // Unit A / B / C (sw/unit.hpp): slot 0 the low shelf, 1 the air bell, and the drive
     std::array<double, kNumParams> target_{};
     LinearSmoother lowF_, lowG_, contour_, airF_, airG_, width_, ms_;
     std::array<Svf, 2> low_{}, air_{};

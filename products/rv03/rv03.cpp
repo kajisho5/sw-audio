@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
             {"rv03.tension", "Tension", 0, 10, 5,   Curve::Lin, 1, {}, ""},
             {"rv03.drip",    "Drip",    0, 10, 5,   Curve::Lin, 1, {}, ""},
             {"rv03.mix",     "Mix",     0, 100, 30, Curve::Lin, 1, {}, "%"},
+            unitSpec("rv03.unit"),
         };
         v[Tone].minLabel = "Dark"; v[Tone].maxLabel = "Bright";
         return v;

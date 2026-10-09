@@ -19,9 +19,12 @@ public:
         if (fs_ > 0.0) dcA_ = std::exp(-2.0 * 3.14159265358979323846 * 5.0 / (os_[0].factor() * fs_));
     }
     int oversample() const { return os_[0].factor(); }
+    // Unit A / B / C (spec common function): where the saturation sets in, +-0.5 dB on the drive gain of one channel (the small-signal gain stays 1)
+    void setOnsetDb(int ch, double db) { onset_[static_cast<size_t>(ch & 1)] = std::pow(10.0, db / 20.0); }
     // g: linear drive gain, b: bias, h: headroom (2.0 = +6 dBFS); channel 0 or 1
     double process(int ch, double x, double g, double b, double h = 2.0) {
         const size_t c = static_cast<size_t>(ch);
+        g *= onset_[c];
         const double tb = std::tanh(b), s = 1.0 / (1.0 - tb * tb);
         return os_[c].process(x, [&](double u) {
             const double y = h * s * (std::tanh(g * u / h + b) - tb) / g;
@@ -32,7 +35,7 @@ public:
 
 private:
     std::array<OsSwitch, 2> os_{};
-    std::array<double, 2> dc_{};
+    std::array<double, 2> dc_{}, onset_{1.0, 1.0};
     double fs_ = 0, dcA_ = 0;
 };
 

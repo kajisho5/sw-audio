@@ -13,6 +13,7 @@ const std::vector<ParamSpec>& specs() {
             {"gt05.pickup",    "Pickup",    0, 100, 50,  Curve::Lin, 1, {}, "%"},
             {"gt05.output",    "Output",    -10, 10, 0,  Curve::Lin, 1, {}, "dB"},
             {"gt05.evo.on",    "Pickup swap", 0, 1, 0,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("gt05.unit"),
         };
         v[Cable].minLabel = "Short"; v[Cable].maxLabel = "Long"; v[Pickup].minLabel = "Single"; v[Pickup].maxLabel = "Hum";
         return v;

@@ -24,7 +24,7 @@ std::vector<float> burst(double rmsDbfs, double sec, double total, unsigned seed
 TEST_CASE("RV05 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"rv05.room", "rv05.decay", "rv05.micdistance", "rv05.speakertilt", "rv05.tone", "rv05.mix"};
+    const char* ids[] = {"rv05.room", "rv05.decay", "rv05.micdistance", "rv05.speakertilt", "rv05.tone", "rv05.mix", "rv05.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Room].labels == std::vector<std::string>{"Small", "Medium", "Large"}); CHECK(s[Room].def == 1);
     CHECK(s[Decay].min == 0); CHECK(s[Decay].max == 10); CHECK(s[Decay].def == 5);

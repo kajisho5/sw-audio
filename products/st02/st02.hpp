@@ -11,7 +11,7 @@
 
 namespace sw::st02 {
 
-enum ParamId { MidLevel, SideLevel, SideHpf, SideAir, MidLow, Encode, kNumParams };
+enum ParamId { MidLevel, SideLevel, SideHpf, SideAir, MidLow, Encode, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

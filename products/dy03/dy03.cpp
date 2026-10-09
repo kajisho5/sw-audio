@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy03.knee",      "Knee",      0, 12, 0,   Curve::Lin,  1, {}, "dB"},
             {"dy03.schpf",     "SC HPF",    20, 300, 20, Curve::Log, 1, {}, "Hz"},
             {"dy03.evo.on",    "Punch keep", 0, 1, 0,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("dy03.unit"),
         };
         v[ScHpf].minLabel = "Off";
         return v;

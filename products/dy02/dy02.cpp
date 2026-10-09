@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
         {"dy02.mix",        "Mix",      0, 100, 100,  Curve::Lin,  1, {}, "%"},
         {"dy02.evo.on",     "Ride",     0, 1, 0,      Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"dy02.automakeup", "Auto makeup", 0, 1, 0,   Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("dy02.unit"),
     };
     return s;
 }

@@ -11,6 +11,7 @@ const std::vector<ParamSpec>& specs() {
         {"st02.sideair",   "Side air",   0, 10, 0,   Curve::Lin, 1, {}, ""},
         {"st02.midlow",    "Mid low",    -6, 6, 0,   Curve::Lin, 1, {}, "dB"},
         {"st02.encode",    "Encode",     0, 1, 0,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("st02.unit"),
     };
     return s;
 }

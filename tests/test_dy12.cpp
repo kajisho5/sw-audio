@@ -13,7 +13,7 @@ double level(Set s, const std::vector<float>& x) { auto p = make(s); return rmsD
 TEST_CASE("DY12 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"dy12.squash", "dy12.blend", "dy12.upward", "dy12.tone", "dy12.speed", "dy12.out"};
+    const char* ids[] = {"dy12.squash", "dy12.blend", "dy12.upward", "dy12.tone", "dy12.speed", "dy12.out", "dy12.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Squash].min == 0); CHECK(s[Squash].max == 10); CHECK(s[Squash].def == 5);
     CHECK(s[Blend].min == 0); CHECK(s[Blend].max == 100); CHECK(s[Blend].def == 30);

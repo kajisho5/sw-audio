@@ -11,6 +11,7 @@ const std::vector<ParamSpec>& specs() {
         {"md07.depth",  "Depth",  0, 10, 5,  Curve::Lin, 1, {}, ""},
         {"md07.tone",   "Tone",   0, 100, 50, Curve::Lin, 1, {}, "%"},
         {"md07.mix",    "Mix",    0, 100, 50, Curve::Lin, 1, {}, "%"},
+            unitSpec("md07.unit"),
     };
     return s;
 }

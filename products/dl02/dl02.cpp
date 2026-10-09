@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"dl02.treble",    "Treble",    -6, 6, 0,    Curve::Lin, 1, {}, "dB"},
         {"dl02.wear",      "Wear",      0, 10, 3,    Curve::Lin, 1, {}, ""},
         {"dl02.mix",       "Mix",       0, 100, 25,  Curve::Lin, 1, {}, "%"},
+            unitSpec("dl02.unit"),
     };
     return s;
 }

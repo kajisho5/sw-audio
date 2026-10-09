@@ -15,7 +15,7 @@ double level(Processor& p, double f, bool side) { auto t = tone(f, side); const 
 TEST_CASE("ST06 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"st06.frequency", "st06.slope", "st06.sideboost", "st06.output", "st06.listen"};
+    const char* ids[] = {"st06.frequency", "st06.slope", "st06.sideboost", "st06.output", "st06.listen", "st06.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Frequency].min == 20); CHECK(s[Frequency].max == 300); CHECK(s[Frequency].def == 120); CHECK(s[Frequency].curve == Curve::Log);
     CHECK(s[Slope].labels == std::vector<std::string>{"6", "12", "24", "48"}); CHECK(s[Slope].def == 24);

@@ -22,7 +22,7 @@ double wobble(const std::vector<float>& y, double f) {
 TEST_CASE("SA07 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa07.era", "sa07.crackle", "sa07.dust", "sa07.wow", "sa07.bandwidth", "sa07.mono", "sa07.mix"};
+    const char* ids[] = {"sa07.era", "sa07.crackle", "sa07.dust", "sa07.wow", "sa07.bandwidth", "sa07.mono", "sa07.mix", "sa07.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Era].labels == std::vector<std::string>{"1950", "1970", "1990", "Tape"}); CHECK(s[Era].def == 1);
     CHECK(s[Crackle].max == 10); CHECK(s[Crackle].def == 0); CHECK(s[Dust].def == 0); CHECK(s[Wow].def == 0);

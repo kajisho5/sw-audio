@@ -10,13 +10,14 @@
 #include "sw/shaper.hpp"
 #include "sw/smooth.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <complex>
 #include <vector>
 
 namespace sw::gt04 {
 
-enum ParamId { Gain, Drive, Master, Low, LoMid, HiMid, High, MidHz, Di, DiBlend, PhaseAlign, Oversample, kNumParams };
+enum ParamId { Gain, Drive, Master, Low, LoMid, HiMid, High, MidHz, Di, DiBlend, PhaseAlign, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -45,6 +46,7 @@ private:
     };
     void updateEq();
     void applyOversample(int factor);
+    void applyUnit();   // Unit A / B / C (sw/unit.hpp): slots 0 low, 1 lo-mid, 2 hi-mid, 3 high shelf; the pre-amp shaper (0) and the distortion shaper (1)
     void updateStatic();
     void measure();
     double fs_ = 48000.0, tau_ = 0.0, apA_ = 0.0;

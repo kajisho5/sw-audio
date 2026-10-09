@@ -14,7 +14,7 @@
 
 namespace sw::cr06 {
 
-enum ParamId { Effect, Amount, Mix, Output, Macro, kNumParams };
+enum ParamId { Effect, Amount, Mix, Output, Macro, Unit, kNumParams };
 enum EffectId { Wide = 0, Warm = 1, Air = 2, Punch = 3, Space = 4, Lofi = 5 };
 
 const std::vector<ParamSpec>& specs();

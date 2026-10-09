@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"md05.micdist", "Mic distance", 0, 100, 50, Curve::Lin, 1, {}, "%"},
         {"md05.drive",   "Drive",        0, 10, 2,  Curve::Lin, 1, {}, ""},
         {"md05.mix",     "Mix",          0, 100, 100, Curve::Lin, 1, {}, "%"},
+            unitSpec("md05.unit"),
     };
     return s;
 }

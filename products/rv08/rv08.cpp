@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"rv08.tone",      "Tone",      0, 100, 50,    Curve::Lin, 1, {}, "%"},
         {"rv08.mix",       "Mix",       0, 100, 40,    Curve::Lin, 1, {}, "%"},
         {"rv08.evo.on",    "Snare key", 0, 1, 0,       Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("rv08.unit"),
     };
     return s;
 }

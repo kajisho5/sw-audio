@@ -15,6 +15,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy06.stereo", "Stereo",    0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Link", "Dual"}},
             {"dy06.evo.on", "Density adapt", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             oversampleSpec("dy06.os"),
+            unitSpec("dy06.unit"),
         };
         v[Mu].minLabel = "Soft"; v[Mu].maxLabel = "Hard";
         return v;
@@ -86,6 +87,7 @@ void Processor::setParam(int id, double v) {
     else if (id == Mu) buildCurve();
     else if (id == Time) updateTiming();
     else if (id == Oversample) for (auto& d : tubeCh_) d.setOversample(static_cast<int>(v));
+    else if (id == Unit) for (int k = 0; k < 2; ++k) tubeCh_[static_cast<size_t>(k)].setOnsetDb(0, sw::Unit::satDb(static_cast<int>(v), k, 0));   // Unit A / B / C: where the tube stage saturates, per channel
 }
 
 void Processor::process(float** ch, int numCh, int n) {

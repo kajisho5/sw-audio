@@ -16,6 +16,7 @@ const std::vector<ParamSpec>& specs() {
             {"dy01.mix",   "Mix",    0, 100, 100, Curve::Lin, 1, {}, "%"},
             {"dy01.schpf", "SC HPF", 20, 300, 20, Curve::Log, 1, {}, "Hz"},
             oversampleSpec("dy01.os"),
+            unitSpec("dy01.unit"),
         };
         v[Ratio].maxLabel = "Max"; v[Ratio].maxLabelNorm = 0.95;  // spec: rightmost 5 % is Max
         v[Speed].minLabel = "Slow"; v[Speed].maxLabel = "Fast";
@@ -53,6 +54,7 @@ void Processor::setParam(int id, double v) {
         case Drive: drive_.setTarget(v * 3.6); break;
         case Ratio: updateCurve(); break;
         case Speed: ball_.set(fs_, attackMs(v), releaseMs(v)); break;
+        case Unit: for (int k = 0; k < 2; ++k) unitSat_[static_cast<size_t>(k)] = std::pow(10.0, sw::Unit::satDb(static_cast<int>(v), k, 0) / 20.0); break;
         case SchPf:
             hpfOn_ = v > sp.min * 1.0001;
             for (auto& h : hpf_) h.setup(Svf::Mode::HighPass, v, fs_, 0.70710678, 0);
@@ -86,6 +88,7 @@ double Processor::colorProcess(int ch, double x, double env, double depthDb) {
     else { g = 0.8 + depthDb / 4.0; b = 0.15; }
     if (max_) g += depthDb / 8.0;
     const size_t c = static_cast<size_t>(ch);
+    g *= unitSat_[c];
     const int setting = OsSwitch::snap(target_[Oversample]), factor = color == 2 && setting > 1 ? 4 : setting;   // Crush: 4x (spec: recommended)
     auto& os = color_.os[c];
     os.setFactor(factor);

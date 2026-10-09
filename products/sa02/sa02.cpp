@@ -17,6 +17,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa02.output",    "Output",    -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa02.group",     "Group",     1, 8, 1,      Curve::Step, 1, {1, 2, 3, 4, 5, 6, 7, 8}, ""},
             oversampleSpec("sa02.os"),
+            unitSpec("sa02.unit"),
         };
         v[Noise].minLabel = "Off"; v[Noise].maxLabel = "Max";
         return v;
@@ -53,13 +54,14 @@ void Processor::applySeed() {
     uint32_t r = static_cast<uint32_t>(seed_) * 2654435761u + 0x1234567u; if (r == 0) r = 1;
     for (int k = 0; k < 4; ++k) unit(r);
     devGain_ = {0.3 * unit(r), 0.3 * unit(r)};      // dB
-    devDrive_ = {0.5 * unit(r), 0.5 * unit(r)};     // dB (where the saturation starts)
+    devDrive_ = {0.5 * unit(r) + sw::Unit::satDb(unit_, 0, 0), 0.5 * unit(r) + sw::Unit::satDb(unit_, 1, 0)};     // dB (where the saturation starts; Unit B / C add their fixed part)
     devNoise_ = 1.0 * unit(r);                      // dB
     const double corner = 1.0 + 0.03 * unit(r);     // tone corners
     for (size_t c = 0; c < 2; ++c) {
-        tone_[c].shelf.setup(Svf::Mode::HighShelf, 6000.0 * corner, fs_, 0.70710678, target_[Color] > 1.5 && target_[Color] < 2.5 ? 1.2 : 0.0);
-        tone_[c].bump.setup(Svf::Mode::Bell, 60.0 * corner, fs_, 0.9, target_[Color] > 2.5 ? 1.5 : 0.0);
-        tone_[c].lowpass.setup(Svf::Mode::LowPass, std::min(target_[Color] > 2.5 ? 13000.0 * corner : 0.45 * fs_, 0.45 * fs_), fs_, 0.70710678, 0);
+        const int ci = static_cast<int>(c);
+        tone_[c].shelf.setup(Svf::Mode::HighShelf, 6000.0 * corner * sw::Unit::freqMul(unit_, ci, 0), fs_, 0.70710678, target_[Color] > 1.5 && target_[Color] < 2.5 ? 1.2 : 0.0);
+        tone_[c].bump.setup(Svf::Mode::Bell, 60.0 * corner * sw::Unit::freqMul(unit_, ci, 1), fs_, 0.9, target_[Color] > 2.5 ? 1.5 : 0.0);
+        tone_[c].lowpass.setup(Svf::Mode::LowPass, std::min(target_[Color] > 2.5 ? 13000.0 * corner * sw::Unit::freqMul(unit_, ci, 2) : 0.45 * fs_, 0.45 * fs_), fs_, 0.70710678, 0);
     }
 }
 
@@ -82,6 +84,7 @@ void Processor::setParam(int id, double v) {
     if (id == Output) out_.setTarget(std::pow(10.0, v / 20.0));
     else if (id == Color) applySeed();
     else if (id == Group && slot_.idx >= 0) joinGroup();
+    else if (id == Unit) { unit_ = static_cast<int>(v); applySeed(); }
     else if (id == Oversample) { lf_.setOversample(static_cast<int>(v)); hf_.setOversample(static_cast<int>(v)); }
 }
 

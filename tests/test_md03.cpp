@@ -23,7 +23,7 @@ double binHz(size_t k) { return k * kFs / 16384.0; }
 TEST_CASE("MD03 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"md03.stages", "md03.rate", "md03.depth", "md03.feedback", "md03.center", "md03.mix", "md03.sync", "md03.evo.on"};
+    const char* ids[] = {"md03.stages", "md03.rate", "md03.depth", "md03.feedback", "md03.center", "md03.mix", "md03.sync", "md03.evo.on", "md03.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Stages].labels == std::vector<std::string>{"4", "6", "8", "12"}); CHECK(s[Stages].def == 6);
     CHECK(s[Rate].min == 0.05); CHECK(s[Rate].max == 8); CHECK(s[Rate].def == 0.5); CHECK(s[Rate].curve == Curve::Log);

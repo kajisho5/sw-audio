@@ -23,6 +23,7 @@ const std::vector<ParamSpec>& specs() {
             {"cs02.route",        "Route",   0, 1, 0,        Curve::Step, 1, {0, 1}, "", {"Dyn to EQ", "EQ to Dyn"}},
             {"cs02.fader",        "Fader",   -100, 10, 0,    Curve::Fader, 1, {}, "dB"},
             {"cs02.link",         "Link",    0, 1, 1,        Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("cs02.unit"),
         };
         v[Ratio].maxLabel = "Max";      // rightmost = infinity
         v[Thresh].reversed = true;      // knob runs +10 .. -20 (spec)

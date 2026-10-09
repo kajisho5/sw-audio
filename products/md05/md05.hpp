@@ -16,7 +16,7 @@
 
 namespace sw::md05 {
 
-enum ParamId { Speed, Accel, Horn, Drum, MicDistance, Drive, Mix, kNumParams };
+enum ParamId { Speed, Accel, Horn, Drum, MicDistance, Drive, Mix, Unit, kNumParams };
 enum SpeedId { Stop = 0, Slow = 1, Fast = 2 };
 
 const std::vector<ParamSpec>& specs();

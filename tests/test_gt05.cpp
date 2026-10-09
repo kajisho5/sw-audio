@@ -20,7 +20,7 @@ Set rig(double imp, double cable, double pickup) { return {{Level, 0}, {Output, 
 TEST_CASE("GT05 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"gt05.level", "gt05.impedance", "gt05.cable", "gt05.pickup", "gt05.output", "gt05.evo.on"};
+    const char* ids[] = {"gt05.level", "gt05.impedance", "gt05.cable", "gt05.pickup", "gt05.output", "gt05.evo.on", "gt05.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Level].min == -20); CHECK(s[Level].max == 10); CHECK(s[Level].def == 0);
     CHECK(s[Impedance].steps == std::vector<double>{10000, 47000, 100000, 1000000}); CHECK(s[Impedance].labels == std::vector<std::string>{"10k", "47k", "100k", "1M"}); CHECK(s[Impedance].def == 1000000);

@@ -21,7 +21,7 @@ std::vector<float> burst(double rmsDbfs, double sec, double total, unsigned seed
 TEST_CASE("RV02 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"rv02.decay", "rv02.predelay", "rv02.damping", "rv02.lowcut", "rv02.width", "rv02.mix", "rv02.monoin", "rv02.sync", "rv02.evo.on"};
+    const char* ids[] = {"rv02.decay", "rv02.predelay", "rv02.damping", "rv02.lowcut", "rv02.width", "rv02.mix", "rv02.monoin", "rv02.sync", "rv02.evo.on", "rv02.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Decay].min == 0.5); CHECK(s[Decay].max == 6); CHECK(s[Decay].def == 2.0); CHECK(s[Decay].curve == Curve::Log);
     CHECK(s[PreDelay].max == 200); CHECK(s[PreDelay].def == 20); CHECK(s[PreDelay].curve == Curve::Skew); CHECK(s[PreDelay].skew == 2);

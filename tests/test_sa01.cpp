@@ -26,7 +26,7 @@ double phaseWobble(const std::vector<float>& y, double f) {
 TEST_CASE("SA01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa01.speed", "sa01.formula", "sa01.input", "sa01.saturation", "sa01.wow", "sa01.flutter", "sa01.hiss", "sa01.output", "sa01.repro", "sa01.os"};
+    const char* ids[] = {"sa01.speed", "sa01.formula", "sa01.input", "sa01.saturation", "sa01.wow", "sa01.flutter", "sa01.hiss", "sa01.output", "sa01.repro", "sa01.os", "sa01.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Speed].steps == std::vector<double>{7.5, 15, 30}); CHECK(s[Speed].def == 15);
     CHECK(s[Formula].labels == std::vector<std::string>{"A", "B", "C"}); CHECK(s[Formula].def == 0);
@@ -94,7 +94,7 @@ TEST_CASE("SA01 silence stays silent without Hiss; extreme input finite") {
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
 TEST_CASE("SA01: the oversampling parameter is the last one, 1x / 2x / 4x, default 2x, and the tape saturation follows it") {
     const auto& s = specs();
-    CHECK(std::string(s[Oversample].id) == "sa01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(std::string(s[Oversample].id) == "sa01.os"); CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 2.0); CHECK(Oversample == kNumParams - 2);
     auto alias = [](int os) { auto p = make({{Wow, 0}, {Flutter, 0}, {Hiss, 0}, {Repro, 0}, {Input, 12}, {Saturation, 10}, {Oversample, double(os)}}); return ost::relDb(p, 15000, 3000, 0.4); };
     const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
     INFO("15 kHz into the tape, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");

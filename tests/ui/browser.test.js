@@ -3,6 +3,7 @@
 //   2. Undo / Redo record one step per gesture (a knob drag is one step), and the History button lists them and goes back;
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
+//   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -100,6 +101,14 @@ async function open(code, query = '') {
   await open('DL01'); eq(await pg.locator('button[data-fmt="os"]').count(), 0, 'DL01 has no oversampling button'); ok(await pg.locator('button[data-inert]', { hasText: '2× OS' }).count() === 1, 'DL01: the 2x OS button is dimmed');
   await open('MS04'); ok(await pg.locator('button', { hasText: '2× OS' }).evaluate(e => getComputedStyle(e).visibility === 'hidden' || e.style.visibility === 'hidden'), 'MS04: the EVO 2x OS is hidden (the panel has its own Oversample)');
 
+  // ---- 6. Unit A / B / C
+  await open('EQ03'); const unitBtn = t => pg.locator('.evob button', { hasText: new RegExp('^' + t + '$') });
+  ok(/\bon\b/.test(await unitBtn('A').getAttribute('class')), 'Unit A is lit by default'); ok(!/\bon\b/.test((await unitBtn('B').getAttribute('class')) || ''), 'Unit B is not');
+  await unitBtn('B').click(); await pg.waitForTimeout(150); ok(/\bon\b/.test(await unitBtn('B').getAttribute('class')), 'a click lights Unit B'); ok(!/\bon\b/.test((await unitBtn('A').getAttribute('class')) || ''), 'and A goes out');
+  await pg.waitForTimeout(700); await unitBtn('C').click(); await pg.waitForTimeout(150); ok(/\bon\b/.test(await unitBtn('C').getAttribute('class')), 'Unit C');
+  await pg.locator('[data-act="undo"]').click(); await pg.waitForTimeout(150); ok(/\bon\b/.test(await unitBtn('B').getAttribute('class')), 'undo goes back to B');
+  await open('UT01'); ok(await pg.locator('.evob button[data-inert]', { hasText: /^A$/ }).count() === 1, 'UT01 has no Unit: A is dimmed'); ok(/no Unit A \/ B \/ C/.test(await pg.locator('.evob button[data-inert]', { hasText: /^A$/ }).getAttribute('title')), 'and says why');
+
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

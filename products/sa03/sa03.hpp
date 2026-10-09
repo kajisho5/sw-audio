@@ -6,12 +6,13 @@
 #include "sw/param.hpp"
 #include "sw/shaper.hpp"
 #include "sw/svf.hpp"
+#include "sw/unit.hpp"
 #include <array>
 #include <vector>
 
 namespace sw::sa03 {
 
-enum ParamId { Drive, Bias, Tone, Tube, Mix, Output, Evo, Oversample, kNumParams };
+enum ParamId { Drive, Bias, Tone, Tube, Mix, Output, Evo, Oversample, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -30,6 +31,8 @@ private:
     double fs_ = 48000.0, env_ = 0, envC_ = 0, shift_ = 0;
     std::array<double, kNumParams> target_{};
     BiasShaper4x shaper_;
+    int unit_ = 0;   // Unit A / B / C (sw/unit.hpp): slot 0 the tone pivot, and the shaper
+    void applyUnit();
     struct ToneCh { Svf lo, hi; };
     std::array<ToneCh, 2> tone_{};
 };

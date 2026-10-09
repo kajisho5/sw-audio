@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "sw/shell.hpp"
 #include "sw/loudness.hpp"
+#include "sw/unit.hpp"
 #include "eq05/eq05.hpp"
 #include <cmath>
 #include <random>
@@ -155,4 +156,59 @@ TEST_CASE("without a sidechain the core runs its normal path") {
     float* c[2] = {l.data(), r.data()};
     sh.process(c, 2, 64);
     CHECK_FALSE(sh.core().gotSc); CHECK(l[10] == 0.0f);
+}
+
+// ---- Unit A / B / C: the gain tolerance of the output stage, a different one on the left and on the right channel, on the wet signal only
+namespace {
+std::pair<std::vector<float>, std::vector<float>> runLR(Shell<GainCore>& sh, const std::vector<float>& in, int block = 256) {
+    std::vector<float> l = in, r = in;
+    for (size_t off = 0; off < l.size(); off += static_cast<size_t>(block)) {
+        const int n = static_cast<int>(std::min(static_cast<size_t>(block), l.size() - off));
+        float* c[2] = {l.data() + off, r.data() + off}; sh.process(c, 2, n);
+    }
+    return {l, r};
+}
+}
+TEST_CASE("Unit A is the reference: the Shell is bit-exact as before") {
+    Shell<GainCore> sh; sh.prepare(kFs, 256, 2); sh.setUnit(0); sh.snap();
+    const auto in = noise(4096, 0.3);
+    const auto [l, r] = runLR(sh, in);
+    CHECK(l == in); CHECK(r == in);
+}
+TEST_CASE("Unit B and C: each channel's wet signal has its own gain, within +-0.3 dB") {
+    for (int unit : {1, 2}) {
+        Shell<GainCore> sh; sh.prepare(kFs, 256, 2); sh.setUnit(unit); sh.snap();
+        const auto [l, r] = runLR(sh, std::vector<float>(2048, 0.25f));
+        const double gl = Unit::gainLin(unit, 0, Unit::kOutputSlot), gr = Unit::gainLin(unit, 1, Unit::kOutputSlot);
+        CHECK(l.back() == doctest::Approx(0.25 * gl).epsilon(1e-5)); CHECK(r.back() == doctest::Approx(0.25 * gr).epsilon(1e-5));
+        CHECK(l.back() != r.back());
+        CHECK(std::abs(20 * std::log10(l.back() / 0.25)) <= 0.3 + 1e-4); CHECK(std::abs(20 * std::log10(r.back() / 0.25)) <= 0.3 + 1e-4);
+    }
+}
+TEST_CASE("Unit changes the wet only: Mix 0 % and In off stay bit-exact") {
+    Shell<GainCore> a; a.prepare(kFs, 256, 2); a.setUnit(2); a.setMix(0.0); a.snap();
+    const auto in = noise(4096, 0.3);
+    const auto [l, r] = runLR(a, in); CHECK(l == in); CHECK(r == in);
+    Shell<GainCore> b; b.prepare(kFs, 256, 2); b.setUnit(2); b.setIn(false); b.snap();
+    const auto [l2, r2] = runLR(b, in); CHECK(l2 == in); CHECK(r2 == in);
+}
+TEST_CASE("Unit's tolerance is not taken back by Auto gain (it is applied after the loudness is compared)") {
+    Shell<GainCore> sh; sh.prepare(kFs, 256, 2); sh.setUnit(1); sh.setAutoGain(true); sh.snap();
+    const auto in = noise(48000 * 14, 0.1);
+    const auto [l, r] = runLR(sh, in);
+    CHECK(std::abs(sh.autoGainDb()) < 0.05);
+    double el = 0, er = 0, ei = 0; for (size_t i = in.size() - 48000; i < in.size(); ++i) { el += double(l[i]) * l[i]; er += double(r[i]) * r[i]; ei += double(in[i]) * in[i]; }
+    CHECK(10 * std::log10(el / ei) == doctest::Approx(Unit::gainDb(1, 0, Unit::kOutputSlot)).epsilon(0.03));
+    CHECK(10 * std::log10(er / ei) == doctest::Approx(Unit::gainDb(1, 1, Unit::kOutputSlot)).epsilon(0.03));
+}
+TEST_CASE("switching Unit does not click (the gain moves over 20 ms)") {
+    Shell<GainCore> sh; sh.prepare(kFs, 64, 2); sh.snap();
+    const int n = 24000; std::vector<float> in(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) in[static_cast<size_t>(i)] = static_cast<float>(0.5 * std::sin(2 * kPi * 100.0 * i / kFs));
+    std::vector<float> l = in, r = in;
+    for (int off = 0; off < n; off += 64) { if (off == 12000) sh.setUnit(2); float* c[2] = {l.data() + off, r.data() + off}; sh.process(c, 2, 64); }
+    double maxStep = 0, refStep = 0;
+    for (int i = 1; i < n; ++i) maxStep = std::max(maxStep, double(std::abs(l[static_cast<size_t>(i)] - l[static_cast<size_t>(i) - 1])));
+    for (int i = 1; i < n; ++i) refStep = std::max(refStep, double(std::abs(in[static_cast<size_t>(i)] - in[static_cast<size_t>(i) - 1])));
+    CHECK(maxStep < refStep * 1.05);
 }

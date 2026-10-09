@@ -12,7 +12,7 @@
 
 namespace sw::rv02 {
 
-enum ParamId { Decay, PreDelay, Damping, LowCut, Width, Mix, MonoIn, Sync, DuckOn, kNumParams };
+enum ParamId { Decay, PreDelay, Damping, LowCut, Width, Mix, MonoIn, Sync, DuckOn, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

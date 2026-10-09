@@ -12,6 +12,7 @@ const std::vector<ParamSpec>& specs() {
         {"st04.balance",   "Balance",    -100, 100, 0, Curve::Lin, 1, {}, "%"},
         {"st04.link",      "Link",       0, 1, 1,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"st04.evo.on",    "Mono safe",  0, 1, 0,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
+            unitSpec("st04.unit"),
     };
     return s;
 }

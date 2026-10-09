@@ -11,7 +11,7 @@
 
 namespace sw::md07 {
 
-enum ParamId { Voices, Spread, Rate, Depth, Tone, Mix, kNumParams };
+enum ParamId { Voices, Spread, Rate, Depth, Tone, Mix, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 constexpr int kMaxVoices = 6;

@@ -13,7 +13,7 @@ double gainAt(Set set, double hz, double db = -24.0) { auto p = make(set); const
 TEST_CASE("CR06 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"cr06.effect", "cr06.amount", "cr06.mix", "cr06.out", "cr06.macro"};
+    const char* ids[] = {"cr06.effect", "cr06.amount", "cr06.mix", "cr06.out", "cr06.macro", "cr06.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Effect].labels == std::vector<std::string>{"Wide", "Warm", "Air", "Punch", "Space", "Lo-fi"}); CHECK(s[Effect].def == 2);
     CHECK(s[Amount].min == 0); CHECK(s[Amount].max == 10); CHECK(s[Amount].def == 0); CHECK(s[Mix].def == 100);

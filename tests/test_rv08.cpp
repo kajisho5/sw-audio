@@ -20,7 +20,7 @@ double winDb(const std::vector<float>& y, double a, double b) { return rmsDb(y, 
 TEST_CASE("RV08 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"rv08.size", "rv08.gatetime", "rv08.threshold", "rv08.shape", "rv08.tone", "rv08.mix", "rv08.evo.on"};
+    const char* ids[] = {"rv08.size", "rv08.gatetime", "rv08.threshold", "rv08.shape", "rv08.tone", "rv08.mix", "rv08.evo.on", "rv08.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Size].min == 0); CHECK(s[Size].max == 10); CHECK(s[Size].def == 5);
     CHECK(s[GateTime].min == 50); CHECK(s[GateTime].max == 800); CHECK(s[GateTime].def == 250); CHECK(s[GateTime].curve == Curve::Log);

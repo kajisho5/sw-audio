@@ -9,6 +9,7 @@ struct Eq05 {
     static constexpr int kOutputParam = sw::eq05::Output;
     static constexpr int kInParam = sw::eq05::In;
     static constexpr int kMixParam = -1;
+    static constexpr int kUnitParam = sw::eq05::Unit;   // Unit A / B / C
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const features[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {

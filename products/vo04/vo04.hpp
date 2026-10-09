@@ -12,7 +12,7 @@
 
 namespace sw::vo04 {
 
-enum ParamId { Voices, Spread, Timing, PitchVar, Tone, Mix, kNumParams };
+enum ParamId { Voices, Spread, Timing, PitchVar, Tone, Mix, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 constexpr int kMaxVoices = 8;

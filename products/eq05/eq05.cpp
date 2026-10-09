@@ -24,6 +24,7 @@ const std::vector<ParamSpec>& specs() {
         {"eq05.out",        "Output",    -10, 10, 0,       Curve::Lin, 1, {}, "dB"},
         {"eq05.in",         "In",        0, 1, 1,          Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         oversampleSpec("eq05.os"),
+            unitSpec("eq05.unit"),
     };
     return s;
 }
@@ -80,6 +81,7 @@ void Processor::setParam(int id, double v) {
             break;
         }
         case Oversample: for (Chain* c : {&ch_[0], &ch_[1], &fade_[0], &fade_[1]}) c->os.setFactor(static_cast<int>(v)); break;
+        case Unit: unit_ = static_cast<int>(v); updateCoefficients(static_cast<int>(0.02 * fs_)); break;   // the coefficients move over 20 ms
         case Output: case In: break;  // handled by sw::Shell (common frame)
         default: break;
     }
@@ -108,16 +110,20 @@ void Processor::updateCoefficients(int n) {
     const double hmfQ = s[HmfQ].toValue(ctl_.hmfQN.current()), lmfQ = s[LmfQ].toValue(ctl_.lmfQN.current());
     const double hpf = hpfHz(ctl_.hpfFreqN.current()), lpf = hpfHz(ctl_.lpfFreqN.current());
     // n > 1: move coefficients linearly over the next n samples (no zipper); otherwise jump
-    for (Chain* c : {&ch_[0], &ch_[1], &fade_[0], &fade_[1]}) {
-        c->hfShelf.setupRamp(Svf::Mode::HighShelf, hf, fs_, kButterQ, ctl_.hfGain.current(), n);
-        c->hfBell.setupRamp(Svf::Mode::Bell, hf, fs_, kShelfBellQ, ctl_.hfGain.current(), n);
-        c->hmf.setupRamp(Svf::Mode::Bell, hmf, fs_, hmfQ, ctl_.hmfGain.current(), n);
-        c->lmf.setupRamp(Svf::Mode::Bell, lmf, fs_, lmfQ, ctl_.lmfGain.current(), n);
-        c->lfShelf.setupRamp(Svf::Mode::LowShelf, lf, fs_, kButterQ, ctl_.lfGain.current(), n);
-        c->lfBell.setupRamp(Svf::Mode::Bell, lf, fs_, kShelfBellQ, ctl_.lfGain.current(), n);
-        c->hpf1.setupRamp(OnePole::Mode::HighPass, hpf, fs_, n);
-        c->hpf2.setupRamp(Svf::Mode::HighPass, hpf, fs_, kHpfStageQ, 0, n);
-        c->lpf.setupRamp(Svf::Mode::LowPass, lpf, fs_, kButterQ, 0, n);
+    int k = 0;
+    for (Chain* c : {&ch_[0], &ch_[1], &fade_[0], &fade_[1]}) {   // the chains and their copies for the Drive Pos crossfade: channel k & 1 (Unit B / C: each channel's parts have their own tolerance)
+        const int ch = k++ & 1;
+        auto fm = [&](int slot, double f) { return std::min(f * Unit::freqMul(unit_, ch, slot), 0.45 * fs_); };
+        c->hfShelf.setupRamp(Svf::Mode::HighShelf, fm(0, hf), fs_, kButterQ, ctl_.hfGain.current(), n);
+        c->hfBell.setupRamp(Svf::Mode::Bell, fm(0, hf), fs_, kShelfBellQ, ctl_.hfGain.current(), n);
+        c->hmf.setupRamp(Svf::Mode::Bell, fm(1, hmf), fs_, hmfQ, ctl_.hmfGain.current(), n);
+        c->lmf.setupRamp(Svf::Mode::Bell, fm(2, lmf), fs_, lmfQ, ctl_.lmfGain.current(), n);
+        c->lfShelf.setupRamp(Svf::Mode::LowShelf, fm(3, lf), fs_, kButterQ, ctl_.lfGain.current(), n);
+        c->lfBell.setupRamp(Svf::Mode::Bell, fm(3, lf), fs_, kShelfBellQ, ctl_.lfGain.current(), n);
+        c->hpf1.setupRamp(OnePole::Mode::HighPass, fm(4, hpf), fs_, n);
+        c->hpf2.setupRamp(Svf::Mode::HighPass, fm(4, hpf), fs_, kHpfStageQ, 0, n);
+        c->lpf.setupRamp(Svf::Mode::LowPass, fm(5, lpf), fs_, kButterQ, 0, n);
+        c->onset = std::pow(10.0, Unit::satDb(unit_, ch, 0) / 20.0);
     }
     sat_.setHeadroom(2.0);  // +6 dBFS, same as every analog output stage (README)
     sat_.setDriveDb(ctl_.drive.current());
@@ -138,7 +144,7 @@ double Processor::eq(Chain& c, double x) const {
 }
 
 double Processor::drive(Chain& c, double x) const {
-    return c.os.process(x, [&](double u) { return sat_.process(u); });
+    return c.os.process(x, [&](double u) { return sat_.process(u, c.onset); });
 }
 
 double Processor::runChain(Chain& c, double x, int pos) const {

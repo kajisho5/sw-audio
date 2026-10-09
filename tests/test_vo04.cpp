@@ -13,7 +13,7 @@ std::pair<std::vector<float>, std::vector<float>> go(Processor& p, std::vector<f
 TEST_CASE("VO04 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"vo04.voices", "vo04.spread", "vo04.timing", "vo04.pitchvar", "vo04.tone", "vo04.mix"};
+    const char* ids[] = {"vo04.voices", "vo04.spread", "vo04.timing", "vo04.pitchvar", "vo04.tone", "vo04.mix", "vo04.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Voices].labels == std::vector<std::string>{"1", "2", "4", "8"}); CHECK(s[Voices].def == 2);
     CHECK(s[Spread].def == 6); CHECK(s[Timing].def == 4); CHECK(s[PitchVar].def == 3); CHECK(s[Tone].def == 50); CHECK(s[Mix].def == 50);

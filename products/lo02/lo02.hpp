@@ -13,7 +13,7 @@
 
 namespace sw::lo02 {
 
-enum ParamId { Sub, RangeHz, Tune, Punch, Dry, kNumParams };
+enum ParamId { Sub, RangeHz, Tune, Punch, Dry, Unit, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 

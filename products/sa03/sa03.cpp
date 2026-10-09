@@ -15,6 +15,7 @@ const std::vector<ParamSpec>& specs() {
             {"sa03.output", "Output", -10, 10, 0,   Curve::Lin,  1, {}, "dB"},
             {"sa03.evo.on", "Moving bias", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
             oversampleSpec("sa03.os", 4.0),   // the spec: 2x OS, 4x recommended
+            unitSpec("sa03.unit"),
         };
         v[Bias].minLabel = "Cold"; v[Bias].maxLabel = "Hot";
         return v;
@@ -34,14 +35,23 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     shaper_.prepare(fs_); shaper_.setOversample(static_cast<int>(target_[Oversample]));
+    applyUnit();
     envC_ = std::exp(-1.0 / (0.050 * fs_));
     env_ = shift_ = 0;
     updateTone();
 }
 
+void Processor::applyUnit() {
+    unit_ = static_cast<int>(target_[Unit]);
+    for (int c = 0; c < 2; ++c) shaper_.setOnsetDb(c, sw::Unit::satDb(unit_, c, 0));   // where the tube saturates, per channel
+}
+
 void Processor::updateTone() {
     const double t = target_[Tone];
-    for (auto& c : tone_) { c.lo.setup(Svf::Mode::LowShelf, 1000.0, fs_, 0.5, -t); c.hi.setup(Svf::Mode::HighShelf, 1000.0, fs_, 0.5, t); }
+    for (int k = 0; k < 2; ++k) {   // each channel's tone network has its own tolerance (Unit B / C)
+        const double f = 1000.0 * sw::Unit::freqMul(unit_, k, 0);
+        tone_[static_cast<size_t>(k)].lo.setup(Svf::Mode::LowShelf, f, fs_, 0.5, -t); tone_[static_cast<size_t>(k)].hi.setup(Svf::Mode::HighShelf, f, fs_, 0.5, t);
+    }
 }
 
 void Processor::setParam(int id, double v) {
@@ -50,6 +60,7 @@ void Processor::setParam(int id, double v) {
     target_[static_cast<size_t>(id)] = v;
     if (id == Tone) updateTone();
     else if (id == Oversample) shaper_.setOversample(static_cast<int>(v));
+    else if (id == Unit) { applyUnit(); updateTone(); }
 }
 
 void Processor::process(float** ch, int numCh, int n) {

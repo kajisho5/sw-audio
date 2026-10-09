@@ -18,7 +18,7 @@ double peakAbs(const std::vector<float>& y, size_t a, size_t b) { double m = 0; 
 TEST_CASE("DL01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"dl01.mode", "dl01.time", "dl01.feedback", "dl01.hpf", "dl01.lpf", "dl01.depth", "dl01.rate", "dl01.duck", "dl01.mix", "dl01.sync", "dl01.pingpong"};
+    const char* ids[] = {"dl01.mode", "dl01.time", "dl01.feedback", "dl01.hpf", "dl01.lpf", "dl01.depth", "dl01.rate", "dl01.duck", "dl01.mix", "dl01.sync", "dl01.pingpong", "dl01.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Mode].labels == std::vector<std::string>{"Tape", "Analog", "Digital"}); CHECK(s[Mode].def == 0);
     CHECK(s[Time].min == 1); CHECK(s[Time].max == 2000); CHECK(s[Time].def == 375); CHECK(s[Time].curve == Curve::Log);

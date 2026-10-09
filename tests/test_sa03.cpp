@@ -14,7 +14,7 @@ double h(Set s, int k, double db = -12, double f = 1000) { auto p = make(s); ret
 TEST_CASE("SA03 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"sa03.drive", "sa03.bias", "sa03.tone", "sa03.tube", "sa03.mix", "sa03.output", "sa03.evo.on", "sa03.os"};
+    const char* ids[] = {"sa03.drive", "sa03.bias", "sa03.tone", "sa03.tube", "sa03.mix", "sa03.output", "sa03.evo.on", "sa03.os", "sa03.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Drive].max == 10); CHECK(s[Drive].def == 3);
     CHECK(s[Bias].def == 0.5); CHECK(std::string(s[Bias].minLabel) == "Cold"); CHECK(std::string(s[Bias].maxLabel) == "Hot");
@@ -61,7 +61,7 @@ TEST_CASE("SA03 silence stays silent, extreme input finite, latency 0") {
 // the common oversampling setting (spec 共通機能: 1x / 2x / 4x, default 2x)
 TEST_CASE("SA03: the oversampling parameter is the last one, 1x / 2x / 4x, default 4x, and the shaper follows it") {
     const auto& s = specs();
-    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 1);
+    CHECK(s[Oversample].steps == std::vector<double>{1, 2, 4}); CHECK(s[Oversample].def == 4.0); CHECK(Oversample == kNumParams - 2);
     auto alias = [](int os) { auto p = make({{Drive, 10}, {Oversample, static_cast<double>(os)}}); return ost::relDb(p, 15000, 3000, 0.3); };
     const double a1 = alias(1), a2 = alias(2), a4 = alias(4);
     INFO("15 kHz, alias at 3 kHz: 1x " << a1 << " dB, 2x " << a2 << " dB, 4x " << a4 << " dB");

@@ -23,7 +23,7 @@ double echoDb(double ms, double f, double db, Set extra = {}) {
 TEST_CASE("DL03 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"dl03.time", "dl03.feedback", "dl03.moddepth", "dl03.modrate", "dl03.grit", "dl03.mix", "dl03.sync"};
+    const char* ids[] = {"dl03.time", "dl03.feedback", "dl03.moddepth", "dl03.modrate", "dl03.grit", "dl03.mix", "dl03.sync", "dl03.unit"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Time].min == 20); CHECK(s[Time].max == 600); CHECK(s[Time].def == 300); CHECK(s[Time].curve == Curve::Log);
     CHECK(s[Feedback].def == 4); CHECK(s[Feedback].max == 10);

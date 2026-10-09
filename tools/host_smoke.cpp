@@ -11,6 +11,7 @@
 //     and for UT03 / RV04 a file sent in base64 pieces the way the page does arrives in the core (length and load counters in the read-outs), EQ07's Auto thresh button call reaches the audio thread -> FAIL
 //   - processing time per second of audio                                         -> printed only (CI runners are noisy)
 // Usage: sw-host-smoke <dir-or-.clap> [...]      (Linux; exit code 1 when any product FAILs)
+#include "sw/unit.hpp"
 #include "sw_message.h"
 
 #include <clap/clap.h>
@@ -535,6 +536,35 @@ struct Loaded {
     // [peers, spectrum of the others] from a poll
     std::vector<double> link() { const auto a = updateArrays(m->send(p, "p")); return a.size() > 5 ? a[5] : std::vector<double>{}; }
 };
+// Unit A / B / C through the real plug-in: with flat default settings the only thing Unit B / C change is the gain tolerance of the output stage, a different one per channel (the Shell, routed by the adapter's kUnitParam):
+// the level of each channel against Unit A must move by the tolerance sw::Unit gives that channel
+bool unitChecks(const std::vector<fs::path>& files) {
+    bool ok = true; int tested = 0;
+    for (const char* code : {"EQ03", "EQ05", "EQ06", "EQ09", "SA04", "DY07"}) {
+        fs::path f; for (const auto& x : files) if (x.stem().string().find(std::string(" ") + code + " ") != std::string::npos) f = x;
+        if (f.empty()) continue;
+        auto fail = [&](const std::string& t) { std::printf("FAIL  Unit of %s: %s\n", code, t.c_str()); ok = false; };
+        auto levels = [&](int unit, double* g) -> bool {
+            Loaded a; std::string why; if (!a.open(f, why)) { fail(why); return false; }
+            const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+            clap_id uid = CLAP_INVALID_ID; for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) { clap_param_info_t pi{}; if (pe->get_info(a.p, i, &pi) && std::string(pi.name) == "Unit") uid = pi.id; }
+            if (uid == CLAP_INVALID_ID) { fail("no Unit parameter"); a.close(); return false; }
+            EventList ev; ev.set(uid, static_cast<double>(unit)); a.run.process(60, 7, ev);
+            for (int c = 0; c < 2; ++c) { const size_t n = a.run.inAll[c].size(); g[c] = rmsDb(a.run.outAll[c], n / 2, n) - rmsDb(a.run.inAll[c], n / 2, n); }
+            a.close(); return true;
+        };
+        double ga[2], gb[2], gc[2];
+        if (!levels(0, ga) || !levels(1, gb) || !levels(2, gc)) continue;
+        for (int c = 0; c < 2; ++c) {
+            const double wantB = sw::Unit::gainDb(1, c, sw::Unit::kOutputSlot), wantC = sw::Unit::gainDb(2, c, sw::Unit::kOutputSlot);
+            if (std::abs((gb[c] - ga[c]) - wantB) > 0.15) fail("channel " + std::to_string(c) + ": Unit B moves the level by " + std::to_string(gb[c] - ga[c]) + " dB, expected " + std::to_string(wantB));
+            if (std::abs((gc[c] - ga[c]) - wantC) > 0.15) fail("channel " + std::to_string(c) + ": Unit C moves the level by " + std::to_string(gc[c] - ga[c]) + " dB, expected " + std::to_string(wantC));
+        }
+        ++tested;
+    }
+    if (ok && tested) std::printf("ok    Unit A / B / C: %d plug-ins: each channel's level moves by the tolerance that sw::Unit gives it (B and C, against A)\n", tested);
+    return ok;
+}
 bool linkChecks(const std::vector<fs::path>& files) {
     auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
     const fs::path fa = find("DY08"), fb = find("EQ02"), fc = find("EQ07");
@@ -777,6 +807,7 @@ int main(int argc, char** argv) {
     }
     if (!linkChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
     std::printf("\n%zu plug-ins: %d ok, %d FAIL, %d with warnings; Output gain checked on %d, Bypass on %d, Mix 0 %% on %d, In Off on %d; slowest %s (%.1f%% of one core, noisy)\n",
