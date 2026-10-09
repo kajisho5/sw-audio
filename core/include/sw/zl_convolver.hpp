@@ -50,9 +50,8 @@ public:
                     const auto& hist = hist_[static_cast<size_t>(c)];
                     const double* x = hist.data() + sz_ + (static_cast<size_t>(pos_ + i) & (sz_ - 1));   // x[-k] is the sample k back
                     const double* hc = headCur_.data();
-                    double a = 0.0, b = 0.0;
-                    for (int k = 0; k < B_; ++k) a += hc[k] * x[-k];
-                    if (fadeLeft_ > 0) { const double* hn = headNext_.data(); for (int k = 0; k < B_; ++k) b += hn[k] * x[-k]; }
+                    const double a = dotBack(hc, x, B_);
+                    const double b = fadeLeft_ > 0 ? dotBack(headNext_.data(), x, B_) : 0.0;
                     p[c][i] = static_cast<float>(p[c][i] + (fadeLeft_ > 0 ? a + g * (b - a) : a));
                 }
                 if (fadeLeft_ > 0 && --fadeLeft_ == 0) headCur_.swap(headNext_);
@@ -62,6 +61,13 @@ public:
     }
 
 private:
+    // sum_k h[k] * x[-k] (k < n): four partial sums, so that the additions do not wait for each other (a plain loop is one long chain of dependent additions; the compiler may not reorder them)
+    static double dotBack(const double* h, const double* x, int n) {
+        double a0 = 0, a1 = 0, a2 = 0, a3 = 0; int k = 0;
+        for (; k + 4 <= n; k += 4) { a0 += h[k] * x[-k]; a1 += h[k + 1] * x[-k - 1]; a2 += h[k + 2] * x[-k - 2]; a3 += h[k + 3] * x[-k - 3]; }
+        for (; k < n; ++k) a0 += h[k] * x[-k];
+        return (a0 + a1) + (a2 + a3);
+    }
     void finishFade() { headCur_.swap(headNext_); fadeLeft_ = 0; }
     Convolver tail_;
     int B_ = 256, nch_ = 2, fadeLen_ = 960, fadeLeft_ = 0, pos_ = 0;

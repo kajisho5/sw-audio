@@ -560,7 +560,7 @@
       if (!linkLamp) return;
       const n = inf.link ? inf.link[0] : -2, on = n > 0;
       if (linkDot) { linkDot.style.background = on ? '' : '#55575c'; linkDot.style.boxShadow = on ? '' : 'none'; }
-      const t = n === -2 ? 'SW Link' : n < 0 ? 'SW Link: this instance is not connected' : n === 0 ? 'SW Link: no other SW AUDIO plug-in is running in this project' : 'SW Link: ' + n + ' other SW AUDIO instance' + (n === 1 ? '' : 's') + ' in this project';
+      const t = n === -2 ? 'SW Link' : n < 0 ? 'SW Link: this instance is not connected' : n === 0 ? 'SW Link: no other SW AUDIO plug-in in this host process (a host that runs plug-ins in separate processes cannot connect them)' : 'SW Link: ' + n + ' other SW AUDIO instance' + (n === 1 ? '' : 's') + ' in this host process';
       if (linkLamp.title !== t) linkLamp.title = t;
     }
     function refreshInfo() {

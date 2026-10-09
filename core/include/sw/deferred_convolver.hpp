@@ -16,13 +16,13 @@ class DeferredConvolver {
 public:
     void prepare(int maxKernel, int block) {
         B_ = block; P_ = std::max(1, (maxKernel + block - 1) / block);
-        fft_.setup(2 * B_);
+        rfft_.setup(2 * B_);
         const size_t bins = static_cast<size_t>(B_ + 1);
         cur_.assign(static_cast<size_t>(P_), std::vector<cd>(bins)); next_ = cur_; stage_ = cur_;
         fdl_.assign(static_cast<size_t>(P_), std::vector<cd>(bins));
         in_.assign(static_cast<size_t>(2 * B_), 0.0);
         out_.assign(static_cast<size_t>(B_), 0.0); pend_ = outN_ = pendN_ = out_;
-        work_.assign(static_cast<size_t>(2 * B_), cd(0, 0));
+        wr_.assign(static_cast<size_t>(2 * B_), 0.0);
         pendK_.assign(static_cast<size_t>(P_) * static_cast<size_t>(B_), 0.0);
         jobC_.acc.assign(bins, cd(0, 0)); jobN_ = jobC_;
         head_ = 0; pos_ = 0; fadeLeft_ = 0; usedStage_ = usedCur_ = usedNext_ = P_;
@@ -42,10 +42,9 @@ public:
     bool stepKernel(int maxParts) {
         const int end = std::min(usedStage_, partNext_ + std::max(1, maxParts));
         for (int p = partNext_; p < end; ++p) {
-            for (int n = 0; n < B_; ++n) work_[static_cast<size_t>(n)] = pendK_[static_cast<size_t>(p) * static_cast<size_t>(B_) + static_cast<size_t>(n)];
-            std::fill(work_.begin() + B_, work_.end(), cd(0, 0));
-            fft_.forward(work_);
-            for (int k = 0; k <= B_; ++k) stage_[static_cast<size_t>(p)][static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
+            std::copy(pendK_.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(p) * static_cast<size_t>(B_)), pendK_.begin() + static_cast<std::ptrdiff_t>((static_cast<size_t>(p) + 1) * static_cast<size_t>(B_)), wr_.begin());
+            std::fill(wr_.begin() + B_, wr_.end(), 0.0);
+            rfft_.forward(wr_.data(), stage_[static_cast<size_t>(p)].data());
         }
         partNext_ = end;
         return partNext_ >= usedStage_;
@@ -81,10 +80,8 @@ private:
         for (int k = 0; k <= B; ++k) { const cd x = X[static_cast<size_t>(k)], h = H[static_cast<size_t>(k)]; acc[static_cast<size_t>(k)] += cd(x.real() * h.real() - x.imag() * h.imag(), x.real() * h.imag() + x.imag() * h.real()); }
     }
     void inverse(const std::vector<cd>& acc, std::vector<double>& out) {
-        for (int k = 0; k <= B_; ++k) work_[static_cast<size_t>(k)] = acc[static_cast<size_t>(k)];
-        for (int k = 1; k < B_; ++k) work_[static_cast<size_t>(2 * B_ - k)] = std::conj(acc[static_cast<size_t>(k)]);
-        fft_.inverse(work_);
-        for (int k = 0; k < B_; ++k) out[static_cast<size_t>(k)] = work_[static_cast<size_t>(B_ + k)].real();   // overlap-save: the second half
+        rfft_.inverse(acc.data(), wr_.data());
+        for (int k = 0; k < B_; ++k) out[static_cast<size_t>(k)] = wr_[static_cast<size_t>(B_ + k)];   // overlap-save: the second half
     }
     void computeNow(const std::vector<std::vector<cd>>& K, int used, int head, std::vector<double>& out) {
         std::fill(jobC_.acc.begin(), jobC_.acc.end(), cd(0, 0));   // (jobC_'s accumulator is free to use while we are not in the middle of its MAC: use a local if it is)
@@ -122,21 +119,19 @@ private:
         if (fadeLeft_ > 0) finishJob(jobN_, next_, usedNext_, pendN_);
         out_.swap(pend_);
         if (fadeLeft_ > 0) outN_.swap(pendN_);
-        for (int k = 0; k < 2 * B_; ++k) work_[static_cast<size_t>(k)] = in_[static_cast<size_t>(k)];
-        fft_.forward(work_);
         head_ = (head_ + 1) % P_;
-        auto& X = fdl_[static_cast<size_t>(head_)];
-        for (int k = 0; k <= B_; ++k) X[static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
+        rfft_.forward(in_.data(), fdl_[static_cast<size_t>(head_)].data());
         std::copy(in_.begin() + B_, in_.end(), in_.begin());
         startJob(jobC_, head_);
         if (fadeLeft_ > 0) startJob(jobN_, head_);
         pos_ = 0;
     }
     int B_ = 1024, P_ = 1, head_ = 0, pos_ = 0, fadeLen_ = 960, fadeLeft_ = 0, partNext_ = 0, usedStage_ = 1, usedCur_ = 1, usedNext_ = 1;
-    Fft fft_;
+    RealFft rfft_;
     std::vector<std::vector<cd>> cur_, next_, stage_, fdl_;
     std::vector<double> in_, out_, pend_, outN_, pendN_, pendK_;
-    std::vector<cd> work_, scratch_;
+    std::vector<double> wr_;
+    std::vector<cd> scratch_;
     Job jobC_, jobN_;
 };
 

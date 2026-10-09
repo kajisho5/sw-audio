@@ -567,7 +567,7 @@
       if (!btn.classList.contains('on')) { clear(); return; }
       const lk = info && info.link, sp = info && info.spectrum;
       if (!lk || lk[0] < 0) { g.innerHTML = ''; key = ''; say('Unmask: this instance is not connected to SW Link'); return; }
-      if (lk[0] === 0) { g.innerHTML = ''; key = ''; say('Unmask: no other SW AUDIO plug-in is running in this project'); return; }
+      if (lk[0] === 0) { g.innerHTML = ''; key = ''; say('Unmask: no other SW AUDIO plug-in found (a host that runs plug-ins in separate processes cannot connect them)'); return; }
       if (lk.length < 65 || !sp) { say('Unmask: listening ...'); return; }
       const a = own.feed(sp), x = oth.feed(lk.slice(1, 65)), ma = Math.max(...a), mx = Math.max(...x);
       if (ma < -70 || mx < -70) { g.innerHTML = ''; key = ''; say('Unmask: nothing to compare yet (this track or the others are silent)'); return; }

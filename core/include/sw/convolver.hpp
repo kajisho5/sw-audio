@@ -13,7 +13,7 @@ class Convolver {
 public:
     void prepare(int maxKernel, int block, int numCh) {
         B_ = block; P_ = (maxKernel + block - 1) / block; nch_ = std::max(1, std::min(2, numCh));
-        fft_.setup(2 * B_);
+        rfft_.setup(2 * B_);
         const size_t bins = static_cast<size_t>(B_ + 1);
         cur_.assign(static_cast<size_t>(P_), std::vector<cd>(bins));
         next_ = cur_;
@@ -27,8 +27,8 @@ public:
             c.outNext.assign(static_cast<size_t>(B_), 0.0);
         }
         head_ = 0; pos_ = 0; fadeLeft_ = 0;
-        work_.assign(static_cast<size_t>(2 * B_), cd(0, 0));
-        acc_ = acc2_ = std::vector<cd>(bins);
+        wr_.assign(static_cast<size_t>(2 * B_), 0.0);
+        acc_ = std::vector<cd>(bins);
     }
     void setFadeSamples(int n) { fadeLen_ = std::max(1, n); }
     int latencySamples() const { return B_; }
@@ -53,10 +53,9 @@ public:
     bool stepKernel(int maxParts) {
         const int end = std::min(usedStage_, partNext_ + std::max(1, maxParts));
         for (int p = partNext_; p < end; ++p) {
-            for (int n = 0; n < B_; ++n) work_[static_cast<size_t>(n)] = pend_[static_cast<size_t>(p) * static_cast<size_t>(B_) + static_cast<size_t>(n)];
-            std::fill(work_.begin() + B_, work_.end(), cd(0, 0));
-            fft_.forward(work_);
-            for (int k = 0; k <= B_; ++k) stage_[static_cast<size_t>(p)][static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
+            std::copy(pend_.begin() + static_cast<std::ptrdiff_t>(static_cast<size_t>(p) * static_cast<size_t>(B_)), pend_.begin() + static_cast<std::ptrdiff_t>((static_cast<size_t>(p) + 1) * static_cast<size_t>(B_)), wr_.begin());
+            std::fill(wr_.begin() + B_, wr_.end(), 0.0);
+            rfft_.forward(wr_.data(), stage_[static_cast<size_t>(p)].data());
         }
         partNext_ = end;
         return partNext_ >= usedStage_;
@@ -99,31 +98,27 @@ private:
                 acc_[static_cast<size_t>(k)] += cd(x.real() * h.real() - x.imag() * h.imag(), x.real() * h.imag() + x.imag() * h.real());
             }
         }
-        for (int k = 0; k <= B_; ++k) work_[static_cast<size_t>(k)] = acc_[static_cast<size_t>(k)];
-        for (int k = 1; k < B_; ++k) work_[static_cast<size_t>(2 * B_ - k)] = std::conj(acc_[static_cast<size_t>(k)]);
-        fft_.inverse(work_);
-        for (int k = 0; k < B_; ++k) out[static_cast<size_t>(k)] = work_[static_cast<size_t>(B_ + k)].real();  // overlap-save: keep the 2nd half
+        rfft_.inverse(acc_.data(), wr_.data());
+        for (int k = 0; k < B_; ++k) out[static_cast<size_t>(k)] = wr_[static_cast<size_t>(B_ + k)];  // overlap-save: keep the 2nd half
     }
     void block(int nch) {
         head_ = (head_ + 1) % P_;
         for (int c = 0; c < nch; ++c) {
             Ch& s = ch_[static_cast<size_t>(c)];
-            for (int k = 0; k < 2 * B_; ++k) work_[static_cast<size_t>(k)] = s.in[static_cast<size_t>(k)];
-            fft_.forward(work_);
-            auto& X = s.fdl[static_cast<size_t>(head_)];
-            for (int k = 0; k <= B_; ++k) X[static_cast<size_t>(k)] = work_[static_cast<size_t>(k)];
+            rfft_.forward(s.in.data(), s.fdl[static_cast<size_t>(head_)].data());
             std::copy(s.in.begin() + B_, s.in.end(), s.in.begin());  // slide: this block becomes the next "previous"
             convolveInto(cur_, usedCur_, s, s.out);
             if (fadeLeft_ > 0) convolveInto(next_, usedNext_, s, s.outNext);
         }
     }
     int B_ = 64, P_ = 1, nch_ = 2, head_ = 0, pos_ = 0, fadeLen_ = 960, fadeLeft_ = 0;
-    Fft fft_;
+    RealFft rfft_;
     std::vector<std::vector<cd>> cur_, next_, stage_;
     std::vector<double> pend_;
     int partNext_ = 0, usedStage_ = 1, usedCur_ = 1, usedNext_ = 1;
     std::array<Ch, 2> ch_{};
-    std::vector<cd> work_, acc_, acc2_;
+    std::vector<double> wr_;
+    std::vector<cd> acc_;
 };
 
 }  // namespace sw
