@@ -495,6 +495,19 @@
     return { update(info) { const sp = info && info.spectrum; if (!sp) return; seen = true; for (let b = 0; b < 64; b++) { const v = sp[b] === undefined ? -120 : sp[b]; slow[b] += (v - slow[b]) * 0.02; } } };
   }
 
+  // ---- "Analyzer" of EQ08: the measured spectrum (the 64 bands every product has, 20 Hz - 20 kHz) as a soft area behind the EQ curve; the button shows / hides it (off until pressed)
+  function analyzerBackdrop(box, ctx) {
+    const svg = svgOf(box), btn = box.querySelector('button[data-analyzer]'); if (!svg || !btn) return null;
+    const [, , W, H] = vbOf(svg), sm = Smooth(), area = mkEl('path', { fill: '#8a8c92', 'fill-opacity': 0.22 }); svg.insertBefore(area, svg.firstChild);
+    let on = false; btn.addEventListener('click', () => { on = !on; btn.classList.toggle('on', on); if (!on) area.setAttribute('d', ''); });
+    return { update(info) {
+      const sp = info && info.spectrum; if (!sp || !on) return;
+      const a = sm.feed(sp); let d = 'M10 ' + H;
+      for (let b = 0; b < 64; b++) d += ' L' + (10 + (b + 0.5) / 64 * (W - 20)).toFixed(1) + ' ' + (H - specDb(a[b], -90) * (H - 12)).toFixed(1);
+      area.setAttribute('d', d + ' L' + (W - 10) + ' ' + H + ' Z');
+    } };
+  }
+
   // 31 third-octave bars with peak holds (LV20)
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
@@ -1775,7 +1788,7 @@
     RS05: declipDisplay,
     DL05: grainDelayDisplay,
     CR03: granularDisplay,
-    EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
+    EQ08: (box, ctx) => combine(eqDisplay(box, ctx), analyzerBackdrop(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
     LV03: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV03'), miniEqCurve(box, ctx)),
     LV04: (box, ctx) => { let tot = -1, at = 0;   // the time of the last event comes from the clock once, when a new event shows up (the core's seconds do not advance while the host is stopped)
       return combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => { const r = info && info.readouts; if (!r || r.length < 5) return null; if (r[2] < 0) return 'No limit events'; if (r[1] !== tot) { tot = r[1]; at = Date.now() - r[2] * 1000; } const d = new Date(at), p2 = v => String(v).padStart(2, '0'); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + '  GR ' + r[3].toFixed(1) + ' dB  ' + r[4].toFixed(1) + ' s'; } }])); },
