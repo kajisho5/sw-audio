@@ -16,6 +16,7 @@
 
 #include <clap/clap.h>
 #include <clap/ext/note-ports.h>
+#include <clap/ext/tail.h>
 #include <clap/ext/track-info.h>
 
 #include <dlfcn.h>
@@ -73,9 +74,9 @@ struct EventList {
         push(&e, sizeof e);
     }
     // a raw MIDI message (status, data1, data2) on note port 0
-    void midi(uint8_t status, uint8_t d1, uint8_t d2) {
+    void midi(uint8_t status, uint8_t d1, uint8_t d2, uint32_t time = 0) {
         clap_event_midi_t e{};
-        e.header.size = sizeof(e); e.header.time = 0; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_MIDI; e.header.flags = 0;
+        e.header.size = sizeof(e); e.header.time = time; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_MIDI; e.header.flags = 0;
         e.port_index = 0; e.data[0] = status; e.data[1] = d1; e.data[2] = d2;
         push(&e, sizeof e);
     }
@@ -809,7 +810,7 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
 // The same input in blocks of different sizes: what comes out must not depend on how the host cuts the audio (the buffer size of a DAW, an offline bounce, a host that splits a block at every automation point).
 // The reference is blocks of 256; the others are 1, 7, 64, 509, 1024 and a mix (1, 2, 3, 5, 8 ... 987). The input is the same noise, three parameter events (random parameters, random values) fall at the same absolute samples in
 // every run (the adapter has to cut the block at the event). `over` = the largest block a run sends is 2 x the max_frames the plug-in was activated with (a host that breaks the CLAP rule: the adapter has to cope).
-struct TimedParam { size_t at; clap_id id; double v; };
+struct TimedParam { size_t at; clap_id id; double v; bool midi = false; uint8_t st = 0, d1 = 0, d2 = 0; };
 struct Cut { const char* name; std::vector<uint32_t> sizes; };
 void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<float>* sc, const std::vector<TimedParam>& tp, const std::vector<uint32_t>& sizes, std::vector<float> out[2], bool& bad) {
     const size_t total = in[0].size(); uint32_t maxSize = 1; for (uint32_t z : sizes) maxSize = std::max(maxSize, z);
@@ -817,7 +818,7 @@ void processCut(Loaded& a, const std::vector<float> in[2], const std::vector<flo
     size_t pos = 0, k = 0, ti = 0;
     while (pos < total) {
         const uint32_t n = static_cast<uint32_t>(std::min<size_t>(sizes[k++ % sizes.size()], total - pos));
-        EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { ev.set(tp[ti].id, tp[ti].v, static_cast<uint32_t>(tp[ti].at - pos)); ++ti; }
+        EventList ev; while (ti < tp.size() && tp[ti].at < pos + n) { const uint32_t t = static_cast<uint32_t>(tp[ti].at - pos); if (tp[ti].midi) ev.midi(tp[ti].st, tp[ti].d1, tp[ti].d2, t); else ev.set(tp[ti].id, tp[ti].v, t); ++ti; }
         for (int c = 0; c < 2; ++c) { std::copy(in[c].begin() + static_cast<long>(pos), in[c].begin() + static_cast<long>(pos + n), bi[c].begin()); std::fill(bo[c].begin(), bo[c].end(), 0.0f); if (sc) std::copy(sc[c].begin() + static_cast<long>(pos), sc[c].begin() + static_cast<long>(pos + n), bs[c].begin()); }
         float* ip[2] = {bi[0].data(), bi[1].data()}; float* sp[2] = {bs[0].data(), bs[1].data()}; float* op[2] = {bo[0].data(), bo[1].data()};
         clap_audio_buffer_t ib[2]{}; ib[0].channel_count = 2; ib[0].data32 = ip; ib[1].channel_count = 2; ib[1].data32 = sp; clap_audio_buffer_t ob{}; ob.channel_count = 2; ob.data32 = op;
@@ -832,12 +833,13 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
     bool ok = true; differ = 0;
     const size_t total = static_cast<size_t>(kSr * 0.7);
     const std::vector<Cut> cuts = {{"1", {1}}, {"7", {7}}, {"64", {64}}, {"509", {509}}, {"1024", {1024}}, {"mixed", {1, 0, 2, 3, 0, 5, 8, 13, 21, 0, 34, 55, 89, 144, 233, 377, 610, 987}}, {"2048*", {2048}}};
-    struct Scenario { const char* name; float level; bool events; bool bursts; bool sidechain; };
+    struct Scenario { const char* name; float level; bool events; bool bursts; bool sidechain; bool midi = false; };
     const Scenario scenarios[] = {{"steady, -20 dBFS noise", 0.1732f, false, false, false}, {"steady, loud (peaks over 0 dBFS)", 1.0f, false, false, false}, {"steady, tone bursts with pauses", 0.25f, false, true, false},
-                                  {"sidechain connected (noise in, tone bursts on the sidechain)", 0.1732f, false, false, true}, {"-20 dBFS noise + 3 parameter events", 0.1732f, true, false, false}};
+                                  {"sidechain connected (noise in, tone bursts on the sidechain)", 0.1732f, false, false, true}, {"-20 dBFS noise + 3 parameter events", 0.1732f, true, false, false},
+                                  {"MIDI notes and controllers (Freeze on, if there is one), tone bursts in", 0.25f, true, true, false, true}};
     for (const auto& f : files) {
         const std::string name = f.stem().string();
-        std::vector<TimedParam> tp; bool bad = false; std::string why; std::vector<uint8_t> state;   // the state of the first instance goes into every other one (SA02: the seed of its component tolerances is saved with the project)
+        std::vector<TimedParam> tp, tpMidi; bool bad = false; std::string why; std::vector<uint8_t> state;   // the state of the first instance goes into every other one (SA02: the seed of its component tolerances is saved with the project)
         std::vector<std::string> rows; double worstAll = -400.0; bool failed = false, differs = false;
         for (const auto& sc : scenarios) {
             std::vector<float> in[2];
@@ -853,13 +855,13 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
                     }
                 }
             }
-            std::vector<float> scIn[2]; bool noSidechain = false;
+            std::vector<float> scIn[2]; bool skipScenario = false;
             if (sc.sidechain) for (int c = 0; c < 2; ++c) { scIn[c].resize(total); for (size_t i = 0; i < total; ++i) scIn[c][i] = std::fmod(static_cast<double>(i) / kSr, 0.22) < 0.12 ? 0.25f * static_cast<float>(std::sin(6.283185307179586 * (330.0 + 110.0 * c) * static_cast<double>(i) / kSr)) : 0.0f; }
             auto runCut = [&](const std::vector<uint32_t>& sizes, std::vector<float> out[2]) -> bool {
                 Loaded a; if (!a.open(f, why, 1024)) return false;
                 const auto* st = static_cast<const clap_plugin_state_t*>(a.p->get_extension(a.p, CLAP_EXT_STATE));
                 if (st) { if (state.empty()) { MemOut o; if (st->save(a.p, &o.s)) state = o.d; } else { MemIn in(state, state.size()); st->load(a.p, &in.s); } }
-                if (sc.events && tp.empty()) {   // chosen once, from the first plug-in instance: three random writable parameters
+                if (sc.events && !sc.midi && tp.empty()) {   // chosen once, from the first plug-in instance: three random writable parameters
                     const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS)); Rng rr(0xB10C ^ std::hash<std::string>()(name));
                     std::vector<clap_param_info_t> info(pe ? pe->count(a.p) : 0); for (uint32_t i = 0; i < info.size(); ++i) pe->get_info(a.p, i, &info[i]);
                     const size_t at[3] = {total / 7, total / 3 + 11, total / 2 + 301};
@@ -869,15 +871,25 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
                         tp.push_back({at[e], info[i].id, v});
                     }
                 }
+                if (sc.midi) {
+                    const auto* np = static_cast<const clap_plugin_note_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_NOTE_PORTS));
+                    if (!np || np->count(a.p, true) < 1) { skipScenario = true; a.close(); return true; }   // no MIDI input
+                    if (tpMidi.empty()) {   // chosen once: Freeze on (CR04 captures on a note only then), then notes and controllers at fixed samples
+                        const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+                        for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) { clap_param_info_t pi{}; if (pe->get_info(a.p, i, &pi) && std::string(pi.name) == "Freeze") tpMidi.push_back({0, pi.id, 1.0}); }
+                        auto m = [&](size_t at, uint8_t st, uint8_t d1, uint8_t d2) { TimedParam t{at, 0, 0.0}; t.midi = true; t.st = st; t.d1 = d1; t.d2 = d2; tpMidi.push_back(t); };
+                        m(total / 5, 0x90, 60, 100); m(total / 4 + 3, 0xB0, 64, 127); m(total / 3, 0xB0, 1, 100); m(total / 2 + 17, 0x90, 64, 90); m(total * 3 / 5, 0x80, 60, 0);
+                    }
+                }
                 if (sc.sidechain) {
                     const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
-                    if (!ports || ports->count(a.p, true) < 2) { noSidechain = true; a.close(); return true; }
+                    if (!ports || ports->count(a.p, true) < 2) { skipScenario = true; a.close(); return true; }
                 }
-                processCut(a, in, sc.sidechain ? scIn : nullptr, sc.events ? tp : std::vector<TimedParam>{}, sizes, out, bad); a.close(); return true;
+                processCut(a, in, sc.sidechain ? scIn : nullptr, sc.midi ? tpMidi : (sc.events ? tp : std::vector<TimedParam>{}), sizes, out, bad); a.close(); return true;
             };
             std::vector<float> ref[2];
             if (!runCut({256}, ref)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
-            if (noSidechain) continue;   // this product has no sidechain input
+            if (skipScenario) continue;   // this product has no sidechain input / no MIDI input
             double peak = 1e-9; for (int c = 0; c < 2; ++c) for (float x : ref[c]) peak = std::max(peak, static_cast<double>(std::fabs(x)));
             std::string row = std::string("  ") + sc.name + ":";
             for (const auto& cut : cuts) {
@@ -885,7 +897,7 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
                 if (!runCut(cut.sizes, o)) { lines.push_back("FAIL  " + name + ": " + why); ok = false; failed = true; break; }
                 double err = 0; for (int c = 0; c < 2; ++c) for (size_t i = 0; i < total; ++i) err = std::max(err, static_cast<double>(std::fabs(o[c][i] - ref[c][i])));
                 const double db = 20.0 * std::log10(std::max(err / peak, 1e-20)); worstAll = std::max(worstAll, db);
-                if (db > (sc.events ? -50.0 : -90.0)) differs = true;   // steady: nothing may depend on the cut; with parameter events the coefficient ramps start on the product's own control grid (a few -60 .. -100 dB)
+                if (db > (sc.events && !sc.midi ? -50.0 : -90.0)) differs = true;   // steady: nothing may depend on the cut; with parameter events the coefficient ramps start on the product's own control grid (a few -60 .. -100 dB)
                 char b[32]; std::snprintf(b, sizeof b, " %s:%.0f", cut.name, db); row += b;
             }
             if (failed) break;
@@ -902,13 +914,32 @@ bool blockChecks(const std::vector<fs::path>& files, std::vector<std::string>& l
     }
     return ok;
 }
+// How long a sound goes on after the input has stopped: an impulse (0.5) in silence, 30 s of silence after it; the last sample above -80 dBFS (1e-4) minus the position of the impulse (the delay the plug-in reports is part of it).
+// A host that bounces or freezes a track needs this ("tail" in CLAP / VST3 getTailSamples): without it the reverb or delay stops at the end of the region.
+void tailChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines) {
+    for (const auto& f : files) {
+        Loaded a; std::string why; if (!a.open(f, why)) { lines.push_back("FAIL  " + f.stem().string() + ": " + why); continue; }
+        a.run.impulse = 4 * kBlock; EventList none;
+        const int blocks = static_cast<int>(30.0 * kSr / kBlock);
+        a.run.process(blocks, 1, none);
+        long last = -1; for (int c = 0; c < 2; ++c) for (size_t i = a.run.outAll[c].size(); i-- > 0;) if (std::fabs(a.run.outAll[c][i]) > 1e-4f) { last = std::max<long>(last, static_cast<long>(i)); break; }
+        const auto* lat = static_cast<const clap_plugin_latency_t*>(a.p->get_extension(a.p, CLAP_EXT_LATENCY));
+        const uint32_t reported = lat ? lat->get(a.p) : 0;
+        const double tail = last < 0 ? 0.0 : (static_cast<double>(last) - 4.0 * kBlock - reported) / kSr;
+        const auto* te = static_cast<const clap_plugin_tail_t*>(a.p->get_extension(a.p, CLAP_EXT_TAIL));
+        const double said = te ? te->get(a.p) / kSr : -1.0;
+        char b[200]; std::snprintf(b, sizeof b, "%-26s tail %7.3f s   reported %s", f.stem().string().c_str(), tail, te ? (std::to_string(said).substr(0, 7) + " s").c_str() : "(none)");
+        if (tail > 0.01) lines.push_back(b);
+        a.close();
+    }
+}
 }   // namespace
 
 int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -917,6 +948,7 @@ int main(int argc, char** argv) {
         }
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         if (opt == "--blocks") { blocksOnly = true; continue; }
+        if (opt == "--tails") { tailsOnly = true; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
             for (auto& e : fs::directory_iterator(a))
@@ -928,6 +960,12 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (tailsOnly) {   // --tails: only the tail measurement
+        std::vector<std::string> lines; tailChecks(files, lines);
+        for (const auto& l : lines) std::printf("%s\n", l.c_str());
+        std::printf("tails: %zu plug-ins, %zu with a tail over 10 ms\n", files.size(), lines.size());
+        return 0;
+    }
     if (blocksOnly) {   // --blocks: only the block-size check
         std::vector<std::string> lines; int differ = 0; const bool ok = blockChecks(files, lines, differ);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
