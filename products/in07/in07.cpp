@@ -143,6 +143,28 @@ const std::vector<ParamSpec>& specs() {
         ParamSpec ps{"in07.preset", "Preset", 0, static_cast<double>(presetLabels.size() - 1), 0, Curve::Step, 1, presetSteps, "", presetLabels};
         ps.automatable = false;
         v.push_back(ps);
+        // the arpeggiator and the trance gate (2026-10-09; appended: the ids above keep their numbers)
+        onOff("in07.arp.on", "Arp", false);
+        v.push_back({"in07.arp.mode",    "Arp mode",    0, 4, ArpUp, Curve::Step, 1, {0, 1, 2, 3, 4}, "", {"Up", "Down", "Up-Down", "Order", "Random"}});
+        v.push_back({"in07.arp.rate",    "Arp rate",    0, 3, 1, Curve::Step, 1, {0, 1, 2, 3}, "", {"1/8", "1/16", "1/16 T", "1/32"}});
+        v.push_back({"in07.arp.octaves", "Arp octaves", 1, 4, 1, Curve::Step, 1, {1, 2, 3, 4}, "", {"1", "2", "3", "4"}});
+        v.push_back({"in07.arp.length",  "Arp length",  10, 100, 70, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.arp.swing",   "Arp swing",   0, 75, 0, Curve::Lin, 1, {}, "%"});
+        {
+            std::vector<double> st; std::vector<std::string> sl;
+            for (int i = 1; i <= kArpSteps; ++i) { st.push_back(i); sl.push_back(std::to_string(i)); }
+            v.push_back({"in07.arp.steps", "Arp steps", 1, kArpSteps, kArpSteps, Curve::Step, 1, st, "", sl});
+        }
+        for (int i = 0; i < kArpSteps; ++i)
+            v.push_back({str("in07.arp.vel" + std::to_string(i + 1)), str("Arp velocity " + std::to_string(i + 1)), 0, 100, 100, Curve::Lin, 1, {}, "%", {}, "Rest"});
+        for (int i = 0; i < kArpSteps; ++i)
+            v.push_back({str("in07.arp.pitch" + std::to_string(i + 1)), str("Arp pitch " + std::to_string(i + 1)), -12, 12, 0, Curve::Step, 1, {-12, 0, 7, 12}, "st", {"-12", "0", "+7", "+12"}});
+        onOff("in07.gate.on", "Gate", false);
+        v.push_back({"in07.gate.rate",  "Gate rate",  0, 2, 1, Curve::Step, 1, {0, 1, 2}, "", {"1/8", "1/16", "1/32"}});
+        v.push_back({"in07.gate.depth", "Gate depth", 0, 100, 100, Curve::Lin, 1, {}, "%"});
+        static const bool kGate[kArpSteps] = {1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1};
+        for (int i = 0; i < kArpSteps; ++i)
+            onOff(str("in07.gate.step" + std::to_string(i + 1)), str("Gate step " + std::to_string(i + 1)), kGate[i]);
         return v;
     }();
     return s;
@@ -171,6 +193,18 @@ inline double fastTanh(double x) {
     if (x < -4.97) return -1.0;
     const double x2 = x * x;
     return x * (135135.0 + x2 * (17325.0 + x2 * (378.0 + x2))) / (135135.0 + x2 * (62370.0 + x2 * (3150.0 + 28.0 * x2)));
+}
+// the same for two pairs at once (the 2x drive's two samples, left and right): one division for the four. |x| over 4.97 is held at 4.97
+// (the approximant there is 1 - 6e-7, where the scalar one returns 1)
+inline void fastTanh2(D2 x0, D2 x1, D2& y0, D2& y1) {
+    const D2 lim = D2::all(4.97), nlim = D2::all(-4.97);
+    x0 = vmin(vmax(x0, nlim), lim); x1 = vmin(vmax(x1, nlim), lim);
+    const D2 a = x0 * x0, b = x1 * x1;
+    const D2 c0 = D2::all(135135.0), c1 = D2::all(17325.0), c2 = D2::all(378.0), e1 = D2::all(62370.0), e2 = D2::all(3150.0), e3 = D2::all(28.0);
+    const D2 n0 = x0 * (c0 + a * (c1 + a * (c2 + a))), d0 = c0 + a * (e1 + a * (e2 + e3 * a));
+    const D2 n1 = x1 * (c0 + b * (c1 + b * (c2 + b))), d1 = c0 + b * (e1 + b * (e2 + e3 * b));
+    const D2 r = D2::all(1.0) / (d0 * d1);
+    y0 = n0 * d1 * r; y1 = n1 * d0 * r;
 }
 inline double dbToGain(double db) { return std::pow(10.0, db / 20.0); }
 // 4-point cubic Hermite (Catmull-Rom) between p[0] and p[1] (p[-1] and p[2] are read too)
@@ -250,22 +284,23 @@ void BlepOsc::jump(double after, double height) {
 }
 
 double BlepOsc::late(double t) const {   // the phase minBLEP's delay ago
-    double u = t - minBlep().delay * inc_;
+    double u = t - late_;
     while (u < 0.0) u += 1.0;
     return u;
 }
 
-double BlepOsc::next() {
+template <int W> double BlepOsc::step() {
     const double t = ph_, dt = inc_;
     double y;
-    switch (wave_) {
-        case Sine: y = std::sin(2.0 * kPi * t); break;
-        case Triangle:
-            y = t < 0.5 ? 4.0 * t - 1.0 : 3.0 - 4.0 * t;
-            if (correct_) y += 8.0 * dt * (blamp(t, dt) - blamp(wrap(t + 0.5), dt));
-            break;
-        case Square: { const double td = correct_ ? late(t) : t; y = (td < pw_ ? 1.0 : -1.0) - (2.0 * pw_ - 1.0); break; }   // minus the pulse's mean: no DC at any width
-        default: y = 2.0 * (correct_ ? late(t) : t) - 1.0; break;   // Saw
+    if constexpr (W == Sine) y = std::sin(2.0 * kPi * t);
+    else if constexpr (W == Triangle) {
+        y = t < 0.5 ? 4.0 * t - 1.0 : 3.0 - 4.0 * t;
+        if (correct_) y += 8.0 * dt * (blamp(t, dt) - blamp(wrap(t + 0.5), dt));
+    } else if constexpr (W == Square) {
+        const double td = correct_ ? late(t) : t;
+        y = (td < pw_ ? 1.0 : -1.0) - (2.0 * pw_ - 1.0);   // minus the pulse's mean: no DC at any width
+    } else {
+        y = 2.0 * (correct_ ? late(t) : t) - 1.0;           // Saw
     }
     if (correct_) {
         y += ring_[static_cast<size_t>(pos_)];
@@ -274,9 +309,9 @@ double BlepOsc::next() {
     }
     // the jumps between this sample and the next
     double b = t + dt;
-    if (wave_ == Saw) {
+    if constexpr (W == Saw) {
         if (b >= 1.0) { b -= 1.0; if (correct_) jump(b / dt, -2.0); }
-    } else if (wave_ == Square) {
+    } else if constexpr (W == Square) {
         if (correct_ && t < pw_ && b >= pw_) jump((b - pw_) / dt, -2.0);
         if (b >= 1.0) {
             b -= 1.0;
@@ -287,6 +322,15 @@ double BlepOsc::next() {
     }
     ph_ = b;
     return y;
+}
+
+double BlepOsc::next() {
+    switch (wave_) {
+        case Sine: return step<Sine>();
+        case Triangle: return step<Triangle>();
+        case Square: return step<Square>();
+        default: return step<Saw>();
+    }
 }
 
 // ---- envelope
@@ -352,8 +396,8 @@ void Voice::prepare(double fs, const double* layerParams, const Shared* shared, 
 
 void Voice::reset() {
     amp_.reset(); fenv_.reset();
-    for (auto& ch : svf_) for (auto& f : ch) f.reset();
-    for (auto& o : os_) o.reset();
+    for (auto& f : svf_) f.reset();
+    os_.reset();
     ctl_ = 0; first_ = true; killed_ = false; glideLeft_ = 0; flyOn_ = false; coherence_ = 0.0;
 }
 
@@ -391,8 +435,8 @@ void Voice::noteOn(int key, double velocity, double glideFrom) {
             sdone_[k] = false;
         }
         oversample_ = p(Drive) > 0.0 || (sh_ && sh_->driveRouted);
-        for (auto& ch : svf_) for (auto& f : ch) f.reset();
-        for (auto& o : os_) o.reset();
+        for (auto& f : svf_) f.reset();
+        os_.reset();
         first_ = true;
     }
     fmEnv_ = 1.0;   // the FM index starts again
@@ -554,7 +598,7 @@ void Voice::control() {
     if (std::abs(pan) > 1e-12) { const double th = (pan + 1.0) * kPi / 4.0; nl = lev * kSqrt2 * std::cos(th); nr = lev * kSqrt2 * std::sin(th); stereo = true; }
     gL0_ = first_ ? nl : gL_; gR0_ = first_ ? nr : gR_;   // ramp from the last period's gains (the first period of a note starts there)
     gL_ = nl; gR_ = nr;
-    if (stereo && !stereo_) { svf_[1] = svf_[0]; os_[1] = os_[0]; }   // the right chain takes over the left chain's state: no click
+    if (stereo && !stereo_) { for (auto& f : svf_) f.copyLeftToRight(); os_.copyLeftToRight(); }   // the right chain takes over the left's state: no click
     stereo_ = stereo;
 
     amp_.setTimes(p(AmpA) * 1e-3 * (m[2] == 0.0 ? 1.0 : std::pow(4.0, m[2])), p(AmpD) * 1e-3, p(AmpS) / 100.0,
@@ -566,20 +610,17 @@ void Voice::control() {
                      + kEnvOctaves * md[DstCutoff] + 2.0 * m[0] + flyCut;
     cutoff_ = std::clamp(p(Cutoff) * std::exp2(oct), 20.0, 0.45 * fs_);
     const int type = static_cast<int>(std::lround(p(FilterType)));
-    if (type != type_) { for (auto& ch : svf_) ch[1].reset(); type_ = type; }
+    if (type != type_) { svf_[1].reset(); type_ = type; }
     const double r = std::clamp((p(Resonance) + kModRange * md[DstResonance] + kMacroRange * m[1]) / 100.0, 0.0, 1.0);
     const int n = first_ ? 0 : kCtl;   // the first update of a note is immediate
-    for (int c = 0; c < 2; ++c) {
-        auto& st = svf_[static_cast<size_t>(c)];
-        switch (type_) {
-            case LP24:
-                st[0].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ24a, 0.0, n);
-                st[1].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ24b * std::pow(kQMax / kQ24b, r), 0.0, n);
-                break;
-            case BP12: st[0].setupRamp(Svf::Mode::BandPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
-            case HP12: st[0].setupRamp(Svf::Mode::HighPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
-            default:   st[0].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
-        }
+    switch (type_) {   // one ramp for both channels
+        case LP24:
+            svf_[0].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ24a, 0.0, n);
+            svf_[1].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ24b * std::pow(kQMax / kQ24b, r), 0.0, n);
+            break;
+        case BP12: svf_[0].setupRamp(Svf::Mode::BandPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
+        case HP12: svf_[0].setupRamp(Svf::Mode::HighPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
+        default:   svf_[0].setupRamp(Svf::Mode::LowPass, cutoff_, fs_, kQ12 * std::pow(kQMax / kQ12, r), 0.0, n); break;
     }
     first_ = false;
     drive_ = std::clamp((p(Drive) + kModRange * md[DstDrive] + kMacroRange * m[4]) / 100.0, 0.0, 1.0);
@@ -596,16 +637,16 @@ void Voice::oscillate(double* xl, double* xr, int m, int done) {
                 w += dw;
                 const int f = std::clamp(static_cast<int>(w), 0, WaveBank::kFrames - 2);
                 const double fw = w - f;
+                const bool oneFrame = fw == 0.0;   // on a frame: a + 0 (b - a) = a, so the second frame is not read
                 double sl = 0.0, sr = 0.0;
                 for (int u = 0; u < U; ++u) {
                     const size_t k = static_cast<size_t>(u);
                     const float* A = wbase_[k] + static_cast<size_t>(f) * stride;
-                    const float* B = A + stride;
                     const double x = ph_[k] * wsize_[k];
                     const int j = static_cast<int>(x);
                     const double fr = x - j;
-                    const double a = hermite(A + j, fr), b = hermite(B + j, fr);
-                    const double s = a + fw * (b - a);
+                    const double a = hermite(A + j, fr);
+                    const double s = oneFrame ? a : a + fw * (hermite(A + stride + j, fr) - a);
                     double ph = ph_[k] + inc0_[k];
                     if (ph >= 1.0) ph -= 1.0;
                     ph_[k] = ph;
@@ -665,17 +706,27 @@ void Voice::oscillate(double* xl, double* xr, int m, int done) {
             }
             break;
         }
-        default:
-            for (int i = 0; i < m; ++i) {
-                double sl = 0.0, sr = 0.0;
-                for (int u = 0; u < U; ++u) {
-                    const size_t k = static_cast<size_t>(u);
-                    const double s = osc_[k].next();
-                    sl += gl_[k] * s; sr += gr_[k] * s;
-                }
-                xl[i] = sl; xr[i] = sr;
+        default:   // every copy has the same wave: chosen once per block
+            switch (osc_[0].wave()) {
+                case Sine: analog<Sine>(xl, xr, m); break;
+                case Triangle: analog<Triangle>(xl, xr, m); break;
+                case Square: analog<Square>(xl, xr, m); break;
+                default: analog<Saw>(xl, xr, m); break;
             }
             break;
+    }
+}
+
+template <int W> void Voice::analog(double* xl, double* xr, int m) {   // the copies side by side, sample by sample
+    const int U = unison_;
+    for (int i = 0; i < m; ++i) {
+        double sl = 0.0, sr = 0.0;
+        for (int u = 0; u < U; ++u) {
+            const size_t k = static_cast<size_t>(u);
+            const double s = osc_[k].step<W>();
+            sl += gl_[k] * s; sr += gr_[k] * s;
+        }
+        xl[i] = sl; xr[i] = sr;
     }
 }
 
@@ -689,38 +740,34 @@ void Voice::render(float* l, float* r, int n) {
         const int done = std::max(0, kCtl - ctl_);   // samples of this control period already played
         oscillate(xs[0], xs[1], m, done);
         const double d = drive_, g = 1.0 + 9.0 * d;
+        const D2 dd = D2::all(d), gg = D2::all(g), ig = D2::all(1.0 / g);
         const bool lp24 = type_ == LP24;
         // the layer gains ramp linearly across the control period
         const double dl = (gL_ - gL0_) / kCtl, dr = (gR_ - gR0_) / kCtl;
         double cl = gL0_ + dl * done, cr = gR0_ + dr * done;
         for (int i = 0; i < m; ++i) {
-            const int chans = stereo_ ? 2 : 1;
-            double y[2] = {xs[0][i], xs[1][i]};
-            for (int c = 0; c < chans; ++c) {
-                const size_t cc = static_cast<size_t>(c);
-                double x = y[c];
-                if (oversample_) {   // drive at 2x: unity gain for small signals
-                    double up[2];
-                    os_[cc].up(x, up);
-                    for (double& v : up) v += d * (fastTanh(g * v) / g - v);
-                    x = os_[cc].down(up);
-                }
-                x = svf_[cc][0].process(x);
-                if (lp24) x = svf_[cc][1].process(x);
-                y[c] = x;
+            D2 x(xs[0][i], xs[1][i]);   // left and right in one pair (a mono voice has the same on both, and gets the same on both)
+            if (oversample_) {          // drive at 2x: unity gain for small signals
+                D2 up[2];
+                os_.up(x, up);
+                D2 t0, t1;
+                fastTanh2(gg * up[0], gg * up[1], t0, t1);
+                up[0] += dd * (t0 * ig - up[0]); up[1] += dd * (t1 * ig - up[1]);
+                x = os_.down(up);
             }
-            if (!stereo_) y[1] = y[0];
+            x = svf_[0].process(x);
+            if (lp24) x = svf_[1].process(x);
             fenv_.next();
             cl += dl; cr += dr;
             const double a = amp_.next() * velGain_;
-            l[off + i] += static_cast<float>(y[0] * a * cl);
-            r[off + i] += static_cast<float>(y[1] * a * cr);
+            l[off + i] += static_cast<float>(x.lo() * a * cl);
+            r[off + i] += static_cast<float>(x.hi() * a * cr);
         }
         ctl_ -= m; off += m;
         if (!amp_.active()) {   // the release ended inside this block: the rest stays silent
             fenv_.reset();
-            for (auto& ch : svf_) for (auto& f : ch) f.reset();
-            for (auto& o : os_) o.reset();
+            for (auto& f : svf_) f.reset();
+            os_.reset();
             killed_ = false;
             break;
         }
@@ -824,7 +871,10 @@ void Processor::swapPatch() {
     struct Again { int key, channel, noteId, slot; double vel; bool held; };
     std::array<Again, kSlots + 128> again{};
     int na = 0;
-    if (mode_ == Poly) {
+    if (arpOn_) {   // the keys the arp plays (its own notes end with the change), in the order they were played
+        for (int i = 0; i < arpN_; ++i) { const ArpKey& a = arpKeys_[static_cast<size_t>(i)]; again[static_cast<size_t>(na++)] = {a.key, a.channel, a.noteId, -1, a.vel, a.held}; }
+        arpN_ = 0;
+    } else if (mode_ == Poly) {
         for (int i = 0; i < kSlots; ++i) {
             const Slot& s = slots_[static_cast<size_t>(i)];
             if (s.key >= 0 && !s.stolen && (s.held || s.sustained)) again[static_cast<size_t>(na++)] = {s.key, s.channel, s.noteId, i, s.vel, s.held};
@@ -854,6 +904,7 @@ void Processor::swapPatch() {
         else end(s);
     }
     held_.clear(); monoSlot_ = -1;
+    arpNoteOn_ = false;
     fading_ = false;
     const bool pedal = pedal_;
     applyStaged();      // (a change of Mode lets all notes go, the pedal too: it is still down)
@@ -861,8 +912,17 @@ void Processor::swapPatch() {
     level_.reset(fs_, 20.0, dbToGain(target_[Level]));
     fx_.restart();
     fxIdle_ = 0;
-    // play again: poly, every note (no glide between them); mono / legato, the last one, with the others held behind it
+    // play again: to the arp when it is on (from its next step); poly, every note (no glide between them); mono / legato, the last one,
+    // with the others held behind it
     if (na == 0) return;
+    if (arpOn_) {
+        for (int a = 0; a < na && arpN_ < static_cast<int>(arpKeys_.size()); ++a) {
+            const Again& g = again[static_cast<size_t>(a)];
+            arpKeys_[static_cast<size_t>(arpN_++)] = {g.key, g.channel, g.noteId, g.vel, ++arpOrder_, g.held};
+        }
+        if (playing_) resyncSteps(); else resetClock();
+        return;
+    }
     if (mode_ == Poly) {
         for (int a = 0; a < na; ++a) {
             const Again& g = again[static_cast<size_t>(a)];
@@ -885,7 +945,12 @@ void Processor::swapPatch() {
 void Processor::setNow(int id, double v) {
     target_[static_cast<size_t>(id)] = v;
     if (id == PresetSelect) return;   // kept only: the plug-in layer loads presets
-    if (id >= kFxEnd) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
+    if (id > PresetSelect) {         // the arp and the gate: their settings are read where they are used
+        if (id == ArpOn) { const bool on = v > 0.5; if (on != arpOn_) { if (prepared_) arpSwitch(on); else arpOn_ = on; } }
+        else if ((id == ArpRate || id == ArpSwing) && prepared_ && (arpN_ > 0 || playing_)) resyncSteps();
+        return;
+    }
+    if (id >= kFxEnd && id < PresetSelect) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
     if (id >= kFxBase) { updateFx(); if (fresh_) fx_.snapSwitches(); return; }
     if (id == Level) level_.setTarget(dbToGain(v));
     else if (id == Glide) shared_.glideMs = v;
@@ -966,12 +1031,12 @@ bool Processor::takeEnded(int& key, int& channel, int& noteId) {
 
 void Processor::end(Slot& s) {
     if (s.key >= 0) pushEnded(s.key, s.channel, s.noteId);
-    s.key = -1; s.held = s.sustained = s.stolen = false;
+    s.key = -1; s.held = s.sustained = s.stolen = s.arp = false;
 }
 
 void Processor::start(Slot& s, int key, double vel, int channel, int noteId, double glideFrom) {
     s.key = key; s.channel = channel; s.noteId = noteId; s.vel = vel;
-    s.held = true; s.sustained = false; s.stolen = false; s.age = ++clock_;
+    s.held = true; s.sustained = false; s.stolen = false; s.arp = arpStarting_; s.age = ++clock_;
     for (int l = 0; l < kLayers; ++l)
         if (layerOn_[static_cast<size_t>(l)]) s.v[static_cast<size_t>(l)].noteOn(key, vel, glideFrom);
 }
@@ -1012,14 +1077,20 @@ Processor::Slot* Processor::allocate() {
 
 void Processor::noteOn(int key, double velocity, int channel, int noteId) {
     if (!prepared_ || key < 0 || key > 127) return;
+    if (!playing_ && !anyKeyHeld() && (arpOn_ || p(GateOn) > 0.5)) resetClock();   // the arp and the gate start with the first key
+    if (arpOn_) { arpAdd(key, velocity, channel, noteId); return; }
+    playOn(key, velocity, channel, noteId);
+}
+
+void Processor::playOn(int key, double velocity, int channel, int noteId) {
     shared_.gridLeft = gctl_;
     lastVel_ = velocity;
     bool any = false;
     for (bool on : layerOn_) any = any || on;
     if (!any) { pushEnded(key, channel, noteId); return; }   // nothing to play: the note ends at once
-    // LFOs set to Note restart with a note played while no key is held
-    bool keysHeld = !held_.empty();
-    for (const auto& s : slots_) keysHeld = keysHeld || (s.key >= 0 && !s.stolen && s.held);
+    // LFOs set to Note restart with a note played while no key is held (the arp's notes: only its first after its clock starts)
+    bool keysHeld = !held_.empty() || (arpStarting_ && arpPos_ > 1);
+    for (const auto& s : slots_) keysHeld = keysHeld || (s.key >= 0 && !s.stolen && s.held && !s.arp);
     if (!keysHeld)
         for (int k = 0; k < 2; ++k)
             if (p(k == 0 ? Lfo1Trigger : Lfo2Trigger) > 0.5) { lfoPhase_[static_cast<size_t>(k)] = 0.0; gctl_ = 0; }
@@ -1044,6 +1115,11 @@ void Processor::noteOn(int key, double velocity, int channel, int noteId) {
 
 void Processor::noteOff(int key, int channel) {
     if (!prepared_) return;
+    if (arpOn_) { arpRelease(key, channel); return; }
+    playOff(key, channel);
+}
+
+void Processor::playOff(int key, int channel) {
     shared_.gridLeft = gctl_;
     if (mode_ != Poly) { monoOff(key); return; }
     for (auto& s : slots_)
@@ -1052,6 +1128,8 @@ void Processor::noteOff(int key, int channel) {
 
 void Processor::choke(int key, int channel) {
     if (!prepared_) return;
+    for (int i = arpN_ - 1; i >= 0; --i)
+        if ((key < 0 || arpKeys_[static_cast<size_t>(i)].key == key) && (channel < 0 || arpKeys_[static_cast<size_t>(i)].channel == channel)) arpRemove(i, true);
     for (auto& s : slots_)
         if (s.key >= 0 && !s.stolen && (key < 0 || s.key == key) && (channel < 0 || s.channel == channel)) {
             s.stolen = true; s.held = s.sustained = false;
@@ -1116,20 +1194,176 @@ void Processor::pitchBend(double v) {
 void Processor::sustain(bool down) {
     pedal_ = down;
     if (down || !prepared_) return;
+    for (int i = arpN_ - 1; i >= 0; --i) if (!arpKeys_[static_cast<size_t>(i)].held) arpRemove(i, true);   // the keys the pedal kept for the arp
     for (auto& s : slots_)
         if (s.key >= 0 && !s.stolen && s.sustained) { s.sustained = false; for (auto& x : s.v) x.noteOff(); }
 }
 
 void Processor::allNotesOff() {
     if (!prepared_) return;
+    while (arpN_ > 0) arpRemove(arpN_ - 1, true);
     pedal_ = false; held_.clear();
     for (auto& s : slots_) if (s.key >= 0 && !s.stolen) { s.held = false; s.sustained = false; for (auto& x : s.v) x.noteOff(); }
 }
 
 void Processor::allSoundOff() {
     if (!prepared_) return;
+    while (arpN_ > 0) arpRemove(arpN_ - 1, true);
+    arpNoteOn_ = false;
     pedal_ = false; held_.clear(); monoSlot_ = -1;
     for (auto& s : slots_) { for (auto& x : s.v) x.reset(); if (s.key >= 0) end(s); }
+}
+
+// ---- the arpeggiator
+bool Processor::keyHeld(int key) const {
+    for (const auto& s : slots_) if (s.key == key && !s.stolen && s.held) return true;
+    return false;
+}
+
+bool Processor::anyKeyHeld() const {
+    if (arpN_ > 0 || !held_.empty()) return true;
+    for (const auto& s : slots_) if (s.key >= 0 && !s.stolen && (s.held || s.sustained) && !s.arp) return true;
+    return false;
+}
+
+double Processor::stepBeats() const {
+    static const double kRate[4] = {0.5, 0.25, 1.0 / 6.0, 0.125};   // 1/8, 1/16, 1/16 T, 1/32
+    return kRate[std::clamp(static_cast<int>(std::lround(p(ArpRate))), 0, 3)];
+}
+
+double Processor::stepStart(long k) const {   // swing: the odd steps late by up to 3/8 of a step (75 % x half a step)
+    const double L = stepBeats();
+    return static_cast<double>(k) * L + ((k & 1) ? std::clamp(p(ArpSwing), 0.0, 75.0) / 100.0 * 0.5 * L : 0.0);
+}
+
+void Processor::resetClock() {
+    beat_ = 0.0; arpK_ = -1; arpPos_ = 0; arpSeed_ = 0x2545F491u;
+}
+
+void Processor::resyncSteps() {
+    const double L = stepBeats(), eps = 0.5 * beatsPerSample();
+    long k = static_cast<long>(std::floor(beat_ / L + 1e-9));
+    if (stepStart(k) > beat_ + eps) --k;               // the swung step has not started yet
+    arpK_ = (stepStart(k) >= beat_ - eps) ? k - 1 : k;  // a step that starts here plays; one already under way does not
+}
+
+void Processor::setTransport(bool playing, double beats) {
+    if (!playing) { playing_ = false; return; }
+    const bool jump = !playing_ || std::abs(beats - beat_) > 0.5 * stepBeats();
+    playing_ = true;
+    beat_ = beats;
+    if (jump) resyncSteps();
+}
+
+void Processor::arpAdd(int key, double vel, int channel, int noteId) {
+    for (int i = 0; i < arpN_; ++i) {
+        ArpKey& a = arpKeys_[static_cast<size_t>(i)];
+        if (a.key == key && a.channel == channel) {
+            if (a.noteId != noteId) pushEnded(a.key, a.channel, a.noteId);
+            a.vel = vel; a.noteId = noteId; a.held = true;
+            return;
+        }
+    }
+    if (arpN_ == 0 && playing_) resyncSteps();   // on the host's beat: the next step
+    if (arpN_ >= static_cast<int>(arpKeys_.size())) arpRemove(0, true);
+    arpKeys_[static_cast<size_t>(arpN_++)] = {key, channel, noteId, vel, ++arpOrder_, true};
+}
+
+void Processor::arpRemove(int i, bool report) {
+    if (i < 0 || i >= arpN_) return;
+    const ArpKey a = arpKeys_[static_cast<size_t>(i)];
+    for (int k = i; k + 1 < arpN_; ++k) arpKeys_[static_cast<size_t>(k)] = arpKeys_[static_cast<size_t>(k) + 1];
+    --arpN_;
+    if (report) pushEnded(a.key, a.channel, a.noteId);
+}
+
+void Processor::arpRelease(int key, int channel) {
+    for (int i = arpN_ - 1; i >= 0; --i) {
+        ArpKey& a = arpKeys_[static_cast<size_t>(i)];
+        if ((key >= 0 && a.key != key) || (channel >= 0 && a.channel != channel) || !a.held) continue;
+        if (pedal_) a.held = false; else arpRemove(i, true);
+    }
+}
+
+// Arp On changed with notes going: the keys held move to the arp (their voices are let go; the arp plays them from its next step), or
+// back to the voices (the arp's note stops, each key held sounds again as an ordinary note)
+void Processor::arpSwitch(bool on) {
+    if (on) {
+        if (!playing_) resetClock();
+        if (mode_ == Poly) {
+            for (auto& s : slots_)
+                if (s.key >= 0 && !s.stolen && !s.arp && (s.held || s.sustained)) {
+                    if (arpN_ < static_cast<int>(arpKeys_.size())) arpKeys_[static_cast<size_t>(arpN_++)] = {s.key, s.channel, s.noteId, s.vel, ++arpOrder_, s.held};
+                    s.noteId = -1;   // the host's note goes on in the arp: the voice's end is not its end
+                    s.held = false; s.sustained = false;
+                    for (auto& x : s.v) x.noteOff();
+                }
+        } else {
+            for (int k : held_) if (arpN_ < static_cast<int>(arpKeys_.size())) arpKeys_[static_cast<size_t>(arpN_++)] = {k, 0, -1, lastVel_, ++arpOrder_, true};
+            playOff(-1, -1);
+        }
+        arpOn_ = true;
+        if (playing_) resyncSteps();
+    } else {
+        arpOn_ = false;
+        if (arpNoteOn_) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+        const int n = arpN_;
+        arpN_ = 0;
+        for (int i = 0; i < n; ++i) {
+            const ArpKey a = arpKeys_[static_cast<size_t>(i)];
+            playOn(a.key, a.vel, a.channel, a.noteId);
+            if (!a.held) playOff(a.key, a.channel);   // the pedal is down: it keeps the note
+        }
+    }
+}
+
+int Processor::arpSamplesToNext() const {
+    const double bps = beatsPerSample();
+    double next = 1e300;
+    if (arpNoteOn_) next = arpOffBeat_;
+    if (arpN_ > 0) next = std::min(next, stepStart(arpK_ + 1));
+    if (next >= 1e299) return 1 << 30;
+    return std::max(1, static_cast<int>(std::floor((next - beat_) / bps + 0.5)));
+}
+
+void Processor::arpEvents() {
+    const double eps = 0.5 * beatsPerSample();
+    if (arpNoteOn_ && beat_ >= arpOffBeat_ - eps) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+    if (arpN_ == 0) return;
+    int guard = 0;
+    while (stepStart(arpK_ + 1) <= beat_ + eps && guard++ < 64) arpStep(++arpK_);
+}
+
+// step k: the pattern's step k mod Steps; a rest plays nothing; otherwise the next note of the order (Up, Down, Up-Down, Order, Random over
+// the keys and their octaves), moved by the step's pitch, at the key's velocity times the step's
+void Processor::arpStep(long k) {
+    const int steps = std::clamp(static_cast<int>(std::lround(p(ArpSteps))), 1, kArpSteps);
+    const int idx = static_cast<int>(k % steps);
+    const double sv = std::clamp(p(arpVel(idx)), 0.0, 100.0) / 100.0;
+    if (arpNoteOn_) { playOff(arpNoteKey_, -1); arpNoteOn_ = false; }
+    if (sv <= 0.0 || arpN_ == 0) return;
+    // the keys, sorted (Order: as played), then their octaves
+    std::array<int, 128> ord{};
+    for (int i = 0; i < arpN_; ++i) ord[static_cast<size_t>(i)] = i;
+    const int mode = std::clamp(static_cast<int>(std::lround(p(ArpMode))), 0, 4);
+    if (mode == ArpOrder) std::sort(ord.begin(), ord.begin() + arpN_, [&](int a, int b) { return arpKeys_[static_cast<size_t>(a)].order < arpKeys_[static_cast<size_t>(b)].order; });
+    else std::sort(ord.begin(), ord.begin() + arpN_, [&](int a, int b) { return arpKeys_[static_cast<size_t>(a)].key < arpKeys_[static_cast<size_t>(b)].key; });
+    const int oct = std::clamp(static_cast<int>(std::lround(p(ArpOctaves))), 1, 4), len = arpN_ * oct;
+    long i = 0;
+    switch (mode) {
+        case ArpDown: i = len - 1 - arpPos_ % len; break;
+        case ArpUpDown: { const long period = len > 1 ? 2L * len - 2 : 1; const long q = arpPos_ % period; i = q < len ? q : period - q; break; }
+        case ArpRandom: arpSeed_ = arpSeed_ * 1664525u + 1013904223u; i = static_cast<long>((arpSeed_ >> 8) % static_cast<uint32_t>(len)); break;
+        default: i = arpPos_ % len; break;   // Up, Order
+    }
+    ++arpPos_;
+    const ArpKey& a = arpKeys_[static_cast<size_t>(ord[static_cast<size_t>(i % arpN_)])];
+    const int key = std::clamp(a.key + 12 * static_cast<int>(i / arpN_) + static_cast<int>(std::lround(p(arpPitch(idx)))), 0, 127);
+    arpStarting_ = true;
+    playOn(key, a.vel * sv, 0, -1);
+    arpStarting_ = false;
+    arpNoteOn_ = true; arpNoteKey_ = key;
+    arpOffBeat_ = stepStart(k) + std::clamp(p(ArpLength), 10.0, 100.0) / 100.0 * stepBeats();
 }
 
 bool Processor::active() const {
@@ -1159,9 +1393,12 @@ void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_ || n <= 0) return;
     fresh_ = false;
     const int cap = static_cast<int>(l_.size());
+    const bool gate = p(GateOn) > 0.5;
+    if (!gate) gateGain_ = 1.0;
     for (int off = 0; off < n;) {
         int m = std::min(cap, n - off);
         if (fading_) m = std::min(m, fadeLeft_);   // the patch change happens at the end of its fade
+        if (arpOn_ || arpNoteOn_) { arpEvents(); m = std::min(m, arpSamplesToNext()); }   // the arp's steps and note ends at their sample
         std::fill(l_.begin(), l_.begin() + m, 0.0f);
         std::fill(r_.begin(), r_.begin() + m, 0.0f);
         // the slots that sound (notes only start between calls, so the list holds for this block)
@@ -1180,6 +1417,19 @@ void Processor::process(float** ch, int numCh, int n) {
                 }
             }
             gctl_ -= k; pos += k;
+        }
+        // the trance gate: the voices' sum through the 16-step pattern on the beat (2 ms ramps at the edges), before the effects
+        if (gate) {
+            static const double kGateRate[3] = {0.5, 0.25, 0.125};
+            const double gl = kGateRate[std::clamp(static_cast<int>(std::lround(p(GateRate))), 0, 2)], bps = beatsPerSample();
+            const double low = 1.0 - std::clamp(p(GateDepth), 0.0, 100.0) / 100.0, ramp = 1.0 / std::max(1.0, 0.002 * fs_);
+            for (int i = 0; i < m; ++i) {
+                const long st = static_cast<long>(std::floor((beat_ + i * bps) / gl + 1e-9));
+                const double target = p(gateStep(static_cast<int>(((st % kArpSteps) + kArpSteps) % kArpSteps))) > 0.5 ? 1.0 : low;
+                gateGain_ = target > gateGain_ ? std::min(target, gateGain_ + ramp) : std::max(target, gateGain_ - ramp);
+                l_[static_cast<size_t>(i)] = static_cast<float>(l_[static_cast<size_t>(i)] * gateGain_);
+                r_[static_cast<size_t>(i)] = static_cast<float>(r_[static_cast<size_t>(i)] * gateGain_);
+            }
         }
         // the effects sleep once no voice sounds and their tails have been under -120 dBFS for half a second (no cost while idle)
         if (voices) fxIdle_ = 0;
@@ -1202,6 +1452,7 @@ void Processor::process(float** ch, int numCh, int n) {
             ch[0][off + i] = static_cast<float>(yl);
             if (numCh > 1) ch[1][off + i] = static_cast<float>(yr);
         }
+        beat_ += m * beatsPerSample();
         if (fading_) { fadeLeft_ -= m; if (fadeLeft_ <= 0) swapPatch(); }
         off += m;
     }

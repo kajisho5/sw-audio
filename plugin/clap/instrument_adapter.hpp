@@ -46,6 +46,9 @@
 namespace sw::clapinst {
 
 // optional on Core: void setTempo(double bpm) — the host tempo (tempo-synced effects)
+// optional on Core: void setTransport(bool playing, double beats) — the host's transport (an arpeggiator or a gate on the beat)
+template <class C, class = void> struct HasTransport : std::false_type {};
+template <class C> struct HasTransport<C, std::void_t<decltype(std::declval<C&>().setTransport(true, 0.0))>> : std::true_type {};
 template <class C, class = void> struct HasSetTempo : std::false_type {};
 template <class C> struct HasSetTempo<C, std::void_t<decltype(std::declval<C&>().setTempo(120.0))>> : std::true_type {};
 // optional on Core: modWheel(0..1) (CC 1) and aftertouch(0..1) (channel pressure, CLAP pressure expression)
@@ -239,6 +242,11 @@ private:
         const uint32_t frames = pr->frames_count;
         if constexpr (HasSetTempo<typename P::Core>::value)
             if (pr->transport && (pr->transport->flags & CLAP_TRANSPORT_HAS_TEMPO)) s->core_.setTempo(pr->transport->tempo);
+        if constexpr (HasTransport<typename P::Core>::value) {
+            const clap_event_transport_t* t = pr->transport;
+            const bool playing = t && (t->flags & CLAP_TRANSPORT_IS_PLAYING) && (t->flags & CLAP_TRANSPORT_HAS_BEATS_TIMELINE);
+            s->core_.setTransport(playing, playing ? static_cast<double>(t->song_pos_beats) / static_cast<double>(CLAP_BEATTIME_FACTOR) : 0.0);
+        }
         const uint32_t nev = pr->in_events ? pr->in_events->size(pr->in_events) : 0;
         uint32_t ev = 0, pos = 0;
         while (pos < frames) {   // sample-accurate events: render up to each one

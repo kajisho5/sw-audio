@@ -80,7 +80,8 @@ std::vector<float> oscRun(int wave, double hz, double pw, size_t n) {
 TEST_CASE("IN07: parameter table") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    CHECK(kNumParams == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields + 1);   // + the preset selector
+    CHECK(PresetSelect == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields);   // then the preset selector
+    CHECK(kNumParams == PresetSelect + 1 + (7 + 2 * kArpSteps) + (3 + kArpSteps));   // then the arp (7 + 16 x 2) and the gate (3 + 16), appended 2026-10-09
     std::set<std::string> ids, names;
     for (const auto& p : s) {
         ids.insert(p.id); names.insert(p.name);
@@ -515,7 +516,8 @@ double fxHeldDb(Processor& p, int note, double seconds = 1.0) {
 
 TEST_CASE("IN07 FX: parameter table and order slots") {
     const auto& s = specs();
-    CHECK(kNumParams == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields + 1);   // + the preset selector
+    CHECK(PresetSelect == kNumGlobal + kLayers * kLayerParams + kFxParams + (kModSlotBase - kFxEnd) + kModSlots * kModFields);   // then the preset selector
+    CHECK(kNumParams == PresetSelect + 1 + (7 + 2 * kArpSteps) + (3 + kArpSteps));   // then the arp (7 + 16 x 2) and the gate (3 + 16), appended 2026-10-09
     CHECK(std::string(s[FxSlot1].id) == "in07.fx.slot1");
     CHECK(std::string(s[FxDelayTime].id) == "in07.fx.delay.time");
     CHECK(std::string(s[FxReverbSize].name) == "Reverb size");

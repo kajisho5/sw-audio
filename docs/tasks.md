@@ -140,9 +140,9 @@
 - [ ] IN04 Bass — Slides and ghost notes from MIDI velocity （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN05 Organ — Drawbar settings morph with an expression pedal （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
 - [ ] IN06 Sampler — Auto maps slices to keys by transient （対象外：楽器プラグイン（MIDI で鳴らす音源）は作らない）
-- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：エンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド、最大 32 音・Poly／Mono／Legato・3 ms のボイススチール・サステインペダル・ベンド、レイヤー 4）、FX 6 スロット（順番入れ替え・休止）、LFO 2（楕円軌道）・変調マトリクス 8・マクロ 8・フライバイ・重力とテスト、プラグイン層（CLAP の音符入力、VST3／AU）、発振器 4 種（Analog・Wavetable 8 表・FM 2 オペレーター・Sample 8 種、折り返しの実測つき）、ファクトリープリセット 128 種（BS.1770 で −16 LUFS にそろえる道具 `tools/in07_presets.cpp`、似すぎの数値検査、テスト）、プラグインでのプリセット選択（`in07.preset`、変わった値をホストへ返す）。ユーザープリセット（`.swpreset`、保存場所、CLAP の preset-discovery／preset-load、壊れたファイルの拒否）。残り：ARP・トランスゲート・画面のプリセットブラウザと保存ボタン・画面の実装（デザインは `docs/design/in07/` の 6 画面＋星系ビュー部品で済み。名前・ロゴタイプ決定済み。動きの設定 MOTION 60／30／OFF を利用者の画面設定として保存）・商標の確認。README「開発中の楽器」
+- [ ] IN07 SWINGBY — 軽量プリセットシンセ（2026-10-08 に依頼者の依頼で追加。IN01〜IN06 とは別）。済：エンジン（minBLEP 鋸・矩形、ユニゾン 8、TPT SVF、Drive 2× OS、ADSR×2、グライド、最大 32 音・Poly／Mono／Legato・3 ms のボイススチール・サステインペダル・ベンド、レイヤー 4）、FX 6 スロット（順番入れ替え・休止）、LFO 2（楕円軌道）・変調マトリクス 8・マクロ 8・フライバイ・重力とテスト、プラグイン層（CLAP の音符入力、VST3／AU）、発振器 4 種（Analog・Wavetable 8 表・FM 2 オペレーター・Sample 8 種、折り返しの実測つき）、ファクトリープリセット 128 種（BS.1770 で −16 LUFS にそろえる道具 `tools/in07_presets.cpp`、似すぎの数値検査、テスト）、プラグインでのプリセット選択（`in07.preset`、変わった値をホストへ返す）。ユーザープリセット（`.swpreset`、保存場所、CLAP の preset-discovery／preset-load、壊れたファイルの拒否）。ARP・トランスゲート（2026-10-09 済、README「IN07 のアルペジエーターとトランスゲート」）。残り：画面のプリセットブラウザと保存ボタン・画面の実装（デザインは `docs/design/in07/` の 6 画面＋星系ビュー部品で済み。名前・ロゴタイプ決定済み。動きの設定 MOTION 60／30／OFF を利用者の画面設定として保存）・商標の確認。README「開発中の楽器」
   - [x] プリセット切り替えの段差（押さえたまま切り替えるとクリック。60 組中 21 組 → 8 ms のフェードと弾き直しで 0。README「IN07 の評価」）
-  - [ ] 重いプリセットの CPU（Anthem Supersaw：4 和音 18 %・16 音 73 %＝このコンテナ。発振器とオーバーサンプラーの SIMD 化か、音数・ユニゾンの見直し）
+  - [x] 重いプリセットの CPU（Anthem Supersaw：4 和音 18.9 → 10.2 %・16 音 73 → 36 %＝このコンテナ。ボイスの 2× を 8 係数に、左右を SIMD の 1 組に。README「IN07 の評価」）
   - [ ] MIDI：Program Change、MIDI learn（CC → マクロ）、MPE／ノートごとの表現、マイクロチューニング、ボイスごとの LFO
   - [ ] パラメータの module を階層（「Layer 1/Filter」）に
   - [ ] 実際の DAW での確認（Live・Logic・Cubase・Studio One・FL Studio・Bitwig・Reaper）。いまは検証ツールと自作ホストだけ

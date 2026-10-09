@@ -119,9 +119,9 @@ TEST_CASE("IN07 PRESETS: categories follow their conventions") {
     }
 }
 
-TEST_CASE("IN07 PRESETS: the preset selector (the last parameter; the plug-in layer loads the preset, the engine only keeps the value)") {
+TEST_CASE("IN07 PRESETS: the preset selector (after the matrix; the arp and gate were appended after it; the plug-in layer loads the preset, the engine only keeps the value)") {
     const auto& s = specs();
-    REQUIRE(kNumParams == PresetSelect + 1);
+    REQUIRE(ArpOn == PresetSelect + 1);
     const sw::ParamSpec& ps = s[static_cast<size_t>(PresetSelect)];
     CHECK(std::string(ps.id) == "in07.preset");
     CHECK_FALSE(ps.automatable);

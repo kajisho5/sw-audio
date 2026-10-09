@@ -3,6 +3,7 @@
 // classic elliptic half-band construction (Valenzuela & Constantinides), as popularised by
 // L. de Soras' HIIR. Group delay is a few samples and frequency dependent; reported latency is 0.
 #pragma once
+#include "sw/simd2.hpp"
 #include <array>
 #include <cmath>
 
@@ -38,10 +39,14 @@ template <int N> std::array<double, N> design(double tbw) {
 }
 }  // namespace halfband
 
-class Oversampler2x {
+// N all-pass coefficients (N/2 sections per branch) and the transition band tbw (of the 2x rate). The standard one, Oversampler2x:
+// 12 coefficients, tbw 0.0415 (stop band about -150 dB from 26 kHz at 48 kHz, pass band to 22 kHz). Lighter ones trade the stop band.
+template <int N>
+class Oversampler2xN {
 public:
-    static constexpr int kCoefs = 12;
-    Oversampler2x() : c_(halfband::design<kCoefs>(0.0415)) { reset(); }
+    static constexpr int kCoefs = N;
+    Oversampler2xN() : Oversampler2xN(0.0415) {}
+    explicit Oversampler2xN(double tbw) : c_(halfband::design<kCoefs>(tbw)) { reset(); }
 
     // one input sample -> two output samples at 2x rate
     void up(double x, double out[2]) {
@@ -67,6 +72,42 @@ private:
         }
     }
     std::array<double, kCoefs> c_;
+    Mem upMem_, downMem_;
+};
+using Oversampler2x = Oversampler2xN<12>;
+
+// the same 2x oversampler for two channels at once (left and right side by side in one SIMD pair)
+template <int N>
+class StereoOversampler2xN {
+public:
+    static constexpr int kCoefs = N;
+    StereoOversampler2xN() : StereoOversampler2xN(0.0415) {}
+    explicit StereoOversampler2xN(double tbw) {
+        const auto c = halfband::design<kCoefs>(tbw);
+        for (int i = 0; i < kCoefs; ++i) c_[static_cast<size_t>(i)] = D2::all(c[static_cast<size_t>(i)]);
+        reset();
+    }
+    void up(D2 x, D2 out[2]) { D2 a = x, b = x; chains(upMem_, a, b); out[0] = a; out[1] = b; }
+    D2 down(const D2 in[2]) { D2 a = in[1], b = in[0]; chains(downMem_, a, b); return D2::all(0.5) * (a + b); }
+    void reset() { upMem_ = Mem{}; downMem_ = Mem{}; }
+    void copyLeftToRight() {
+        for (Mem* m : {&upMem_, &downMem_})
+            for (int i = 0; i < kCoefs; ++i) {
+                const size_t k = static_cast<size_t>(i);
+                m->x[k] = D2(m->x[k].lo(), m->x[k].lo()); m->y[k] = D2(m->y[k].lo(), m->y[k].lo());
+            }
+    }
+
+private:
+    struct Mem { std::array<D2, kCoefs> x{}, y{}; };
+    void chains(Mem& m, D2& a, D2& b) const {
+        for (int i = 0; i < kCoefs; i += 2) {
+            const size_t ia = static_cast<size_t>(i), ib = ia + 1;
+            const D2 ta = m.x[ia]; m.x[ia] = a; a = (a - m.y[ia]) * c_[ia] + ta; m.y[ia] = a;
+            if (ib < kCoefs) { const D2 tb = m.x[ib]; m.x[ib] = b; b = (b - m.y[ib]) * c_[ib] + tb; m.y[ib] = b; }
+        }
+    }
+    std::array<D2, kCoefs> c_{};
     Mem upMem_, downMem_;
 };
 

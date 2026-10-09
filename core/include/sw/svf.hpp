@@ -2,6 +2,7 @@
 // Topology-preserving (trapezoidal) SVF after A. Simper, "Linear Trapezoidal Integrated SVF".
 // The response equals the analog prototype evaluated at the bilinear-warped frequency.
 #pragma once
+#include "sw/simd2.hpp"
 #include <cmath>
 
 namespace sw {
@@ -23,6 +24,7 @@ public:
         if (n <= 1) { setup(mode, fc, fs, q, gainDb); return; }
         double g = 0, k = 1, m0 = 1, m1 = 0, m2 = 0;
         compute(mode, fc, fs, q, gainDb, g, k, m0, m1, m2);
+        if (remaining_ == 0 && g == g_ && k == k_ && m0 == m0_ && m1 == m1_ && m2 == m2_) return;   // already there: no ramp (the same output, no per-sample update)
         const double inv = 1.0 / n;
         dg_ = (g - g_) * inv; dk_ = (k - k_) * inv;
         dm0_ = (m0 - m0_) * inv; dm1_ = (m1 - m1_) * inv; dm2_ = (m2 - m2_) * inv;
@@ -45,6 +47,22 @@ public:
     }
 
     void reset() { ic1_ = ic2_ = 0; }
+
+    // the coefficient ramp alone, for a caller that runs its own states with these coefficients (StereoSvf): one step, as process() does
+    void stepCoefs() {
+        if (remaining_ > 0) {
+            if (--remaining_ == 0) { g_ = tg_; k_ = tk_; m0_ = tm0_; m1_ = tm1_; m2_ = tm2_; }
+            else { g_ += dg_; k_ += dk_; m0_ += dm0_; m1_ += dm1_; m2_ += dm2_; }
+            updateA();
+        }
+    }
+    bool ramping() const { return remaining_ > 0; }
+    double a1() const { return a1_; }
+    double a2() const { return a2_; }
+    double a3() const { return a3_; }
+    double m0() const { return m0_; }
+    double m1() const { return m1_; }
+    double m2() const { return m2_; }
 
 private:
     static void compute(Mode mode, double fc, double fs, double q, double gainDb,
@@ -75,6 +93,31 @@ private:
     int remaining_ = 0;
     double a1_ = 1, a2_ = 0, a3_ = 0;
     double ic1_ = 0, ic2_ = 0;
+};
+
+// Two channels through the same TPT SVF (the same coefficients and ramp; the left and right states side by side in one SIMD pair):
+// the coefficients are ramped once for both, and each step works on both channels at once. Same arithmetic as Svf::process per lane.
+class StereoSvf {
+public:
+    void setup(Svf::Mode mode, double fc, double fs, double q, double gainDb) { c_.setup(mode, fc, fs, q, gainDb); }
+    void setupRamp(Svf::Mode mode, double fc, double fs, double q, double gainDb, int n) { c_.setupRamp(mode, fc, fs, q, gainDb, n); }
+    D2 process(D2 v0) {
+        c_.stepCoefs();
+        const D2 a1 = D2::all(c_.a1()), a2 = D2::all(c_.a2()), a3 = D2::all(c_.a3());
+        const D2 v3 = v0 - ic2_;
+        const D2 v1 = a1 * ic1_ + a2 * v3;
+        const D2 v2 = ic2_ + a2 * ic1_ + a3 * v3;
+        const D2 two = D2::all(2.0);
+        ic1_ = two * v1 - ic1_;
+        ic2_ = two * v2 - ic2_;
+        return D2::all(c_.m0()) * v0 + D2::all(c_.m1()) * v1 + D2::all(c_.m2()) * v2;
+    }
+    void reset() { ic1_ = D2(); ic2_ = D2(); }
+    void copyLeftToRight() { ic1_ = D2(ic1_.lo(), ic1_.lo()); ic2_ = D2(ic2_.lo(), ic2_.lo()); }
+
+private:
+    Svf c_;   // the coefficients and their ramp only
+    D2 ic1_, ic2_;
 };
 
 // First-order TPT section (used for odd-order HPF, e.g. 18 dB/oct = 1st + 2nd order)

@@ -70,7 +70,15 @@ constexpr int modId(int slot, int field) { return kModSlotBase + slot * kModFiel
 // the preset selector (Init, then the factory presets; not automatable): the plug-in layer loads the preset when the host changes it,
 // the engine only keeps the value (a restored session keeps its own values)
 constexpr int PresetSelect = kModSlotBase + kModSlots * kModFields;
-constexpr int kNumParams = PresetSelect + 1;
+// the arpeggiator and the trance gate (appended after the selector, 2026-10-09): 16 steps each
+constexpr int kArpSteps = 16;
+enum ArpParamId { ArpOn = PresetSelect + 1, ArpMode, ArpRate, ArpOctaves, ArpLength, ArpSwing, ArpSteps, kArpVelBase };
+constexpr int arpVel(int i) { return kArpVelBase + i; }                  // 0..100 % (0 = a rest)
+constexpr int arpPitch(int i) { return kArpVelBase + kArpSteps + i; }    // -12 / 0 / +7 / +12 semitones
+enum GateParamId { GateOn = kArpVelBase + 2 * kArpSteps, GateRate, GateDepth, kGateStepBase };
+constexpr int gateStep(int i) { return kGateStepBase + i; }               // Off / On
+constexpr int kNumParams = kGateStepBase + kArpSteps;
+enum ArpModeId { ArpUp = 0, ArpDown, ArpUpDown, ArpOrder, ArpRandom };
 enum LfoShapeId { LfoOrbit = 0, LfoTriangle, LfoSaw, LfoSquare, LfoRandom };
 enum ModSource { SrcNone = 0, SrcLfo1, SrcLfo2, SrcEnv2, SrcVelocity, SrcModWheel, SrcAftertouch, SrcKey,
                  SrcM1, SrcM2, SrcM3, SrcM4, SrcM5, SrcM6, SrcM7, SrcM8, kModSources };
@@ -96,22 +104,30 @@ struct MinBlep {
 };
 const MinBlep& minBlep();
 
+// the voice drive's 2x oversampler: 8 coefficients, transition band 0.06 (stop band about -113 dB from 26.9 kHz at 48 kHz, pass band to
+// 21.1 kHz). The drive's own folding at the 2x rate sets the alias floor long before that (README「IN07 の評価」), and it costs two thirds
+// of the standard 12-coefficient one, per voice and layer.
+using VoiceOs = StereoOversampler2xN<8>;   // both channels of a voice at once
+constexpr double kVoiceOsTbw = 0.06;
+
 // one band-limited oscillator; the phase runs 0..1
 class BlepOsc {
 public:
     void setWave(int w) { wave_ = w; }
     void setPulseWidth(double pw) { pw_ = pw; }
-    void setIncrement(double inc) { inc_ = inc; }   // f / fs, below 0.5
+    void setIncrement(double inc) { inc_ = inc; late_ = minBlep().delay * inc; }   // f / fs, below 0.5
     void setPhase(double p) { ph_ = p; ring_.fill(0.0f); }
     void setCorrection(bool on) { correct_ = on; }  // false = the naive waveform (tests compare the two)
     double phase() const { return ph_; }
     double next();
+    template <int W> double step();                 // next() when the wave is known to be W (the caller picks it once per block)
+    int wave() const { return wave_; }
 
 private:
     void jump(double after, double height);         // a jump of `height` that happened `after` samples before the next sample
     double late(double t) const;
     int wave_ = Saw, pos_ = 0;
-    double pw_ = 0.5, inc_ = 0.0, ph_ = 0.0;
+    double pw_ = 0.5, inc_ = 0.0, ph_ = 0.0, late_ = 0.0;   // late_: minBLEP's delay in phase (delay x increment)
     bool correct_ = true;
     std::array<float, MinBlep::kTaps> ring_{};       // pending corrections, one per coming sample
 };
@@ -178,7 +194,8 @@ public:
 
 private:
     void control();
-    void oscillate(double* xl, double* xr, int m, int done);   // the unison copies' sum for m samples (done: samples of the period already played)
+    void oscillate(double* xl, double* xr, int m, int done);
+    template <int W> void analog(double* xl, double* xr, int m);   // the Analog copies with the wave W   // the unison copies' sum for m samples (done: samples of the period already played)
     double phaseOf(int k) const { return otype_ == OscAnalog ? osc_[static_cast<size_t>(k)].phase() : ph_[static_cast<size_t>(k)]; }
     double p(int id) const { return lp_[id]; }
     const double* lp_ = nullptr;
@@ -204,8 +221,8 @@ private:
     double fi0_ = 0.0, fi1_ = 0.0, fb0k_ = 0.0, fb1k_ = 0.0, fmEnv_ = 1.0, fmRatio_ = 1.0;   // FM index and feedback (cycles), the index decay
     std::array<double, 2> dcx_{}, dcy_{};                 // the FM output's DC blocker
     double dca_ = 0.9993;
-    std::array<std::array<Svf, 2>, 2> svf_;            // [channel][stage]
-    std::array<Oversampler2x, 2> os_;
+    std::array<StereoSvf, 2> svf_;                     // [stage]: both channels in one SIMD pair (the same coefficients)
+    VoiceOs os_{kVoiceOsTbw};                          // the drive's 2x, both channels
     Adsr amp_, fenv_;
 };
 
@@ -237,6 +254,10 @@ public:
     void allNotesOff();                                 // release everything (the pedal is lifted too)
     void allSoundOff();                                 // silent at once
     void process(float** ch, int numCh, int n);         // writes (replaces) the output
+    // the host's transport at the start of the next process() call (the arp and the gate follow its beat while it plays; stopped, they
+    // run on their own clock, which starts at 0 with a note played while no key is held)
+    void setTransport(bool playing, double beats);
+    bool keyHeld(int key) const;                        // a note of this key is sounding and held (by a key, the pedal or the arp)
     // a whole patch (a preset): beginPatch(), setParam() for each of its values, endPatch(). Nothing sounding (or not prepared): the values
     // go in at once. Otherwise the change waits: the output fades out over kPatchFadeMs, then the values go in, every voice and effect
     // starts again from silence, and the keys still held (and the notes the pedal holds) play again with the new patch (no step, and the
@@ -257,7 +278,7 @@ private:
         std::array<Voice, kLayers> v;
         int key = -1, channel = 0, noteId = -1;
         double vel = 1.0;
-        bool held = false, sustained = false, stolen = false;
+        bool held = false, sustained = false, stolen = false, arp = false;   // arp: a note the arpeggiator plays
         uint64_t age = 0;
         bool sounding() const;
     };
@@ -268,6 +289,23 @@ private:
     void pushEnded(int key, int channel, int noteId);
     void monoOn(int key, double vel, int channel, int noteId);
     void monoOff(int key);
+    void playOn(int key, double vel, int channel, int noteId);   // a note to the voices (poly, mono, legato)
+    void playOff(int key, int channel);
+    // the arpeggiator: the keys it plays, its clock and its steps
+    struct ArpKey { int key = -1, channel = 0, noteId = -1; double vel = 1.0; uint64_t order = 0; bool held = true; };
+    void arpAdd(int key, double vel, int channel, int noteId);
+    void arpRelease(int key, int channel);
+    void arpRemove(int i, bool report);
+    void arpSwitch(bool on);                            // the Arp On parameter changed: the held keys move to the arp or back to the voices
+    void arpEvents();                                   // the steps and note ends due now
+    int arpSamplesToNext() const;                       // to the next step or note end (1 at least)
+    void arpStep(long k);
+    double stepBeats() const;                           // one step of the arp
+    double stepStart(long k) const;                     // where step k starts (beats; swing on the odd steps)
+    void resetClock();                                  // its own clock from 0 (the transport is not playing)
+    void resyncSteps();                                 // the next step from the beat where the clock is now
+    bool anyKeyHeld() const;
+    double beatsPerSample() const { return bpm_ / 60.0 / fs_; }
     double p(int id) const { return target_[static_cast<size_t>(id)]; }
     void setNow(int id, double v);                      // a (normalised) value goes in
     void applyStaged();                                 // the values a patch change held back go in
@@ -305,6 +343,14 @@ private:
     std::array<bool, kNumParams> stagedSet_{};
     bool staging_ = false, fading_ = false, anyStaged_ = false;
     int fadeLen_ = 1, fadeLeft_ = 0;                    // the fade before a patch change (samples)
+    std::array<ArpKey, 128> arpKeys_{};                 // the keys the arp plays (held, or kept by the pedal), in the order played
+    int arpN_ = 0;
+    bool arpOn_ = false, arpNoteOn_ = false, arpStarting_ = false, playing_ = false;
+    uint64_t arpOrder_ = 0;
+    double beat_ = 0.0, arpOffBeat_ = 0.0, gateGain_ = 1.0;
+    long arpK_ = -1, arpPos_ = 0;                       // the last step started; the steps that played a note (the note order)
+    int arpNoteKey_ = -1;
+    uint32_t arpSeed_ = 0x2545F491u;
 };
 
 }  // namespace sw::in07
