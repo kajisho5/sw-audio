@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.13.0：132 製品が完成（単体テスト 1328 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 136＝共通の Bypass パラメータと画面の大半まで Windows・macOS・Linux で全ジョブ成功）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`）。残りは RS02（学習済みモデルが要る・保留）と、共通機能（Low lat・オーバーサンプリング 1×/2×/4×・Unit A/B/C・プリセット）の実装。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.13.0：132 製品が完成（単体テスト 1369 件（ASan・UBSan でも全合格）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 149＝EQ02 Assist／Unmask・SW Link・UT01 のトラック名・Undo／履歴まで Windows・macOS・Linux で全ジョブ成功）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）と Low lat（9 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、共通機能（Low lat の残り MS01・MS03、オーバーサンプリング 1×/2×/4×、Unit A/B/C）の実装。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 

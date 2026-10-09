@@ -976,7 +976,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 
 | 項目 | Linux x86_64（このクラウド環境） | Windows x64・macOS（GitHub Actions） |
 | --- | --- | --- |
-| 単体テスト（1366件） | 全合格（`test_swlink`・`test_resonance` は AddressSanitizer・UBSan・ThreadSanitizer 付きでも全合格。全件の Sanitizer 実行は 1319 件の時点で全合格） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 147（commit 36b9564。EQ07 Auto thresh まで、全 132 本）** |
+| 単体テスト（1369件） | 全合格（**AddressSanitizer・UBSan 付きでも 1369 件すべて合格**：commit 4b7192c の時点。その後の MIDI・GT02・Low lat の変更は、該当の 8 ファイル 82 件を同じ Sanitizer で実行して合格。`test_swlink` は ThreadSanitizer でも合格） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 149（commit 4b7192c。EQ02 Assist／Unmask・SW Link・UT01 のトラック名・Undo／履歴・Low lat・FFT 高速化・ブラウザ試験まで、全 132 本）** |
 | CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 69：成功） |
 | VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 69：成功） |
 | AU：auval | — | macOS で実行（run 69：成功） |
