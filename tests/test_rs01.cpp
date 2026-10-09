@@ -14,7 +14,7 @@ constexpr size_t kLat = 2048;
 TEST_CASE("RS01 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"rs01.profile", "rs01.evo.on", "rs01.reduction", "rs01.thresh", "rs01.smooth", "rs01.low", "rs01.high", "rs01.guard", "rs01.learn"};
+    const char* ids[] = {"rs01.profile", "rs01.evo.on", "rs01.reduction", "rs01.thresh", "rs01.smooth", "rs01.low", "rs01.high", "rs01.guard", "rs01.learn", "rs01.lowlat"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Profile].labels == std::vector<std::string>{"Voice", "Music", "Field"}); CHECK(s[Profile].def == 0);
     CHECK(s[Adaptive].labels == std::vector<std::string>{"Off", "On"}); CHECK(s[Adaptive].def == 1);
@@ -83,4 +83,24 @@ TEST_CASE("RS01 Artifact guard smooths the gain; loud input stays finite") {
                                   double m = 0; for (double v : e) m += v; m /= static_cast<double>(e.size()); double sd = 0; for (double v : e) sd += (v - m) * (v - m); return std::sqrt(sd / static_cast<double>(e.size())); };
     CHECK(flick(1) < flick(0));
     auto p = make({{Reduction, -40}, {HighBand, 20}, {LowBand, 20}}); auto x = noise(6, 2.0, 9); for (auto& v : x) v *= 8.0f; for (float v : run(p, x)) CHECK(std::isfinite(v));
+}
+
+TEST_CASE("RS01 Low lat: a 512-point window (hop 128), reported delay 512 from the next prepare on; the signal still passes and the noise still goes down") {
+    CHECK(std::string(specs()[LowLat].id) == "rs01.lowlat"); CHECK(specs()[LowLat].labels == std::vector<std::string>{"Off", "On"}); CHECK(specs()[LowLat].def == 0); CHECK(specs()[LowLat].automatable);
+    { Processor q; CHECK(q.latencySamples() == 2048); q.setParam(LowLat, 1); CHECK(q.latencySamples() == 512); q.setParam(LowLat, 0); CHECK(q.latencySamples() == 2048); }
+    // "the value for the next prepare": a prepared processor keeps the window it was prepared with until prepare() is called again
+    { auto p = make(); CHECK(p.latencySamples() == 2048); p.setParam(LowLat, 1); CHECK(p.latencySamples() == 512); p.prepare(kFs, 256); p.snapToTargets(); CHECK(p.latencySamples() == 512); }
+    const size_t lat = 512;
+    { auto p = make({{LowLat, 1}, {Reduction, 0}}); const auto x = mix(sine(-20, 2.0, 700), noise(-35, 2.0, 3)); const auto y = run(p, x);
+      for (size_t i = 6000; i < y.size(); i += 311) NEAR(y[i], x[i - lat], 2e-4); }                       // Reduction 0: the signal delayed by 512, unchanged
+    { auto p = make({{LowLat, 1}}); std::vector<float> z(48000, 0.0f); for (float v : run(p, z)) CHECK(v == 0.0f); }
+    const auto noiseOnly = noise(-40, 6.0, 3); auto tone = sine(-20, 6.0, 1000); for (size_t i = 0; i < tone.size(); ++i) if ((i / 12000) % 2 == 1) tone[i] = 0.0f;
+    for (double red : {-12.0, -24.0}) {
+        auto p = make({{LowLat, 1}, {Reduction, red}}); const auto y = run(p, mix(noiseOnly, tone));
+        auto q = make({{LowLat, 1}, {Reduction, red}}); const auto n = run(q, noiseOnly);
+        const double noiseDrop = rmsDb(n, 5 * 48000, 6 * 48000) - rmsDb(noiseOnly, 5 * 48000 - lat, 6 * 48000 - lat);
+        NEAR(noiseDrop, red, 4.5);                                                                        // a shorter window resolves the noise less finely: the same depth within a wider margin
+        const size_t a = 5 * 48000;
+        NEAR(binDb(y, 1000, a + lat + 2400, a + lat + 12000 - 2400), binDb(tone, 1000, a + 2400, a + 12000 - 2400), 2.0);   // the tone keeps its level
+    }
 }

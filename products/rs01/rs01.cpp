@@ -14,6 +14,7 @@ const std::vector<ParamSpec>& specs() {
         {"rs01.high",      "High band",  -20, 20, 0,  Curve::Lin, 1, {}, "dB"},
         {"rs01.guard",     "Artifact guard", 0, 1, 1, Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
         {"rs01.learn",     "Learn",      0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Off", "On"}, nullptr, nullptr, 1.0, false},
+        {"rs01.lowlat",    "Low lat",    0, 1, 0,     Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
     };
     return s;
 }
@@ -28,8 +29,9 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
-    stft_.prepare(kFft, kHop, 2);
-    const size_t nb = kFft / 2 + 1;
+    const bool low = target_[LowLat] > 0.5; fft_ = low ? kFftLow : kFft; hop_ = low ? kHopLow : kHop;
+    stft_.prepare(fft_, hop_, 2);
+    const size_t nb = static_cast<size_t>(fft_ / 2 + 1);
     for (auto& c : ch_) {
         c.smooth.assign(nb, 0.0); c.sub.assign(nb, 1e30); c.noise.assign(nb, 0.0); c.learnSum.assign(nb, 0.0); c.gainPrev.assign(nb, 1.0); c.prevSig.assign(nb, 0.0); c.gainSmooth.assign(nb, 1.0);
         c.mins.assign(kSubs, std::vector<double>(nb, 1e30)); c.subPos = 0; c.subCount = 0; c.learnN = 0;
@@ -55,10 +57,11 @@ void Processor::process(float** ch, int numCh, int n) {
 void Processor::frame(std::complex<double>* const* spec, int nch, int nbins) {
     const int prof = std::clamp(static_cast<int>(target_[Profile] + 0.5), 0, 2), sm = std::clamp(static_cast<int>(target_[Smoothing] + 0.5), 0, 2);
     const bool adaptive = target_[Adaptive] > 0.5, learn = target_[Learn] > 0.5, guard = target_[Guard] > 0.5;
-    const double alpha = kAlpha[sm], over = std::pow(10.0, target_[Threshold] / 10.0) * kOverSub[prof];
-    const int subLen = std::max(1, static_cast<int>(std::lround(kSubSec[prof] * fs_ / kHop)));
+    const double rho = static_cast<double>(hop_) / kHop;   // the per-frame constants are for hop 512: in the Low lat mode (hop 128) they are scaled so that they last the same time
+    const double alpha = std::pow(kAlpha[sm], rho), smoothA = std::pow(0.8, rho), release = 1.0 - std::pow(0.7, rho), over = std::pow(10.0, target_[Threshold] / 10.0) * kOverSub[prof];
+    const int subLen = std::max(1, static_cast<int>(std::lround(kSubSec[prof] * fs_ / hop_)));
     const double depth = target_[Reduction], lowAdj = target_[LowBand], highAdj = target_[HighBand];
-    for (int k = 0; k < nbins; ++k) { const double f = k * fs_ / kFft; bandAdj_[static_cast<size_t>(k)] = lowAdj * ramp(f, 400.0, 1200.0) + highAdj * (1.0 - ramp(f, 1500.0, 4000.0)); }
+    for (int k = 0; k < nbins; ++k) { const double f = k * fs_ / fft_; bandAdj_[static_cast<size_t>(k)] = lowAdj * ramp(f, 400.0, 1200.0) + highAdj * (1.0 - ramp(f, 1500.0, 4000.0)); }
     for (int c = 0; c < nch; ++c) {
         auto& ch = ch_[static_cast<size_t>(c)];
         std::complex<double>* X = spec[c];
@@ -66,7 +69,7 @@ void Processor::frame(std::complex<double>* const* spec, int nch, int nbins) {
         for (int k = 0; k < nbins; ++k) {
             const double P = std::norm(X[k]);
             double& s = ch.smooth[static_cast<size_t>(k)];
-            s = frameNo_ == 0 ? P : 0.8 * s + 0.2 * P;
+            s = frameNo_ == 0 ? P : smoothA * s + (1.0 - smoothA) * P;
             if (learn) ch.learnSum[static_cast<size_t>(k)] += P;
             if (adaptive && !learn) ch.sub[static_cast<size_t>(k)] = std::min(ch.sub[static_cast<size_t>(k)], s);
         }
@@ -100,7 +103,7 @@ void Processor::frame(std::complex<double>* const* spec, int nch, int nbins) {
             tmpG_[i] = G;
         }
         if (guard) {
-            for (int k = 0; k < nbins; ++k) { double& g = ch.gainSmooth[static_cast<size_t>(k)]; const double t = tmpG_[static_cast<size_t>(k)]; g = t > g ? t : g + 0.3 * (t - g); }
+            for (int k = 0; k < nbins; ++k) { double& g = ch.gainSmooth[static_cast<size_t>(k)]; const double t = tmpG_[static_cast<size_t>(k)]; g = t > g ? t : g + release * (t - g); }
             for (int k = 0; k < nbins; ++k) {
                 const double a = ch.gainSmooth[static_cast<size_t>(std::max(0, k - 1))], b = ch.gainSmooth[static_cast<size_t>(k)], d = ch.gainSmooth[static_cast<size_t>(std::min(nbins - 1, k + 1))];
                 tmpG_[static_cast<size_t>(k)] = 0.25 * a + 0.5 * b + 0.25 * d;
