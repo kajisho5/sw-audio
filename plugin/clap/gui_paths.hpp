@@ -4,6 +4,12 @@
 #include <cstdlib>
 #include <string>
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX   // windows.h must not turn std::min / std::max into macros for the code that includes this
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <shlobj.h>
 #endif
