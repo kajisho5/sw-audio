@@ -19,12 +19,6 @@ if (MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")  # self-contained plugins
 endif()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND UNIX AND NOT APPLE)
-    # GCC makes the statics of inline functions "unique" symbols that the dynamic linker merges across every plug-in loaded into one process (and a library that has one can never be unloaded).
-    # macOS and Windows do not do that, and SW Link (plugin/clap/swlink.hpp: one registry reached through the environment) must not depend on it, so Linux is built the way they behave
-    add_compile_options(-fno-gnu-unique)
-endif()
-
 option(SW_BUILD_TESTS "Build unit tests" ON)
 option(SW_BUILD_PLUGINS "Build CLAP/VST3/AU plugins" ON)
 

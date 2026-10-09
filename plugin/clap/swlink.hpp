@@ -110,8 +110,10 @@ inline uint64_t randomId() {
 }
 }  // namespace detail
 
-// the registry of this process (null when the one in the environment has another layout)
-inline Registry* registry() { static Registry* r = detail::open(); return r; }
+// the registry of this process (null when the one in the environment has another layout).
+// `static`, not `inline`: GCC makes the statics of inline functions "unique" symbols that the dynamic linker merges across every plug-in loaded into one process on Linux (macOS and Windows keep one copy per
+// binary). With internal linkage every binary (every translation unit, in fact) asks the environment itself, which is what the other platforms do, so a Linux test means something.
+static Registry* registry() { static Registry* r = detail::open(); return r; }
 
 inline uint32_t packCode(const char* c) { uint32_t v = 0; for (int i = 0; i < 4; ++i) v = (v << 8) | static_cast<uint8_t>(c && c[i] ? c[i] : ' '); return v; }
 
