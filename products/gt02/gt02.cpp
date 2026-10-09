@@ -126,14 +126,14 @@ Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cas
 void Processor::rebuild(bool immediate) {
     designer_.begin(static_cast<int>(target_[Cab] + 0.5), static_cast<int>(target_[Mic] + 0.5), target_[MicDistance], target_[OffAxis], target_[Room]);
     while (!designer_.step()) {}
-    conv_.setKernel(designer_.ir(), immediate);
+    for (auto& c : conv_) c.setKernel(designer_.ir(), immediate);
     designing_ = false;
 }
 
 void Processor::prepare(double sampleRate, int) {
     fs_ = sampleRate;
     len_ = 8192; while (len_ < 8192.0 * fs_ / 48000.0) len_ *= 2;
-    conv_.prepare(len_, 256, 2, static_cast<int>(0.02 * fs_));
+    for (size_t c = 0; c < conv_.size(); ++c) conv_[c].prepare(len_, static_cast<int>(0.02 * fs_), static_cast<int>(c));
     designer_.prepare(len_, fs_);
     rebuild(true);
     lowCutOn_ = target_[LowCut] > specs()[LowCut].min * 1.0001;
@@ -162,12 +162,12 @@ void Processor::process(float** ch, int numCh, int n) {
     if (!prepared_) return;
     const int nch = std::min(numCh, 2);
     if (designing_) {   // one step per block: about a millisecond each
-        if (designer_.step()) { conv_.setKernel(designer_.ir(), false); designing_ = false; }
-    } else if (dirty_ && !conv_.fading()) {
+        if (designer_.step()) { for (auto& c : conv_) c.setKernel(designer_.ir(), false); designing_ = false; }
+    } else if (dirty_ && !conv_[0].fading() && !conv_[1].fading()) {
         designer_.begin(static_cast<int>(target_[Cab] + 0.5), static_cast<int>(target_[Mic] + 0.5), target_[MicDistance], target_[OffAxis], target_[Room]);
         designing_ = true; dirty_ = false;
     }
-    conv_.process(ch, nch, n);
+    for (int c = 0; c < nch; ++c) conv_[static_cast<size_t>(c)].process(ch[c], n);
     if (lowCutOn_) for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) ch[c][i] = static_cast<float>(hp_[static_cast<size_t>(c)].process(ch[c][i]));
     for (int c = 0; c < nch; ++c) for (int i = 0; i < n; ++i) if (std::abs(ch[c][i]) < 1e-30f) ch[c][i] = 0.0f;
 }

@@ -117,3 +117,18 @@ TEST_CASE("GT02 changing a setting crossfades to the new IR; silence stays silen
     auto q = make(pure(2, 0)); std::vector<float> z(24000, 0.0f); for (float v : run(q, z)) CHECK(v == 0.0f);
     auto r = make(pure(2, 0)); const auto l = noise(-20, 0.5); std::vector<float> sil(l.size(), 0.0f); const auto o = run2(r, l, sil); for (float v : o.second) CHECK(v == 0.0f);
 }
+
+TEST_CASE("GT02 the impulse response of the processor is the designed IR, tap for tap, at 48 and 192 kHz (the room tail included)") {
+    for (double fs : {48000.0, 192000.0}) {
+        Processor p; for (auto& s : pure(2, 0, 4, 15, 30)) p.setParam(s.first, s.second);
+        p.prepare(fs, 256); p.snapToTargets();
+        int len = 8192; while (len < 8192.0 * fs / 48000.0) len *= 2;
+        const auto h = designIr(len, fs, 2, 0, 4, 15, 30);
+        std::vector<float> x(static_cast<size_t>(len) + 300, 0.0f); x[100] = 1.0f;
+        const auto y = run(p, x);
+        double peak = 0, worst = 0; for (double v : h) peak = std::max(peak, std::abs(v));
+        for (size_t k = 0; k < h.size(); ++k) worst = std::max(worst, std::abs(static_cast<double>(y[k + 100]) - h[k]));
+        INFO("fs " << fs); CHECK(peak > 0.0); CHECK(worst < 2e-5 * std::max(1.0, peak));
+        for (size_t k = 0; k < 100; ++k) CHECK(y[k] == 0.0f);   // nothing before the impulse
+    }
+}
