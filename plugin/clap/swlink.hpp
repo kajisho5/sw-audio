@@ -163,7 +163,8 @@ public:
     // share a reference spectrum (kRefBands dB values; serial != 0) or withdraw it (serial 0): atomic stores only (not while leave() runs: the owner leaves when it is destroyed)
     void publishReference(uint32_t serial, const float* db) {
         if (!slot_) return;
-        slot_->refSerial.store(0);
+        slot_->refSerial.store(0, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_release);   // (a seqlock: a reader that sees any of the new values also sees the 0 above)
         if (!serial || !db) return;
         for (int i = 0; i < kRefBands; ++i) slot_->refDb[i].store(db[i], std::memory_order_relaxed);
         slot_->refSerial.store(serial, std::memory_order_release);
@@ -180,7 +181,8 @@ public:
             if (!a) continue;
             if (!db) return a;
             float tmp[kRefBands]; for (int k = 0; k < kRefBands; ++k) tmp[k] = s.refDb[k].load(std::memory_order_relaxed);
-            if (s.refSerial.load(std::memory_order_acquire) != a || s.id.load() != id) continue;   // changed while it was read
+            std::atomic_thread_fence(std::memory_order_acquire);                                   // (the values above are read before the serial below, also on a weakly ordered CPU)
+            if (s.refSerial.load(std::memory_order_relaxed) != a || s.id.load() != id) continue;   // changed while it was read
             for (int k = 0; k < kRefBands; ++k) db[k] = tmp[k];
             return a;
         }
@@ -193,6 +195,8 @@ public:
     void publishShared(double value) {
         if (!slot_ || !reg_) return;
         const uint32_t st = reg_->stamp.fetch_add(1) + 1;
+        slot_->sharedStamp.store(0, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_release);   // (a seqlock: see publishReference)
         slot_->sharedValue.store(value, std::memory_order_relaxed); slot_->sharedStamp.store(st, std::memory_order_release);
         seenStamp_ = st;
     }
@@ -207,7 +211,8 @@ public:
             const uint32_t a = s.sharedStamp.load(std::memory_order_acquire);
             if (a == 0 || a <= seenStamp_ || a <= best) continue;
             const double x = s.sharedValue.load(std::memory_order_relaxed);
-            if (s.sharedStamp.load(std::memory_order_acquire) != a || s.id.load() != id) continue;   // changed while it was read: the next call
+            std::atomic_thread_fence(std::memory_order_acquire);
+            if (s.sharedStamp.load(std::memory_order_relaxed) != a || s.id.load() != id) continue;   // changed while it was read: the next call
             best = a; v = x;
         }
         if (!best) return false;
