@@ -9,6 +9,8 @@
   const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
   const peakDb = m => (m ? Math.max(m[0], m[1]) : -100);
   const outDb = m => (m ? Math.max(m[2], m[3]) : -100);
+  // gain reduction in dB (>= 0): the core's own value when the plug-in sends it (readouts[0], <= 0), otherwise estimated from the input and output peaks (+ the make-up the output carries)
+  const grOf = (info, makeup) => { const r = info && info.readouts; if (r && r.length) return Math.max(0, -r[0]); const m = info && info.meters; return m ? Math.max(0, peakDb(m) + (makeup || 0) - outDb(m)) : 0; };
 
   // ring of the last n values
   function Ring(n, init) { const a = new Array(n).fill(init); return { push(v) { a.shift(); a.push(v); }, a }; }
@@ -44,7 +46,7 @@
         const i = peakDb(m), o = outDb(m);
         dot.setAttribute('cx', px(i).toFixed(1)); dot.setAttribute('cy', py(o > -99 ? o : compCurve(i, thr, ratio, knee) + mk).toFixed(1));
         if (++tick % 2) return;                                          // the history moves at ~30 Hz
-        lvl.push(i); gr.push(Math.max(0, i + mk - o));
+        lvl.push(i); gr.push(grOf(info, mk));
         let up = '', dn = '', g = '';
         for (let k = 0; k < N; k++) {
           const x = (k * dx).toFixed(1), a = clamp((lvl.a[k] + 60) / 60, 0, 1) * (H * 0.42);   // amplitude around the centre line
@@ -88,16 +90,16 @@
         const m = info && info.meters; if (!m) return;
         const sel = seg ? +(seg.dataset.sel || 0) : (mode === 'gr' ? 0 : 1);       // DY02's own switch: GR, +4, +10
         if (mode === 'gr3') {                                                                       // DY03: its own face, GR only (peak in minus peak out)
-          needles.forEach((n, k) => { const target = vuAngle(Math.min(20, Math.max(0, peakDb(m) + (ctx.value('Makeup') || 0) - outDb(m))), GR_SCALE); cur[k] += (target - cur[k]) * (target < cur[k] ? 0.45 : 0.22); n.style.transform = 'rotate(' + cur[k].toFixed(1) + 'deg)'; });
+          needles.forEach((n, k) => { const target = vuAngle(Math.min(20, grOf(info, ctx.value('Makeup') || 0)), GR_SCALE); cur[k] += (target - cur[k]) * (target < cur[k] ? 0.45 : 0.22); n.style.transform = 'rotate(' + cur[k].toFixed(1) + 'deg)'; });
           return;
         }
         needles.forEach((n, k) => {
           let vu;
           if (label === 'OFF') vu = -20;
           else if (label && label !== 'GR') vu = outDb(m) + REF[label];
-          else if (label === 'GR') vu = -Math.max(0, peakDb(m) - outDb(m));
+          else if (label === 'GR') vu = -grOf(info);
           else if (mode === 'outLR') vu = (m[2 + (k % 2)] > -99 ? m[2 + (k % 2)] : -100) + 15;
-          else if (sel === 0 && mode !== 'out') vu = -Math.max(0, peakDb(m) - outDb(m));           // gain reduction
+          else if (sel === 0 && mode !== 'out') vu = -grOf(info);                                   // gain reduction (the core's own value)
           else vu = outDb(m) + (sel === 2 ? 9 : 15);                                                // +4 and +10 reference
           const target = vuAngle(Math.max(-20, Math.min(3, vu)));
           cur[k] += (target - cur[k]) * (target > cur[k] ? 0.45 : 0.22);                            // 300 ms ballistics at the 60 ms update
@@ -607,7 +609,40 @@
     } };
   }
 
+
+  // ---- de-esser (DY05): the measured output spectrum 1 - 20 kHz, the detection band (drag it: Freq), the threshold line (drag it), the gain reduction (the core's own value)
+  function deesserDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const rects = [...svg.querySelectorAll(':scope > rect')], band = rects[0], grBg = rects.find(r => r.getAttribute('x') === '394' && r.getAttribute('height') === '310'), grFill = rects.find(r => r !== grBg && r.getAttribute('x') === '394');
+    const edges = [...svg.querySelectorAll(':scope > line')].filter(l => l.getAttribute('x1') === l.getAttribute('x2')), thr = [...svg.querySelectorAll(':scope > line')].find(l => l.getAttribute('stroke-dasharray'));
+    const area = [...svg.querySelectorAll(':scope > path')].sort((a, b) => b.getAttribute('d').length - a.getAttribute('d').length)[0], tT = [...svg.querySelectorAll(':scope > text')].find(t => /^Threshold/.test(t.textContent)), peak = svg.querySelector(':scope > circle');
+    const freqI = (ctx.params.find(q => q.name === 'Freq') || {}).i, thrI = (ctx.params.find(q => q.name === 'Threshold') || {}).i;
+    if (!band || edges.length < 2 || !thr || !area || freqI === undefined || thrI === undefined) return null;
+    const X0 = 10, X1 = 380, F0 = 1000, F1 = 20000, fx = f => X0 + Math.log(clamp(f, F0, F1) / F0) / Math.log(F1 / F0) * (X1 - X0), xf = x => F0 * Math.pow(F1 / F0, (x - X0) / (X1 - X0));
+    const yd = db => 10 + clamp(-db, 0, 60) / 60 * 320, dy = y => -(y - 10) / 320 * 60, W = 1.3, sm = Smooth(), q = i => ctx.params.find(x => x.i === i);
+    const redL = [...box.querySelectorAll('span')].find(e => /^Reduction$/i.test(e.textContent.trim())), redV = redL && redL.nextElementSibling;
+    const drag = (els, apply, begin, end) => els.forEach(e => { let on = false; e.style.pointerEvents = 'all'; e.addEventListener('pointerdown', ev => { ev.stopPropagation(); e.setPointerCapture(ev.pointerId); on = true; begin(); apply(ev); }); e.addEventListener('pointermove', ev => { if (on) apply(ev); }); const stop = () => { if (!on) return; on = false; end(); }; e.addEventListener('pointerup', stop); e.addEventListener('pointercancel', stop); });
+    const pt = ev => { const r = svg.getBoundingClientRect(); return [(ev.clientX - r.left) / r.width * 420, (ev.clientY - r.top) / r.height * 349]; };
+    band.style.cursor = 'ew-resize'; thr.style.cursor = 'ns-resize'; edges.forEach(e => { e.style.cursor = 'ew-resize'; });
+    drag([band, ...edges], ev => { const m = q(freqI); ctx.set(freqI, m.c.value(m.c.norm(xf(pt(ev)[0])))); }, () => ctx.begin(freqI), () => ctx.end(freqI));
+    const hit = mkEl('line', { x1: X0, x2: X1, y1: 0, y2: 0, stroke: 'transparent', 'stroke-width': 14 }); svg.append(hit); hit.style.cursor = 'ns-resize';
+    drag([hit], ev => { const m = q(thrI); ctx.set(thrI, m.c.value(m.c.norm(dy(pt(ev)[1])))); }, () => ctx.begin(thrI), () => ctx.end(thrI));
+    return { update(info) {
+      const f = ctx.get(freqI), t = ctx.get(thrI), a = fx(f / W), b = fx(f * W);
+      band.setAttribute('x', a.toFixed(1)); band.setAttribute('width', (b - a).toFixed(1)); edges[0].setAttribute('x1', a.toFixed(1)); edges[0].setAttribute('x2', a.toFixed(1)); edges[1].setAttribute('x1', b.toFixed(1)); edges[1].setAttribute('x2', b.toFixed(1));
+      const y = yd(t); thr.setAttribute('y1', y.toFixed(1)); thr.setAttribute('y2', y.toFixed(1)); hit.setAttribute('y1', y.toFixed(1)); hit.setAttribute('y2', y.toFixed(1)); if (tT) { tT.textContent = 'Threshold ' + (+t.toFixed(0)) + ' dB'; tT.setAttribute('y', (y - 6).toFixed(1)); }
+      const sp = info && info.spectrum; if (sp) {
+        const v = sm.feed(sp); let d = 'M' + X0 + ' 330', bi = -1, bv = -200;
+        for (let k = 0; k < 64; k++) { const fk = 20 * Math.pow(1000, (k + 0.5) / 64); if (fk < F0 || fk > F1) continue; d += ' L' + fx(fk).toFixed(1) + ' ' + yd(v[k]).toFixed(1); if (fk >= f / W && fk <= f * W && v[k] > bv) { bv = v[k]; bi = k; } }
+        area.setAttribute('d', d + ' L' + X1 + ' 330 Z');
+        if (peak) { if (bi >= 0 && bv > -90) { peak.style.display = ''; peak.setAttribute('cx', fx(20 * Math.pow(1000, (bi + 0.5) / 64)).toFixed(1)); peak.setAttribute('cy', yd(bv).toFixed(1)); } else peak.style.display = 'none'; }
+      }
+      { const g = grOf(info), h = clamp(g / 20, 0, 1) * 310; if (grFill) grFill.setAttribute('height', h.toFixed(1)); if (redV) redV.textContent = (g > 0.05 ? '-' : '') + g.toFixed(1) + ' dB'; }
+    } };
+  }
+
   const registry = {
+    DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     MT01: loudnessDisplay, LV23: loudnessDisplay,
