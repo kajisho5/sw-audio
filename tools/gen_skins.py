@@ -374,7 +374,7 @@ def bind_actions(root, code, report):
 def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips and the preset menu) are
     shown dimmed with a title instead of pretending to work."""
-    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock'}
+    inert = {'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto'}
     bound = ('data-p', 'data-pb', 'data-band', 'data-act', 'data-call')
     n = 0
     for b in root.select('button'):
@@ -456,6 +456,7 @@ def build(code, report):
         if p['curve'] == 'step' and len(p['steps']) == 2:
             names.setdefault(norm(p['name']), []).append(p['i'])
     delta = [p['i'] for p in params if p['id'] == 'common.delta']
+    autogain = [p['i'] for p in params if p['id'] == 'common.autogain']
     for tb in root.select('.tb'):
         for b in tb.select('button'):
             lab = (b.get('aria-label') or '').lower(); t = b.get_text().strip()
@@ -472,6 +473,8 @@ def build(code, report):
             t = tl.get_text().strip(); b['data-tile'] = '1'
         if t == 'Δ' and delta:
             b['data-p'] = str(delta[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
+        if t == 'Auto' and autogain and b.parent is not None and any(x.get_text().strip() == 'Δ' for x in b.parent.find_all('button', recursive=False)):
+            b['data-p'] = str(autogain[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue   # the panel's Auto next to the Δ button = the common Auto gain
         if not t:
             continue
         nbt += 1

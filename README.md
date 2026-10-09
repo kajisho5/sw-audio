@@ -1059,6 +1059,7 @@ Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（4
 ### 画面のボタン：コアを呼ぶもの、まだ無い機能
 
 - **コアのメソッドを呼ぶボタン**（Randomize・Clear・Ring out・Lock filters・Clear live・Learn noise・Flat・Clap sync・Output・Reset・Tap・Lock all・Mark の 12 製品。`ui/actions.json`）は、**共通の画面（デザインなし）にだけ繋がっていて、デザインの画面では動いていなかった**。`tools/gen_skins.py` が名前で `data-call` を付け、ランタイムが `bridge.call` で呼ぶようにした（トグルは画面側で On／Off を持つ）。デザインにないボタン（LV08 Forget、LV21 Arm、LV30 Record、UT01 Remember gain）、LV23 Export log（ファイルへの書き出しのアダプタ側が未実装）、DL01 Tap は繋がっていない。
+- パネルの **Δ の隣の「Auto」ボタン**（40 製品）は共通の Auto gain に結び付けた（ヘッダーの Auto gain と同じパラメータ）。
 - **機能がまだ製品に無い部品**（EVO バーの Low lat・2× OS・Unit A／B／C・履歴ボタン・拡大率の「100%」、LIVE の Main show・Remote・Lock）は、動いているふりをしないよう**薄く表示して「Not available yet」の説明を付けた**（仕様書の共通機能で、DSP 側の実装が要る：Low lat＝低遅延版への切り替え、2× OS＝オーバーサンプリングの選択、Unit A／B／C＝部品公差の個体差）。プリセットのメニューも「Presets are not available yet」の説明のみ（クリックしても何も起きない）。
 
 ### A／B のモーフのスライダー
