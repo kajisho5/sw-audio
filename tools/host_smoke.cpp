@@ -1029,13 +1029,30 @@ bool tailChecks(const std::vector<fs::path>& files, int settings, std::vector<st
     }
     return ok;
 }
+// Memory per instance: a DAW session holds dozens of instances. 1 + 6 instances of each plug-in are created and activated; the growth of the resident set per instance (the first one pays for the library's static data).
+// Lists the heaviest; the numbers are what the allocator gave back to the process, so a few MB are noise.
+void memoryChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines) {
+    std::vector<std::pair<double, std::string>> out;
+    for (const auto& f : files) {
+        Loaded first; std::string why; if (!first.open(f, why)) continue;
+        const double r0 = residentMB(); std::vector<Loaded> more(6);
+        bool ok = true; for (auto& m : more) if (!m.open(f, why)) { ok = false; break; }
+        if (ok) out.push_back({(residentMB() - r0) / 6.0, f.stem().string()});
+        for (auto& m : more) m.close();
+        first.close();
+    }
+    std::sort(out.rbegin(), out.rend());
+    double sum = 0; for (const auto& o : out) sum += std::max(0.0, o.first);
+    for (size_t i = 0; i < out.size() && i < 8; ++i) { char b[120]; std::snprintf(b, sizeof b, "%8.1f MB per instance   %s", out[i].first, out[i].second.c_str()); lines.push_back(b); }
+    char b[160]; std::snprintf(b, sizeof b, "one instance of every plug-in together: %.0f MB (%zu plug-ins, sample rate %.0f Hz)", sum, out.size(), kSr); lines.push_back(b);
+}
 }   // namespace
 
 int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1045,6 +1062,7 @@ int main(int argc, char** argv) {
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         if (opt == "--blocks") { blocksOnly = true; continue; }
         if (opt == "--reset") { resetOnly = true; continue; }
+        if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
@@ -1057,6 +1075,11 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (memoryOnly) {   // --memory: only the memory per instance
+        std::vector<std::string> lines; memoryChecks(files, lines);
+        for (const auto& l : lines) std::printf("%s\n", l.c_str());
+        return 0;
+    }
     if (resetOnly) {   // --reset: only the reset() check
         std::vector<std::string> lines; int failing = 0; const bool ok = resetChecks(files, lines, failing);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
