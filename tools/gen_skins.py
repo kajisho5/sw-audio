@@ -626,6 +626,13 @@ def build(code, report):
     if code == 'CS04':
         cs04_bind(root, params)
     mark_inert(root)
+    # the SW Link lamp of the bottom bar: SW Link is not part of this version (README), so the lamp is not green
+    for evr in root.select('.evob .evr'):
+        if 'SW Link' in evr.get_text():
+            evr['title'] = 'SW Link is not part of this version'
+            d = evr.select_one('.evd')
+            if d is not None:
+                d['style'] = (d.get('style') or '') + ';background:#55575c;box-shadow:none'
     # the EVO label of the bottom bar switches the product's evolution feature (an `.evo.on`-style parameter) when no other control on the screen does
     used_p = {int(x) for x in re.findall(r'data-p="(\d+)"', str(root))}
     evo_p = [p for p in params if '.evo' in p['id'] and p['curve'] == 'step' and len(p['steps']) == 2]
