@@ -1167,6 +1167,32 @@
   }
 
 
+  // ---- LIVE strips with level ladders (LV03, LV04): the design's `.bar` ladders follow the measured peaks (two bars = output L / R; four = input L / R, output L / R).
+  // LV03: the GR bar is the compressor's gain reduction (readouts: [gate gain, compressor gain, de-ess gain] in dB, from the core) and the gate lamp shows whether the gate is open (gain above -3 dB).
+  // LV04: the GR bar is the drop from the input peak to the output peak (no gain reduction readout in the core); Overs = limit events (readouts[1]); Max peak and Max GR are the largest values seen
+  // since the screen opened (click to reset).
+  const BAR_COL = 'linear-gradient(to top,#2bd14a 0 70%,#f0c93d 70% 88%,#e0443e 88%)';
+  const ladder = (b, db) => { const pct = clamp((db + 30) / 30, 0, 1) * 100; b.style.background = 'linear-gradient(to top,transparent 0 ' + pct.toFixed(1) + '%,rgba(30,31,34,.92) ' + pct.toFixed(1) + '%),' + BAR_COL; };
+  function liveStripDisplay(box, ctx, kind) {
+    const bars = [...box.querySelectorAll('.bar')]; if (bars.length < 2) return null;
+    const grFill = [...box.querySelectorAll('div')].find(d => /position:absolute/.test(d.getAttribute('style') || '') && /top:0/.test(d.getAttribute('style') || '') && /background:#f0ad3d/.test(d.getAttribute('style') || '') && /height:\d+%/.test(d.getAttribute('style') || ''));
+    const lamp = kind === 'LV03' ? [...box.querySelectorAll('.dot')].find(e => e.nextElementSibling && /^open$/i.test(e.nextElementSibling.textContent.trim())) : null, lampT = lamp && lamp.nextElementSibling;
+    const boxes = [...box.querySelectorAll('.box')], val = n => { const b = boxes.find(x => x.firstElementChild && x.firstElementChild.textContent.trim().toLowerCase() === n); return b && b.querySelector('.rv'); };
+    const eOver = val('overs'), ePk = val('max peak'), eGr = val('max gr'); let maxPk = -200, maxGr = 0;
+    [ePk, eGr].forEach(e => { if (e) { e.parentElement.style.cursor = 'pointer'; e.parentElement.title = 'Click to reset'; e.parentElement.addEventListener('click', () => { maxPk = -200; maxGr = 0; }); } });
+    return { update(info) {
+      const m = info && info.meters, r = info && info.readouts; if (!m) return;
+      if (bars.length >= 4) { ladder(bars[0], m[0]); ladder(bars[1], m[1]); ladder(bars[2], m[2]); ladder(bars[3], m[3]); } else { ladder(bars[0], m[2]); ladder(bars[1], m[3]); }
+      let gr = 0;
+      if (kind === 'LV03' && r && r.length >= 3) { gr = Math.max(0, -r[1]); if (lamp) { const open = r[0] > -3; lamp.style.background = open ? '' : '#3a3b3f'; lamp.style.boxShadow = open ? '' : 'none'; lampT.textContent = open ? 'Open' : 'Closed'; } }
+      else { const inP = Math.max(m[0], m[1]), outP = Math.max(m[2], m[3]); gr = inP > -70 ? Math.max(0, inP - outP) : 0; maxPk = Math.max(maxPk, outP); maxGr = Math.max(maxGr, gr); }
+      if (grFill) grFill.style.height = clamp(gr / (kind === 'LV03' ? 20 : 12), 0, 1) * 100 + '%';
+      if (ePk) ePk.textContent = maxPk > -150 ? maxPk.toFixed(1) : '—'; if (eGr) eGr.textContent = maxGr > 0.05 ? '-' + maxGr.toFixed(1) : '0.0';
+      if (eOver && r && r.length >= 2) eOver.textContent = String(Math.round(r[1]));
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1182,7 +1208,8 @@
     MS06: (box, ctx) => combine(compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio' }), textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^TP -?\d/, text: () => 'TP —' }, { re: /^LRA \d/, text: () => 'LRA —' }])),
     LV01: (box, ctx) => textRules(box, ctx, [{ re: /^-?\d+(\.\d+)? LUFS$/, text: () => '— LUFS' }, { re: /^GR \d+(\.\d+)?$/, text: () => 'GR —' }]),
     EQ08: (box, ctx) => combine(eqDisplay(box, ctx), textRules(box, ctx, [{ re: /^Latency [\d.]+ ms$/, text: info => info.latencyMs === undefined ? null : 'Latency ' + info.latencyMs.toFixed(1) + ' ms' }])),
-    LV04: (box, ctx) => textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }]),
+    LV03: (box, ctx) => liveStripDisplay(box, ctx, 'LV03'),
+    LV04: (box, ctx) => combine(liveStripDisplay(box, ctx, 'LV04'), textRules(box, ctx, [{ re: /GR -?[\d.]+ dB/, text: info => info.readouts && info.readouts.length >= 2 ? (info.readouts[1] > 0 ? 'Limit events: ' + info.readouts[1] : 'No limit events') : null }])),
     UT03: (box, ctx) => { const rb = [...box.querySelectorAll('.rbox')].map(b => [...b.querySelectorAll('span')]), mix = rb.find(x => /^Mix/.test(x[0].textContent)), ref = rb.find(x => /^Ref/.test(x[0].textContent)), matchV = [...box.querySelectorAll('.val')].find(e => /LU$/.test(e.textContent));
       return { update(info) { const r = info && info.readouts; if (!r || r.length < 4) return; if (mix) mix[1].textContent = lufs(r[1]) + ' LUFS'; if (ref) ref[1].textContent = lufs(Math.max(r[2], r[3])) + ' LUFS'; if (matchV) matchV.textContent = r[1] > -150 ? (r[0] >= 0 ? '+' : '') + r[0].toFixed(1) + ' LU' : '— LU'; } }; },
     LV19: (box, ctx) => combine(derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'), textRules(box, ctx, [{ re: /^\d+(\.\d+)? ms late$/, text: info => info.readouts && info.readouts.length >= 5 ? (info.readouts[4] > 0.5 ? info.readouts[3].toFixed(0) + ' ms late' : 'in sync') : null }])),

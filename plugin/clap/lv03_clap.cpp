@@ -9,6 +9,8 @@ struct Lv03 {
     static constexpr int kOutputParam = sw::lv03::Out;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 3;   // gate gain, compressor gain, de-esser gain (dB, <= 0)
+    static void readouts(const Core& c, double* o) { o[0] = c.gateGainDb(); o[1] = c.compGainDb(); o[2] = c.deessGainDb(); }
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_COMPRESSOR, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv03", "SW LV03 Channel", "SEVENTHWELL",
