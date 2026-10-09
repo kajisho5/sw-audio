@@ -1,4 +1,4 @@
-// The screen's SA06 transfer curve (ui/displays.js sa06Shape) against the core's shapeFn (products/sa06/sa06.cpp); the same table is in tests/test_sa06.cpp.
+// The screen's drawn functions against the numbers the cores give: the SA06 transfer curve (ui/displays.js sa06Shape; tests/test_sa06.cpp holds the same table) and the CR01 filter response (cr01Gain; tests/test_cr01.cpp).
 // run: node tests/ui/shapes.test.js
 const D = require('../../ui/displays.js');
 const us = [-3.0, -1.0, -0.4, 0.0, 0.25, 0.7, 1.5, 5.0];
@@ -21,5 +21,34 @@ const rows = [
 ];
 let n = 0, bad = 0;
 rows.forEach(r => us.forEach((u, i) => { ++n; const v = D.sa06Shape(r.t, r.s, u); if (Math.abs(v - r.y[i]) > 1e-7 + 1e-7 * Math.abs(r.y[i])) { if (bad++ < 10) console.log('MISMATCH type', r.t, 'shape', r.s, 'u', u, 'js', v, 'core', r.y[i]); } }));
-console.log(n + ' shape samples,', bad ? bad + ' problems' : 'all match');
+// CR01 filter response (cr01Gain) at 100 / 600 / 1200 / 2500 / 5000 / 12000 Hz, 96 kHz (the core runs the filter at 2x 48 kHz); the same table is in tests/test_cr01.cpp (-60 = a null)
+const fr = [100, 600, 1200, 2500, 5000, 12000];
+const crRows = [
+  { t: 0, r: 0.0, fc: 1200, g: [-0.06, -1.94, -6.02, -14.58, -25.42, -41.00] },
+  { t: 0, r: 0.0, fc: 5000, g: [-0.00, -0.12, -0.48, -1.91, -6.02, -17.26] },
+  { t: 0, r: 0.6, fc: 1200, g: [0.04, 1.26, 1.31, -11.61, -24.63, -40.87] },
+  { t: 0, r: 0.6, fc: 5000, g: [0.00, 0.08, 0.31, 1.25, 1.31, -15.14] },
+  { t: 0, r: 1.0, fc: 1200, g: [0.06, 2.48, 20.00, -10.53, -24.44, -40.84] },
+  { t: 0, r: 1.0, fc: 5000, g: [0.00, 0.12, 0.50, 2.44, 20.00, -14.49] },
+  { t: 1, r: 0.0, fc: 1200, g: [-15.63, -1.94, 0.00, -2.16, -6.93, -14.52] },
+  { t: 1, r: 0.0, fc: 5000, g: [-28.04, -12.59, -6.93, -1.97, 0.00, -3.25] },
+  { t: 1, r: 0.6, fc: 1200, g: [-22.86, -6.07, 0.00, -6.53, -13.47, -21.72] },
+  { t: 1, r: 0.6, fc: 5000, g: [-35.37, -19.73, -13.47, -6.14, 0.00, -8.46] },
+  { t: 1, r: 1.0, fc: 1200, g: [-41.53, -23.55, 0.00, -24.14, -31.97, -40.38] },
+  { t: 1, r: 1.0, fc: 5000, g: [-54.05, -38.37, -31.97, -23.64, 0.00, -26.50] },
+  { t: 2, r: 0.0, fc: 1200, g: [-43.24, -13.98, -6.02, -1.80, -0.48, -0.08] },
+  { t: 2, r: 0.0, fc: 5000, g: [-60.00, -37.11, -25.42, -14.07, -6.02, -1.28] },
+  { t: 2, r: 0.6, fc: 1200, g: [-43.14, -10.78, 1.31, 1.17, 0.31, 0.05] },
+  { t: 2, r: 0.6, fc: 5000, g: [-60.00, -36.91, -24.63, -10.91, 1.31, 0.84] },
+  { t: 2, r: 1.0, fc: 1200, g: [-43.12, -9.57, 20.00, 2.25, 0.50, 0.08] },
+  { t: 2, r: 1.0, fc: 5000, g: [-60.00, -36.86, -24.44, -9.72, 20.00, 1.49] },
+  { t: 3, r: 0.0, fc: 1200, g: [-0.12, -4.43, -60.00, -4.06, -0.98, -0.16] },
+  { t: 3, r: 0.0, fc: 5000, g: [-0.01, -0.25, -0.98, -4.37, -60.00, -2.78] },
+  { t: 3, r: 0.6, fc: 1200, g: [-0.02, -1.23, -60.00, -1.09, -0.20, -0.03] },
+  { t: 3, r: 0.6, fc: 5000, g: [-0.00, -0.05, -0.20, -1.21, -60.00, -0.67] },
+  { t: 3, r: 1.0, fc: 1200, g: [-0.00, -0.02, -60.00, -0.02, -0.00, -0.00] },
+  { t: 3, r: 1.0, fc: 5000, g: [-0.00, -0.00, -0.00, -0.02, -60.00, -0.01] },
+];
+crRows.forEach(r => fr.forEach((f, i) => { ++n; const v = D.cr01Gain(r.t, r.r, r.fc, f, 96000); if (Math.abs(v - r.g[i]) > 0.02) { if (bad++ < 10) console.log('MISMATCH cr01 type', r.t, 'res', r.r, 'fc', r.fc, 'f', f, 'js', v, 'table', r.g[i]); } }));
+console.log(n + ' samples,', bad ? bad + ' problems' : 'all match');
 process.exit(bad ? 1 : 0);

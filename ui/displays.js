@@ -1091,6 +1091,34 @@
   }
 
 
+  // ---- CR01 filter: the response of the two-pole state-variable filter (Type, Resonance) at the cutoff that is in use (the core's modulated cutoff), and the modulator over the last ~12 s (grey)
+  // H(w) with w = tan(pi f / fsOs) / tan(pi fc / fsOs), damping k = max(0.1, 2 (1 - 0.95 r)); LP 1/D, BP k jw/D, HP -w^2/D, Notch (1 - w^2)/D with D = 1 - w^2 + j k w (fsOs = 2 x 48 kHz).
+  // readouts: [the modulator 0 .. 1, the cutoff in use (Hz)]; the drive's saturation is not drawn.
+  function cr01Gain(type, res, fc, f, fsOs) {   // dB
+    const k = Math.max(0.1, 2 * (1 - 0.95 * res)), g = Math.tan(Math.PI * Math.min(fc, 0.45 * fsOs) / fsOs), w = Math.tan(Math.PI * Math.min(f, 0.45 * fsOs) / fsOs) / g, re = 1 - w * w, im = k * w;
+    const num = [[1, 0], [0, k * w], [-w * w, 0], [re, 0]][type] || [1, 0];
+    return 20 * Math.log10(Math.max(Math.hypot(num[0], num[1]) / Math.sqrt(re * re + im * im), 1e-3));
+  }
+  function filterResponseDisplay(box, ctx) {
+    const svg = svgOf(box); if (!svg) return null;
+    const paths = [...svg.querySelectorAll(':scope > path')], label = svg.querySelector(':scope > text'); if (paths.length < 3) return null;
+    const [glow, line, mod] = paths, [, , W, H] = vbOf(svg), N = 160, M = 200, fsOs = 96000, hist = Ring(M, 0), names = ['Envelope', 'LFO', 'Sidechain']; let last = '', Y0 = 96.5;
+    const yDb = db => clamp(Y0 - db * 2.6, 3, H - 3);
+    return { update(info) {
+      const r = info && info.readouts, type = Math.round(ctx.value('Type')), res = ctx.value('Resonance') / 100, src = Math.round(ctx.value('Mod source'));
+      if (!Number.isFinite(type) || !Number.isFinite(res)) return;
+      const fc = r && r.length >= 2 && r[1] > 5 ? r[1] : ctx.value('Cutoff'); if (r && r.length >= 2) hist.push(clamp(r[0], 0, 1));
+      const key = [type, res, Math.round(fc), src].join('|');
+      if (key !== last) {
+        last = key; let d = '';
+        for (let i = 0; i <= N; i++) d += (i ? ' L' : 'M') + (i / N * W).toFixed(1) + ' ' + yDb(cr01Gain(type, res, fc, 20 * Math.pow(1000, i / N), fsOs)).toFixed(1);
+        glow.setAttribute('d', d); line.setAttribute('d', d); if (label && names[src]) label.textContent = names[src];
+      }
+      let m = ''; hist.a.forEach((v, i) => { m += (i ? ' L' : 'M') + (i / (M - 1) * W).toFixed(1) + ' ' + (H - 6 - v * 70).toFixed(1); }); mod.setAttribute('d', m);
+    } };
+  }
+
+
   // ======== numbers the design printed as examples: shown only when the plug-in measures them, otherwise a dash ========
   // rules: [{ re: regex on the element's text, text: (info, ctx, m) => string | null (null keeps the text) }]; elements are the leaf nodes (html or svg text) of the design
   function textRules(box, ctx, rules) {
@@ -1137,6 +1165,7 @@
     VO01: pitchGraphDisplay,
     VO03: harmonyGraphDisplay,
     VO08: breathDisplay,
+    CR01: filterResponseDisplay,
     RV07: earlyRoomDisplay,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
@@ -1162,6 +1191,6 @@
     DY08: (box, ctx) => compressorDisplay(box, ctx, { thr: 'Threshold', ratio: 'Ratio', knee: 'Knee', makeup: 'Makeup' }),
   };
 
-  global.SWDISP = { sa06Shape, attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
+  global.SWDISP = { sa06Shape, cr01Gain, attach(code, box, ctx) { const f = registry[code]; try { return f ? f(box, ctx) : null; } catch (e) { return null; } }, compCurve };
   if (typeof module !== 'undefined') module.exports = global.SWDISP;
 })(typeof window !== 'undefined' ? window : globalThis);
