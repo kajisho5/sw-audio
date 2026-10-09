@@ -2,7 +2,7 @@
 //   1. every product's screen loads without a script error;
 //   2. Undo / Redo record one step per gesture (a knob drag is one step), and the History button lists them and goes back;
 //   3. EQ02 Assist (marks, a tap places a Bell) and Unmask (the SW Link overlay and its messages, the lamp);
-//   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall).
+//   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line.
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
 const assert = require('assert');
@@ -82,6 +82,9 @@ async function open(code, query = '') {
   ok(/Vocal track: no Gain remembered/.test(await evt.textContent()), 'UT01 shows the kind of track: ' + await evt.textContent());
   const d2 = pg.locator('[data-dial]').first(), rb = await d2.boundingBox(); await pg.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2); await pg.mouse.down(); for (let k = 1; k <= 8; k++) await pg.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2 - 6 * k); await pg.mouse.up();
   await evt.click(); await pg.waitForTimeout(250); ok(/Vocal track: Gain \+[\d.]+ dB remembered/.test(await evt.textContent()), 'a click remembers the Gain: ' + await evt.textContent());
+
+  // VO03: the EVO line names the chord held on the MIDI track (the preview's read-out holds F A C most of the time)
+  await open('VO03'); await pg.waitForFunction(() => /MIDI chord: C F A/.test(document.getElementById('app').shadowRoot.querySelector('.evob .evt').textContent), null, { timeout: 8000 }).then(() => ok(true), () => ok(false, 'VO03 shows the held chord'));
 
   await browser.close(); server.close();
   console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line: ' + checks + ' checks passed');
