@@ -1048,9 +1048,13 @@ cmake/             MinGW 用ツールチェーン
 
 Barlow Condensed（400・500・600・700）、Michroma（400）、Space Mono（400・700）の latin サブセット（woff2、約 156 KB。出典は npm の @fontsource、SIL Open Font License 1.1、ライセンス文は `ui/fonts/LICENSE-*.txt`）。`tools/embed_ui.py` が `data:` URI にして画面の CSS の先頭に入れる（ネットワーク不要、端末にフォントが無くても同じ見た目）。`@font-face` は影の DOM の中では効かないため、ページ本体の `<style>` に置く。これまでプラグインの画面はフォントを読み込んでおらず、端末のフォントに頼っていた（プレビューだけ Google Fonts のリンク）。ネットワークを切ってブラウザで読み込めることを確認（DAW 内の WebView では未確認）。latin 以外の文字（日本語など）は含まない。
 
+### LIVE 製品の画面の不具合の修正（つまみ・タイル）
+
+LIVE 製品（LV02〜LV30、25 製品）のデザインは、つまみが `.rc`／`.rk`／`.kn`／`.rl`／`.rv`、トグルが `.tile`（`<b>名前</b>` と `.tv` の値）という別の部品で作られており、`tools/gen_skins.py` がそれを拾っていなかった。**画面の絵は出ていたが、つまみとトグルは動かなかった**（STUDIO 側の `.ctl`／`.dk`／`.dc` の部品だけがパラメータに結び付いていた）。`.rc` を `.ctl` と同じに扱い、`.tile` は `<b>` の名前でパラメータに結び付け（値の文字とランプも追従）、ランタイム（`ui/sw-ui.js`）もこの部品に対応した。つまみの結び付け数は 551/559 → 641/651。**DAW 内の実機確認は未実施**（ブラウザの擬似画面で、LV07 のつまみを動かして値が変わること、タイルのオン／オフが切り替わることを確認）。Distance（LV14）・Frames（LV19）はパラメータがない派生値のため、つまみをやめてコアの値の読み取り表示にした。
+
 ### コアが測った値を画面へ渡す口（`readouts`）
 
-製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29・MD02・MD04 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
+製品の traits に `static constexpr int kReadouts = N;`（16 まで）と `static void readouts(const Core&, double* out)` を書くと、アダプタがブロックごとにその値をアトミックへ写し、画面の更新（`SWHOST.update` の 6 番目の引数、`info.readouts`）で渡す。7 番目の引数はステレオスコープ用（相関と L・R の点。全製品に付く）、5 番目はスペクトラム。音声スレッドとの競合を避けるため GUI スレッドはコアを直接読まない。MT01・LV23・MS01・LV06・LV07・DY01〜DY08・DY12・GT03・VO05・MS05・LV22・LV05・LV29・MD02・MD04・LV14・LV19 で使用。他の製品（LV06・LV07・UT03・VO05 など）も同じ形で足せる。
 
 ### 画面の中央の表示（`ui/displays.js`）
 

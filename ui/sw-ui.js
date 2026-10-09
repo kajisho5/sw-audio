@@ -227,7 +227,7 @@
       const hostOf = i => host[i];
       // one control: cur() gives the host index it drives now; draw(v) shows a value
       function attachDial(ctl, cur) {
-        const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr'), val = ctl.querySelector('.val');
+        const dial = ctl.querySelector('[data-dial]'), ptr = ctl.querySelector('.ptr, .kn'), val = ctl.querySelector('.val, .rv');   // .rc/.rk/.kn/.rv: the LIVE line's knobs
         const draw = () => { const i = cur(), h = hostOf(i); if (!h) return; const x = h.c.norm(vals[i]), deg = x * 270; dial.style.setProperty('--v', deg + 'deg'); if (ptr) ptr.style.transform = 'rotate(' + (deg - 135) + 'deg)'; if (val) val.textContent = format(h.p, vals[i], h.c); };
         let drag = null; dial.style.touchAction = 'none'; dial.style.cursor = 'ns-resize';
         dial.addEventListener('pointerdown', e => { const i = cur(); dial.setPointerCapture(e.pointerId); drag = { i, y: e.clientY, x0: hostOf(i).c.norm(vals[i]) }; bridge.begin(i); });
@@ -241,7 +241,8 @@
       function attachButton(b, cur) {
         const toggle = !!b.dataset.toggle, t = +b.dataset.v;
         b.addEventListener('click', () => { const i = cur(), h = hostOf(i); bridge.begin(i); setValue(i, toggle ? (vals[i] > 0.5 ? h.p.steps[0] : h.p.steps[1]) : t); bridge.end(i); });
-        return () => { const i = cur(), h = hostOf(i); if (!h) return; b.classList.toggle('on', toggle ? h.c.norm(vals[i]) > 0.5 : Math.abs(vals[i] - t) < 1e-9); };
+        const tile = b.dataset.tile, tv = tile && b.querySelector('.tv'), dot = tile && b.querySelector('.dot, .offd');   // LIVE tiles: the value text and the lamp follow the parameter
+        return () => { const i = cur(), h = hostOf(i); if (!h) return; const on = toggle ? h.c.norm(vals[i]) > 0.5 : Math.abs(vals[i] - t) < 1e-9; b.classList.toggle('on', on); if (tv && toggle) tv.textContent = (h.p.labels && h.p.labels[on ? 1 : 0]) || (on ? 'On' : 'Off'); if (dot) dot.className = on ? 'dot' : 'offd'; };
       }
       // switches without a parameter (DY02 meter mode): a setting of the screen only, until the live meters are wired
       skinBox.querySelectorAll('[data-seg]').forEach(seg => {
@@ -259,8 +260,8 @@
       const draws = new Map();                  // host index -> [draw functions]
       const reg = (i, f) => { (draws.get(i) || draws.set(i, []).get(i)).push(f); };
       const list = o => JSON.parse(o.dataset.pb);
-      skinBox.querySelectorAll('.ctl[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
-      skinBox.querySelectorAll('.ctl[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
+      skinBox.querySelectorAll('.ctl[data-p], .rc[data-p]').forEach(ctl => { const i = +ctl.dataset.p; if (hostOf(i)) reg(i, attachDial(ctl, () => i)); });
+      skinBox.querySelectorAll('.ctl[data-pb], .rc[data-pb]').forEach(ctl => { const l = list(ctl), cur = () => l[Math.min(band, l.length - 1)], f = attachDial(ctl, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       skinBox.querySelectorAll('button[data-p], .btn[data-p], .chip[data-p], .bigbtn[data-p]').forEach(b => { const i = +b.dataset.p; if (hostOf(i)) reg(i, attachButton(b, () => i)); });
       skinBox.querySelectorAll('button[data-pb]').forEach(b => { const l = list(b), cur = () => l[Math.min(band, l.length - 1)], f = attachButton(b, cur); dyn.push(f); l.forEach(i => reg(i, f)); });
       const sel = [...skinBox.querySelectorAll('button[data-band]')];

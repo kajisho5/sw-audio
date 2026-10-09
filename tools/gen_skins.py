@@ -79,10 +79,10 @@ def band_groups(params, alias):
 
 def make_static(ctl, st):
     """A part with no parameter (meter mode, tuner, music state) becomes a switch or a read-out, not a knob."""
-    lab = ctl.select_one('.lbl')
-    value = ctl.select_one('.val')
+    lab = ctl.select_one('.lbl, .rl')
+    value = ctl.select_one('.val, .rv')
     text = value.get_text().strip() if value else st.get('text', '')
-    for t in ctl.select('.dk, .knob, .pos, .rng, .val'):
+    for t in ctl.select('.dk, .knob, .rk, .pos, .rng, .val, .rv'):
         t.decompose()
     if st['kind'] == 'switch':
         seg = BeautifulSoup('<div data-seg="1" style="display:flex;gap:2px;margin-bottom:6px"></div>', 'html.parser').find()
@@ -106,9 +106,9 @@ def apply_edits(root, alias):
     alias['_sections']: section heading -> new heading;  alias['_drop_text']: texts of static decorations to delete."""
     edits = alias.get('_edit', {})
     seen = {}
-    for ctl in list(root.select('.ctl')):
-        lab = ctl.select_one('.lbl')
-        if not lab or not ctl.select_one('.dk, .knob'):
+    for ctl in list(root.select('.ctl, .rc')):
+        lab = ctl.select_one('.lbl, .rl')
+        if not lab or not ctl.select_one('.dk, .knob, .rk'):
             continue
         n = norm(lab.get_text())
         seen[n] = seen.get(n, 0) + 1
@@ -123,14 +123,14 @@ def apply_edits(root, alias):
                 c = BeautifulSoup(str(ctl), 'html.parser').find()
                 clones.append(c)
             for k, c in enumerate(clones):
-                c.select_one('.lbl').string = e['labels'][k]
-                c['data-p'] = str(e['dup'][k]); c.select_one('.dk, .knob')['data-dial'] = '1'
+                c.select_one('.lbl, .rl').string = e['labels'][k]
+                c['data-p'] = str(e['dup'][k]); c.select_one('.dk, .knob, .rk')['data-dial'] = '1'
                 ctl.insert_before(c)
             ctl.decompose(); continue
         if 'label' in e:
             lab.string = e['label']
         if 'p' in e:
-            ctl['data-p'] = str(e['p']); ctl.select_one('.dk, .knob')['data-dial'] = '1'
+            ctl['data-p'] = str(e['p']); ctl.select_one('.dk, .knob, .rk')['data-dial'] = '1'
         if 'rng' in e and ctl.select_one('.rng'):
             for sp, t in zip(ctl.select_one('.rng').find_all('span'), e['rng']):
                 sp.string = t
@@ -307,9 +307,9 @@ def build(code, report):
         root_html_vu = True
     nb = nk = nbt = nbb = 0
     # knobs: .ctl with a .dk / .knob, label in .lbl
-    for ctl in root.select('.ctl'):
-        lab = ctl.select_one('.lbl')
-        dial = ctl.select_one('.dk, .knob')
+    for ctl in root.select('.ctl, .rc'):
+        lab = ctl.select_one('.lbl, .rl')
+        dial = ctl.select_one('.dk, .knob, .rk')
         if not lab or not dial:
             continue
         nk += 1
@@ -324,8 +324,8 @@ def build(code, report):
     if groups:
         sel = alias.get('_bands') or {}
         labels = [norm(x) for x in sel.get('labels', [])]
-        for ctl in root.select('.ctl'):
-            lab = ctl.select_one('.lbl'); dial = ctl.select_one('.dk, .knob')
+        for ctl in root.select('.ctl, .rc'):
+            lab = ctl.select_one('.lbl, .rl'); dial = ctl.select_one('.dk, .knob, .rk')
             if not lab or not dial or ctl.get('data-p'):
                 continue
             g = groups.get(norm(lab.get_text())) or groups.get(alias.get('_alias', {}).get(norm(lab.get_text()), ''))
@@ -366,6 +366,9 @@ def build(code, report):
         if b.get('data-p') or b.get('data-pb') or b.get('data-band') or b.get('data-act') or b.find_parent(attrs={'data-p': True}):
             continue
         t = b.get_text().strip()
+        tl = b.select_one('b') if 'tile' in (b.get('class') or []) else None   # the LIVE line's tiles: <b>label</b> + <span class="tv">value</span>
+        if tl is not None and tl.get_text().strip():
+            t = tl.get_text().strip(); b['data-tile'] = '1'
         if t == 'Δ' and delta:
             b['data-p'] = str(delta[0]); b['data-toggle'] = '1'; nbt += 1; nbb += 1; continue
         if not t:
@@ -395,13 +398,13 @@ def build(code, report):
             if len(hit) == 1:
                 b['data-pb'] = json.dumps(hit[0][0]); b['data-v'] = str(hit[0][1]); nbb += 1; continue
         report.setdefault(code, []).append('btn:' + t)
-    for ctl in root.select('.ctl'):
-        if ctl.select_one('.dk, .knob') and ctl.select_one('.lbl') and not ctl.get('data-p') and not ctl.get('data-pb'):
-            st = alias.get('_static', {}).get(norm(ctl.select_one('.lbl').get_text()))
+    for ctl in root.select('.ctl, .rc'):
+        if ctl.select_one('.dk, .knob, .rk') and ctl.select_one('.lbl, .rl') and not ctl.get('data-p') and not ctl.get('data-pb'):
+            st = alias.get('_static', {}).get(norm(ctl.select_one('.lbl, .rl').get_text()))
             if st:
                 make_static(ctl, st)    # no parameter: it is not drawn as a knob any more
                 continue
-            report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl').get_text())
+            report.setdefault(code, []).append('knob:' + ctl.select_one('.lbl, .rl').get_text())
     style = re.sub(r'@import[^;]*;', '', style) + extra_css
     m = re.match(r'<div[^>]*style="([^"]*)"', str(root))
     st = m.group(1) if m else ''

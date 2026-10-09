@@ -254,5 +254,19 @@
     "kind": "readout"
    }
   }
+ },
+ "LV14": {
+  "_static": {
+   "distance": {
+    "kind": "readout"
+   }
+  }
+ },
+ "LV19": {
+  "_static": {
+   "frames": {
+    "kind": "readout"
+   }
+  }
  }
 }

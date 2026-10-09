@@ -9,6 +9,8 @@ struct Lv14 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 4;   // distance (m) from the Delay, measure state, found delay (ms), confidence
+    static void readouts(const Core& c, double* o) { o[0] = c.distanceM(); o[1] = c.measureState(); o[2] = c.foundMs(); o[3] = c.confidence(); }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

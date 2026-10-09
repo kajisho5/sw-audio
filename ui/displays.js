@@ -184,7 +184,12 @@
       if (q.name === 'On') { cur = { on: q.i }; bands.push(cur); }
       else if (cur && /^(Type|Freq|Gain|Q|Slope)$/.test(q.name) && cur[q.name] === undefined) cur[q.name] = q.i;
     });
+    if (!bands.length) {                                                      // names with a band number and no On (LV13: Band 1 Type, Band 1 Freq ...): every band is always on
+      const by = {}; ctx.params.forEach(q => { const m = /^Band (\d+) (Type|Freq|Gain|Q)$/.exec(q.name); if (m) { (by[m[1]] = by[m[1]] || { on: -1 })[m[2]] = q.i; } });
+      Object.keys(by).sort((a, b) => a - b).forEach(k => { if (by[k].Freq !== undefined && by[k].Gain !== undefined) bands.push(by[k]); });
+    }
     if (bands.length < 2) return null;
+    const isOn = b => b.on < 0 || ctx.get(b.on) > 0.5;
     // the axes: from the printed labels when the design has them (50 ... 10k, +12 ... -12), otherwise the whole graph (20 Hz - 20 kHz, +-18 dB)
     const lab = {}; svg.querySelectorAll(':scope > g text').forEach(t => { lab[t.textContent.trim()] = t; });
     const FMIN = 20, FMAX = 20000; let X0 = 10, X1 = W - 10, YC = H / 2, DB = 18, YS = (H / 2 - 12) / DB;
@@ -214,17 +219,17 @@
       d.c.addEventListener('pointermove', e => { if (!drag) return; const [x, y] = pt(e); ctx.set(b.Freq, norm(b.Freq, xf(x))); ctx.set(b.Gain, norm(b.Gain, yg(y))); });
       const end = () => { if (!drag) return; drag = false; [b.Freq, b.Gain].forEach(i => ctx.end(i)); };
       d.c.addEventListener('pointerup', end); d.c.addEventListener('pointercancel', end);
-      d.c.addEventListener('dblclick', e => { e.stopPropagation(); ctx.begin(b.on); ctx.set(b.on, 0); ctx.end(b.on); });
+      d.c.addEventListener('dblclick', e => { e.stopPropagation(); if (b.on < 0) return; ctx.begin(b.on); ctx.set(b.on, 0); ctx.end(b.on); });
       d.c.addEventListener('wheel', e => { e.preventDefault(); const q = ctx.params.find(x => x.i === b.Q); ctx.begin(b.Q); ctx.set(b.Q, q.c.value(Math.min(1, Math.max(0, q.c.norm(ctx.get(b.Q)) - Math.sign(e.deltaY) * 0.03)))); ctx.end(b.Q); }, { passive: false });
     });
     svg.addEventListener('dblclick', e => {                               // a double click on an empty place turns on the next free band there
-      const free = bands.find(b => ctx.get(b.on) < 0.5); if (!free) return; const [x, y] = pt(e);
+      const free = bands.find(b => b.on >= 0 && ctx.get(b.on) < 0.5); if (!free) return; const [x, y] = pt(e);
       [free.on, free.Freq, free.Gain].forEach(i => ctx.begin(i)); ctx.set(free.on, 1); ctx.set(free.Freq, norm(free.Freq, xf(x))); ctx.set(free.Gain, norm(free.Gain, yg(y))); [free.on, free.Freq, free.Gain].forEach(i => ctx.end(i));
     });
     let last = null;
     return {
       update() {
-        const act = bands.filter(b => ctx.get(b.on) > 0.5).map(b => ({ type: typeOf(b), f: ctx.get(b.Freq), g: ctx.get(b.Gain), q: ctx.get(b.Q) || 1, slope: b.Slope !== undefined ? ctx.get(b.Slope) : 12 }));
+        const act = bands.filter(isOn).map(b => ({ type: typeOf(b), f: ctx.get(b.Freq), g: ctx.get(b.Gain), q: ctx.get(b.Q) || 1, slope: b.Slope !== undefined ? ctx.get(b.Slope) : 12 }));
         const key = act.map(a => a.type + a.f + a.g + a.q + a.slope).join('|'); if (key === last) { return; } last = key;
         let d = '';
         for (let i = 0; i <= 200; i++) {
@@ -233,7 +238,7 @@
           d += (i ? ' L' : 'M') + (X0 + (X1 - X0) * i / 200).toFixed(1) + ' ' + gy(Math.max(-DB * 1.3, Math.min(DB * 1.3, db))).toFixed(1);
         }
         line.setAttribute('d', d); glow.setAttribute('d', d); area.setAttribute('d', d + ' L' + X1 + ' ' + YC + ' L' + X0 + ' ' + YC + ' Z');
-        bands.forEach((b, k) => { const on = ctx.get(b.on) > 0.5, x = fx(Math.min(FMAX, Math.max(FMIN, ctx.get(b.Freq)))), y = gy(Math.max(-DB, Math.min(DB, ctx.get(b.Gain)))); const ds = dots[k];
+        bands.forEach((b, k) => { const on = isOn(b), x = fx(Math.min(FMAX, Math.max(FMIN, ctx.get(b.Freq)))), y = gy(Math.max(-DB, Math.min(DB, ctx.get(b.Gain)))); const ds = dots[k];
           ds.c.style.display = ds.t.style.display = on ? '' : 'none'; ds.c.setAttribute('cx', x.toFixed(1)); ds.c.setAttribute('cy', y.toFixed(1)); ds.t.setAttribute('x', x.toFixed(1)); ds.t.setAttribute('y', (y + 3.5).toFixed(1)); });
       }
     };
@@ -483,9 +488,9 @@
   function spectrumBars(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
     const rs = [...svg.querySelectorAll(':scope > rect')], bars = rs.filter(r => +r.getAttribute('height') > 4), ticks = rs.filter(r => +r.getAttribute('height') <= 4);
-    if (bars.length !== 31 || ticks.length !== 31) return null;
+    if (bars.length !== 31 || (ticks.length !== 31 && ticks.length !== 0)) return null;      // LV20: 31 bars + 31 peak ticks; LV13: 31 bars behind the EQ curve
     bars.sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x')); ticks.sort((a, b) => +a.getAttribute('x') - +b.getAttribute('x'));
-    const base = +bars[0].getAttribute('y') + +bars[0].getAttribute('height'), full = Math.max(...bars.map(r => +r.getAttribute('height'))) * 1.05, th = +ticks[0].getAttribute('height');
+    const base = +bars[0].getAttribute('y') + +bars[0].getAttribute('height'), full = Math.max(...bars.map(r => +r.getAttribute('height'))) * 1.05, th = ticks.length ? +ticks[0].getAttribute('height') : 0;
     const sm = Smooth(), hold = new Array(31).fill(0);
     return { update(info) {
       const sp = info && info.spectrum; if (!sp) return; const a = sm.feed(sp);
@@ -493,7 +498,7 @@
         const f0 = 20 * Math.pow(10, (k - 0.5) / 10), f1 = 20 * Math.pow(10, (k + 0.5) / 10), b0 = Math.max(0, Math.floor(Math.log(f0 / 20) / Math.log(1000) * 64)), b1 = Math.min(63, Math.max(b0, Math.ceil(Math.log(f1 / 20) / Math.log(1000) * 64) - 1));
         let v = -120; for (let b = b0; b <= b1; b++) v = Math.max(v, a[b]);
         const x = specDb(v, -80), h = Math.max(1, x * full); bars[k].setAttribute('y', (base - h).toFixed(1)); bars[k].setAttribute('height', h.toFixed(1));
-        hold[k] = Math.max(x, hold[k] - 0.012); ticks[k].setAttribute('y', (base - hold[k] * full - th).toFixed(1));
+        hold[k] = Math.max(x, hold[k] - 0.012); if (ticks[k]) ticks[k].setAttribute('y', (base - hold[k] * full - th).toFixed(1));
       }
     } };
   }
@@ -723,7 +728,15 @@
     } };
   }
 
+
+  // a read-out the design has no parameter for (LV14 Distance, LV19 Frames): the value comes from the core (readouts[0])
+  function derivedReadout(box, ctx, fmt) {
+    const el = box.querySelector('[data-readout] span'); if (!el) return null;
+    return { update(info) { const r = info && info.readouts; if (r) el.textContent = fmt(r[0]); } };
+  }
+
   const registry = {
+    LV14: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' m'), LV19: (box, ctx) => derivedReadout(box, ctx, v => v.toFixed(1) + ' frames'),
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
@@ -733,6 +746,7 @@
     LV06: streamMasterDisplay, LV07: speechLevelerDisplay,
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
+    LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),

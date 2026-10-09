@@ -11,6 +11,8 @@ struct Lv19 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
+    static constexpr int kReadouts = 5;   // frames of delay, sync state, found delay (ms), late (ms), audio late (1 / 0)
+    static void readouts(const Core& c, double* o) { o[0] = c.frames(); o[1] = c.syncState(); o[2] = c.foundMs(); o[3] = c.lateMs(); o[4] = c.audioLate() ? 1.0 : 0.0; }
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static void guiCall(Core& c, const char* n, const char* a) { (void)a; if (!std::strcmp(n, "clap")) c.markVideoClap(a[0] ? std::atof(a) : 0.0); }
