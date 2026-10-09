@@ -1009,10 +1009,10 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 
 | 項目 | Linux x86_64（このクラウド環境） | Windows x64・macOS（GitHub Actions） |
 | --- | --- | --- |
-| 単体テスト（1630件） | 全合格（**AddressSanitizer・UBSan 付きでも全合格**：commit 579f2de の 1628 件〔Learn 系・音声スレッドの確保の検査・14 製品の修正を含む〕。その後の変更〔カーネル設計の対数格子と `test_fir_designer.cpp` の 2 件、全製品を 0〜3 フレームで呼ぶ検査〕は、関係するテスト 159 件〔FirDesigner・FIR・EQ02・EQ08・全製品の確保の検査〕を単独で ASan・UBSan で実行して合格）。`test_swlink` は ThreadSanitizer でも合格。全 132 製品の ThreadSanitizer ストレス試験は下の「データ競合の検査」） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 168（commit 9032fe4。v0.15.0＝畳み込みの積和ループ・`--leaks`・DY04／CS02 の Learn・CS03 の Set input を含む。全 132 本）**。その後の RV08 の Learn と DY10 の Auto（commit 3563c7a 以降）の実行は結果待ち |
-| CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 168：成功） |
-| VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 168：成功） |
-| AU：auval | — | macOS で実行（run 168：成功。aufx の効果 128 本と、MIDI を受ける aumf の 4 本〔CR04・LV25・MD05・VO03〕を、auval が登録している種類で） |
+| 単体テスト（1630件） | 全合格（**AddressSanitizer・UBSan 付きでも全合格**：commit 579f2de の 1628 件〔Learn 系・音声スレッドの確保の検査・14 製品の修正を含む〕。その後の変更〔カーネル設計の対数格子と `test_fir_designer.cpp` の 2 件、全製品を 0〜3 フレームで呼ぶ検査〕は、関係するテスト 159 件〔FirDesigner・FIR・EQ02・EQ08・全製品の確保の検査〕を単独で ASan・UBSan で実行して合格）。`test_swlink` は ThreadSanitizer でも合格。全 132 製品の ThreadSanitizer ストレス試験は下の「データ競合の検査」） | ビルド後に実行（Windows MSVC・macOS ユニバーサル）。**全ジョブが成功した実行：run 169（commit 2b60862。v0.15.0＝畳み込みの積和ループ・`--leaks`・DY04／CS02／RV08 の Learn・CS03 の Set input・DY10 の Auto を含む。全 132 本）**。その後の MS07 の Truncation check・CS04 の並び順の提案・音声スレッドの確保の修正・カーネル設計の高速化（commit b12c3f6 以降）の実行は結果待ち |
+| CLAP：clap-validator 0.4.1 | 各 0不合格（33合格・11対象外。軽い製品で「極小値で遅い」の警告が出ると32合格：上の「clap-validator の「極小値で遅い」警告について」） | 同じ検証を各 OS で実行（run 169：成功） |
+| VST3：Steinberg validator（SDK 3.8.0） | 各 47合格・0不合格 | 同じ検証を各 OS で実行（run 169：成功） |
+| AU：auval | — | macOS で実行（run 169：成功。aufx の効果 128 本と、MIDI を受ける aumf の 4 本〔CR04・LV25・MD05・VO03〕を、auval が登録している種類で） |
 
 v0.11.0（23本）の時点では Windows を MinGW でクロスビルドして Wine 上で検証していた（CS04 以外の 22 本で不合格 0）。現在の Windows の根拠は上の GitHub Actions（MSVC）で、Wine での再検証はしていない。
 
