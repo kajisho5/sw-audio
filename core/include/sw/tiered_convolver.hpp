@@ -27,15 +27,15 @@ public:
         head_.assign(static_cast<size_t>(kEnd1), 0.0);
         p2_ = 0;
         scratch_.assign(256, 0.0f); s2_ = scratch_; s3_ = scratch_;
-        stage_ = 0;
-        if (phase != 0) {
-            // phase 1: 3/4 of a tier-2 block and 1/2 of a tier-3 block ahead (RV04's two channels); phases 2 and 3 (ST05's four convolvers) put the heavy blocks in yet other calls
-            static const int calls2[4] = {0, 3, 2, 1}, calls3[4] = {0, 16, 8, 24};
-            const int p = phase & 3;
-            std::vector<float> z(256, 0.0f); float* pz[1] = {z.data()};
-            if (has2_) for (int i = 0; i < calls2[p] * kB2 / 4 / 256; ++i) t2_.process(pz, 1, 256);
-            if (has3_) for (int i = 0; i < calls3[p] * 256 / 256; ++i) t3_.process(z.data(), 256);
-        }
+        stage_ = 0; phase_ = phase;
+        rollPhase();
+    }
+    // forget the audio, keep the kernel: the tiers' histories, the input delay of tier 2, the scratch; the heavy blocks of the tiers fall where prepare() put them
+    void reset() {
+        zl_.reset(); if (has2_) t2_.reset(); if (has3_) t3_.reset();
+        std::fill(d2_.begin(), d2_.end(), 0.0f); p2_ = 0;
+        std::fill(scratch_.begin(), scratch_.end(), 0.0f); std::fill(s2_.begin(), s2_.end(), 0.0f); std::fill(s3_.begin(), s3_.end(), 0.0f);
+        rollPhase();
     }
     int latencySamples() const { return 0; }
     bool fading() const { return zl_.fading(); }
@@ -81,6 +81,17 @@ public:
     }
 
 private:
+    // phase 1: 3/4 of a tier-2 block and 1/2 of a tier-3 block ahead (RV04's two channels); phases 2 and 3 (ST05's four convolvers) put the heavy blocks in yet other calls
+    // (the input before time 0 is silence, so nothing changes; `scratch_` is 256 long: no allocation)
+    void rollPhase() {
+        if (phase_ == 0) return;
+        static const int calls2[4] = {0, 3, 2, 1}, calls3[4] = {0, 16, 8, 24};
+        const int p = phase_ & 3;
+        float* pz[1] = {scratch_.data()};
+        if (has2_) for (int i = 0; i < calls2[p] * kB2 / 4 / 256; ++i) { std::fill(scratch_.begin(), scratch_.end(), 0.0f); t2_.process(pz, 1, 256); }
+        if (has3_) for (int i = 0; i < calls3[p] * 256 / 256; ++i) { std::fill(scratch_.begin(), scratch_.end(), 0.0f); t3_.process(scratch_.data(), 256); }
+        std::fill(scratch_.begin(), scratch_.end(), 0.0f);
+    }
     static float delayed(std::vector<float>& ring, size_t& pos, float x) {   // ring of length d: the value written d samples ago
         const float y = ring[pos]; ring[pos] = x; if (++pos >= ring.size()) pos = 0; return y;
     }
@@ -90,7 +101,7 @@ private:
     std::vector<float> d2_, scratch_, s2_, s3_;
     std::vector<double> head_, seg2_, seg3_;
     size_t p2_ = 0;
-    int maxK_ = kEnd1, stage_ = 0;
+    int maxK_ = kEnd1, stage_ = 0, phase_ = 0;
     bool has2_ = false, has3_ = false;
 };
 

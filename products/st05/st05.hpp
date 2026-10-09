@@ -48,6 +48,7 @@ public:
     void snapToTargets();
     void process(float** ch, int numCh, int n);
     double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
+    void reset();   // forget the audio (the host stopped or jumped): the convolvers' history and the filters; the IRs stay
     int latencySamples() const { return 0; }
     void setHeadYaw(double deg) { yawTarget_ = deg; }
     bool busy() const { return stage_ != Idle || differs(wanted()); }   // a new IR set is being built or waiting to be

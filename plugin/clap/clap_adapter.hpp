@@ -65,6 +65,9 @@ template <class C> struct HasSetTransport<C, std::void_t<decltype(std::declval<C
 // a core that rings on after its input stops reports for how long (seconds, from the current settings; sw/tail.hpp): the host's bounce / freeze / VST3 getTailSamples need it
 template <class C, class = void> struct HasTail : std::false_type {};
 template <class C> struct HasTail<C, std::void_t<decltype(std::declval<const C&>().tailSeconds())>> : std::true_type {};
+// a core that keeps audio (delay lines, reverb tails, convolver histories) and can forget it without allocating: called when the host stops or jumps (clap reset()). A core without it but with a tail is prepared again instead
+template <class C, class = void> struct HasReset : std::false_type {};
+template <class C> struct HasReset<C, std::void_t<decltype(std::declval<C&>().reset())>> : std::true_type {};
 template <class C, class = void> struct HasSetPlayhead : std::false_type {};
 template <class C> struct HasSetPlayhead<C, std::void_t<decltype(std::declval<C&>().setPlayhead(0.0, false))>> : std::true_type {};
 
@@ -351,7 +354,16 @@ private:
     static void deactivate(const clap_plugin_t* p) { self(p)->active_ = false; }
     static bool startProcessing(const clap_plugin_t*) { return true; }
     static void stopProcessing(const clap_plugin_t*) {}
-    static void reset(const clap_plugin_t* p) { self(p)->snap_pending_.store(true); }
+    // the host stopped or jumped: what rang before must not come out afterwards (a reverb tail from the old position). Audio thread. The Shell forgets its delay line and meters; the core forgets its audio:
+    // its own reset(), or (a product with a tail that has none) a new prepare(), which only clears buffers of the size they already have
+    static void reset(const clap_plugin_t* p) {
+        Plugin* s = self(p);
+        if (!s->active_) return;
+        s->shell_.reset();
+        if constexpr (HasReset<typename P::Core>::value) s->shell_.core().reset();
+        else if constexpr (HasTail<typename P::Core>::value) { s->shell_.core().prepare(s->sr_, static_cast<int>(s->maxFrames_)); }
+        s->snap_pending_.store(true);
+    }
 
     static clap_process_status process(const clap_plugin_t* p, const clap_process_t* pr) {
         ScopedNoDenormals noDenormals;

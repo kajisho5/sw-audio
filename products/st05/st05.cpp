@@ -212,4 +212,10 @@ void Processor::process(float** ch, int numCh, int n) {
 // the tail: the length of the impulse responses (a fixed kIrSeconds), plus a little
 double Processor::tailSeconds() const { return fs_ > 0.0 ? static_cast<double>(len_) / fs_ + 0.1 : 0.0; }
 
+void Processor::reset() {
+    for (auto& c : conv_) c.reset();
+    for (auto& t : tmp_) std::fill(t.begin(), t.end(), 0.0f);
+    for (auto& e : eq_) for (auto& f : e) f.reset();
+}
+
 }  // namespace sw::st05

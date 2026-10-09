@@ -30,6 +30,15 @@ public:
         wr_.assign(static_cast<size_t>(2 * B_), 0.0);
         acc_ = std::vector<cd>(bins);
     }
+    // forget the audio (the input history and the results not played yet), keep the kernel: what comes out afterwards is silence until new input arrives. A running fade is finished (the new kernel stays).
+    void reset() {
+        if (fadeLeft_ > 0) { cur_.swap(next_); std::swap(usedCur_, usedNext_); fadeLeft_ = 0; }
+        for (auto& c : ch_) {
+            for (auto& v : c.fdl) std::fill(v.begin(), v.end(), cd(0, 0));
+            std::fill(c.in.begin(), c.in.end(), 0.0); std::fill(c.out.begin(), c.out.end(), 0.0); std::fill(c.outNext.begin(), c.outNext.end(), 0.0);
+        }
+        head_ = 0; pos_ = 0;
+    }
     void setFadeSamples(int n) { fadeLen_ = std::max(1, n); }
     int latencySamples() const { return B_; }
     bool fading() const { return fadeLeft_ > 0; }

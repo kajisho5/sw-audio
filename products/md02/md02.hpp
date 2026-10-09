@@ -25,6 +25,7 @@ public:
     void setTempo(double bpm) { bpm_ = bpm; }
     void setTransport(bool playing, double beatsToNextBar);
     void process(float** ch, int numCh, int n);
+    double tailSeconds() const;   // how long it goes on after the input stops (sw/tail.hpp)
     int latencySamples() const;                 // the value for the next prepare
     double rateHz() const;                      // the sweep rate in use (Sync: from the note length)
     double delaySamples(int ch) const { return lastDelay_[static_cast<size_t>(ch)]; }

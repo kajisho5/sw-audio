@@ -1,4 +1,5 @@
 #include "md02/md02.hpp"
+#include "sw/tail.hpp"
 #include "sw/notes.hpp"
 #include <algorithm>
 #include <cmath>
@@ -92,5 +93,8 @@ void Processor::process(float** ch, int numCh, int n) {
         for (int c = 0; c < nch; ++c) { double y = out[c]; if (std::abs(y) < 1e-30) y = 0.0; ch[c][i] = static_cast<float>(y); }
     }
 }
+
+// the tail: the flanger feeds back through a delay of Manual plus the sweep (up to Manual x 2 + 2 ms); each trip is Feedback (either sign) of the last
+double Processor::tailSeconds() const { return tail::loop(target_[Manual] * 0.002 + 0.002, std::abs(target_[Feedback]) * 0.01) + 0.1; }
 
 }  // namespace sw::md02

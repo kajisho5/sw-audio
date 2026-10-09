@@ -361,4 +361,12 @@ void Processor::process(float** ch, int numCh, int n) {
 // the tail: the impulse response in use, or the one being built (Length / Size just changed), after the pre-delay
 double Processor::tailSeconds() const { return fs_ > 0.0 ? std::max(irLen_, static_cast<double>(outLen_)) / fs_ + target_[PreDelay] * 0.001 + 0.2 : 0.0; }
 
+void Processor::reset() {
+    for (auto& c : conv_) c.reset();
+    for (auto& b : pre_) std::fill(b.begin(), b.end(), 0.0f);
+    prePos_ = 0;
+    for (auto& f : hp_) f.reset();
+    for (auto& f : lp_) f.reset();
+}
+
 }  // namespace sw::rv04

@@ -22,6 +22,12 @@ public:
         pos_ = 0; fadeLeft_ = 0;
         dry_.assign(static_cast<size_t>(B_), 0.0f);
     }
+    // forget the audio (history of the direct part and of the tail convolver), keep the kernel; a running fade is finished
+    void reset() {
+        if (fadeLeft_ > 0) finishFade();
+        for (auto& c : hist_) std::fill(c.begin(), c.end(), 0.0);
+        tail_.reset(); pos_ = 0;
+    }
     int latencySamples() const { return 0; }
     bool fading() const { return fadeLeft_ > 0; }
     // immediate: no crossfade (first kernel / prepare)

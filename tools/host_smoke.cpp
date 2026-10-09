@@ -814,6 +814,33 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
     return ok;
 }
 
+// reset(): a host calls it when the transport stops or jumps; what rang before must not come out of the plug-in afterwards. 0.4 s of noise, reset(), then 0.5 s of silence: the output must be silent at once
+// (the first 20 ms are left out for the smoothers). Above -80 dBFS is listed; above -40 dBFS fails.
+bool resetChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& failing) {
+    bool ok = true; failing = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        Loaded a; std::string why; if (!a.open(f, why)) { lines.push_back("FAIL  reset of " + name + ": " + why); ok = false; continue; }
+        EventList none;
+        a.run.process(static_cast<int>(0.4 * kSr / kBlock), 1, none);
+        a.p->reset(a.p);
+        a.run.clearLogs(); a.run.impulse = INT64_MAX;   // silence
+        a.run.process(static_cast<int>(0.5 * kSr / kBlock) + 1, 2, none);
+        const size_t from = static_cast<size_t>(0.02 * kSr), n = a.run.outAll[0].size();
+        double peak = 0; for (int c = 0; c < 2; ++c) for (size_t i = from; i < n; ++i) peak = std::max(peak, static_cast<double>(std::fabs(a.run.outAll[c][i])));
+        // the latency of the plug-in: a delayed-through sound is not a ring (the 0.4 s of noise is still on its way for `lat` samples)
+        const auto* lat = static_cast<const clap_plugin_latency_t*>(a.p->get_extension(a.p, CLAP_EXT_LATENCY));
+        const size_t skip = lat ? lat->get(a.p) : 0; double peakAfter = 0;
+        for (int c = 0; c < 2; ++c) for (size_t i = from + skip; i < n; ++i) peakAfter = std::max(peakAfter, static_cast<double>(std::fabs(a.run.outAll[c][i])));
+        (void)peak;
+        if (peakAfter > 1e-4) {   // above -80 dBFS is listed; above -40 dBFS (a reverb or a delay still ringing) fails; the rest is a filter running out (a notch or a shelf: -42 .. -80 dBFS)
+            ++failing; const bool loud = peakAfter > 0.01; if (loud) ok = false;
+            char b[200]; std::snprintf(b, sizeof b, "%s %-26s still sounds after reset(): peak %.1f dBFS in the next 0.5 s", loud ? "FAIL " : "     ", name.c_str(), 20.0 * std::log10(peakAfter)); lines.push_back(b);
+        }
+        a.close();
+    }
+    return ok;
+}
 // An input sample that is NaN or infinite (an upstream plug-in glitch, a broken file) must not poison the plug-in for good: recursive filters, envelopes and delay lines would keep the NaN for ever.
 // One such sample (NaN, +Inf, -Inf; left channel) is fed in after 0.2 s of noise; the output of the last 0.3 s of the next 0.8 s of noise has to be finite again and not enormous.
 bool poisonChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
@@ -1008,7 +1035,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1017,6 +1044,7 @@ int main(int argc, char** argv) {
         }
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         if (opt == "--blocks") { blocksOnly = true; continue; }
+        if (opt == "--reset") { resetOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
         const fs::path a = argv[i];
         if (fs::is_directory(a) && a.extension() != ".clap") {
@@ -1029,6 +1057,12 @@ int main(int argc, char** argv) {
     std::sort(files.begin(), files.end());
     if (files.empty()) { std::fprintf(stderr, "usage: %s <dir|file.clap> ...\n", argv[0]); return 2; }
 
+    if (resetOnly) {   // --reset: only the reset() check
+        std::vector<std::string> lines; int failing = 0; const bool ok = resetChecks(files, lines, failing);
+        for (const auto& l : lines) std::printf("%s\n", l.c_str());
+        std::printf("reset: %zu plug-ins, %d still sound after reset() (above -80 dBFS), %s\n", files.size(), failing, ok ? "none above -40 dBFS" : "SOME ABOVE -40 dBFS");
+        return ok ? 0 : 1;
+    }
     if (tailsOnly) {   // --tails: only the tail measurement
         std::vector<std::string> lines; const bool ok = tailChecks(files, tailSettings, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());

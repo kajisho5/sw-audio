@@ -47,6 +47,14 @@ public:
         for (int c = 0; c < 2; ++c) unitG_[static_cast<size_t>(c)].reset(fs, 20.0, Unit::gainLin(unit_, c, Unit::kOutputSlot));
     }
 
+    // the host jumped or stopped (clap reset()): forget the audio the frame holds (the delay that keeps the dry signal level with the wet one, the loudness meters, the Auto gain estimate); the settings stay
+    void reset() {
+        for (auto& d : delay_) std::fill(d.begin(), d.end(), 0.0f);
+        dpos_ = 0; agcDb_ = 0.0; untilBlock_ = block_;
+        dryMeter_.setup(fs_, nch_); wetMeter_.setup(fs_, nch_);
+        agc_.reset(fs_, 100.0, 1.0);
+    }
+
     void setIn(bool on) { in_ = on; inMix_.setTarget(on ? 1.0 : 0.0); }
     void setDelta(bool on) { delta_ = on; deltaMix_.setTarget(on ? 1.0 : 0.0); }
     void setAutoGain(bool on) { autoGain_ = on; agc_.setTarget(on ? dbToGain(agcDb_) : 1.0); }

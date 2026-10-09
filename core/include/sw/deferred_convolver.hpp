@@ -28,6 +28,14 @@ public:
         head_ = 0; pos_ = 0; fadeLeft_ = 0; usedStage_ = usedCur_ = usedNext_ = P_;
         jobC_.state = jobN_.state = Job::Idle;
     }
+    // forget the audio (input history, jobs under way, results not played yet), keep the kernel; a running fade is finished
+    void reset() {
+        if (fadeLeft_ > 0) finishFade();
+        jobC_.state = jobN_.state = Job::Idle;
+        for (auto& v : fdl_) std::fill(v.begin(), v.end(), cd(0, 0));
+        for (auto* v : {&in_, &out_, &pend_, &outN_, &pendN_}) std::fill(v->begin(), v->end(), 0.0);
+        head_ = 0; pos_ = 0;
+    }
     int latencySamples() const { return 2 * B_; }
     void setFadeSamples(int n) { fadeLen_ = std::max(1, n); }
     bool fading() const { return fadeLeft_ > 0; }

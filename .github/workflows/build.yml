@@ -95,6 +95,8 @@ jobs:
           build/sw-host-smoke --blocks build/plugins
           # how long each one rings on after its input stops: what it reports (the CLAP tail extension) must be at least what it does, with the defaults and 2 random settings
           build/sw-host-smoke --tails=2 build/plugins
+          # reset() (the host stopped or jumped): no reverb tail or repeat of the old position comes out afterwards
+          build/sw-host-smoke --reset build/plugins
 
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
