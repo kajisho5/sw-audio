@@ -478,7 +478,8 @@
     if (!area || (area.getAttribute('d') || '').split('L').length < 20) return null;
     const [, , W, H] = vbOf(svg), sm = Smooth(), TOP = H * 0.06;
     return { update(info) {
-      const sp = info && info.spectrum; if (!sp) return; const a = sm.feed(sp); let d = 'M0 ' + H;
+      const sp = info && info.spectrum; if (!sp) return;
+      const a = sm.feed(sp); let d = 'M0 ' + H;
       for (let b = 0; b < 64; b++) d += ' L' + ((b + 0.5) / 64 * W).toFixed(1) + ' ' + (H - specDb(a[b], -90) * (H - TOP)).toFixed(1);
       area.setAttribute('d', d + ' L' + W + ' ' + H + ' Z');
     } };
@@ -804,6 +805,7 @@
     MT01: loudnessDisplay, LV23: loudnessDisplay,
     MT02: spectrumPath, MD06: spectrumPath, LV09: spectrumPath, LV08: spectrumPath, LV02: spectrumPath, LO01: spectrumPath, SA05: spectrumPath,
     LV13: (box, ctx) => { const a = eqDisplay(box, ctx), b = spectrumBars(box, ctx); if (!a && !b) return null; return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; },
+    CR04: spectrumPath, RS01: spectrumPath,
     LV20: spectrumBars, MT03: spectrumCells, RS04: spectrumCells, RS07: spectrumCells,
     RV06: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay' }),
     LV24: (box, ctx) => decayDisplay(box, ctx, { decay: 'Decay', pre: 'Pre-delay' }),
