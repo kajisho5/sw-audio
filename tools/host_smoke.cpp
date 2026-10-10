@@ -717,18 +717,21 @@ bool linkKeyChecks(const std::vector<fs::path>& files) {
     const fs::path fk = find("LV01"), fd = find("LV05");
     if (fk.empty() || fd.empty()) return true;   // a partial set of plug-ins: nothing to check
     bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link key: %s\n", t.c_str()); ok = false; };
-    Loaded k, d; std::string why;
+    // a second LV01 that is on the track list but never plays (a muted track): it must never be taken for the key (CI run 175: the ducking never let go with two LV01 slots, one of them standing still)
+    Loaded k, k2, d; std::string why;
     if (!k.open(fk, why)) { fail("LV01 " + why); return false; }
-    if (!d.open(fd, why)) { fail("LV05 " + why); k.close(); return false; }
+    if (!k2.open(fk, why)) { fail("second LV01 " + why); k.close(); return false; }
+    if (!d.open(fd, why)) { fail("LV05 " + why); k.close(); k2.close(); return false; }
+    { EventList none2; k2.run.process(2, 9, none2); }
     const auto* pe = static_cast<const clap_plugin_params_t*>(d.p->get_extension(d.p, CLAP_EXT_PARAMS));
     clap_id keyId = CLAP_INVALID_ID, voiceId = CLAP_INVALID_ID;
     for (uint32_t i = 0; pe && i < pe->count(d.p); ++i) { clap_param_info_t pi{}; if (!pe->get_info(d.p, i, &pi)) continue; if (std::string(pi.name) == "Key") keyId = pi.id; if (std::string(pi.name) == "Voice only") voiceId = pi.id; }
-    if (keyId == CLAP_INVALID_ID || voiceId == CLAP_INVALID_ID) { fail("LV05 has no Key / Voice only parameter"); k.close(); d.close(); return false; }
+    if (keyId == CLAP_INVALID_ID || voiceId == CLAP_INVALID_ID) { fail("LV05 has no Key / Voice only parameter"); k.close(); k2.close(); d.close(); return false; }
     auto readoutsOf = [&]() { const auto a = updateArrays(d.m->send(d.p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
     // both play noise at -20 dBFS (the program of LV05 is that noise as well); the key is LV01's output
     EventList none, setKey; setKey.set(keyId, 1.0); setKey.set(voiceId, 0.0);   // Key = LV01 Voice, Voice only Off (a noise is not a voice)
     d.run.process(2, 3, none); k.run.process(2, 4, none);
-    { const auto r = readoutsOf(); if (r.size() < 3 || r[0] != 0.0 || r[2] != 0.0) { fail("LV05 should start with no ducking and no key found"); k.close(); d.close(); return false; } }
+    { const auto r = readoutsOf(); if (r.size() < 3 || r[0] != 0.0 || r[2] != 0.0) { fail("LV05 should start with no ducking and no key found"); k.close(); k2.close(); d.close(); return false; } }
     d.run.process(1, 5, setKey); k.run.process(1, 6, none);
     for (int i = 0; i < 480; ++i) { k.run.process(1, 10u + static_cast<uint64_t>(i), none); d.run.process(1, 1000u + static_cast<uint64_t>(i), none); }   // about 2.6 s, a block each in turn as a host does: the 80 ms attack is long over
     { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 1.0 || r[0] > -10.0) fail("LV05 with Key = LV01 should duck by about 12 dB under LV01's noise (gain " + std::to_string(r.empty() ? 99.0 : r[0]) + " dB, key found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
@@ -739,8 +742,8 @@ bool linkKeyChecks(const std::vector<fs::path>& files) {
     EventList toSc; toSc.set(keyId, 0.0); d.run.process(1, 7, toSc);
     for (int i = 0; i < 480; ++i) { k.run.process(1, 3000u + static_cast<uint64_t>(i), none); d.run.process(1, 4000u + static_cast<uint64_t>(i), none); }
     { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 0.0 || r[0] < -1.0) fail("Key = Sidechain with nothing connected should not duck (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB)"); }
-    k.close(); d.close();
-    if (ok) std::printf("ok    SW Link key: LV05 ducks under another instance's output (Key = LV01 Voice, in the same process), notices when it stops, and the host's sidechain is used again with Key = Sidechain\n");
+    k.close(); k2.close(); d.close();
+    if (ok) std::printf("ok    SW Link key: LV05 ducks under another instance's output (Key = LV01 Voice, in the same process, with a second LV01 standing still next to it), notices when it stops, and the host's sidechain is used again with Key = Sidechain\n");
     return ok;
 }
 
@@ -1431,7 +1434,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false, reactivateOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false, reactivateOnly = false, linkOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1445,6 +1448,7 @@ int main(int argc, char** argv) {
         if (opt == "--mono") { monoOnly = true; continue; }
         if (opt == "--offline") { offlineOnly = true; continue; }
         if (opt == "--reactivate") { reactivateOnly = true; continue; }
+        if (opt == "--link") { linkOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
@@ -1469,6 +1473,10 @@ int main(int argc, char** argv) {
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
         return 0;
+    }
+    if (linkOnly) {   // --link: only the SW Link checks
+        bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkSharedChecks(files) && ok;
+        return ok ? 0 : 1;
     }
     if (reactivateOnly) {   // --reactivate: only the activate-again check
         std::vector<std::string> problems; const bool ok = reactivateChecks(files, problems);

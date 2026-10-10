@@ -219,33 +219,50 @@ public:
         seenStamp_ = best; value = v; return true;
     }
 
-    // The audio thread: the latest `frames` samples of the output ring of another instance of `product` ("LV01") into out (the ring is the mean of its left and right). What it remembers between calls: which slot,
-    // and whether the ring still moves. False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
-    struct KeyState { int slot = -1; uint64_t id = 0; size_t head = 0; int still = 0; };
+    // The audio thread: the latest `frames` samples of the output ring of another instance of `product` ("LV01") into out (the ring is the mean of its left and right).
+    // False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
+    // What it remembers between calls, for every slot: whose ring it saw, where the write position was and how many calls in a row it did not move. A slot whose ring moved in one of the last two calls is "live";
+    // one seen for the first time is live only on the very first call (nothing is known yet), later it has to move first. Of the live slots the one that was the key stays the key, otherwise the first.
+    // (Two instances of the product, one stopped: a state that only remembered one slot took the stopped one for new at every switch and read its last block for ever.)
+    struct KeyState {
+        int slot = -1; bool started = false;
+        uint64_t ids[kSlots] = {}; size_t heads[kSlots] = {}; int still[kSlots] = {};
+    };
     bool readKey(const char* product, float* out, int frames, KeyState& st) const {
         Registry* r = reg_ ? reg_ : registry(); if (!r || frames <= 0) return false;
         const uint32_t code = packCode(product);
-        auto tryRead = [&](int i) -> bool {
+        const size_t n = static_cast<size_t>(frames);
+        int best = -1, firstLive = -1; bool any = false;
+        for (int i = 0; i < kSlots; ++i) {                               // 1: who moves
             Slot& s = r->s[i]; const uint64_t id = s.id.load();
-            if (id == 0 || id == id_ || s.product.load() != code) return false;
-            bool ok = false;
+            if (id == 0 || id == id_ || s.product.load() != code) { st.ids[i] = 0; continue; }
             s.readers.fetch_add(1);                                      // from here the owner cannot take the ring away
-            const std::atomic<float>* d = s.data.load(); const std::atomic<size_t>* hp = s.head.load();
-            if (d && hp && s.id.load() == id) {
-                const size_t mask = s.mask.load(), h = hp->load(std::memory_order_acquire), n = static_cast<size_t>(frames);
-                if (id != st.id || i != st.slot) { st.slot = i; st.id = id; st.head = h; st.still = 0; }
-                else if (h != st.head) { st.head = h; st.still = 0; } else ++st.still;
-                if (st.still < 2 && h >= n && mask + 1 >= n) {
-                    for (size_t k = 0; k < n; ++k) out[k] = d[(h - n + k) & mask].load(std::memory_order_relaxed);
-                    ok = s.id.load() == id;
-                }
-            }
+            const std::atomic<size_t>* hp = s.head.load();
+            if (hp && s.data.load() && s.id.load() == id) {
+                any = true;
+                const size_t h = hp->load(std::memory_order_acquire);
+                if (st.ids[i] != id) { st.ids[i] = id; st.heads[i] = h; st.still[i] = st.started ? 2 : 0; }
+                else if (h != st.heads[i]) { st.heads[i] = h; st.still[i] = 0; } else if (st.still[i] < 2) ++st.still[i];
+            } else st.ids[i] = 0;
             s.readers.fetch_sub(1);
-            return ok;
-        };
-        if (st.slot >= 0 && tryRead(st.slot)) return true;
-        for (int i = 0; i < kSlots; ++i) if (i != st.slot && tryRead(i)) return true;   // (another instance of the product, or the first time)
-        return false;
+            if (st.ids[i] == id && st.still[i] < 2) { if (firstLive < 0) firstLive = i; if (i == st.slot) best = i; }
+        }
+        if (any) st.started = true;
+        if (best < 0) best = firstLive;
+        if (best < 0) return false;
+        st.slot = best;
+        Slot& s = r->s[best]; const uint64_t id = s.id.load(); bool ok = false;   // 2: its latest samples
+        s.readers.fetch_add(1);
+        const std::atomic<float>* d = s.data.load(); const std::atomic<size_t>* hp = s.head.load();
+        if (d && hp && s.id.load() == id && st.ids[best] == id) {
+            const size_t mask = s.mask.load(), h = hp->load(std::memory_order_acquire);
+            if (h >= n && mask + 1 >= n) {
+                for (size_t k = 0; k < n; ++k) out[k] = d[(h - n + k) & mask].load(std::memory_order_relaxed);
+                ok = s.id.load() == id;
+            }
+        }
+        s.readers.fetch_sub(1);
+        return ok;
     }
 
     // GUI thread: how many other instances are alive

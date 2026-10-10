@@ -193,3 +193,24 @@ TEST_CASE("SW Link: a shared setting - the last change of any instance of a prod
     late.leave(); m3.leave(); m1.leave(); m2.leave();
     link::Member alone; REQUIRE(alone.join(a.view(), "MT05")); CHECK_FALSE(alone.adoptShared("MT05", v));
 }
+
+TEST_CASE("SW Link: a key with two instances of the product - the one that moves is the key, a stopped one is never taken for a key (no flipping between slots when the moving one stops)") {
+    Ring a(300, -20), c(500, -20), me_ring(1000, -20);
+    link::Member pa, pc, me;
+    REQUIRE(pa.join(a.view(), "LV01")); REQUIRE(pc.join(c.view(), "LV01")); REQUIRE(me.join(me_ring.view(), "LV05"));
+    link::Member::KeyState st; std::vector<float> key(256, 0.0f);
+    auto fromRing = [&](Ring& r) { const size_t h = r.head.load(); double worst = 0; for (size_t k = 0; k < 256; ++k) worst = std::max(worst, std::abs(static_cast<double>(key[k]) - static_cast<double>(r.data[(h - 256 + k) & (Ring::kN - 1)].load()))); return worst == 0.0; };
+    // the first calls see both (nothing is known yet); then only the one that moves is a key, whichever slot comes first
+    for (int k = 0; k < 6; ++k) { c.advance(256); (void)me.readKey("LV01", key.data(), 256, st); }
+    for (int k = 0; k < 20; ++k) { c.advance(256); CHECK(me.readKey("LV01", key.data(), 256, st)); CHECK(fromRing(c)); }
+    // c stops: after two calls there is no key, and none for as long as both stand still
+    int gone = 0; for (int k = 0; k < 40; ++k) if (!me.readKey("LV01", key.data(), 256, st)) ++gone; CHECK(gone >= 38);
+    int late = 0; for (int k = 0; k < 40; ++k) if (me.readKey("LV01", key.data(), 256, st)) ++late;
+    CHECK(late == 0);
+    // the other one starts moving: it is the key at once (within a block)
+    a.advance(256); (void)me.readKey("LV01", key.data(), 256, st);
+    for (int k = 0; k < 10; ++k) { a.advance(256); CHECK(me.readKey("LV01", key.data(), 256, st)); CHECK(fromRing(a)); }
+    // both move: one of them, steadily (the one that was the key stays the key)
+    int fromA = 0, fromC = 0; for (int k = 0; k < 20; ++k) { a.advance(256); c.advance(256); if (me.readKey("LV01", key.data(), 256, st)) { if (fromRing(a)) ++fromA; else if (fromRing(c)) ++fromC; } }
+    CHECK(fromA + fromC == 20); CHECK(std::min(fromA, fromC) == 0);
+}
