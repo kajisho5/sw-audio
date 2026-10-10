@@ -4,6 +4,10 @@
 //   build/in07_song <song> <out.wav> [the loud sections' loudness, LUFS: the song's own when left out]     (run from the repository's root)
 //   SW_SONG_STEMS=<dir>: each track as a WAV too; SW_SONG_EVENTS=<file.json>: every track's values and events (tools/in07_song_video.py)
 #include "in07_songkit.hpp"
+#include "songs/afterglow.hpp"
+#include "songs/escape_velocity.hpp"
+#include "songs/low_orbit.hpp"
+#include "songs/neon_coastline.hpp"
 #include "songs/slingshot.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -15,7 +19,11 @@
 int main(int argc, char** argv) {
     using sw::in07::songkit::Song;
     const std::vector<std::pair<const char*, std::function<Song()>>> songs = {
-        {"slingshot", sw::in07::songs::slingshot},
+        {"slingshot", sw::in07::songs::slingshot},             // dubstep (brostep), 140 bpm, 1:47
+        {"afterglow", sw::in07::songs::afterglow},             // future bass, 150 bpm
+        {"neon-coastline", sw::in07::songs::neonCoastline},    // synthwave, 105 bpm
+        {"escape-velocity", sw::in07::songs::escapeVelocity},  // drum & bass, 174 bpm
+        {"low-orbit", sw::in07::songs::lowOrbit},              // lo-fi hip hop, 80 bpm
     };
     if (argc < 3) {
         std::fprintf(stderr, "usage: in07_song <song> <out.wav> [target LUFS]\nsongs:");

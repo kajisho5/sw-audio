@@ -58,7 +58,7 @@ inline Track factoryTrack(const std::string& name, const std::string& preset, do
     const auto& n = presetNames();
     for (size_t i = 0; i < n.size(); ++i)
         if (n[i] == preset) {
-            Track t{name, {}, gainDb, duckDb};
+            Track t; t.name = name; t.gainDb = gainDb; t.duckDb = duckDb;
             presetValues(static_cast<int>(i), t.plain);
             t.preset = preset; t.category = factoryPresets()[i].category; t.source = "factory"; t.factoryIndex = static_cast<int>(i);
             return t;
@@ -67,14 +67,14 @@ inline Track factoryTrack(const std::string& name, const std::string& preset, do
 }
 inline Track userTrack(const std::string& name, const std::string& path, double gainDb, double duckDb = 0) {
     std::ifstream f(path, std::ios::binary); std::stringstream ss; ss << f.rdbuf();
-    Track t{name, {}, gainDb, duckDb};
+    Track t; t.name = name; t.gainDb = gainDb; t.duckDb = duckDb;
     sw::presetfile::Meta m; std::string err;
     if (!userPresetValues(ss.str(), t.plain, m, err)) { std::fprintf(stderr, "%s: %s\n", path.c_str(), err.c_str()); std::exit(1); }
     t.preset = m.name; t.category = m.category; t.source = "user";
     return t;
 }
 inline Track songTrack(const std::string& name, const Raw& r, double gainDb, double duckDb = 0) {   // a recipe written in the song
-    Track t{name, {}, gainDb, duckDb};
+    Track t; t.name = name; t.gainDb = gainDb; t.duckDb = duckDb;
     if (!recipe::plainOf(r, t.plain)) std::exit(1);
     t.preset = r.name; t.category = r.cat; t.source = "song";
     return t;
@@ -110,6 +110,46 @@ inline const Raw& hatRecipe(bool open) {
         .L(1, smp("Tick", 1) + flt("HP 12", 7000, 10, 0, 0, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 60, 0, 60, 70))
         .L(2, smp("Static", 2, 1) + flt("HP 12", 8000, 0, 0, 0, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 220, 0, 150, 70) + lvl(-4)));
     return open ? opened : closed;
+}
+// a kick with its own shape: the body's length (ms), how far the pitch falls (the 4th Env 2 -> Pitch slot, 0..100 on top of three at 100
+// for a hard kick; lower for a rounder one: the first slots are cut by soft), the drive, the knock's level (dB)
+inline Raw kickShaped(double bodyMs, double fall, double drive, double knockDb, bool soft = false) {
+    using namespace dsl;
+    B b = N().drv(drive, 40);
+    if (soft) b.mod(1, "Env 2", "Pitch", 100).mod(2, "Env 2", "Pitch", fall);
+    else b.mod(1, "Env 2", "Pitch", 100).mod(2, "Env 2", "Pitch", 100).mod(3, "Env 2", "Pitch", 100).mod(4, "Env 2", "Pitch", fall);
+    b.L(1, wave("Sine", 0, 1, 0, 0) + flt("LP 12", soft ? 6000 : 20000, 0, 0, 20, 0) + fenv(0.5, soft ? 70 : 45, 0, 40) + amp(0.5, bodyMs, 0, 60, 30))
+     .L(2, smp("Knock", 0) + flt("HP 12", 1500, 0, 0, 0, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 25, 0, 20, 30) + lvl(knockDb));
+    return R("Kick", "FX", std::move(b));
+}
+// a clap: the Static noise band-passed around 1.2 kHz, short; played as a flam of three (clapAt), a room after it
+inline const Raw& clapRecipe() {
+    using namespace dsl;
+    static const Raw r = R("Clap", "FX", N().eq(0, 2, 2).rev(1.6, 28, 30)
+        .L(1, smp("Static", 0, 2, 70) + flt("BP 12", 1200, 25, 0, 20, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 140, 0, 90, 50))
+        .L(2, smp("Static", 1, 1, 40) + flt("HP 12", 3000, 0, 0, 0, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 60, 0, 40, 50) + lvl(-6)));
+    return r;
+}
+inline void clapAt(Track& t, double beat, double bpm, double vel = 0.9) {   // three hits 11 ms apart, the last one the longest
+    const double ms = bpm / 60000.0;
+    t.note(beat, 0.05, 60, vel * 0.7); t.note(beat + 11 * ms, 0.05, 60, vel * 0.8); t.note(beat + 22 * ms, 0.25, 60, vel);
+}
+// a tom: a sine falling 4 semitones, with a knock; the key sets its pitch
+inline const Raw& tomRecipe() {
+    using namespace dsl;
+    static const Raw r = R("Tom", "FX", N().drv(20, 50).rev(2.0, 25, 40)
+        .mod(1, "Env 2", "Pitch", 35)
+        .L(1, wave("Sine", 0, 1, 0, 0) + flt("LP 12", 20000, 0, 0, 10, 0) + fenv(0.5, 180, 0, 100) + amp(0.5, 450, 0, 150, 40))
+        .L(2, smp("Knock", 0) + flt("LP 12", 3000, 0, 0, 0, 0) + amp(0.5, 40, 0, 30, 40) + lvl(-8)));
+    return r;
+}
+// a crash: noise high-passed with a long fall, an inharmonic FM shimmer, a room
+inline const Raw& crashRecipe() {
+    using namespace dsl;
+    static const Raw r = R("Crash", "FX", N().eq(-6, 0, 3).rev(2.5, 25)
+        .L(1, smp("Static", 1, 2, 100) + flt("HP 12", 5000, 0, 0, 0, 0) + fenv(0.5, 1, 0, 1) + amp(0.5, 1800, 0, 1500, 40))
+        .L(2, fm("11", 60, 900, 30, 1, 2, 30, 100) + flt("HP 12", 3000, 0, 0, 0, 0) + amp(0.5, 1500, 0, 1200, 40) + lvl(-10)));
+    return r;
 }
 // a riser: noise through a band-pass and a saw stack, both opened by automation (riseInto), the pitch bent up an octave (bend range 12)
 inline const Raw& riserRecipe() {
