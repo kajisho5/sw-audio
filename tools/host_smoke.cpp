@@ -129,6 +129,7 @@ struct Run {
     double toneHz = 0, toneDb = -20.0; uint64_t toneN = 0;   // toneHz > 0: a sine instead of noise (the SW Link checks)
     int64_t impulse = -1;                                    // >= 0: silence with one impulse (0.5) at that sample (the latency check)
     int64_t poisonAt = -1; float poison = 0.0f;              // >= 0: that input sample (left channel) is `poison` (NaN or an infinity) instead of what it would be
+    int forceFrames = -1;                                    // >= 0: the frames_count of every block (0: an empty block, as some hosts send to flush events); the logs get that many samples
     struct Tr { bool none = false; clap_event_transport_t t{}; };
     std::vector<Tr> transports; size_t trIdx = 0;            // not empty: block k gets transports[k % size] (`none` = the host gives no transport at all)
 
@@ -155,7 +156,8 @@ struct Run {
             ob.channel_count = inCh[0]; ob.data32 = outPtr;
             clap_output_events_t oe{nullptr, outTryPush};
             clap_process_t pr{};
-            pr.steady_time = -1; pr.frames_count = kBlock; pr.transport = nullptr;
+            const uint32_t nFrames = forceFrames >= 0 ? static_cast<uint32_t>(forceFrames) : kBlock;
+            pr.steady_time = -1; pr.frames_count = nFrames; pr.transport = nullptr;
             if (!transports.empty()) { const Tr& tr = transports[trIdx++ % transports.size()]; if (!tr.none) pr.transport = &tr.t; }
             pr.audio_inputs = ib; pr.audio_inputs_count = nIn;
             pr.audio_outputs = &ob; pr.audio_outputs_count = 1;
@@ -163,11 +165,11 @@ struct Run {
             const auto t0 = std::chrono::steady_clock::now();
             const clap_process_status st = p->process(p, &pr);
             seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-            audioSeconds += kBlock / kSr;
+            audioSeconds += nFrames / kSr;
             if (st == CLAP_PROCESS_ERROR) bad = true;
-            events.ev.clear(); toneN += kBlock;
+            events.ev.clear(); toneN += nFrames;
             for (int c = 0; c < 2; ++c) {
-                for (uint32_t i = 0; i < kBlock; ++i) {
+                for (uint32_t i = 0; i < nFrames; ++i) {
                     const float y = out[c][i];
                     if (!std::isfinite(y)) bad = true; else peak = std::max(peak, static_cast<double>(std::fabs(y)));
                     inAll[c].push_back(in[c][i]); outAll[c].push_back(y);
@@ -1148,6 +1150,43 @@ bool reactivateChecks(const std::vector<fs::path>& files, std::vector<std::strin
     return ok;
 }
 
+// Blocks of 0 and 1 frames: some hosts call process() with nothing to process (to hand over events, or at the end of a stream) and with a single frame. A plug-in must not divide by the block length, read out of the
+// buffer or lose its place: 20 normal blocks, then 40 empty ones, a run of single frames and 20 normal blocks again, with random settings arriving in the empty blocks: finite output, no process() error, peak under 1e4.
+bool tinyBlockChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (int seed = 1; seed <= 2; ++seed) {
+            Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  tiny blocks of " + name + ": " + why); ok = false; break; }
+            const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+            const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+            a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+            if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+            Rng rng(0xD6E8FEB86659FD93ull * static_cast<uint64_t>(seed) + 41);
+            auto randomEvents = [&](EventList& ev) {
+                for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
+                    clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
+                    double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                    ev.set(pi.id, v);
+                }
+            };
+            EventList none; a.run.process(20, 1000 + static_cast<uint64_t>(seed), none);
+            a.run.forceFrames = 0;
+            for (int i = 0; i < 40; ++i) { EventList ev; if (i % 10 == 0) randomEvents(ev); a.run.process(1, 1100u + static_cast<uint64_t>(i), ev); }
+            a.run.forceFrames = 1;
+            for (int i = 0; i < 300; ++i) { EventList ev; if (i % 100 == 0) randomEvents(ev); a.run.process(1, 1200u + static_cast<uint64_t>(i), ev); }
+            a.run.forceFrames = -1;
+            a.run.process(20, 1500 + static_cast<uint64_t>(seed), none);
+            if (a.run.bad) { problems.push_back("FAIL  tiny blocks of " + name + " (settings " + std::to_string(seed) + "): NaN / Inf in the output or an error from process()"); ok = false; }
+            else if (a.run.peak > 1e4) { char b[200]; std::snprintf(b, sizeof b, "FAIL  tiny blocks of %s (settings %d): peak %.3g", name.c_str(), seed, a.run.peak); problems.push_back(b); ok = false; }
+            a.close();
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    tiny blocks: %d plug-ins x 2 random settings: 40 blocks of 0 frames and 300 of 1 frame between normal blocks: finite output, no process() error, peak under 1e4\n", tested);
+    return ok;
+}
+
 // The transport a host sends is not always sane: a tempo of 0, a negative or NaN tempo, a bar position far out of range, a time signature with a 0, a play position of INT64_MAX. The products that read the tempo or the
 // bar line (17 of them: delays, modulations, the tempo-locked ones) must still give a finite output of a sensible size, in a time that is not far over the audio (a loop that waits for a beat that never comes).
 // Three scripts, two random settings each (every parameter at a random value, so the Sync switches are on half of the time); the script cycles through a block each.
@@ -1472,7 +1511,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false, reactivateOnly = false, linkOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false, reactivateOnly = false, linkOnly = false, tinyOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1487,6 +1526,7 @@ int main(int argc, char** argv) {
         if (opt == "--offline") { offlineOnly = true; continue; }
         if (opt == "--reactivate") { reactivateOnly = true; continue; }
         if (opt == "--link") { linkOnly = true; continue; }
+        if (opt == "--tiny") { tinyOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
@@ -1511,6 +1551,11 @@ int main(int argc, char** argv) {
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
         return 0;
+    }
+    if (tinyOnly) {   // --tiny: only the empty / one-frame blocks
+        std::vector<std::string> problems; const bool ok = tinyBlockChecks(files, problems);
+        for (const auto& l : problems) std::printf("%s\n", l.c_str());
+        return ok ? 0 : 1;
     }
     if (linkOnly) {   // --link: only the SW Link checks
         bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkLowKeyChecks(files) && ok; ok = linkSharedChecks(files) && ok;
@@ -1596,6 +1641,7 @@ int main(int argc, char** argv) {
     { std::vector<std::string> problems; if (!monoChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!offlineChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!reactivateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    { std::vector<std::string> problems; if (!tinyBlockChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
