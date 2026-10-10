@@ -89,6 +89,15 @@ template <class P> struct HasLinkRefUse<P, std::void_t<decltype(P::kLinkRefFrom)
 // (mono; plugin/clap/swlink.hpp readKey, on the audio thread), and not the host's sidechain.
 template <class P, class = void> struct HasLinkKey : std::false_type {};
 template <class P> struct HasLinkKey<P, std::void_t<decltype(P::linkKeyOf(std::declval<const typename P::Core&>())), decltype(P::kLinkKeyReadout)>> : std::true_type {};
+// optional with HasLinkKey (LO03): static constexpr uint32_t kLinkKeyTag = only an instance whose tag (HasLinkTag) is that counts as the key (LO03: 1 = an instance whose Role is Kick);
+// static constexpr bool kLinkKeyOnlyWithoutSidechain = the host's sidechain wins when it carries a signal (LO03: the Bass takes the Kick of the other instance only when no key is connected)
+template <class P, class = void> struct LinkKeyTagOf { static constexpr uint32_t value = 0; };
+template <class P> struct LinkKeyTagOf<P, std::void_t<decltype(P::kLinkKeyTag)>> { static constexpr uint32_t value = P::kLinkKeyTag; };
+template <class P, class = void> struct LinkKeyHostWins { static constexpr bool value = false; };
+template <class P> struct LinkKeyHostWins<P, std::void_t<decltype(P::kLinkKeyOnlyWithoutSidechain)>> { static constexpr bool value = P::kLinkKeyOnlyWithoutSidechain; };
+// optional trait (LO03): static uint32_t linkTagOf(const Core&) -> what this instance is within its product (the Role: 1 Kick, 2 Bass, 3 Both), published to the others after every block (SW Link tag)
+template <class P, class = void> struct HasLinkTag : std::false_type {};
+template <class P> struct HasLinkTag<P, std::void_t<decltype(P::linkTagOf(std::declval<const typename P::Core&>()))>> : std::true_type {};
 // optional trait (MT05: the 0 VU reference of the session): static constexpr int kLinkSharedParam = the parameter whose value the instances of the product share, static constexpr const char* kLinkSharedFrom
 // = the product code ("MT05"); the core has void adoptShared(double) (sets the parameter and hands the value to the host through takeParamWrite). A change the person makes (the host's automation, the screen)
 // is published with SW Link (publishShared: atomics only); the other instances take it at their next block; an instance that adopts does not publish. A value equal to the default is no change (an instance
@@ -459,9 +468,13 @@ private:
             if (s->link_.adoptShared(P::kLinkSharedFrom, v) && v != s->lastShared_) { s->lastShared_ = v; s->shell_.core().adoptShared(v); }
         }
         if constexpr (HasLinkKey<P>::value) {   // the key is another instance's output (SW Link), when the screen chose one
-            if (const char* code = P::linkKeyOf(s->shell_.core())) {
+            const char* code = P::linkKeyOf(s->shell_.core());
+            if constexpr (LinkKeyHostWins<P>::value) {   // a sidechain that carries a signal is the key (a host that leaves an unconnected one silent does not count)
+                if (code && scCh > 0) { bool sig = false; for (int c = 0; c < scCh && !sig; ++c) for (uint32_t i = 0; i < frames; ++i) if (scBase[c][i] != 0.0f) { sig = true; break; } if (sig) code = nullptr; }
+            }
+            if (code) {
                 scBase[0] = scBase[1] = nullptr; scCh = 0;
-                const bool got = frames <= s->scLink_.size() && s->link_.readKey(code, s->scLink_.data(), static_cast<int>(frames), s->keyState_);
+                const bool got = frames <= s->scLink_.size() && s->link_.readKey(code, s->scLink_.data(), static_cast<int>(frames), s->keyState_, LinkKeyTagOf<P>::value);
                 if (got) { scBase[0] = s->scLink_.data(); scCh = 1; }
                 s->linkKeyFound_.store(got ? 1.0f : 0.0f, std::memory_order_relaxed);
             } else s->linkKeyFound_.store(0.0f, std::memory_order_relaxed);
@@ -489,6 +502,7 @@ private:
         if constexpr (HasReadouts<P>::value) s->publishReadouts();
         if constexpr (HasLinkKey<P>::value) s->ro_[static_cast<size_t>(P::kLinkKeyReadout)].store(static_cast<double>(s->linkKeyFound_.load(std::memory_order_relaxed)), std::memory_order_relaxed);
         if constexpr (HasLinkRef<P>::value) s->publishLinkRef();
+        if constexpr (HasLinkTag<P>::value) s->link_.setTag(P::linkTagOf(s->shell_.core()));
         s->updateTail();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
         if (s->shell_.core().latencySamples() != s->shell_.latencySamples() && !s->restart_requested_.exchange(true))

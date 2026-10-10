@@ -1394,7 +1394,7 @@
 
 
   // ---- LO03 low focus: the two bells the plug-in applies (the Focus bell, Q 1.2, at the gain the core has right now; the Mud cut bell, Q 1.0, cut 6 dB x Tight) on 20 Hz - 2 kHz,
-  // and the "Mono below" corner as a dashed line. Drag a numbered dot sideways to move its frequency (1 = Focus, 2 = Mud cut). readouts: [the Focus bell's gain (dB, <= 0)]
+  // and the "Mono below" corner as a dashed line. Drag a numbered dot sideways to move its frequency (1 = Focus, 2 = Mud cut). readouts: [the Focus bell's gain (dB, <= 0), 1 while a Bass follows the Kick of another LO03 (SW Link)]
   function lowFocusDisplay(box, ctx) {
     const svg = svgOf(box); if (!svg) return null;
     const grid = [...svg.querySelectorAll(':scope > line')], paths = [...svg.querySelectorAll(':scope > path')], dots = [...svg.querySelectorAll(':scope > circle')], nums = [...svg.querySelectorAll(':scope > text')].filter(t => t.getAttribute('text-anchor') === 'middle');
@@ -1414,8 +1414,9 @@
     });
     return { update(info) {
       const r = info && info.readouts, fcut = r && r.length >= 1 && Number.isFinite(r[0]) ? Math.min(0, r[0]) : 0, ff = ctx.value('Focus'), fm = ctx.value('Mud cut'), tight = ctx.value('Tight') / 100, fmono = ctx.value('Mono below');
-      if (![ff, fm, tight, fmono].every(Number.isFinite)) return; const key = [Math.round(fcut * 20), ff, fm, tight, fmono, ctx.value('Role')].join('|'); if (key === last) return; last = key;
-      const mud = -6 * tight; let d = ''; const role = Math.round(ctx.value('Role')); if (caption && roleText[role]) caption.textContent = roleText[role];
+      const viaLink = r && r.length >= 2 && r[1] > 0.5 ? 1 : 0;   // the Bass is following the Kick of another LO03 in this host (SW Link)
+      if (![ff, fm, tight, fmono].every(Number.isFinite)) return; const key = [Math.round(fcut * 20), ff, fm, tight, fmono, ctx.value('Role'), viaLink].join('|'); if (key === last) return; last = key;
+      const mud = -6 * tight; let d = ''; const role = Math.round(ctx.value('Role')); if (caption && roleText[role]) caption.textContent = role === 1 && viaLink ? 'Bass: ducked by the Kick of another LO03 (SW Link)' : roleText[role];
       for (let i = 0; i <= N; i++) { const f = F0 * Math.pow(F1 / F0, i / N), db = biquadMag('bell', ff, fcut, 1.2, f) + biquadMag('bell', fm, mud, 1.0, f), x = (i / N * W).toFixed(1); d += (i ? ' L' : 'M') + x + ' ' + yOf(db).toFixed(1); }
       glow.setAttribute('d', d); line.setAttribute('d', d); area.setAttribute('d', d + ' L' + W + ' ' + Y0 + ' L0 ' + Y0 + ' Z');
       [[ff, fcut], [fm, mud]].forEach(([f, g], k) => { const x = xOf(f), y = yOf(g); dots[k].setAttribute('cx', x.toFixed(1)); dots[k].setAttribute('cy', y.toFixed(1)); nums[k].setAttribute('x', x.toFixed(1)); nums[k].setAttribute('y', (y + 3.5).toFixed(1)); });

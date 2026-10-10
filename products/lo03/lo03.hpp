@@ -27,6 +27,7 @@ public:
     void processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh) { run(ch, numCh, n, sc, scCh); }
     int latencySamples() const { return 0; }
     double focusCutDb() const { return focusDb_; }   // current dynamic cut of the Focus bell (display / tests)
+    int role() const { return static_cast<int>(target_[Role] + 0.5); }   // Kick / Bass / Both (SW Link: the Bass takes the Kick of another instance as its key)
 
 private:
     struct Lr4 {

@@ -214,3 +214,28 @@ TEST_CASE("SW Link: a key with two instances of the product - the one that moves
     int fromA = 0, fromC = 0; for (int k = 0; k < 20; ++k) { a.advance(256); c.advance(256); if (me.readKey("LV01", key.data(), 256, st)) { if (fromRing(a)) ++fromA; else if (fromRing(c)) ++fromC; } }
     CHECK(fromA + fromC == 20); CHECK(std::min(fromA, fromC) == 0);
 }
+
+TEST_CASE("SW Link: a key looked for by the tag (LO03: the instance whose Role is Kick) - only an instance that says it is that, and only while its ring moves; the tag goes with the slot") {
+    Ring kick(55, -20), bass(80, -20), both(70, -20), mine(1000, -20);
+    link::Member pk, pb, pt, me;
+    REQUIRE(pk.join(kick.view(), "LO03")); REQUIRE(pb.join(bass.view(), "LO03")); REQUIRE(pt.join(both.view(), "LO03")); REQUIRE(me.join(mine.view(), "LO03"));
+    link::Member::KeyState st; std::vector<float> key(256, 0.0f);
+    auto fromRing = [&](Ring& r) { const size_t h = r.head.load(); double worst = 0; for (size_t k = 0; k < 256; ++k) worst = std::max(worst, std::abs(static_cast<double>(key[k]) - static_cast<double>(r.data[(h - 256 + k) & (Ring::kN - 1)].load()))); return worst == 0.0; };
+    auto step = [&] { kick.advance(256); bass.advance(256); both.advance(256); };
+    // nobody has said what it is: no instance with the tag 1
+    for (int k = 0; k < 4; ++k) { step(); CHECK_FALSE(me.readKey("LO03", key.data(), 256, st, 1)); }
+    pk.setTag(1); pb.setTag(2); pt.setTag(3); me.setTag(2);
+    for (int k = 0; k < 4; ++k) { step(); (void)me.readKey("LO03", key.data(), 256, st, 1); }
+    for (int k = 0; k < 10; ++k) { step(); CHECK(me.readKey("LO03", key.data(), 256, st, 1)); CHECK(fromRing(kick)); }     // the Kick, not the Bass or the Both
+    link::Member::KeyState st2;
+    for (int k = 0; k < 4; ++k) { step(); (void)me.readKey("LO03", key.data(), 256, st2, 3); }
+    for (int k = 0; k < 4; ++k) { step(); CHECK(me.readKey("LO03", key.data(), 256, st2, 3)); CHECK(fromRing(both)); }
+    // the Kick becomes a Bass: no Kick left, so no key; it is a Kick again: a key once it moves
+    pk.setTag(2); for (int k = 0; k < 4; ++k) { step(); CHECK_FALSE(me.readKey("LO03", key.data(), 256, st, 1)); }
+    pk.setTag(1); step(); (void)me.readKey("LO03", key.data(), 256, st, 1); step(); CHECK(me.readKey("LO03", key.data(), 256, st, 1));
+    // a tag of 0 asks for any instance of the product; the instance itself is never its own key
+    link::Member::KeyState st3; step(); CHECK(me.readKey("LO03", key.data(), 256, st3));
+    // the slot is freed: the next instance in it does not inherit the tag
+    pk.leave(); link::Member again; REQUIRE(again.join(kick.view(), "LO03"));
+    for (int k = 0; k < 6; ++k) { step(); CHECK_FALSE(me.readKey("LO03", key.data(), 256, st, 1)); }
+}

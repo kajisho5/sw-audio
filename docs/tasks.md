@@ -201,7 +201,7 @@
 ## 製品のあと
 
 - 画面（キャンバス docs/design/canvas/project/<コード>.dc.html を WebView で流用）。共通機能のうちモーフ（A/B）・EVO バー・Unit A/B/C・Low lat は画面と一緒に。
-- SW Link の残り（最初の部分＝誰がいるか・出力スペクトルは `plugin/clap/swlink.hpp` で済）：ラウドネスとトラック種別の共有、LV15/LV11 の他製品との連携を、この登録簿の上に載せる（済：EQ05 Match の参照元＝UT03 の参照スペクトル、LV05 の Key＝別のインスタンスの出力を `readKey` で受ける、MT05 の 0 VU 基準の共有）。
+- SW Link の残り（最初の部分＝誰がいるか・出力スペクトルは `plugin/clap/swlink.hpp` で済）：ラウドネスとトラック種別の共有、LV15/LV11 の他製品との連携を、この登録簿の上に載せる（済：EQ05 Match の参照元＝UT03 の参照スペクトル、LV05 の Key＝別のインスタンスの出力を `readKey` で受ける、MT05 の 0 VU 基準の共有、LO03 の Bass 役が Kick 役の LO03 の出力を鍵にする〔登録簿の `tag`〕。残り：LV29・LV27・VO05）。
 - 画面に暗いまま残っているボタン（機能が無いので押しても何も起きない。ツールチップに理由）：**CS04 の「Add module」**（モジュールは 6 つ固定なので足すものが無い。デザインの意図が不明）、**LV27 の「Learn current」**（OBS 連携が要る）、**MT03 の「Snapshot」・RS04 の「Repair」**（仕様書の要確認）、**拡大率の「100%」**（ホストのウィンドウのサイズ変更が要る）。
 - 解析・学習系の EVO（区分 A／B／C：EQ02 Assist／Unmask、EQ07 Auto thresh、DY04 Learn、CS02 被り学習、RV08 Learn〔この 3 つは `sw::BleedLearner` を共有〕、CS03 入力レベル合わせ〔`sw::LevelLearner`〕、DY10 Auto〔`sw::CrossoverFinder`〕、MS07 Truncation check〔`sw::BitDepthProbe`〕、EQ05 Match〔`sw::BandSpectrum` と有界の最小二乗。参照は画面からファイルを選ぶ／ドロップする道と、SW Link 経由で UT03 の参照スペクトルを使う道（From UT03）〕、CS04 並び順の提案〔規則表は案。ボタンとメニュー〕は済。CS04 の後期版〔音源の自動判別。区分 C〕は未。CS03 の「音源の種類ごとの目標」は表が無く未実装）。
 - SW AUDIO for OBS（GPL の薄い OBS フィルタ＋非公開エンジン、共有メモリ、フェイルオープン。公開前に弁護士確認）。

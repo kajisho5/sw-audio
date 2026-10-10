@@ -48,7 +48,7 @@ __declspec(dllimport) void* __stdcall VirtualAlloc(void*, unsigned long long, un
 
 namespace sw::link {
 
-constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 3;   // "SWLK"
+constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 4;   // "SWLK"
 constexpr int kSlots = 128;
 constexpr int kRefBands = 60;                           // the reference spectrum a product may publish (= sw::BandSpectrum::kBands)
 constexpr const char* kEnv = "SW_AUDIO_LINK";
@@ -61,6 +61,7 @@ struct Slot {
     std::atomic<size_t> mask{0};
     std::atomic<double> sampleRate{48000.0};
     std::atomic<uint32_t> product{0};                              // the product code, four characters packed (EQ02 -> 'E','Q','0','2')
+    std::atomic<uint32_t> tag{0};                                  // what this instance is within its product (LO03: its Role, 1 Kick / 2 Bass / 3 Both); 0 = nothing to tell
     std::atomic<uint32_t> refSerial{0};                            // the shared reference spectrum: 0 = none, otherwise which one it is (changes with every new reference); written last, withdrawn first
     std::atomic<float> refDb[kRefBands];                           // (dB, 1/6 octave from 20 Hz)
     std::atomic<uint32_t> sharedStamp{0};                          // the setting this instance's person changed last (0: none yet): when (a stamp of the registry's counter) ...
@@ -144,17 +145,19 @@ public:
         for (int i = 0; i < kSlots; ++i) {
             uint64_t e = 0; Slot& s = r->s[i];
             if (!s.id.compare_exchange_strong(e, id)) continue;
-            s.mask.store(ring.mask); s.sampleRate.store(sampleRate); s.product.store(packCode(product));
+            s.mask.store(ring.mask); s.sampleRate.store(sampleRate); s.product.store(packCode(product)); s.tag.store(0);
             s.head.store(ring.head); s.data.store(ring.data);   // last: a reader that sees the ring sees the rest
             slot_ = &s; id_ = id; reg_ = r; return true;
         }
         return false;
     }
     void setSampleRate(double sr) { if (slot_) slot_->sampleRate.store(sr); }
+    // what this instance is within its product (LO03: the Role), for the others that look for one of them (readKey's tag); atomics only, any thread
+    void setTag(uint32_t t) { if (slot_) slot_->tag.store(t, std::memory_order_relaxed); }
     // main thread: withdraw the ring, wait for the readers that are inside, free the slot. Call before the ring is destroyed.
     void leave() {
         if (!slot_) return;
-        slot_->refSerial.store(0); slot_->sharedStamp.store(0);
+        slot_->refSerial.store(0); slot_->sharedStamp.store(0); slot_->tag.store(0);
         slot_->data.store(nullptr); slot_->head.store(nullptr);
         while (slot_->readers.load() != 0) std::this_thread::yield();
         slot_->id.store(0); slot_ = nullptr; reg_ = nullptr;
@@ -220,7 +223,7 @@ public:
     }
 
     // The audio thread: the latest `frames` samples of the output ring of another instance of `product` ("LV01") into out (the ring is the mean of its left and right).
-    // False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
+    // `tag` (not 0): only an instance that says it is that (setTag: the Role of an LO03). False when there is no such instance, or its ring has not moved for 2 calls (stopped, bypassed by the host): out is not touched then. No lock, no allocation.
     // What it remembers between calls, for every slot: whose ring it saw, where the write position was and how many calls in a row it did not move. A slot whose ring moved in one of the last two calls is "live";
     // one seen for the first time is live only on the very first call (nothing is known yet), later it has to move first. Of the live slots the one that was the key stays the key, otherwise the first.
     // (Two instances of the product, one stopped: a state that only remembered one slot took the stopped one for new at every switch and read its last block for ever.)
@@ -228,14 +231,14 @@ public:
         int slot = -1; bool started = false;
         uint64_t ids[kSlots] = {}; size_t heads[kSlots] = {}; int still[kSlots] = {};
     };
-    bool readKey(const char* product, float* out, int frames, KeyState& st) const {
+    bool readKey(const char* product, float* out, int frames, KeyState& st, uint32_t tag = 0) const {
         Registry* r = reg_ ? reg_ : registry(); if (!r || frames <= 0) return false;
         const uint32_t code = packCode(product);
         const size_t n = static_cast<size_t>(frames);
         int best = -1, firstLive = -1; bool any = false;
         for (int i = 0; i < kSlots; ++i) {                               // 1: who moves
             Slot& s = r->s[i]; const uint64_t id = s.id.load();
-            if (id == 0 || id == id_ || s.product.load() != code) { st.ids[i] = 0; continue; }
+            if (id == 0 || id == id_ || s.product.load() != code || (tag != 0 && s.tag.load(std::memory_order_relaxed) != tag)) { st.ids[i] = 0; continue; }
             s.readers.fetch_add(1);                                      // from here the owner cannot take the ring away
             const std::atomic<size_t>* hp = s.head.load();
             if (hp && s.data.load() && s.id.load() == id) {

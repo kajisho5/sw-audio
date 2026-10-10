@@ -747,6 +747,43 @@ bool linkKeyChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// SW Link, LO03: a Bass takes the Kick of another LO03 in the same process as its key (the Role of every instance is published as its tag). Kick = an LO03 with Role Kick playing bursts of a 55 Hz tone; Bass = another LO03 with
+// Role Bass and Tight 100 % that gets noise and nothing on its sidechain. While the Kick plays the Bass ducks its Focus bell (readouts: [the bell's gain in dB, key found]); with the Kick standing still, with no Kick at all
+// (the other one is a Both) or alone, it does not.
+bool linkLowKeyChecks(const std::vector<fs::path>& files) {
+    fs::path fl; for (const auto& f : files) if (f.stem().string().find(" LO03 ") != std::string::npos) fl = f;
+    if (fl.empty()) return true;   // a partial set of plug-ins: nothing to check
+    bool ok = true; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link LO03 key: %s\n", t.c_str()); ok = false; };
+    Loaded k, b; std::string why;
+    if (!k.open(fl, why)) { fail("Kick " + why); return false; }
+    if (!b.open(fl, why)) { fail("Bass " + why); k.close(); return false; }
+    auto idOf = [&](Loaded& x, const char* name) { const auto* pe = static_cast<const clap_plugin_params_t*>(x.p->get_extension(x.p, CLAP_EXT_PARAMS)); for (uint32_t i = 0; pe && i < pe->count(x.p); ++i) { clap_param_info_t pi{}; if (pe->get_info(x.p, i, &pi) && std::string(pi.name) == name) return pi.id; } return CLAP_INVALID_ID; };
+    const clap_id roleK = idOf(k, "Role"), roleB = idOf(b, "Role"), tightB = idOf(b, "Tight");
+    if (roleK == CLAP_INVALID_ID || roleB == CLAP_INVALID_ID || tightB == CLAP_INVALID_ID) { fail("no Role / Tight parameter"); k.close(); b.close(); return false; }
+    auto readouts = [&](Loaded& x) { const auto a = updateArrays(x.m->send(x.p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
+    EventList none, asKick, asBass;
+    asKick.set(roleK, 0.0);                                 // (a stepped parameter's host value is the step: Kick 0, Bass 1, Both 2)
+    asBass.set(roleB, 1.0); asBass.set(tightB, 1.0);
+    k.run.toneHz = 55.0; k.run.toneDb = -90.0;
+    // the Kick is still a Both (the default) and plays: the Bass has no Kick to follow
+    b.run.process(1, 1, asBass);
+    double minGain = 0; bool found = false;
+    for (int i = 0; i < 240; ++i) { k.run.toneDb = (i % 60) < 20 ? -6.0 : -90.0; k.run.process(1, 100u + static_cast<uint64_t>(i), none); b.run.process(1, 300u + static_cast<uint64_t>(i), none); const auto r = readouts(b); if (r.size() >= 2) { minGain = std::min(minGain, r[0]); found = found || r[1] > 0.5; } }
+    if (found || minGain < -0.5) fail("a Bass must not follow an instance whose Role is Both (found " + std::to_string(found) + ", lowest gain " + std::to_string(minGain) + " dB)");
+    // the Kick says what it is: the Bass ducks with every burst
+    k.run.process(1, 2, asKick); minGain = 0; found = false;
+    for (int i = 0; i < 240; ++i) { k.run.toneDb = (i % 60) < 20 ? -6.0 : -90.0; k.run.process(1, 500u + static_cast<uint64_t>(i), none); b.run.process(1, 700u + static_cast<uint64_t>(i), none); const auto r = readouts(b); if (r.size() >= 2) { minGain = std::min(minGain, r[0]); found = found || r[1] > 0.5; } }
+    const double duckedTo = minGain;
+    if (!found) fail("the Bass did not find the Kick of the other LO03");
+    if (minGain > -3.0) fail("the Bass should duck its Focus bell by about 6 dB at the Kick's bursts (lowest gain " + std::to_string(minGain) + " dB)");
+    // the Kick stops (not processed any more): the key is gone and the bell comes back
+    for (int i = 0; i < 200; ++i) b.run.process(1, 900u + static_cast<uint64_t>(i), none);
+    { const auto r = readouts(b); if (r.size() < 2 || r[1] != 0.0 || r[0] < -0.5) fail("with the Kick not playing the key should be gone and the bell released (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB, found " + std::to_string(r.size() > 1 ? r[1] : -1) + ")"); }
+    k.close(); b.close();
+    if (ok) std::printf("ok    SW Link LO03 key: a Bass ducks at the bursts of another LO03 whose Role is Kick (lowest Focus gain %.1f dB), not for a Both, and lets go when the Kick stops\n", duckedTo);
+    return ok;
+}
+
 // SW Link shared setting: two MT05 instances in one process (the same binary opened twice, as a host with two tracks does): a change of the 0 VU reference made on one reaches the other's parameter, a late
 // instance takes the value that is already there, and a change on the second goes back to the first (the last change wins).
 bool linkSharedChecks(const std::vector<fs::path>& files) {
@@ -1475,7 +1512,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (linkOnly) {   // --link: only the SW Link checks
-        bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkSharedChecks(files) && ok;
+        bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkLowKeyChecks(files) && ok; ok = linkSharedChecks(files) && ok;
         return ok ? 0 : 1;
     }
     if (reactivateOnly) {   // --reactivate: only the activate-again check
@@ -1550,6 +1587,7 @@ int main(int argc, char** argv) {
     if (!linkChecks(files)) ++fails;
     if (!linkReferenceChecks(files)) ++fails;
     if (!linkKeyChecks(files)) ++fails;
+    if (!linkLowKeyChecks(files)) ++fails;
     if (!linkSharedChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
