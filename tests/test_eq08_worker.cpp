@@ -3,6 +3,7 @@
 #include "alloc_guard.hpp"
 #include "eq08/eq08.hpp"
 #include "tu.hpp"
+#include <cstring>
 #include <thread>
 using namespace tu;
 using namespace sw::eq08;
@@ -78,4 +79,20 @@ TEST_CASE("EQ08 worker: a state load (snapToTargets) wins over a design on its w
     b.prepare(96000.0, 256); b.snapToTargets(); CHECK(b.workerRunning());
     for (int k = 0; k < 6; ++k) { setBands(b, k % 2 ? 5.0 : -5.0, 1000.0 + 100.0 * k); float* d[2] = {tmp.data(), t2.data()}; b.process(d, 2, 256); }
     // (destroyed with a design possibly running: the destructor joins the thread)
+}
+
+TEST_CASE("EQ08 worker: offline - the audio thread waits for the design, so the output is the same in every run however the thread is scheduled") {
+    // a bounce runs faster than real time: without the wait the kernel arrives "when the thread is ready" and the sample where it takes over differs from run to run
+    const auto x = noise(-20.0, 3.0, 9);
+    std::vector<float> first;
+    for (int run = 0; run < 12; ++run) {
+        Processor p; p.useWorker(true); p.setOffline(true); p.prepare(kFs, 256); p.snapToTargets();
+        REQUIRE(p.workerRunning());
+        std::vector<float> y = x, r = x;
+        for (size_t off = 0, k = 0; off + 256 <= x.size(); off += 256, ++k) {
+            if (k % 6 == 0) { p.setParam(band(1, On), 1); p.setParam(band(1, Gain), (k % 12 ? 7.0 : -5.0)); p.setParam(band(1, Freq), 400.0 + 37.0 * static_cast<double>(k)); }
+            float* c[2] = {y.data() + off, r.data() + off}; p.process(c, 2, 256);
+        }
+        if (run == 0) first = y; else CHECK(std::memcmp(first.data(), y.data(), y.size() * sizeof(float)) == 0);
+    }
 }

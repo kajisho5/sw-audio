@@ -4,6 +4,7 @@
 #include "alloc_guard.hpp"
 #include "eq02/eq02.hpp"
 #include "tu.hpp"
+#include <cstring>
 #include <thread>
 using namespace tu;
 using namespace sw::eq02;
@@ -99,5 +100,21 @@ TEST_CASE("EQ02 reset(): the host stopped - the audio is forgotten in every phas
         const auto a = through(p, l, r, [] {}), b = through(fresh, l, r, [] {});
         double diff = 0; for (size_t i = a.first.size() / 2; i < a.first.size(); ++i) diff = std::max(diff, static_cast<double>(std::abs(a.first[i] - b.first[i])));
         CHECK(diff < 1e-4);
+    }
+}
+
+TEST_CASE("EQ02 worker: offline - the audio thread waits for the design, so the output is the same in every run however the thread is scheduled") {
+    const auto l = noise(-20.0, 3.0, 5), r = noise(-20.0, 3.0, 6);
+    std::vector<float> first;
+    for (int run = 0; run < 12; ++run) {
+        Processor p; p.useWorker(true); p.setOffline(true); p.setParam(PhaseMode, Linear); p.setParam(Ms, 1); p.prepare(kFs, 256); p.snapToTargets();
+        REQUIRE(p.workerRunning());
+        std::vector<float> a = l, b = r;
+        for (size_t off = 0, k = 0; off + 256 <= l.size(); off += 256, ++k) {
+            if (k % 6 == 0) setBands(p, (k % 12 ? 7.0 : -5.0), 400.0 + 37.0 * static_cast<double>(k));
+            float* c[2] = {a.data() + off, b.data() + off}; p.process(c, 2, 256);
+        }
+        std::vector<float> y = a; y.insert(y.end(), b.begin(), b.end());
+        if (run == 0) first = y; else CHECK(std::memcmp(first.data(), y.data(), y.size() * sizeof(float)) == 0);
     }
 }

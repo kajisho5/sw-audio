@@ -192,6 +192,7 @@ void Processor::process(float** ch, int numCh, int n) {
         if (dirty_ && st_.load() == 0 && sinceKernel_ >= fadeLen_ && !conv_.fading()) {   // ask for the next one: a copy of the parameters, then the thread is woken
             wd_.t = target_; wd_.fs = fs_; wd_.mode = mode_;
             dirty_ = false; st_.store(1); job_.kick();
+            if (offline_.load()) job_.waitIdle();   // a bounce: the design is done before the next block, whatever the thread's schedule (the kernel takes over at the same sample in every run)
         }
     } else if (dirty_ && sinceKernel_ >= fadeLen_ && !conv_.fading()) rebuildKernel(false);
     if (!ms) { conv_.process(ch, nch, n); return; }

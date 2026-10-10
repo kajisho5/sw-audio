@@ -15,6 +15,7 @@
 #include "sw_message.h"
 
 #include <clap/clap.h>
+#include <clap/ext/render.h>
 #include <clap/ext/note-ports.h>
 #include <clap/ext/tail.h>
 #include <clap/ext/track-info.h>
@@ -991,7 +992,7 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
 // Mono: a host that sends one channel (a mono track on a host that does not follow the stereo ports the plug-in declares, or a bus the host narrowed) must not crash a core that reaches for the second channel.
 // Every parameter at a random value (three seeds), 0.4 s of noise with one channel in and out (and a one-channel sidechain where there is a sidechain): finite output, no error from process(), peak under 1e4.
 bool monoChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
-    bool ok = true; int tested = 0, sounding = 0;
+    bool ok = true; int tested = 0, sounding = 0; std::string silent;
     for (const auto& f : files) {
         const std::string name = f.stem().string();
         for (int seed = 1; seed <= 3; ++seed) {
@@ -1011,12 +1012,57 @@ bool monoChecks(const std::vector<fs::path>& files, std::vector<std::string>& pr
             a.run.process(70, 600 + static_cast<uint64_t>(seed), ev);
             if (a.run.bad) { problems.push_back("FAIL  mono of " + name + " (settings " + std::to_string(seed) + "): NaN / Inf in the output or an error from process()"); ok = false; }
             else if (a.run.peak > 1e4) { char b[200]; std::snprintf(b, sizeof b, "FAIL  mono of %s (settings %d): peak %.3g", name.c_str(), seed, a.run.peak); problems.push_back(b); ok = false; }
-            if (seed == 1 && a.run.peak > 1e-3) ++sounding;   // the one channel really went through (not a silent run that proves nothing)
+            if (seed == 1) { if (a.run.peak > 1e-3) ++sounding; else silent += " [" + name + "]"; }   // the one channel really went through (not a silent run that proves nothing)
             a.close();
         }
         ++tested;
     }
-    if (ok) std::printf("ok    mono: %d plug-ins x 3 random settings with one channel in and out (and in the sidechain): finite output, no process() error, peak under 1e4 (%d of them gave sound with the first settings)\n", tested, sounding);
+    if (ok) std::printf("ok    mono: %d plug-ins x 3 random settings with one channel in and out (and in the sidechain): finite output, no process() error, peak under 1e4 (%d of them gave sound with the first settings; silent:%s)\n", tested, sounding, silent.empty() ? " none" : silent.c_str());
+    return ok;
+}
+
+// Offline: a bounce runs faster than real time, and the same project must give the same file every time. Two fresh instances get the same blocks and the same parameter changes (random values on every
+// parameter, at the start and every 10 blocks, so the kernels of EQ08 / EQ02 Linear are designed again and again), with the host's render mode set to offline where the plug-in has the render extension
+// (a VST3 host's kOffline arrives the same way); the two outputs have to be identical to the bit. A kernel designed on another thread that arrives "when it is ready" differs from run to run.
+bool offlineChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0, withRender = 0;
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (int seed = 1; seed <= 3; ++seed) {
+            std::vector<float> out[2]; std::vector<uint8_t> first;   // the project state of the first instance: the second one is a reload of it (SA02's per-instance seed is part of the state)
+            for (int pass = 0; pass < 2; ++pass) {
+                Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  offline of " + name + ": " + why); ok = false; break; }
+                if (const auto* sb = static_cast<const clap_plugin_state_t*>(a.p->get_extension(a.p, CLAP_EXT_STATE))) {
+                    if (pass == 0) { MemOut mo; if (sb->save(a.p, &mo.s)) first = mo.d; }
+                    else if (!first.empty()) { MemIn mi(first); sb->load(a.p, &mi.s); }
+                }
+                const auto* rn = static_cast<const clap_plugin_render_t*>(a.p->get_extension(a.p, CLAP_EXT_RENDER));
+                if (rn) { if (pass == 0 && seed == 1) ++withRender; rn->set(a.p, CLAP_RENDER_OFFLINE); }
+                const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+                const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+                a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+                if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+                Rng rng(0xC2B2AE3D27D4EB4Full * static_cast<uint64_t>(seed) + 11);
+                for (int step = 0; step < 6; ++step) {
+                    EventList ev;
+                    for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
+                        clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
+                        double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                        ev.set(pi.id, v);
+                    }
+                    a.run.process(10, 700 + static_cast<uint64_t>(seed) * 10 + static_cast<uint64_t>(step), ev);
+                }
+                for (int c = 0; c < 2; ++c) out[pass].insert(out[pass].end(), a.run.outAll[c].begin(), a.run.outAll[c].end());
+                a.close();
+            }
+            if (out[0].size() != out[1].size() || std::memcmp(out[0].data(), out[1].data(), out[0].size() * sizeof(float)) != 0) {
+                size_t first = 0; while (first < out[0].size() && out[0][first] == out[1][first]) ++first;
+                char b[220]; std::snprintf(b, sizeof b, "FAIL  offline of %s (settings %d): two identical runs differ (first at sample %zu)", name.c_str(), seed, first % std::max<size_t>(1, out[0].size() / 2)); problems.push_back(b); ok = false;
+            }
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    offline: %d plug-ins x 3 random settings changed every 10 blocks, twice each, render mode offline (%d plug-ins have the render extension): the two outputs are identical to the bit\n", tested, withRender);
     return ok;
 }
 
@@ -1344,7 +1390,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1356,6 +1402,7 @@ int main(int argc, char** argv) {
         if (opt == "--reset") { resetOnly = true; continue; }
         if (opt == "--transport") { transportOnly = true; continue; }
         if (opt == "--mono") { monoOnly = true; continue; }
+        if (opt == "--offline") { offlineOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
@@ -1380,6 +1427,11 @@ int main(int argc, char** argv) {
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
         return 0;
+    }
+    if (offlineOnly) {   // --offline: only the two-runs-identical check
+        std::vector<std::string> problems; const bool ok = offlineChecks(files, problems);
+        for (const auto& l : problems) std::printf("%s\n", l.c_str());
+        return ok ? 0 : 1;
     }
     if (monoOnly) {   // --mono: only the one-channel check
         std::vector<std::string> problems; const bool ok = monoChecks(files, problems);
@@ -1448,6 +1500,7 @@ int main(int argc, char** argv) {
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!transportChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!monoChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    { std::vector<std::string> problems; if (!offlineChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }

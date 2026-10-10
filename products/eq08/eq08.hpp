@@ -36,6 +36,8 @@ public:
     // thread and takes the finished kernel at a later block, when the crossfade of the last one is over. Without it (the default: tests, offline) the design runs in process() as before.
     // Call before prepare(); the thread lives from prepare() to the next prepare() or the end (no thread in Minimum mode, which has no kernel).
     void useWorker(bool on) { wantWorker_ = on; }
+    // a bounce runs faster than real time: offline, process() waits for the design it asked for (so the kernel takes over at the same sample in every run); realtime, it does not wait (the default)
+    void setOffline(bool on) { offline_ = on; }
     bool workerRunning() const { return job_.running(); }   // (a copy of a Processor has no thread: it designs in process() until its own prepare())
     void waitKernel() { job_.waitIdle(); }                   // not the audio thread: returns when no design is on its way (the next process() takes a finished one)
     int kernelsApplied() const { return applied_.load(); }   // kernels handed to the convolver since prepare()
@@ -75,6 +77,7 @@ private:
     bool wantWorker_ = false;
     CopyAtomic<int> st_{0};                      // the worker's hand-over: 0 nothing on its way, 1 asked (wd_.t is the request), 2 done (wd_.result is the kernel)
     CopyAtomic<int> applied_{0};
+    CopyAtomic<bool> offline_{false};            // (set from the main thread, read by the audio thread)
     std::thread::id lastThread_;
     BackgroundWork job_;                         // (last: the thread is joined before the rest goes)
 };

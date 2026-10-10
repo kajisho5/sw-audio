@@ -25,6 +25,7 @@
 #include "sw/text.hpp"
 #include <clap/clap.h>
 #include <clap/ext/note-ports.h>
+#include <clap/ext/render.h>
 #include <clap/ext/tail.h>
 #include <clap/ext/track-info.h>
 #include <algorithm>
@@ -69,6 +70,10 @@ template <class C> struct HasTail<C, std::void_t<decltype(std::declval<const C&>
 template <class C, class = void> struct HasReset : std::false_type {};
 template <class C> struct HasReset<C, std::void_t<decltype(std::declval<C&>().reset())>> : std::true_type {};
 // a core that has work for a background thread (EQ08 / EQ02 Linear: the kernel design, sw/worker.hpp) gets it switched on here, before prepare(); without it (tests, offline) the core does the work itself in process()
+// Optional on Core: void setOffline(bool) — the host's render mode (CLAP render extension; a VST3 host's offline process mode arrives the same way through clap-wrapper). Only a core whose output would depend on
+// the speed of the bounce (a kernel designed on another thread) has it: offline, it waits for the thread, so the file is the same every time.
+template <class C, class = void> struct HasSetOffline : std::false_type {};
+template <class C> struct HasSetOffline<C, std::void_t<decltype(std::declval<C&>().setOffline(true))>> : std::true_type {};
 template <class C, class = void> struct HasUseWorker : std::false_type {};
 template <class C> struct HasUseWorker<C, std::void_t<decltype(std::declval<C&>().useWorker(true))>> : std::true_type {};
 // SW Link reference spectrum (plugin/clap/swlink.hpp). The producer (UT03) has static unsigned linkSerial(const Core&) (0: none, otherwise it changes with every new reference) and
@@ -518,6 +523,7 @@ private:
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
         if constexpr (HasTail<typename P::Core>::value) { static const clap_plugin_tail_t tailExt = {tailGet}; if (!std::strcmp(id, CLAP_EXT_TAIL)) return &tailExt; }
+        if constexpr (HasSetOffline<typename P::Core>::value) { static const clap_plugin_render_t renderExt = {renderRealtimeOnly, renderSet}; if (!std::strcmp(id, CLAP_EXT_RENDER)) return &renderExt; }
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
@@ -704,6 +710,11 @@ private:
         }
     }
     static uint32_t tailGet(const clap_plugin_t* p) { return self(p)->tail_.load(); }
+    static bool renderRealtimeOnly(const clap_plugin_t*) { return false; }
+    static bool renderSet(const clap_plugin_t* p, clap_plugin_render_mode mode) {
+        if constexpr (HasSetOffline<typename P::Core>::value) { self(p)->shell_.core().setOffline(mode == CLAP_RENDER_OFFLINE); return mode == CLAP_RENDER_OFFLINE || mode == CLAP_RENDER_REALTIME; }
+        else return false;
+    }
     static uint32_t latencyGet(const clap_plugin_t* p) { return static_cast<uint32_t>(self(p)->shell_.latencySamples()); }
 
     clap_plugin_t plugin_{};

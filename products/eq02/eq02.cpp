@@ -211,6 +211,7 @@ void Processor::process(float** ch, int numCh, int n) {
             if (kernelDirty_ && st_.load() == 0 && sinceKernel_ >= fadeLen_ && !(conv_[0].fading() || conv_[1].fading())) {   // ask for the next ones: a copy of the parameters, then the thread is woken
                 wd_.t = target_; wd_.fs = fs_;
                 kernelDirty_ = false; st_.store(1); job_.kick();
+                if (offline_.load()) job_.waitIdle();   // a bounce: the design is done before the next block, whatever the thread's schedule (the kernels take over at the same sample in every run)
             }
         } else if (kernelDirty_ && sinceKernel_ >= fadeLen_ && !fading) { buildLinear(false); kernelDirty_ = false; }
     } else if (kernelDirty_ && mode_ == Natural) { buildNatural(); kernelDirty_ = false; }
