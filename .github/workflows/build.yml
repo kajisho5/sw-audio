@@ -159,3 +159,14 @@ jobs:
         with:
           name: sw-audio-${{ runner.os }}-${{ matrix.shard }}
           path: dist
+
+  # Data races (ThreadSanitizer, Linux): the audio thread, the window's thread and the host's main thread (project state saved and loaded, parameter text, render mode) on the products that share data across
+  # threads - the worker (EQ02, EQ08), SW Link (EQ05, LV01, LV05, LO03, MT05, UT03), the extra state block (LV02, LV27, LV30, RV04, SA02, UT01), the learning buttons (DY04, CS02, RV08).
+  # All 132 products take about an hour with the build; run it by hand: tools/stress_tsan.sh 3
+  race:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stress with ThreadSanitizer
+        run: tools/stress_tsan.sh 4 eq02 eq05 eq08 dy04 cs02 rv04 rv08 sa02 ut01 ut03 lv01 lv02 lv05 lv27 lv30 lo03 mt05
