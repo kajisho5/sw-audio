@@ -347,7 +347,7 @@ const std::vector<std::string>& presetNames() {
 
 void applyInit(Processor& p) {
     const auto& s = specs();
-    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, s[static_cast<size_t>(i)].def);
+    for (int i = 0; i < kNumParams; ++i) if (presetPart(i)) p.setParam(i, s[static_cast<size_t>(i)].def);
 }
 const std::vector<std::string>& presetErrors() { return built().errors; }
 
@@ -379,7 +379,7 @@ void applyPreset(Processor& p, int index, const PresetLevels& lv) {
     if (index < 0 || index >= static_cast<int>(factoryPresets().size())) return;
     std::vector<double> plain;
     presetValues(index, lv, plain);
-    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
+    for (int i = 0; i < kNumParams; ++i) if (presetPart(i)) p.setParam(i, plain[static_cast<size_t>(i)]);
 }
 
 // every factory preset as plain values, built once (the plug-in builds it on the main thread when it activates): loading a preset on
@@ -398,7 +398,7 @@ const std::vector<double>& presetPlain(int index) {
 void applyPreset(Processor& p, int index) {
     const auto& plain = presetPlain(index);
     if (plain.size() != static_cast<size_t>(kNumParams)) return;
-    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
+    for (int i = 0; i < kNumParams; ++i) if (presetPart(i)) p.setParam(i, plain[static_cast<size_t>(i)]);
 }
 
 // ---- user presets
@@ -410,7 +410,9 @@ std::string userPresetText(const std::vector<double>& plain, const presetfile::M
     presetfile::Meta m = meta;
     m.category = presetfile::cleanText(m.category, presetfile::kMaxTextChars);
     if (!isPresetCategory(m.category)) m.category.clear();
-    return presetfile::write(kPresetProduct, m, specs(), plain, PresetSelect);
+    static_assert(MorphD == kNumParams - 1, "the morph's parameters are the last ones: a preset file stops before them");
+    const std::vector<double> part(plain.begin(), plain.begin() + std::min<size_t>(plain.size(), static_cast<size_t>(MorphOn)));
+    return presetfile::write(kPresetProduct, m, specs(), part, PresetSelect);
 }
 std::string userPresetText(const Processor& p, const presetfile::Meta& meta) {
     std::vector<double> plain(static_cast<size_t>(kNumParams));
@@ -429,7 +431,7 @@ bool userPresetValues(std::string_view text, std::vector<double>& plain, presetf
 bool loadUserPreset(Processor& p, std::string_view text, presetfile::Meta& meta, std::string& error) {
     std::vector<double> plain;
     if (!userPresetValues(text, plain, meta, error)) return false;
-    for (int i = 0; i < kNumParams; ++i) if (i != PresetSelect) p.setParam(i, plain[static_cast<size_t>(i)]);
+    for (int i = 0; i < kNumParams; ++i) if (presetPart(i)) p.setParam(i, plain[static_cast<size_t>(i)]);
     return true;
 }
 

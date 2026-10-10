@@ -39,6 +39,9 @@ void applyInit(Processor& p);                     // every parameter but the sel
 // the audition phrase of a category: (start s, length s, key); velocity 0.8, tempo 120
 struct AuditionNote { double start, length; int key; };
 std::vector<AuditionNote> audition(const std::string& category, double& total);
+// what a preset (factory, Init, a user file) sets: everything but the selector and the morph (its planets and probe are the player's, kept
+// across preset changes; the morph's planet A is the preset loaded)
+inline bool presetPart(int id) { return id != PresetSelect && (id < MorphOn || id > MorphD); }
 // a factory preset's audition: its category's phrase, or, when it plays the arpeggiator or the trance gate, its notes held (2026-10-10)
 std::vector<AuditionNote> presetAudition(int index, double& total);
 struct PresetMeasure {

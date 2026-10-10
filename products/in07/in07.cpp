@@ -177,6 +177,18 @@ const std::vector<ParamSpec>& specs() {
         }
         v.push_back({"in07.roche.spread", "Roche spread",    0, 24, 7, Curve::Lin, 1, {}, "st"});
         v.push_back({"in07.roche.time",   "Roche time",      20, 2000, 300, Curve::Log, 1, {}, "ms"});
+        // the morph (2026-10-10; appended): planet A is the sound as it is, B..D a factory preset each
+        onOff("in07.morph.on", "Morph", false);
+        v.push_back({"in07.morph.x", "Morph X", 0, 100, 0, Curve::Lin, 1, {}, "%"});
+        v.push_back({"in07.morph.y", "Morph Y", 0, 100, 0, Curve::Lin, 1, {}, "%"});
+        {
+            std::vector<double> st; std::vector<std::string> sl = {"None"};
+            for (const auto& n : presetNames()) sl.push_back(n);
+            for (size_t i = 0; i < sl.size(); ++i) st.push_back(static_cast<double>(i));
+            v.push_back({"in07.morph.b", "Morph planet B", 0, static_cast<double>(sl.size() - 1), 0, Curve::Step, 1, st, "", sl});
+            v.push_back({"in07.morph.c", "Morph planet C", 0, static_cast<double>(sl.size() - 1), 0, Curve::Step, 1, st, "", sl});
+            v.push_back({"in07.morph.d", "Morph planet D", 0, static_cast<double>(sl.size() - 1), 0, Curve::Step, 1, st, "", sl});
+        }
         return v;
     }();
     return s;
@@ -836,6 +848,7 @@ bool Processor::Slot::sounding() const {
 
 Processor::Processor() : slots_(static_cast<size_t>(kSlots)) {
     for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def;
+    live_ = target_;
     for (int l = 0; l < kLayers; ++l) layerOn_[static_cast<size_t>(l)] = target_[static_cast<size_t>(lp(l, On))] > 0.5;
     held_.reserve(128);
 }
@@ -846,15 +859,17 @@ void Processor::prepare(double sampleRate, int maxBlock) {
     (void)minBlep();   // build the tables here, not on the audio thread
     (void)waveBank(); (void)sampleBank(); (void)sineTable(); (void)sincTable();
     fs_ = sampleRate;
+    (void)presetPlain(0);   // the factory presets' values (the morph's planets): built here, not on the audio thread
+    if (morphDirty_) { morphDirty_ = false; recomputeMorph(); }
     const size_t m = static_cast<size_t>(std::max(1, maxBlock));
     l_.assign(m, 0.0f); r_.assign(m, 0.0f);
     held_.clear(); monoSlot_ = -1; pedal_ = false; bend_ = 0.0; lastKey_ = -1.0; clock_ = 0;
     endHead_ = endTail_ = 0;
-    level_.reset(fs_, 20.0, dbToGain(target_[Level]));
+    level_.reset(fs_, 20.0, dbToGain(live_[Level]));
     shared_.bendSemis = 0.0; shared_.glideMs = p(Glide);
     mode_ = static_cast<int>(std::lround(p(Mode)));
     for (auto& s : slots_) {
-        for (int l = 0; l < kLayers; ++l) s.v[static_cast<size_t>(l)].prepare(fs_, &target_[static_cast<size_t>(lp(l, 0))], &shared_, l);
+        for (int l = 0; l < kLayers; ++l) s.v[static_cast<size_t>(l)].prepare(fs_, &live_[static_cast<size_t>(lp(l, 0))], &shared_, l);
         s.key = -1; s.held = s.sustained = s.stolen = false;
     }
     lfoPhase_ = {}; lfoValue_ = {}; lfoSeed_ = {{0x1234567u, 0x7654321u}}; gctl_ = 0; wheel_ = after_ = 0.0; flyFlip_ = 1.0;
@@ -965,7 +980,7 @@ void Processor::swapPatch() {
     const bool pedal = pedal_;
     applyStaged();      // (a change of Mode lets all notes go, the pedal too: it is still down)
     pedal_ = pedal;
-    level_.reset(fs_, 20.0, dbToGain(target_[Level]));
+    level_.reset(fs_, 20.0, dbToGain(live_[Level]));
     fx_.restart();
     fxIdle_ = 0;
     // play again: to the arp when it is on (from its next step); poly, every note (no glide between them); mono / legato, the last one,
@@ -1000,6 +1015,17 @@ void Processor::swapPatch() {
 
 void Processor::setNow(int id, double v) {
     target_[static_cast<size_t>(id)] = v;
+    if (id >= MorphOn && id <= MorphD) {   // the morph: again on the next control tick (at once before a prepare)
+        live_[static_cast<size_t>(id)] = v;
+        morphOn_ = p(MorphOn) > 0.5;
+        morphDirty_ = true;
+        return;
+    }
+    applyLive(id, morphOn_ && !morphDirty_ && morphable(id) ? morphed(id) : v);   // (dirty: the next tick sets every value again)
+}
+
+void Processor::applyLive(int id, double v) {
+    live_[static_cast<size_t>(id)] = v;
     if (id == PresetSelect) return;   // kept only: the plug-in layer loads presets
     if (id > PresetSelect) {         // the arp and the gate: their settings are read where they are used
         if (id == ArpOn) { const bool on = v > 0.5; if (on != arpOn_) { if (prepared_) arpSwitch(on); else arpOn_ = on; } }
@@ -1049,6 +1075,101 @@ void Processor::updateMod() {
     shared_.flyDelta = 0.05 + 0.6 * (1.0 - p(FlybyNear) / 100.0);
 }
 
+// ---- the morph
+// the planets' weights: Shepard (inverse square of the distance) over the planets that are set; on a planet, that planet alone
+void Processor::morphWeights() {
+    static const double kPos[4][2] = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};   // A top left, B top right, C bottom left, D bottom right
+    const auto& pre = factoryPresets();
+    morphSrc_[0] = target_.data();
+    for (int k = 1; k < 4; ++k) {
+        const int sel = static_cast<int>(std::lround(p(MorphB + k - 1))) - 1;
+        morphSrc_[static_cast<size_t>(k)] = sel >= 0 && sel < static_cast<int>(pre.size()) ? presetPlain(sel).data() : nullptr;
+    }
+    const double x = std::clamp(p(MorphX), 0.0, 100.0) / 100.0, y = std::clamp(p(MorphY), 0.0, 100.0) / 100.0;
+    morphCaptured_ = -1;
+    double sum = 0.0;
+    for (int k = 0; k < 4; ++k) {
+        morphW_[static_cast<size_t>(k)] = 0.0;
+        if (!morphSrc_[static_cast<size_t>(k)]) continue;
+        const double dx = x - kPos[k][0], dy = y - kPos[k][1], d2 = dx * dx + dy * dy;
+        if (d2 < 1e-12) { morphCaptured_ = k; break; }
+        morphW_[static_cast<size_t>(k)] = 1.0 / d2; sum += 1.0 / d2;
+    }
+    if (morphCaptured_ >= 0) { morphW_ = {}; morphW_[static_cast<size_t>(morphCaptured_)] = 1.0; return; }
+    for (auto& w : morphW_) w /= sum;
+}
+
+// one value from the planets. Continuous: the weighted mean on the parameter's own scale (its normalized value: a cutoff in octaves).
+// A choice: the strongest planet's. A layer: on if a planet that pulls has it on; its level counts -60 dB for the planets without it; its
+// other values come from the planets that have it. An effect: on if any has it; its mix (or an EQ band) counts dry for the planets
+// without it; its other values from those with it. A mod slot: the strongest planet's route; the amount over the planets with that route.
+double Processor::morphed(int id) const {
+    if (morphCaptured_ >= 0) return morphSrc_[static_cast<size_t>(morphCaptured_)][id];
+    const auto& sp = specs()[static_cast<size_t>(id)];
+    const bool step = sp.curve == Curve::Step;
+    auto val = [&](int k, int i) { return morphSrc_[static_cast<size_t>(k)][i]; };
+    auto strongest = [&](const std::array<double, 4>& w) { int b = -1; for (int k = 0; k < 4; ++k) if (w[static_cast<size_t>(k)] > 0.0 && (b < 0 || w[static_cast<size_t>(k)] > w[static_cast<size_t>(b)])) b = k; return b; };
+    auto blend = [&](const std::array<double, 4>& w) {   // over the weights given (renormalised); a choice: the strongest
+        double sum = 0.0;
+        for (double x : w) sum += x;
+        if (sum <= 0.0) return target_[static_cast<size_t>(id)];
+        if (step) return val(strongest(w), id);
+        double n = 0.0;
+        for (int k = 0; k < 4; ++k) if (w[static_cast<size_t>(k)] > 0.0) n += w[static_cast<size_t>(k)] / sum * sp.toNorm(val(k, id));
+        return sp.toValue(n);
+    };
+    auto only = [&](auto has) { std::array<double, 4> w{}; for (int k = 0; k < 4; ++k) if (morphW_[static_cast<size_t>(k)] > 0.0 && has(k)) w[static_cast<size_t>(k)] = morphW_[static_cast<size_t>(k)]; return w; };
+    if (id >= kNumGlobal && id < kFxBase) {   // a layer
+        const int l = (id - kNumGlobal) / kLayerParams, f = (id - kNumGlobal) % kLayerParams;
+        auto on = [&](int k) { return val(k, lp(l, On)) > 0.5; };
+        const auto w = only(on);
+        bool any = false;
+        for (double x : w) any = any || x > 1e-3;
+        if (f == On) return any ? 1.0 : 0.0;
+        if (f == LayerLevel) { double v = 0.0; for (int k = 0; k < 4; ++k) if (morphW_[static_cast<size_t>(k)] > 0.0) v += morphW_[static_cast<size_t>(k)] * (on(k) ? val(k, id) : -60.0); return v; }
+        return blend(w);
+    }
+    if (id >= FxDriveOn && id < kFxEnd) {    // an effect
+        const int fx = (id - FxDriveOn) / 4, f = (id - FxDriveOn) % 4;
+        auto on = [&](int k) { return val(k, fxOnId(fx)) > 0.5; };
+        if (f == 0) { for (int k = 0; k < 4; ++k) if (morphW_[static_cast<size_t>(k)] > 1e-3 && on(k)) return 1.0; return 0.0; }
+        const bool wet = (fxOnId(fx) == FxEqOn) ? true : (f == 3 && fxOnId(fx) != FxLimitOn);   // a mix, or an EQ band: dry for the planets without it
+        if (wet) { double v = 0.0; for (int k = 0; k < 4; ++k) if (morphW_[static_cast<size_t>(k)] > 0.0) v += morphW_[static_cast<size_t>(k)] * (on(k) ? val(k, id) : 0.0); return v; }
+        return blend(only(on));
+    }
+    if (id >= kModSlotBase && id < PresetSelect) {   // a mod slot
+        const int sl = (id - kModSlotBase) / kModFields, f = (id - kModSlotBase) % kModFields;
+        const int b = strongest(morphW_);
+        if (f != ModAmount) return val(b, id);
+        auto same = [&](int k) { return val(k, modId(sl, ModSrc)) == val(b, modId(sl, ModSrc)) && val(k, modId(sl, ModDst)) == val(b, modId(sl, ModDst)) && val(k, modId(sl, ModOn)) > 0.5; };
+        double v = 0.0;
+        for (int k = 0; k < 4; ++k) if (morphW_[static_cast<size_t>(k)] > 0.0) v += morphW_[static_cast<size_t>(k)] * (same(k) ? val(k, id) : 0.0);
+        return v;
+    }
+    return blend(morphW_);
+}
+
+// every morphable value again, then what they move, once
+void Processor::recomputeMorph() {
+    morphOn_ = p(MorphOn) > 0.5;
+    if (morphOn_) morphWeights();
+    bool fx = false, mod = false;
+    for (int id = 0; id < PresetSelect; ++id) {
+        if (!morphable(id)) continue;
+        const double v = morphOn_ ? morphed(id) : target_[static_cast<size_t>(id)];
+        if (v == live_[static_cast<size_t>(id)]) continue;
+        if (id >= kFxBase && id < kFxEnd) { live_[static_cast<size_t>(id)] = v; fx = true; continue; }
+        if (id >= kFxEnd) { live_[static_cast<size_t>(id)] = v; mod = true; fx = fx || id == Macro7 || id == Macro8; continue; }
+        applyLive(id, v);   // the globals and the layers: their own (cheap) effects
+    }
+    if (mod) updateMod();
+    if (fx) {
+        updateFx();
+        if (fresh_) fx_.snapSwitches();
+        else if (!active() && fxIdle_ > 0) fx_.snapOrder();
+    }
+}
+
 void Processor::updatePlanets() {
     shared_.satDepth = std::clamp(p(SatDepth), 0.0, 100.0) / 100.0;
     shared_.rocheLimit = std::clamp(p(RocheLimit), 0.0, 100.0) / 100.0;
@@ -1058,6 +1179,7 @@ void Processor::updatePlanets() {
 
 // every 32 samples on the synth's own grid (the same whatever the host's block size): the LFOs and the global sources
 void Processor::tick() {
+    if (morphDirty_) { morphDirty_ = false; recomputeMorph(); }
     static const double kSyncBeats[11] = {0.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25, 2.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0};
     shared_.src[SrcModWheel] = wheel_; shared_.src[SrcAftertouch] = after_;
     // the LFO rates may be modulated by the global sources (an LFO by the other, the wheel, the macros); per-voice sources count 0 here

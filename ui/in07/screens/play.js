@@ -216,8 +216,85 @@
     window.addEventListener('blur', stop);
     ribbon.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); play(60); setTimeout(stop, 400); } });
     const arp = ui.onButton('in07.arp.on', { on: 'ARP ON', off: 'ARP OFF', style: { width: '112px' } });
+    const morphBtn = ui.onButton('in07.morph.on', { on: 'MORPH ON', off: 'MORPH', style: { width: '112px' } });
+    morphBtn.title = 'Swing by between presets: drag the probe among four planets (A: this sound; B, C, D: factory presets)';
     root.appendChild(el('div', { style: { position: 'absolute', left: '24px', right: '24px', bottom: '14px', height: '44px', display: 'flex', alignItems: 'center', gap: '14px' } },
-      el('span', { style: { width: '70px', fontSize: '10px', letterSpacing: '.3em', color: 'var(--sub)' }, text: 'RIBBON' }), ribbon, arp));
+      el('span', { style: { width: '70px', fontSize: '10px', letterSpacing: '.3em', color: 'var(--sub)' }, text: 'RIBBON' }), ribbon, morphBtn, arp));
+
+    // ---- the morph: four planets at the corners of a square over the orbit view (A: the sound as it is; B, C, D: a factory preset each),
+    // a probe that each planet pulls with the inverse square of its distance (the plug-in's own weights, products/in07 morphWeights)
+    const F = { left: 440, top: 186, size: 400 };
+    const field = el('div', { role: 'group', 'aria-label': 'Morph: drag the probe among the planets', style: { position: 'absolute', left: F.left + 'px', top: F.top + 'px', width: F.size + 'px', height: F.size + 'px', border: '1px dashed var(--line2)', borderRadius: '6px', cursor: 'crosshair', touchAction: 'none', display: 'none' } });
+    const NS = 'http://www.w3.org/2000/svg';
+    const lines = document.createElementNS(NS, 'svg');
+    lines.setAttribute('width', F.size); lines.setAttribute('height', F.size); lines.setAttribute('aria-hidden', 'true');
+    lines.style.cssText = 'position:absolute;left:0;top:0;overflow:visible;pointer-events:none';
+    field.appendChild(lines);
+    const CORNER = [[0, 0], [1, 0], [0, 1], [1, 1]], IDS = [null, 'in07.morph.b', 'in07.morph.c', 'in07.morph.d'];
+    const planets = CORNER.map(([cx, cy], k) => {
+      const dot = el('span', { 'aria-hidden': 'true', style: { position: 'absolute', left: (cx * F.size - 9) + 'px', top: (cy * F.size - 9) + 'px', width: '18px', height: '18px', borderRadius: '50%', border: '1px solid var(--line2)', background: 'radial-gradient(circle at 35% 30%, var(--strong), var(--acc) 45%, rgba(0,0,0,0) 72%)' } });
+      const pct = el('span', { class: 'mono', 'aria-hidden': 'true', style: { position: 'absolute', left: (cx ? F.size - 64 : 14) + 'px', top: (cy ? F.size - 30 : 14) + 'px', width: '50px', textAlign: cx ? 'right' : 'left', fontSize: '10px', color: 'var(--sub)' } });
+      field.appendChild(dot); field.appendChild(pct);
+      return { dot, pct };
+    });
+    const nameA = el('span', { style: { fontSize: '13px', letterSpacing: '.08em', color: 'var(--strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' } });
+    const tagOf = t => el('span', { class: 'mono', style: { fontSize: '10px', color: 'var(--acc)', marginRight: '6px' }, text: t });
+    const slotBox = (k, style) => el('div', { style: Object.assign({ position: 'absolute', display: 'flex', alignItems: 'center', width: '200px' }, style) }, tagOf(['A', 'B', 'C', 'D'][k]),
+      k === 0 ? nameA : el('div', { style: { flex: '1' } }, ui.dropdown(IDS[k], { label: 'Morph planet ' + ['A', 'B', 'C', 'D'][k] })));
+    const labels = el('div', { style: { position: 'absolute', left: (F.left - 30) + 'px', top: (F.top - 46) + 'px', width: (F.size + 60) + 'px', height: (F.size + 92) + 'px', pointerEvents: 'none', display: 'none' } },
+      slotBox(0, { left: '0', top: '6px' }), slotBox(1, { right: '0', top: '0', pointerEvents: 'auto' }),
+      slotBox(2, { left: '0', bottom: '0', pointerEvents: 'auto' }), slotBox(3, { right: '0', bottom: '0', pointerEvents: 'auto' }));
+    const probe = el('span', { 'aria-hidden': 'true', style: { position: 'absolute', width: '16px', height: '16px', marginLeft: '-8px', marginTop: '-8px', borderRadius: '50%', background: 'var(--cat)', boxShadow: '0 0 14px var(--cat)', pointerEvents: 'none' } });
+    field.appendChild(probe);
+    root.appendChild(labels); root.appendChild(field);
+    const weights = (x, y) => {   // as the plug-in: Shepard over the planets set; on a planet, that one alone
+      const set = [true, P.stepIndex('in07.morph.b') > 0, P.stepIndex('in07.morph.c') > 0, P.stepIndex('in07.morph.d') > 0];
+      const w = [0, 0, 0, 0]; let sum = 0;
+      for (let k = 0; k < 4; k++) {
+        if (!set[k]) continue;
+        const d2 = (x - CORNER[k][0]) ** 2 + (y - CORNER[k][1]) ** 2;
+        if (d2 < 1e-12) { return w.map((_, j) => (j === k ? 1 : 0)); }
+        w[k] = 1 / d2; sum += w[k];
+      }
+      return w.map(v => v / sum);
+    };
+    const showMorph = () => {
+      const on = P.get('in07.morph.on') > 0.5;
+      field.style.display = on ? 'block' : 'none'; labels.style.display = on ? 'block' : 'none';
+      if (!on) return;
+      nameA.textContent = String(SW.current.name || 'Init').toUpperCase();
+      const x = P.get('in07.morph.x') / 100, y = P.get('in07.morph.y') / 100, w = weights(x, y);
+      probe.style.left = (x * F.size) + 'px'; probe.style.top = (y * F.size) + 'px';
+      lines.innerHTML = '';
+      CORNER.forEach(([cx, cy], k) => {
+        const setK = k === 0 || P.stepIndex(IDS[k]) > 0;
+        planets[k].dot.style.opacity = setK ? '1' : '.25';
+        planets[k].pct.textContent = setK ? Math.round(w[k] * 100) + ' %' : '';
+        if (!setK || w[k] <= 0) return;
+        const ln = document.createElementNS(NS, 'line');
+        ln.setAttribute('x1', x * F.size); ln.setAttribute('y1', y * F.size); ln.setAttribute('x2', cx * F.size); ln.setAttribute('y2', cy * F.size);
+        ln.setAttribute('stroke', 'var(--acc)'); ln.setAttribute('stroke-width', (0.8 + 5 * w[k]).toFixed(2)); ln.setAttribute('stroke-opacity', (0.2 + 0.7 * w[k]).toFixed(2));
+        ln.setAttribute('stroke-dasharray', '4 5'); ln.setAttribute('stroke-linecap', 'round');
+        lines.appendChild(ln);
+      });
+    };
+    const setFrom = e => {
+      const r = field.getBoundingClientRect();
+      P.set('in07.morph.x', Math.round(SW.clamp((e.clientX - r.left) / r.width, 0, 1) * 1000) / 10);
+      P.set('in07.morph.y', Math.round(SW.clamp((e.clientY - r.top) / r.height, 0, 1) * 1000) / 10);
+    };
+    let dragging = false;
+    field.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault(); field.setPointerCapture(e.pointerId); dragging = true;
+      P.begin('in07.morph.x'); P.begin('in07.morph.y'); setFrom(e);
+    });
+    field.addEventListener('pointermove', e => { if (dragging) setFrom(e); });
+    const release = () => { if (!dragging) return; dragging = false; P.end('in07.morph.x'); P.end('in07.morph.y'); };
+    field.addEventListener('pointerup', release); field.addEventListener('pointercancel', release); field.addEventListener('lostpointercapture', release);
+    field.addEventListener('dblclick', () => { P.tap('in07.morph.x', 0); P.tap('in07.morph.y', 0); });   // back to A
+    ui.watch(['in07.morph.on', 'in07.morph.x', 'in07.morph.y', 'in07.morph.b', 'in07.morph.c', 'in07.morph.d'], showMorph);
+    SW.on('preset', showMorph);
   };
   SW.screens.push({ id: 'play', label: 'PLAY', build, show: on => { if (orbit) { orbit.show(on); if (on) orbit.set(SW.orbitProps()); } } });
 })();

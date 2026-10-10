@@ -79,7 +79,9 @@ enum GateParamId { GateOn = kArpVelBase + 2 * kArpSteps, GateRate, GateDepth, kG
 constexpr int gateStep(int i) { return kGateStepBase + i; }               // Off / On
 // the planets (appended after the gate steps, 2026-10-10): planetary alignment (the arp), the eclipse gate, satellite unison, the Roche limit
 enum PlanetParamId { ArpAlign = kGateStepBase + kArpSteps, GateShape, SatRate, SatDepth, RocheLimit, RocheSpread, RocheTime, kPlanetEnd };
-constexpr int kNumParams = kPlanetEnd;
+// the morph (appended after the planets, 2026-10-10): on, the probe (x, y 0..100 %), the planets B, C, D (None or a factory preset)
+enum MorphParamId { MorphOn = kPlanetEnd, MorphX, MorphY, MorphB, MorphC, MorphD, kMorphEnd };
+constexpr int kNumParams = kMorphEnd;
 enum ArpAlignId { AlignOff = 0, Align234, Align345, Align357 };
 enum GateShapeId { GateHard = 0, GateEclipse };
 enum ArpModeId { ArpUp = 0, ArpDown, ArpUpDown, ArpOrder, ArpRandom };
@@ -243,6 +245,7 @@ public:
     Processor();
     void prepare(double sampleRate, int maxBlock);
     void setParam(int id, double plainValue);
+    double live(int id) const { return id >= 0 && id < kNumParams ? live_[static_cast<size_t>(id)] : 0.0; }   // the value the sound uses (the morph's)
     double param(int id) const {   // the value last set (one waiting for a patch change included)
         if (id < 0 || id >= kNumParams) return 0.0;
         return stagedSet_[static_cast<size_t>(id)] ? staged_[static_cast<size_t>(id)] : target_[static_cast<size_t>(id)];
@@ -322,19 +325,30 @@ private:
     void resyncSteps();                                 // the next step from the beat where the clock is now
     bool anyKeyHeld() const;
     double beatsPerSample() const { return bpm_ / 60.0 / fs_; }
-    double p(int id) const { return target_[static_cast<size_t>(id)]; }
+    double p(int id) const { return live_[static_cast<size_t>(id)]; }   // the sound's value (the morph's when it is on)
     void setNow(int id, double v);                      // a (normalised) value goes in
     void applyStaged();                                 // the values a patch change held back go in
     void swapPatch();                                   // the end of the fade: the new patch, the held notes again
     void updateFx();                                    // the effects' parameters and order from the table
     void updateMod();                                   // the matrix, the macros and the flyby settings into Shared
     void tick();                                        // the global sources, every 32 samples
+    void applyLive(int id, double v);                   // a value the sound uses, and what it moves
+    // the morph: the planets' values (A = target_, B..D a factory preset or none), their weights from the probe, the values they give
+    bool morphable(int id) const { return id >= 0 && id < PresetSelect && id != Mode && id != Voices; }
+    void morphWeights();
+    double morphed(int id) const;
+    void recomputeMorph();                              // every morphable value again (the probe or a planet moved, the morph turned on / off)
+    std::array<const double*, 4> morphSrc_{};
+    std::array<double, 4> morphW_{};
+    int morphCaptured_ = 0;                             // the planet the probe sits on (-1: between them)
+    bool morphOn_ = false, morphDirty_ = false;
 
     double fs_ = 48000.0, lastVel_ = 1.0, bend_ = 0.0, lastKey_ = -1.0;
     bool prepared_ = false, pedal_ = false;
     uint64_t clock_ = 0;
     int mode_ = Poly;
     std::array<double, kNumParams> target_{};
+    std::array<double, kNumParams> live_{};   // what the sound uses: target_, or the morph of the planets
     std::array<bool, kLayers> layerOn_{};
     Shared shared_;
     std::vector<Slot> slots_;                           // kSlots, on the heap (40 x 4 voices are about 750 kB: too big for a stack)

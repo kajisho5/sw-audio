@@ -28,6 +28,8 @@ struct In07 {
         return sw::in07::userPresetValues(text, plain, meta, error);
     }
     static std::string userPresetText(const std::vector<double>& plain, const sw::presetfile::Meta& meta) { return sw::in07::userPresetText(plain, meta); }
+    // a preset loaded from the window or the host's browser leaves these alone (the morph's planets and probe: sw::in07::presetPart)
+    static bool presetKeeps(int id) { return id != sw::in07::PresetSelect && !sw::in07::presetPart(id); }
     // MIDI learn: the eight macros
     static constexpr int kMacroCount = 8;
     static int macroParam(int m) { return sw::in07::Macro1 + m; }
@@ -54,6 +56,7 @@ struct In07 {
         if (g == "gate") return "Trance gate";
         if (g == "sat") return "Satellites";
         if (g == "roche") return "Roche limit";
+        if (g == "morph") return "Morph";
         if (g == "preset") return "Preset";
         return "Voice";
     }

@@ -74,6 +74,9 @@ template <class C, class = void> struct HasPatch : std::false_type {};
 template <class C> struct HasPatch<C, std::void_t<decltype(std::declval<C&>().beginPatch()), decltype(std::declval<C&>().endPatch())>> : std::true_type {};
 template <class T, class = void> struct HasProgram : std::false_type {};
 template <class T> struct HasProgram<T, std::void_t<decltype(T::kProgramParam), decltype(T::loadProgram(std::declval<typename T::Core&>(), 0))>> : std::true_type {};
+// optional: static bool presetKeeps(int id) — a preset loaded on the main thread leaves this value as it is (a performance control)
+template <class T, class = void> struct HasPresetKeeps : std::false_type {};
+template <class T> struct HasPresetKeeps<T, std::void_t<decltype(T::presetKeeps(0))>> : std::true_type {};
 template <class T, class = void> struct HasWarmUp : std::false_type {};
 template <class T> struct HasWarmUp<T, std::void_t<decltype(T::warmUp())>> : std::true_type {};
 template <class T, class = void> struct HasUi : std::false_type {};
@@ -787,6 +790,8 @@ private:
                     if (program >= 0) { host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, program)); dirty_[static_cast<size_t>(i)].store(true); }
                     continue;
                 }
+            if constexpr (HasPresetKeeps<P>::value)
+                if (P::presetKeeps(i)) continue;
             host_values_[static_cast<size_t>(i)].store(sanitizeHost(i, plainToHost(i, plain[static_cast<size_t>(i)])));
             dirty_[static_cast<size_t>(i)].store(true);
         }

@@ -147,6 +147,20 @@ TEST_CASE("IN07 WINDOW: factory and user presets, saving, the folder only, the n
     CHECK(updateValues(upd)[static_cast<size_t>(cut)] == doctest::Approx(want[static_cast<size_t>(cut)]).epsilon(1e-9));
     CHECK(p.guiMessage("c factory 99999").find("\"error\"") != std::string::npos);
     CHECK(p.guiMessage("c factory 1.5").find("\"error\"") != std::string::npos);
+    // the morph's planets and probe are the player's: a preset from the window leaves them (2026-10-10)
+    for (const auto& kv : std::vector<std::pair<int, double>>{{sw::in07::MorphOn, 1}, {sw::in07::MorphX, 40}, {sw::in07::MorphB, 7}}) {
+        p.guiMessage("b " + std::to_string(kv.first)); p.guiMessage("s " + std::to_string(kv.first) + " " + std::to_string(kv.second)); p.guiMessage("e " + std::to_string(kv.first));
+    }
+    block(p, o);
+    p.guiMessage("c factory 20");
+    block(p, o);
+    upd = p.guiMessage("p");
+    CHECK(updateValues(upd)[static_cast<size_t>(sw::in07::MorphOn)] == 1.0);
+    CHECK(updateValues(upd)[static_cast<size_t>(sw::in07::MorphX)] == doctest::Approx(40.0));
+    CHECK(updateValues(upd)[static_cast<size_t>(sw::in07::MorphB)] == 7.0);
+    p.guiMessage("s " + std::to_string(sw::in07::MorphOn) + " 0");
+    p.guiMessage("c factory 3");
+    block(p, o);
     // save: a new name, the same name again (asks), overwrite
     const std::string req = "{\"name\":\"Night/Drive \\u00e9\",\"category\":\"BASS\",\"author\":\"Kai\",\"comment\":\"\",\"overwrite\":false}";
     std::string r = p.guiMessage("c save " + b64(req));
