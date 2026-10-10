@@ -21,8 +21,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#if !defined(SW_NO_FILES)   // SW_NO_FILES: the text only (the browser trial's WebAssembly build has no files and no exceptions)
 #include <filesystem>
 #include <fstream>
+#endif
 #include <locale>
 #include <random>
 #include <sstream>
@@ -256,6 +258,7 @@ inline bool read(std::string_view text, const char* product, const std::vector<P
     return true;
 }
 
+#if !defined(SW_NO_FILES)
 // ---- files (UTF-8 paths). A path that is not valid UTF-8 (or, on Windows, a file name with a lone surrogate) makes the standard
 // library throw (MSVC's u8path / u8string): these functions catch it and fail like any other unreadable file, so nothing reaches the host.
 inline std::filesystem::path pathOf(const std::string& utf8) { return std::filesystem::u8path(utf8); }
@@ -338,5 +341,7 @@ inline std::vector<std::string> listFiles(const std::string& dir, const char* ex
     std::sort(out.begin(), out.end());
     return out;
 }
+
+#endif  // SW_NO_FILES
 
 }  // namespace sw::presetfile

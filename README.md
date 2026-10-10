@@ -1246,6 +1246,18 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 - 画面：探査機と各惑星の間に重力線（太さ・濃さ＝重み）、各惑星の横に重みの %。ダブルクリックで A に戻る。星系の図とパネルはホストの値（A）を描く。
 - 耳での確認はまだ。
 
+### IN07 のブラウザ体験版（2026-10-10、`tools/in07_web.py`）
+
+依頼者の「7以外ぜんぶ！」の 4。プラグインと同じエンジン（`products/in07`）を WebAssembly にし、ブラウザの AudioWorklet で鳴らす。画面もプラグインと同じ `ui/in07`（ネイティブ側の返事を `tools/in07_web/host.js` がブラウザの中で返す）。インストールなしで、パソコンのキー（A〜K、Z／X でオクターブ）・画面のリボン・MIDI キーボード（Web MIDI があるブラウザ）で弾ける。
+
+- **作り方**：`python3 tools/in07_web.py <出力フォルダ> [--check]`。C++ のコンパイラは Zig（`pip install ziglang` で入る。wasm32-wasi 用の libc++ を含む）。`-msimd128` で、左右 2 つを 1 組で計算する部分（`core/include/sw/simd2.hpp`）に WebAssembly SIMD の版を足した。プリセットのファイル読み書き（`sw/preset_file.hpp` のファイル部分）は `SW_NO_FILES` で外す（ブラウザにファイルはない）。出力：`index.html`（自前のサーバーに置く用）、`artifact.html`（claude.ai のアーティファクト用。骨組みなし）、`worklet.js`、`swingby.wasm`（531 kB）、`assets/`（画面の絵とフォント）。合わせて約 4 MB。
+- **できないこと**：プリセットの保存・ユーザープリセット・MIDI ラーン・ライセンス（プラグインのもの）。体験版の無音はない（ブラウザでは保存も書き出しもできないため）。
+- **確かめたこと**：
+  - 出力が同じ：7 種のプリセットで 4 和音を 2 秒、ネイティブ（g++）と WebAssembly（Node）で RMS とピークが表示の桁まで一致（例：Anthem Supersaw −19.5 dB・0.313）。
+  - 重さ（このコンテナの Node、4 和音を押さえたまま、1 コアに対する割合。実測）：Ultra Saw 14.7 %、Anthem Supersaw 12.1 %、Solar Wind 10.1 %、Glass Horizon 7.8 %、Hoover Stab 7.5 %、Velvet Keys 3.7 %、Polar Bass 1.0 %。起動時の表の作成に 0.8 秒。
+  - `--check`：ローカルのサーバーと Chromium（Playwright）で、START AUDIO → A キーで音が出る（ピーク 0.287）、プリセットを替えて E キーでも出る、ページのエラー 0。
+- **アーティファクトとして公開した**（「SWINGBY Browser Trial」）。アーティファクトの表示枠が WebAssembly を許すかはこちらでは確かめられない（許さないと START AUDIO で止まり、上の帯に理由が出る）。その場合は `index.html` 一式を自分のサイトに置けば動く（http(s) で配る。file:// ではブラウザがワークレットを動かさない）。
+
 ### IN07 のアルペジエーターとトランスゲート（2026-10-09、設計値）
 
 画面案（ARP 画面）に合わせて作った。パラメータはプリセット選択（`in07.preset`）の後ろに足した（それより前の番号は変えていない。古い保存データはこの分が既定値＝オフで読める）。ファクトリープリセットはどれもオフのまま（音は変わらない）。
