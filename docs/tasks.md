@@ -247,5 +247,5 @@
 - [x] 検証：長時間の連続運転（`host_smoke --soak`。CR04 の待機中の CPU 無駄遣いを発見・修正）、ブロック長に依存しないこと（`host_smoke --blocks`・`tests/block_helpers.hpp`。アダプターの範囲外ブロック、GT01・MS06・LV07・VO05・LV08・LV05・LV29・SA05 とリミッターの Auto release〔MS01・MS02・MS06〕を発見・修正）。残り：GT02・RV04・ST05 は IR の作り直しが 1 呼び出し 1 ステップなので、切り替わる時刻がブロック長で変わる（README「ブロック長に依存しないこと」）
 - [x] `reset()`：ホストが止まった・飛んだときに残響・ディレイの残りが出ない（README「ホストが止まった・飛んだとき」。`host_smoke --reset`）。残り：−43〜−80 dBFS のフィルターの余韻 23 製品
 - [x] テール（CLAP の tail 拡張）：22 製品が報告（README「テール（残響・繰り返し）の長さ」）。`host_smoke --tails`
-- [x] 検証：MIDI を使う製品（CR04・MD05・VO03・LV25）の `--blocks`（済）。済：テンポ・小節線・再生位置の異常値を使う製品（`host_smoke --transport`、見つけた 5 製品を修正）。済：1 チャンネルだけ渡されたとき（`host_smoke --mono`、全 132 製品合格）。済：オフラインの書き出しで同じ結果（`host_smoke --offline`。EQ08・EQ02 の Linear が実行ごとに違った→ CLAP render 拡張で設計を待つ形に）
+- [x] 検証：MIDI を使う製品（CR04・MD05・VO03・LV25）の `--blocks`（済）。済：テンポ・小節線・再生位置の異常値を使う製品（`host_smoke --transport`、見つけた 5 製品を修正）。済：1 チャンネルだけ渡されたとき（`host_smoke --mono`、全 132 製品合格）。済：サンプルレートとバッファの大きさを変えて activate し直す（`host_smoke --reactivate`、全 132 製品合格）。済：オフラインの書き出しで同じ結果（`host_smoke --offline`。EQ08・EQ02 の Linear が実行ごとに違った→ CLAP render 拡張で設計を待つ形に）
 - [ ] 共通機能の実装（画面の部品はある）：拡大率の「100%」（LV23 のログの書き出しは実装済み）

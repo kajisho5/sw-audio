@@ -1066,6 +1066,47 @@ bool offlineChecks(const std::vector<fs::path>& files, std::vector<std::string>&
     return ok;
 }
 
+// Re-activation: a host changes the sample rate or the buffer size by deactivating the plug-in and activating it again with new numbers (the same instance, the same parameters). Anything sized by the first activation
+// (a buffer, a table, a coefficient computed at the old rate) must follow. 48 kHz / 256 -> 96 kHz / 4096 -> 44.1 kHz / 64 -> 192 kHz / 512 -> 48 kHz / 256, random settings at the start, 20 blocks (256 frames; the adapter cuts them to the
+// activated maximum) after each: finite output, no process() error, peak under 1e4, and no change of the plug-in's own sample rate left behind.
+bool reactivateChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0;
+    struct Cfg { double sr; uint32_t maxFrames; };
+    const Cfg cfgs[] = {{96000.0, 4096}, {44100.0, 64}, {192000.0, 512}, {48000.0, 256}, {22050.0, 1}};
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (int seed = 1; seed <= 2; ++seed) {
+            Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  re-activation of " + name + ": " + why); ok = false; break; }
+            const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+            const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+            a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+            if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+            Rng rng(0x94D049BB133111EBull * static_cast<uint64_t>(seed) + 29);
+            EventList ev;
+            for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
+                clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
+                double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                ev.set(pi.id, v);
+            }
+            a.run.process(20, 800 + static_cast<uint64_t>(seed), ev);
+            bool failed = a.run.bad || a.run.peak > 1e4; std::string where = failed ? "the first activation" : "";
+            for (const Cfg& c : cfgs) {
+                if (failed) break;
+                a.p->stop_processing(a.p); a.p->deactivate(a.p);
+                if (!a.p->activate(a.p, c.sr, 1, c.maxFrames) || !a.p->start_processing(a.p)) { failed = true; where = "activate(" + std::to_string(static_cast<int>(c.sr)) + " Hz, " + std::to_string(c.maxFrames) + ") was refused"; break; }
+                a.run.bad = false; a.run.peak = 0;
+                EventList none; a.run.process(20, 900 + static_cast<uint64_t>(seed), none);
+                if (a.run.bad || a.run.peak > 1e4) { failed = true; where = std::to_string(static_cast<int>(c.sr)) + " Hz / " + std::to_string(c.maxFrames) + " frames" + (a.run.bad ? ": NaN / Inf or a process() error" : ": peak " + std::to_string(a.run.peak)); }
+            }
+            if (failed) { problems.push_back("FAIL  re-activation of " + name + " (settings " + std::to_string(seed) + "): " + where); ok = false; }
+            a.close();
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    re-activation: %d plug-ins x 2 random settings, one instance activated again at 96 kHz / 4096, 44.1 kHz / 64, 192 kHz / 512, 48 kHz / 256, 22.05 kHz / 1: finite output, no process() error, peak under 1e4\n", tested);
+    return ok;
+}
+
 // The transport a host sends is not always sane: a tempo of 0, a negative or NaN tempo, a bar position far out of range, a time signature with a 0, a play position of INT64_MAX. The products that read the tempo or the
 // bar line (17 of them: delays, modulations, the tempo-locked ones) must still give a finite output of a sensible size, in a time that is not far over the audio (a loop that waits for a beat that never comes).
 // Three scripts, two random settings each (every parameter at a random value, so the Sync switches are on half of the time); the script cycles through a block each.
@@ -1390,7 +1431,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false, monoOnly = false, offlineOnly = false, reactivateOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1403,6 +1444,7 @@ int main(int argc, char** argv) {
         if (opt == "--transport") { transportOnly = true; continue; }
         if (opt == "--mono") { monoOnly = true; continue; }
         if (opt == "--offline") { offlineOnly = true; continue; }
+        if (opt == "--reactivate") { reactivateOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
@@ -1427,6 +1469,11 @@ int main(int argc, char** argv) {
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
         return 0;
+    }
+    if (reactivateOnly) {   // --reactivate: only the activate-again check
+        std::vector<std::string> problems; const bool ok = reactivateChecks(files, problems);
+        for (const auto& l : problems) std::printf("%s\n", l.c_str());
+        return ok ? 0 : 1;
     }
     if (offlineOnly) {   // --offline: only the two-runs-identical check
         std::vector<std::string> problems; const bool ok = offlineChecks(files, problems);
@@ -1501,6 +1548,7 @@ int main(int argc, char** argv) {
     { std::vector<std::string> problems; if (!transportChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!monoChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!offlineChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    { std::vector<std::string> problems; if (!reactivateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }
