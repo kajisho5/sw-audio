@@ -1,4 +1,6 @@
 #include "vo05/vo05.hpp"
+#include "sw/link_products.hpp"
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 namespace sw::vo05 {
@@ -11,7 +13,26 @@ const std::vector<ParamSpec>& specs() {
         {"vo05.ride",        "Ride",        -12, 12, 0,   Curve::Lin, 1, {}, "dB"},
         {"vo05.evo.on",      "Write automation", 0, 1, 0, Curve::Step, 1, {0, 1}, "", {"Off", "On"}, nullptr, nullptr, 1.0, false},
     };
-    return s;
+    static const std::vector<ParamSpec> all = [] {
+        std::vector<ParamSpec> v = s;
+        // Music from (appended at the end, SW Link; the spec: "the music comes in on the external sidechain or SW Link"): the sidechain, all the other SW AUDIO, or one product (not a vocal product: VO..)
+        ParamSpec m{"vo05.link.music", "Music from", 0, 0, 0, Curve::Step, 1, {}, "", {}, nullptr, nullptr, 1.0, false};
+        m.labels = {"Sidechain", "All other SW AUDIO"}; 
+        size_t n = 0; const LinkProduct* lp = linkProducts(n);
+        for (size_t k = 0; k < n; ++k) if (std::strncmp(lp[k].code, "VO", 2) != 0) m.labels.push_back(lp[k].label);
+        for (size_t k = 0; k < m.labels.size(); ++k) m.steps.push_back(static_cast<double>(k));
+        m.max = static_cast<double>(m.labels.size() - 1);
+        v.push_back(m);
+        return v;
+    }();
+    return all;
+}
+const char* Processor::musicProduct(int step) {
+    if (step <= 0) return nullptr;
+    if (step == 1) return "*";
+    int k = step - 2; size_t n = 0; const LinkProduct* lp = linkProducts(n);
+    for (size_t i = 0; i < n; ++i) if (std::strncmp(lp[i].code, "VO", 2) != 0) { if (k-- == 0) return lp[i].code; }
+    return nullptr;
 }
 namespace {
 constexpr double kTau[3] = {2.0, 0.8, 0.3}, kDead[3] = {1.5, 0.75, 0.25};   // Sensitivity Low / Mid / High (design values)
@@ -56,7 +77,8 @@ int Processor::takeParamWrite(int& id, double& plain) {
 }
 
 void Processor::processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh) {
-    const int nch = std::min(numCh, 2), nsc = sc ? std::min(scCh, 2) : 0;
+    const bool fromLink = musicFromLink();
+    const int nch = std::min(numCh, 2), nsc = (sc && !fromLink) ? std::min(scCh, 2) : 0;   // (music from SW Link: the sidechain is not listened to)
     scPresent_ = nsc > 0;
     // the control decisions are taken on a grid of the stream (every kControl samples, wherever the host's block starts), not per host block: the result does not depend on the block size.
     // The ride found at the end of a control block is ramped in over the next one.
@@ -101,13 +123,16 @@ void Processor::control(int nch) {
         const double w = std::max(1.0 - std::pow(vocC_, len), static_cast<double>(len) / static_cast<double>(vocAge_));
         vocMs_ += w * (vSum / len - vocMs_);
     }
-    if (scPresent_) {   // without a sidechain the music level is not updated (and not listening)
+    const bool fromLink = musicFromLink(), haveMusic = fromLink ? linkValid_ : scPresent_;
+    if (fromLink) {   // SW Link gave the level (short-term, already a 3 s window): it is the music level as it is
+        if (linkValid_) { musAge_ += len; musMs_ = linkMs_; }
+    } else if (scPresent_) {   // without a sidechain the music level is not updated (and not listening)
         musAge_ += len;
         const double w = std::max(1.0 - std::pow(musC_, len), static_cast<double>(len) / static_cast<double>(musAge_));   // the first 3 s are a running mean: no ramp up from silence
         musMs_ += w * (mSum / len - musMs_);
     }
     const double musDb = musMs_ > 1e-20 ? 10.0 * std::log10(musMs_) : -200.0;
-    listening_ = scPresent_ && musDb > kQuiet;
+    listening_ = haveMusic && musDb > kQuiet;
     if (writing) {
         if (listening_ && active && musAge_ >= static_cast<long>(fs_)) {   // the first second of music is only a rough estimate: no riding yet
             const double want = std::clamp(musicLufs() + target_[Target] - vocalLufs(), -range, range);

@@ -1,4 +1,5 @@
 #include "ut01/ut01.hpp"
+#include "sw/track_kind.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -23,17 +24,7 @@ const std::vector<ParamSpec>& specs() {
     return s;
 }
 
-int classifyTrack(const std::string& name) {
-    std::string n; for (char c : name) n += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    auto has = [&](std::initializer_list<const char*> keys) { for (const char* k : keys) if (n.find(k) != std::string::npos) return true; return false; };
-    if (has({"vox", "vocal", "voice", "lead v", "bv", "ボーカル", "歌", "コーラス"})) return Vocal;
-    if (has({"drum", "kick", "snare", "hat", "tom", "cymbal", "perc", "ドラム", "キック", "スネア"})) return Drums;
-    if (has({"bass", "ベース"})) return Bass;
-    if (has({"guitar", "gtr", "ギター"})) return Guitar;
-    if (has({"key", "piano", "synth", "organ", "pad", "keys", "ピアノ", "シンセ", "キー"})) return Keys;
-    if (has({"bus", "master", "mix", "group", "stem", "バス", "マスター"})) return Bus;
-    return Other;
-}
+int classifyTrack(const std::string& name) { return sw::classifyTrackName(name); }   // (the numbers of the kinds are the same: sw/track_kind.hpp)
 
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; kept_.fill(0.0); has_.fill(false); g_ = target_[Gain]; b_ = target_[Balance]; w_ = target_[Width]; }
 

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 using namespace sw;
@@ -238,4 +239,59 @@ TEST_CASE("SW Link: a key looked for by the tag (LO03: the instance whose Role i
     // the slot is freed: the next instance in it does not inherit the tag
     pk.leave(); link::Member again; REQUIRE(again.join(kick.view(), "LO03"));
     for (int k = 0; k < 6; ++k) { step(); CHECK_FALSE(me.readKey("LO03", key.data(), 256, st, 1)); }
+}
+
+TEST_CASE("SW Link: the loudness of an instance's output - of one product, or of all the others together (their power added) - only from instances that are playing; the track name and kind are listed for the screen") {
+    Ring a(300, -20), b(500, -20), c(700, -20), mine(1000, -20);
+    link::Member pa, pb, pc, me;
+    REQUIRE(pa.join(a.view(), "LV01")); REQUIRE(pb.join(b.view(), "MS06")); REQUIRE(pc.join(c.view(), "VO01")); REQUIRE(me.join(mine.view(), "VO05"));
+    pa.publishLoudness(-20.0f); pb.publishLoudness(-20.0f); pc.publishLoudness(-20.0f);
+    auto step = [&] { a.advance(256); b.advance(256); c.advance(256); };
+    link::Member::KeyState st; double l = 0; int n = 0;
+    // all the others but the vocal products (VO..): LV01 and MS06 at -20 LUFS each add up to -17 LUFS
+    for (int k = 0; k < 3; ++k) { step(); (void)me.othersLoudness("VO", st, l, &n); }
+    step(); REQUIRE(me.othersLoudness("VO", st, l, &n)); CHECK(n == 2); CHECK(l == doctest::Approx(-20.0 + 10.0 * std::log10(2.0)).epsilon(0.001));
+    // without the exclusion VO01 is counted too: three at -20 LUFS are -15.2
+    for (int k = 0; k < 3; ++k) { step(); (void)me.othersLoudness("", st, l, &n); }   // (VO01 is new to this count and has to be seen moving first)
+    step(); REQUIRE(me.othersLoudness("", st, l, &n)); CHECK(n == 3); CHECK(l == doctest::Approx(-20.0 + 10.0 * std::log10(3.0)).epsilon(0.001));
+    // one product
+    link::Member::KeyState st2;
+    for (int k = 0; k < 3; ++k) { step(); (void)me.loudnessOf("MS06", st2, l); }
+    step(); REQUIRE(me.loudnessOf("MS06", st2, l)); CHECK(l == doctest::Approx(-20.0));
+    pb.publishLoudness(-31.5f); step(); REQUIRE(me.loudnessOf("MS06", st2, l)); CHECK(l == doctest::Approx(-31.5));
+    CHECK_FALSE(me.loudnessOf("LV07", st2, l));                                  // no such product
+    // an instance that stops moving is not counted (after two calls), one that has no loudness yet (-200) never
+    int calls = 0; double sum = 0; for (int k = 0; k < 6; ++k) { a.advance(256); c.advance(256); if (me.othersLoudness("VO", st, l, &n)) { ++calls; sum = l; } }   // (MS06 stands still)
+    CHECK(calls == 6); CHECK(n == 1); CHECK(sum == doctest::Approx(-20.0));
+    pa.publishLoudness(-200.0f); for (int k = 0; k < 3; ++k) { a.advance(256); } CHECK_FALSE(me.othersLoudness("VO", st, l, &n));   // nothing audible left
+    // the track name and kind, as the screen lists them: product, name, kind, loudness; not the instance itself; a name longer than the room is cut
+    pa.publishInfo("Vocal MC mic", 0); pb.publishInfo("Music bus", 5); pc.publishInfo(std::string(80, 'x').c_str(), 6); me.publishInfo("Rider", 0);
+    pa.publishLoudness(-18.25f);
+    for (int k = 0; k < 4; ++k) { step(); (void)me.peers(); }
+    auto list = me.list(); REQUIRE(list.size() == 3);
+    std::sort(list.begin(), list.end(), [](const link::Peer& x, const link::Peer& y) { return x.product < y.product; });
+    CHECK(list[0].product == "LV01"); CHECK(list[0].name == "Vocal MC mic"); CHECK(list[0].kind == 0); CHECK(list[0].lufs == doctest::Approx(-18.25));
+    CHECK(list[1].product == "MS06"); CHECK(list[1].name == "Music bus"); CHECK(list[1].kind == 5);
+    CHECK(list[2].product == "VO01"); CHECK(list[2].name.size() == 31); CHECK(list[2].kind == 6);
+    // the slot is freed: the next one does not inherit the loudness or the name
+    pa.leave(); link::Member again; REQUIRE(again.join(a.view(), "LV01"));
+    for (int k = 0; k < 4; ++k) { step(); (void)me.peers(); }
+    for (const auto& p : me.list()) if (p.product == "LV01") { CHECK(p.name.empty()); CHECK(p.kind == 255); CHECK(p.lufs < -190.0f); }
+}
+
+TEST_CASE("SW Link: the track name is read whole or not at all (a reader against a writer that changes it)") {
+    Ring a(300, -20), mine(1000, -20);
+    link::Member pa, me; REQUIRE(pa.join(a.view(), "LV01")); REQUIRE(me.join(mine.view(), "VO05"));
+    std::atomic<bool> stop{false};
+    std::thread w([&] { bool x = false; while (!stop) { pa.publishInfo(x ? std::string(31, 'B').c_str() : std::string(31, 'A').c_str(), x ? 3 : 4); x = !x; a.advance(64); } });
+    int reads = 0, whole = 0, torn = 0;   // (a read that did not get through - the writer was in the middle of it three times - gives an empty name: that is no whole name, but it is not a mixed one either)
+    for (const auto t0 = std::chrono::steady_clock::now(); whole < 2000 && std::chrono::steady_clock::now() - t0 < std::chrono::seconds(5);) {
+        for (const auto& p : me.list()) {
+            ++reads; if (p.name.empty()) continue;
+            const bool allA = p.name == std::string(31, 'A'), allB = p.name == std::string(31, 'B');
+            if ((allA && p.kind == 4) || (allB && p.kind == 3)) ++whole; else ++torn;
+        }
+    }
+    stop = true; w.join();
+    INFO(reads << " reads, " << whole << " whole"); CHECK(whole > 0); CHECK(torn == 0);
 }

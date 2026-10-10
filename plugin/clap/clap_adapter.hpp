@@ -20,9 +20,11 @@
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
 #endif
 #include "sw/denormal.hpp"
+#include "sw/loudness.hpp"
 #include "sw/param.hpp"
 #include "sw/shell.hpp"
 #include "sw/text.hpp"
+#include "sw/track_kind.hpp"
 #include <clap/clap.h>
 #include <clap/ext/note-ports.h>
 #include <clap/ext/render.h>
@@ -98,6 +100,11 @@ template <class P> struct LinkKeyHostWins<P, std::void_t<decltype(P::kLinkKeyOnl
 // optional trait (LO03): static uint32_t linkTagOf(const Core&) -> what this instance is within its product (the Role: 1 Kick, 2 Bass, 3 Both), published to the others after every block (SW Link tag)
 template <class P, class = void> struct HasLinkTag : std::false_type {};
 template <class P> struct HasLinkTag<P, std::void_t<decltype(P::linkTagOf(std::declval<const typename P::Core&>()))>> : std::true_type {};
+// optional trait (VO05): static const char* linkMusicOf(const Core&) -> where the music comes from: nullptr = the host's sidechain, "*" = all the other SW AUDIO instances (their loudness added, the products
+// whose code starts with kLinkMusicExclude left out), otherwise the product code of the instance to listen to; static void linkMusicUse(Core&, bool valid, double lufs) -> the loudness SW Link found (every block,
+// before the block is processed). The loudness is what every instance publishes of its own output (short-term LUFS, K-weighted); no audio is read.
+template <class P, class = void> struct HasLinkMusic : std::false_type {};
+template <class P> struct HasLinkMusic<P, std::void_t<decltype(P::linkMusicOf(std::declval<const typename P::Core&>())), decltype(P::kLinkMusicExclude)>> : std::true_type {};
 // optional trait (MT05: the 0 VU reference of the session): static constexpr int kLinkSharedParam = the parameter whose value the instances of the product share, static constexpr const char* kLinkSharedFrom
 // = the product code ("MT05"); the core has void adoptShared(double) (sets the parameter and hands the value to the host through takeParamWrite). A change the person makes (the host's automation, the screen)
 // is published with SW Link (publishShared: atomics only); the other instances take it at their next block; an instance that adopts does not publish. A value equal to the default is no change (an instance
@@ -276,6 +283,18 @@ private:
             if (name == "linkref") { pl.linkRefTake(); return; }
             pl.guiCall(name, arg);
         }
+        // the other SW AUDIO instances in this host (SW Link), for the chooser of a source: SWHOST.linkList([[product, track name, kind (0 vocal .. 6 other, 255 not known), short-term LUFS of its output], ...]);
+        std::string linkListScript() {
+            std::string out = "SWHOST.linkList([";
+            if (pl.link_.joined()) {
+                bool first = true;
+                for (const auto& pr : pl.link_.list()) {
+                    char num[48]; std::snprintf(num, sizeof num, ",%d,%.1f]", pr.kind == 255 ? -1 : pr.kind, static_cast<double>(pr.lufs));
+                    out += (first ? "" : ",") + std::string("[") + gui::jsonString(pr.product) + "," + gui::jsonString(pr.name) + num; first = false;
+                }
+            }
+            return out + "]);";
+        }
         // SW Link for the screen: [the other instances alive, then (only while a screen part asked for it: "linkwatch 1") the sum of their output spectra, 64 dB values]; returns how many values
         int link(double* out) {
             out[0] = pl.link_.joined() ? pl.link_.peers() : -1;   // -1: this instance is not in the registry (no room, or a layout it does not know)
@@ -384,7 +403,7 @@ private:
     static void destroy(const clap_plugin_t* p) { delete self(p); }
     static bool activate(const clap_plugin_t* p, double sr, uint32_t, uint32_t maxFrames) {
         Plugin* s = self(p);
-        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); if constexpr (HasLinkKey<P>::value) s->scLink_.assign(s->maxFrames_, 0.0f); if constexpr (HasUseWorker<typename P::Core>::value) s->shell_.core().useWorker(true); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->pullTrackInfo();
+        s->maxFrames_ = std::max<uint32_t>(1, maxFrames); for (auto& v : s->scClean_) v.assign(s->maxFrames_, 0.0f); if constexpr (HasLinkKey<P>::value) s->scLink_.assign(s->maxFrames_, 0.0f); if constexpr (HasUseWorker<typename P::Core>::value) s->shell_.core().useWorker(true); s->shell_.prepare(sr, static_cast<int>(s->maxFrames_), 2); s->sr_ = sr; s->link_.setSampleRate(sr); s->outLoud_.setup(sr, 2); s->pullTrackInfo();
         for (int i = 0; i < numParams(); ++i) s->dirty_[static_cast<size_t>(i)].store(true);
         s->snap_pending_.store(true);
         s->active_ = true;
@@ -401,7 +420,7 @@ private:
     static void reset(const clap_plugin_t* p) {
         Plugin* s = self(p);
         if (!s->active_) return;
-        s->shell_.reset();
+        s->shell_.reset(); s->outLoud_.reset();
         if constexpr (HasReset<typename P::Core>::value) s->shell_.core().reset();
         else if constexpr (HasTail<typename P::Core>::value) { s->shell_.core().prepare(s->sr_, static_cast<int>(s->maxFrames_)); }
         s->snap_pending_.store(true);
@@ -474,6 +493,13 @@ private:
             double v;
             if (s->link_.adoptShared(P::kLinkSharedFrom, v) && v != s->lastShared_) { s->lastShared_ = v; s->shell_.core().adoptShared(v); }
         }
+        if constexpr (HasLinkMusic<P>::value) {   // the music is the loudness other instances publish (SW Link), when the screen chose that
+            if (const char* src = P::linkMusicOf(s->shell_.core())) {
+                double l = 0; const bool all = src[0] == '*' && src[1] == 0;
+                const bool ok = all ? s->link_.othersLoudness(P::kLinkMusicExclude, s->keyState_, l) : s->link_.loudnessOf(src, s->keyState_, l);
+                P::linkMusicUse(s->shell_.core(), ok, l);
+            } else P::linkMusicUse(s->shell_.core(), false, 0.0);
+        }
         if constexpr (HasLinkKey<P>::value) {   // the key is another instance's output (SW Link), when the screen chose one
             const char* code = P::linkKeyOf(s->shell_.core());
             if constexpr (LinkKeyHostWins<P>::value) {   // a sidechain that carries a signal is the key (a host that leaves an unconnected one silent does not count)
@@ -509,6 +535,7 @@ private:
         if constexpr (HasReadouts<P>::value) s->publishReadouts();
         if constexpr (HasLinkKey<P>::value) s->ro_[static_cast<size_t>(P::kLinkKeyReadout)].store(static_cast<double>(s->linkKeyFound_.load(std::memory_order_relaxed)), std::memory_order_relaxed);
         if constexpr (HasLinkRef<P>::value) s->publishLinkRef();
+        s->link_.publishLoudness(static_cast<float>(s->outLoud_.shortTerm()));   // what the others (VO05: the music) hear of this instance
         if constexpr (HasLinkTag<P>::value) s->link_.setTag(P::linkTagOf(s->shell_.core()));
         s->updateTail();
         // a parameter changed the latency (e.g. Lookahead): CLAP only allows that across a restart
@@ -524,7 +551,7 @@ private:
     // peak meters of the screen: block peak with a ~0.3 s fall (slot 0/1 input L/R, 2/3 output L/R)
     void measure(float* const* d, uint32_t nch, uint32_t frames, int slot) {
         if (frames == 0) return;
-        if (slot == 2) { spec_.push(d, nch, frames); spec_.pushStereo(d, nch, frames); }
+        if (slot == 2) { spec_.push(d, nch, frames); spec_.pushStereo(d, nch, frames); outLoud_.process(d, static_cast<int>(nch), static_cast<int>(frames)); }
         const float fall = std::exp(-static_cast<float>(frames) / static_cast<float>(0.3 * sr_));
         for (uint32_t c = 0; c < 2; ++c) {
             const float* x = d[std::min(c, nch - 1)]; float pk = 0.f;
@@ -548,7 +575,7 @@ private:
         if (!std::strcmp(id, CLAP_EXT_STATE)) return &state;
         if (!std::strcmp(id, CLAP_EXT_LATENCY)) return &latency;
         if (!std::strcmp(id, SW_EXT_MESSAGE)) return &message;
-        if constexpr (HasTrackInfo<P>::value) { static const clap_plugin_track_info_t trackInfoExt = {trackInfoChanged}; if (!std::strcmp(id, CLAP_EXT_TRACK_INFO) || !std::strcmp(id, CLAP_EXT_TRACK_INFO_COMPAT)) return &trackInfoExt; }
+        { static const clap_plugin_track_info_t trackInfoExt = {trackInfoChanged}; if (!std::strcmp(id, CLAP_EXT_TRACK_INFO) || !std::strcmp(id, CLAP_EXT_TRACK_INFO_COMPAT)) return &trackInfoExt; }
         if constexpr (HasMidi<P>::value) { static const clap_plugin_note_ports_t notePorts = {notePortsCount, notePortsGet}; if (!std::strcmp(id, CLAP_EXT_NOTE_PORTS)) return &notePorts; }
         if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
@@ -566,14 +593,16 @@ private:
     // ---- the host's track information (CLAP track-info; VST3 hosts through clap-wrapper's IInfoListener): asked for at activation and whenever the host says it changed
     static void trackInfoChanged(const clap_plugin_t* p) { self(p)->pullTrackInfo(); }
     void pullTrackInfo() {
-        if constexpr (HasTrackInfo<P>::value) {
-            if (!host_) return;
-            const auto* h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO));
-            if (!h) h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO_COMPAT));
-            clap_track_info_t ti{}; if (!h || !h->get || !h->get(host_, &ti)) return;
-            ti.name[CLAP_NAME_SIZE - 1] = 0;
-            P::trackInfo(shell_.core(), (ti.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME) ? ti.name : "", ti.flags);
-        }
+        if (!host_) return;
+        const auto* h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO));
+        if (!h) h = static_cast<const clap_host_track_info_t*>(host_->get_extension(host_, CLAP_EXT_TRACK_INFO_COMPAT));
+        clap_track_info_t ti{}; if (!h || !h->get || !h->get(host_, &ti)) return;
+        ti.name[CLAP_NAME_SIZE - 1] = 0;
+        const char* name = (ti.flags & CLAP_TRACK_INFO_HAS_TRACK_NAME) ? ti.name : "";
+        // every instance tells the others what track it is on (the screens list them for the choice of a source): the name and the kind (a bus or the master is a bus whatever its name says)
+        const int kind = (ti.flags & (CLAP_TRACK_INFO_IS_FOR_BUS | CLAP_TRACK_INFO_IS_FOR_MASTER)) ? kTrackBus : (name[0] ? classifyTrackName(name) : static_cast<int>(kTrackUnknown));
+        link_.publishInfo(name, kind);
+        if constexpr (HasTrackInfo<P>::value) P::trackInfo(shell_.core(), name, ti.flags);
     }
 
     // ---- audio ports: one stereo in, one stereo out (+ a stereo sidechain input when the core accepts one)
@@ -762,6 +791,7 @@ private:
     std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
     std::vector<float> scLink_;                   // room for the key read from another SW Link instance (allocated in activate)
     link::Member::KeyState keyState_; std::atomic<float> linkKeyFound_{0.0f};
+    LoudnessMeter outLoud_;                       // the loudness of the output, published to SW Link every block (the others read it)
     // 0 free, 1 the audio thread is in process(), 2 the main thread is in loadExtra / saveExtra (cores with an extra state block only)
     std::atomic<int> extraGate_{0};
     struct ExtraLock {

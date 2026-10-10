@@ -17,6 +17,10 @@
 //   * "Alive": a slot whose write position has not moved for `timeout` (1.5 s) is an instance that is not processing (stopped, bypassed by the host), and does not count.
 //   * A product that has a reference spectrum to share (UT03: the long-term spectrum of its reference, 60 bands of 1/6 octave, sw/band_spectrum.hpp) publishes it in its slot (publishReference:
 //     only atomic stores, so the audio thread may do it after a block): the values first, then a serial that is not 0; a reader (findReference: EQ05 Match) reads the serial, the values and the serial again and drops the read when it changed.
+//   * Layout 5 adds what the instances say about themselves: a role (`tag`, setTag: LO03's Role, the key of readKey can ask for it), the short-term LUFS of the output (publishLoudness: an atomic
+//     store after a block; loudnessOf / othersLoudness read it on the audio thread, others' powers added, the VO products left out: VO05 "Music from", LV29 "Interp from"), and the track's name and kind
+//     (publishInfo: from the host's track-info; a seqlock on infoSerial). list() gives the GUI one row per live instance (product, name, kind, LUFS) for the SW Link chip's chooser.
+//     readKey / loudnessOf / othersLoudness keep a KeyState on the caller's side: per slot, whether its ring moved since the last call, so one stopped slot of a product never hides a playing one.
 //   * Layout: magic, version and sizes are checked; a build of another layout cannot join and sees no peers (the others do not see it either).
 //   Thread rules: join()/leave() on the main thread, peers()/others() on one GUI thread per Member (they keep state), never on the audio thread.
 #pragma once
@@ -48,8 +52,9 @@ __declspec(dllimport) void* __stdcall VirtualAlloc(void*, unsigned long long, un
 
 namespace sw::link {
 
-constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 4;   // "SWLK"
+constexpr uint32_t kMagic = 0x4b4c5753u, kVersion = 5;   // "SWLK"
 constexpr int kSlots = 128;
+constexpr int kNameLen = 32;                            // the room for a track name
 constexpr int kRefBands = 60;                           // the reference spectrum a product may publish (= sw::BandSpectrum::kBands)
 constexpr const char* kEnv = "SW_AUDIO_LINK";
 
@@ -62,6 +67,10 @@ struct Slot {
     std::atomic<double> sampleRate{48000.0};
     std::atomic<uint32_t> product{0};                              // the product code, four characters packed (EQ02 -> 'E','Q','0','2')
     std::atomic<uint32_t> tag{0};                                  // what this instance is within its product (LO03: its Role, 1 Kick / 2 Bass / 3 Both); 0 = nothing to tell
+    std::atomic<float> lufs{-200.0f};                              // the short-term loudness (K-weighted, 3 s) of this instance's output, written every block; -200 = nothing yet
+    std::atomic<uint32_t> infoSerial{0};                           // the name and kind below: 0 = being written or never written, otherwise which version it is (a seqlock, see publishInfo)
+    std::atomic<char> name[kNameLen];                              // the host's name for the track (UTF-8, cut at kNameLen - 1 bytes, 0-terminated)
+    std::atomic<uint8_t> kind{255};                                // what kind of track (sw/track_kind.hpp: 0 vocal .. 6 other); 255 = the host did not say
     std::atomic<uint32_t> refSerial{0};                            // the shared reference spectrum: 0 = none, otherwise which one it is (changes with every new reference); written last, withdrawn first
     std::atomic<float> refDb[kRefBands];                           // (dB, 1/6 octave from 20 Hz)
     std::atomic<uint32_t> sharedStamp{0};                          // the setting this instance's person changed last (0: none yet): when (a stamp of the registry's counter) ...
@@ -131,6 +140,10 @@ static Registry* registry() { static Registry* r = detail::open(); return r; }
 
 inline uint32_t packCode(const char* c) { uint32_t v = 0; for (int i = 0; i < 4; ++i) v = (v << 8) | static_cast<uint8_t>(c && c[i] ? c[i] : ' '); return v; }
 
+// what the screen lists of another instance
+struct Peer { std::string product, name; int kind = 255; float lufs = -200.0f; };
+constexpr double kAudible = -120.0;   // a published loudness at or under this is "nothing there"
+
 class Member {
 public:
     Member() = default;
@@ -145,7 +158,7 @@ public:
         for (int i = 0; i < kSlots; ++i) {
             uint64_t e = 0; Slot& s = r->s[i];
             if (!s.id.compare_exchange_strong(e, id)) continue;
-            s.mask.store(ring.mask); s.sampleRate.store(sampleRate); s.product.store(packCode(product)); s.tag.store(0);
+            s.mask.store(ring.mask); s.sampleRate.store(sampleRate); s.product.store(packCode(product)); s.tag.store(0); s.lufs.store(-200.0f); s.infoSerial.store(0); s.kind.store(255); for (auto& ch : s.name) ch.store(0, std::memory_order_relaxed);
             s.head.store(ring.head); s.data.store(ring.data);   // last: a reader that sees the ring sees the rest
             slot_ = &s; id_ = id; reg_ = r; return true;
         }
@@ -157,7 +170,7 @@ public:
     // main thread: withdraw the ring, wait for the readers that are inside, free the slot. Call before the ring is destroyed.
     void leave() {
         if (!slot_) return;
-        slot_->refSerial.store(0); slot_->sharedStamp.store(0); slot_->tag.store(0);
+        slot_->refSerial.store(0); slot_->sharedStamp.store(0); slot_->tag.store(0); slot_->infoSerial.store(0);
         slot_->data.store(nullptr); slot_->head.store(nullptr);
         while (slot_->readers.load() != 0) std::this_thread::yield();
         slot_->id.store(0); slot_ = nullptr; reg_ = nullptr;
@@ -235,23 +248,8 @@ public:
         Registry* r = reg_ ? reg_ : registry(); if (!r || frames <= 0) return false;
         const uint32_t code = packCode(product);
         const size_t n = static_cast<size_t>(frames);
-        int best = -1, firstLive = -1; bool any = false;
-        for (int i = 0; i < kSlots; ++i) {                               // 1: who moves
-            Slot& s = r->s[i]; const uint64_t id = s.id.load();
-            if (id == 0 || id == id_ || s.product.load() != code || (tag != 0 && s.tag.load(std::memory_order_relaxed) != tag)) { st.ids[i] = 0; continue; }
-            s.readers.fetch_add(1);                                      // from here the owner cannot take the ring away
-            const std::atomic<size_t>* hp = s.head.load();
-            if (hp && s.data.load() && s.id.load() == id) {
-                any = true;
-                const size_t h = hp->load(std::memory_order_acquire);
-                if (st.ids[i] != id) { st.ids[i] = id; st.heads[i] = h; st.still[i] = st.started ? 2 : 0; }
-                else if (h != st.heads[i]) { st.heads[i] = h; st.still[i] = 0; } else if (st.still[i] < 2) ++st.still[i];
-            } else st.ids[i] = 0;
-            s.readers.fetch_sub(1);
-            if (st.ids[i] == id && st.still[i] < 2) { if (firstLive < 0) firstLive = i; if (i == st.slot) best = i; }
-        }
-        if (any) st.started = true;
-        if (best < 0) best = firstLive;
+        scan(r, st, [&](const Slot& s) { return s.product.load() == code && (tag == 0 || s.tag.load(std::memory_order_relaxed) == tag); });   // 1: who moves
+        const int best = pick(st);
         if (best < 0) return false;
         st.slot = best;
         Slot& s = r->s[best]; const uint64_t id = s.id.load(); bool ok = false;   // 2: its latest samples
@@ -266,6 +264,75 @@ public:
         }
         s.readers.fetch_sub(1);
         return ok;
+    }
+
+    // The loudness (short-term LUFS of the output, every instance publishes it with publishLoudness) of the instance of `product` that plays - the one that was used last if it still plays, otherwise the first.
+    // The audio thread (it reads atomics only): the same KeyState as readKey. False when there is no such instance that plays, or it has published nothing audible.
+    bool loudnessOf(const char* product, KeyState& st, double& lufs) const {
+        Registry* r = reg_ ? reg_ : registry(); if (!r) return false;
+        const uint32_t code = packCode(product);
+        scan(r, st, [&](const Slot& s) { return s.product.load() == code; });
+        const int best = pick(st); if (best < 0) return false;
+        st.slot = best;
+        const double v = r->s[best].lufs.load(std::memory_order_relaxed);
+        if (!(v > kAudible)) return false;
+        lufs = v; return true;
+    }
+    // The loudness of all the other instances that play, their powers added (a mix of them is that loud when they are not correlated): the audio thread. Products whose code starts with `excludePrefix`
+    // ("VO": the vocal products) are left out. `count` = how many were added. False when there is none audible.
+    bool othersLoudness(const char* excludePrefix, KeyState& st, double& lufs, int* count = nullptr) const {
+        Registry* r = reg_ ? reg_ : registry(); if (!r) return false;
+        const size_t np = excludePrefix ? std::min<size_t>(4, std::strlen(excludePrefix)) : 0;
+        scan(r, st, [&](const Slot& s) {
+            const uint32_t pc = s.product.load();
+            for (size_t k = 0; k < np; ++k) if (static_cast<char>((pc >> (8 * (3 - k))) & 0xff) != excludePrefix[k]) return true;   // differs somewhere in the prefix: counted
+            return np == 0;                                                                                                           // (the same prefix: left out)
+        });
+        double power = 0.0; int n = 0;
+        for (int i = 0; i < kSlots; ++i) {
+            if (!live(st, i)) continue;
+            const double v = r->s[i].lufs.load(std::memory_order_relaxed);
+            if (v > kAudible) { power += std::pow(10.0, v / 10.0); ++n; }
+        }
+        if (count) *count = n;
+        if (n == 0) return false;
+        lufs = 10.0 * std::log10(power); return true;
+    }
+
+    // This instance's output loudness for the others (any thread, atomics only)
+    void publishLoudness(float lufs) { if (slot_) slot_->lufs.store(lufs, std::memory_order_relaxed); }
+    // The track this instance is on, for the screens of the others (the main thread; a seqlock: a reader that sees a new name also sees the 0 first). kind: sw/track_kind.hpp (255: not known)
+    void publishInfo(const char* name, int kind) {
+        if (!slot_) return;
+        size_t len = name ? std::strlen(name) : 0; if (len > kNameLen - 1) { len = kNameLen - 1; while (len > 0 && (static_cast<unsigned char>(name[len]) & 0xC0) == 0x80) --len; }   // (not in the middle of a UTF-8 character)
+        slot_->infoSerial.store(0, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_release);
+        for (size_t k = 0; k < kNameLen; ++k) slot_->name[k].store(k < len ? name[k] : '\0', std::memory_order_relaxed);
+        slot_->kind.store(static_cast<uint8_t>(kind >= 0 && kind < 255 ? kind : 255), std::memory_order_relaxed);
+        if (++infoVersion_ == 0) infoVersion_ = 1;
+        slot_->infoSerial.store(infoVersion_, std::memory_order_release);
+    }
+    // The GUI thread: the other instances that are alive - what product, on what track, of what kind, how loud (-200: nothing yet)
+    std::vector<Peer> list() {
+        std::vector<Peer> out; Registry* r = reg_ ? reg_ : registry(); if (!r) return out;
+        refresh();
+        for (int i = 0; i < kSlots; ++i) {
+            if (!seen_[i].alive) continue;
+            Slot& s = r->s[i]; const uint64_t id = s.id.load(); if (id == 0 || id == id_ || id != seen_[i].id) continue;
+            Peer p; p.lufs = s.lufs.load(std::memory_order_relaxed);
+            for (int b = 3; b >= 0; --b) { const char c = static_cast<char>((s.product.load() >> (8 * b)) & 0xff); if (c != ' ') p.product += c; }
+            for (int tries = 0; tries < 3; ++tries) {   // a name that changes while it is read is read again
+                const uint32_t a = s.infoSerial.load(std::memory_order_acquire);
+                char tmp[kNameLen]; for (int k = 0; k < kNameLen; ++k) tmp[k] = s.name[k].load(std::memory_order_relaxed);
+                const uint8_t kd = s.kind.load(std::memory_order_relaxed);
+                std::atomic_thread_fence(std::memory_order_acquire);
+                if (a == 0 && s.infoSerial.load(std::memory_order_relaxed) == 0 && p.name.empty() && kd == 255) break;   // never written
+                if (a == 0 || s.infoSerial.load(std::memory_order_relaxed) != a) continue;
+                tmp[kNameLen - 1] = 0; p.name = tmp; p.kind = kd; break;
+            }
+            if (s.id.load() == id) out.push_back(p);
+        }
+        return out;
     }
 
     // GUI thread: how many other instances are alive
@@ -285,6 +352,30 @@ public:
     }
 
 private:
+    // pass 1 of readKey / loudnessOf / othersLoudness (the audio thread): for every slot that is another instance and that `match` accepts, remember where its ring is and whether it moved since the last call
+    template <class Match> void scan(Registry* r, KeyState& st, Match match) const {
+        bool any = false;
+        for (int i = 0; i < kSlots; ++i) {
+            Slot& s = r->s[i]; const uint64_t id = s.id.load();
+            if (id == 0 || id == id_ || !match(s)) { st.ids[i] = 0; continue; }
+            s.readers.fetch_add(1);                                      // from here the owner cannot take the ring away
+            const std::atomic<size_t>* hp = s.head.load();
+            if (hp && s.data.load() && s.id.load() == id) {
+                any = true;
+                const size_t h = hp->load(std::memory_order_acquire);
+                if (st.ids[i] != id) { st.ids[i] = id; st.heads[i] = h; st.still[i] = st.started ? 2 : 0; }
+                else if (h != st.heads[i]) { st.heads[i] = h; st.still[i] = 0; } else if (st.still[i] < 2) ++st.still[i];
+            } else st.ids[i] = 0;
+            s.readers.fetch_sub(1);
+        }
+        if (any) st.started = true;
+    }
+    static bool live(const KeyState& st, int i) { return st.ids[i] != 0 && st.still[i] < 2; }
+    static int pick(const KeyState& st) {   // the slot used last if it still plays, otherwise the first that does
+        if (st.slot >= 0 && live(st, st.slot)) return st.slot;
+        for (int i = 0; i < kSlots; ++i) if (live(st, i)) return i;
+        return -1;
+    }
     using Clock = std::chrono::steady_clock;
     struct Seen { uint64_t id = 0; size_t head = 0; Clock::time_point moved; bool alive = false; uint32_t product = 0; };
 
@@ -324,6 +415,7 @@ private:
     Slot* slot_ = nullptr; Registry* reg_ = nullptr; uint64_t id_ = 0; uint32_t seenStamp_ = 0;
     double timeout_ = 1.5, specInterval_ = 0.09;
     Seen seen_[kSlots];
+    uint32_t infoVersion_ = 0;
     double spec_[gui::kSpecBands] = {}; bool cached_ = false; int cachedN_ = 0; Clock::time_point lastSpec_;
 };
 

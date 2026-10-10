@@ -576,6 +576,7 @@
       params: host.map(h => ({ name: h.p.name, i: h.i, p: h.p, c: h.c })), get: i => vals[i], set: (i, v) => setValue(i, v, false), begin: i => bridge.begin(i), end: i => bridge.end(i),
       band: () => selBand,
       call: (name, arg) => bridge.call(name, arg === undefined ? '' : arg),
+      onLinkList: cb => { if (bridge.onLinkList) bridge.onLinkList(cb); },
       selectBand: k => { const b = skinBox.querySelector('button[data-band="' + k + '"]'); if (b) b.click(); else if (bandHook) bandHook(k); } }) : null;
     // the SW Link lamp of the bottom bar: lit while other SW AUDIO instances are in this host process (info.link[0], see plugin/clap/swlink.hpp)
     const linkLamp = skinBox ? skinBox.querySelector('.evr[data-link]') : null, linkDot = linkLamp ? linkLamp.querySelector('.evd') : null;

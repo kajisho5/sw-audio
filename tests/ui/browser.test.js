@@ -211,10 +211,25 @@ async function open(code, query = '') {
   eq((await ksel.textContent()).trim(), 'LV01 Voice', 'the button shows the choice'); eq((await pg.evaluate(() => window.simValues()))[6], 1, 'the Key parameter is 1');
   ok(/LV01 Voice is in this host and playing/.test(await ksel.getAttribute('title')), 'the instance is found (read-out): ' + await ksel.getAttribute('title'));
   eq(await pg.evaluate(() => !!document.getElementById('app').shadowRoot.querySelector('[data-key]')), false, 'the menu closed');
+  // VO05 Music from / LV29 Interp from (SW Link): the design has no chooser, the SW Link chip of the bottom bar opens one: what plays in this host now (a press takes that product) and all the choices
+  for (const [code, pname, nrows, second, pidx] of [['VO05', 'Music from', 126, 'All other SW AUDIO', 6], ['LV29', 'Interp from', 30, 'LV01 Voice', 5]]) {
+    await open(code); const chip = pg.locator('.evr[data-link]');
+    eq(await chip.count(), 1, code + ' has the SW Link chip');
+    await chip.click(); await pg.waitForTimeout(250);
+    const rows = await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('[data-src]')].map(r => r.textContent.replace('\u2713 ', '')));
+    eq(rows.length, nrows, code + ': the chooser lists the choices of ' + pname); eq(rows[0] + ' / ' + rows[1], 'Sidechain / ' + second, code + ': in the order of the parameter');
+    const peerRows = await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('div')].filter(d => /\u00b7 .*LUFS|\u00b7 silent/.test(d.textContent) && d.children.length === 0).map(d => d.textContent));
+    ok(peerRows.some(t => /^LV01 \u00b7 MC mic \u00b7 Vocal \u00b7 -18\.2 LUFS/.test(t)), code + ': the list of what plays in this host (LV01, MC mic, Vocal, -18.2 LUFS): ' + peerRows.join(' | '));
+    // a press on a peer takes that product (LV01 is in the choices of both)
+    await pg.evaluate(() => [...document.getElementById('app').shadowRoot.querySelectorAll('div')].find(d => d.children.length === 0 && /^LV01 \u00b7 MC mic/.test(d.textContent)).click()); await pg.waitForTimeout(300);
+    const val = (await pg.evaluate(() => window.simValues()))[pidx];
+    ok(val >= 1, code + ': the press on LV01 set ' + pname + ' (value ' + val + ')');
+    eq(await pg.evaluate(() => !!document.getElementById('app').shadowRoot.querySelector('[data-src]')), false, code + ': the chooser closed');
+  }
   await open('DY04'); eq(await pg.locator('.evob button[data-ref]').count(), 0, 'DY04 has no Reference button');
 
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match and LV05 Key: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match and LV05 Key, VO05 / LV29 SW Link source chooser: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

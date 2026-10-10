@@ -1659,6 +1659,49 @@
     return api;
   }
 
+  // ---- "Music from" (VO05) / "Interp from" (LV29): where the music (the interpreter) comes from - the host's sidechain or, with SW Link, other SW AUDIO instances in this host. The designs have no chooser:
+  // the "SW Link" chip of the bottom bar opens one. It lists what is playing in this host now (the product, the track's name and kind, the loudness: the registry of plugin/clap/swlink.hpp, asked with
+  // "linklist") - a press on a row takes that product - and all the choices of the parameter. `status(info)` is the line at the top (is the source there?).
+  const KIND_NAMES = ['Vocal', 'Drums', 'Bass', 'Guitar', 'Keys', 'Bus', 'Other'];
+  function linkSourceChip(box, ctx, name, what, status) {
+    const chip = box.querySelector('.evr[data-link]'), pk = ctx.params.find(q => q.name === name); if (!chip || !pk || !(pk.p.labels || []).length) return null;
+    const root = box.closest('.root') || box; let pop = null, peers = [], timer = null, lastInfo = null;
+    const index = () => Math.round(pk.c.norm(ctx.get(pk.i)) * (pk.p.steps.length - 1));
+    const close = () => { if (pop) { pop.remove(); pop = null; } if (timer) { clearInterval(timer); timer = null; } chip.classList.remove('on'); };
+    const choose = k => { ctx.begin(pk.i); ctx.set(pk.i, pk.p.steps[k]); ctx.end(pk.i); };
+    const row = (text, onclick, dim, mark) => {
+      const r = document.createElement('div'); r.textContent = (mark ? '\u2713 ' : '') + text; r.style.cssText = 'padding:4px 10px;white-space:nowrap;' + (dim ? 'color:#6b6d73' : 'cursor:pointer');
+      if (!dim) { r.onmouseenter = () => { r.style.background = '#2a2c31'; }; r.onmouseleave = () => { r.style.background = ''; }; r.onclick = () => { onclick(); close(); }; } return r;
+    };
+    const draw = () => {
+      if (!pop) return; pop.textContent = '';
+      const head = (t, c) => { const h = document.createElement('div'); h.textContent = t; h.style.cssText = 'padding:3px 10px;color:' + (c || '#8a8c92') + ';font-size:11px;max-width:320px;white-space:normal'; pop.append(h); };
+      head(what, '#c9cbd0'); head(status ? status(lastInfo) : '');
+      head('Playing in this host now (a press takes that product):');
+      const k = index(), codeOf = lab => lab.split(' ')[0];
+      if (!peers.length) pop.append(row('(nothing else: no other SW AUDIO plug-in is playing in this host process)', null, true));
+      peers.forEach(pr => {
+        const j = pk.p.labels.findIndex(l => codeOf(l) === pr[0]), lufs = pr[3] > -120 ? pr[3].toFixed(1) + ' LUFS' : 'silent';
+        pop.append(row(pr[0] + (pr[1] ? ' \u00b7 ' + pr[1] : '') + (pr[2] >= 0 && pr[2] < KIND_NAMES.length ? ' \u00b7 ' + KIND_NAMES[pr[2]] : '') + ' \u00b7 ' + lufs, () => choose(j), j < 0, j >= 0 && j === k));
+      });
+      head('Choices:');
+      pk.p.labels.forEach((lab, j) => { const r = row(lab, () => choose(j), false, j === k); r.dataset.src = String(j); pop.append(r); });
+    };
+    ctx.onLinkList(l => { peers = Array.isArray(l) ? l : []; draw(); });
+    chip.style.cursor = 'pointer';
+    chip.addEventListener('click', ev => {
+      ev.stopPropagation(); if (pop) { close(); return; }
+      const a = root.getBoundingClientRect(), b = chip.getBoundingClientRect(), z = root.offsetWidth ? a.width / root.offsetWidth : 1;
+      pop = document.createElement('div');
+      pop.style.cssText = 'position:absolute;z-index:70;min-width:230px;max-height:300px;overflow:auto;background:#1c1d21;border:1px solid #2f3137;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.5);padding:4px 0;font:12px "Barlow Condensed",sans-serif;color:#e6e6e8;'
+        + 'left:' + Math.max(4, (b.left - a.left) / z - 200).toFixed(0) + 'px;bottom:' + ((a.bottom - b.top) / z + 4).toFixed(0) + 'px';
+      root.append(pop); chip.classList.add('on'); draw(); ctx.call('linklist');
+      timer = setInterval(() => ctx.call('linklist'), 1000);
+    });
+    document.addEventListener('pointerdown', e => { if (pop && !(e.target && chip.contains(e.target))) { const p = e.composedPath ? e.composedPath() : []; if (!p.includes(pop)) close(); } });
+    return { update(info) { lastInfo = info; if (pop) draw(); }, destroy() { close(); } };
+  }
+
   // ---- LV05: the second dashed line and its label ("-12 dB") are the ducking Depth: they move with the parameter (the first one is 0 dB, the background's own level)
   function depthLineDisplay(box, ctx, y) {
     const svg = svgOf(box); if (!svg) return null;
@@ -2086,7 +2129,9 @@
     CR05: tapeStopDisplay,
     MD02: (box, ctx) => lfoDisplay(box, ctx, 'sine'), MD04: (box, ctx) => lfoDisplay(box, ctx, 'shape'),
     LV22: polarityGauge, LV05: (box, ctx) => combine(gainTraceDisplay(box, ctx, { y: db => clamp(22 - db * 40 / 12, 14, 90) }), depthLineDisplay(box, ctx, db => clamp(22 - db * 40 / 12, 14, 90)), linkKeySelect(box, ctx)), LV29: (box, ctx) => gainTraceDisplay(box, ctx, { y: db => clamp(30 - db * 40 / 24, 14, 80) }),
-    MS05: riderDisplay, VO05: riderDisplay, GT03: tunerReadout,
+    MS05: riderDisplay, GT03: tunerReadout,
+    VO05: (box, ctx) => combine(riderDisplay(box, ctx), linkSourceChip(box, ctx, 'Music from', "Music from: the host's sidechain, or the loudness of other SW AUDIO instances in this host (SW Link)", info => { const l = info && info.readouts && info.readouts.length > 1 ? info.readouts[1] : -1; return l < 0 ? '' : l ? 'Listening to the music.' : 'Not listening: nothing audible from this source.'; })),
+    LV29: (box, ctx) => { const pf = ctx.params.find(q => q.name === 'Interp from'); return linkSourceChip(box, ctx, 'Interp from', "Interp from: the host's sidechain, or the output of another SW AUDIO instance in this host (SW Link)", info => { const r = info && info.readouts; return r && r.length > 2 && pf && ctx.get(pf.i) > 0 ? (r[2] > 0.5 ? 'The source is there and playing.' : 'The source is not there (or not playing).') : ''; }); },
     DY05: deesserDisplay,
     MT04: stereoScope, UT02: stereoScope, UT01: trackGain, ST01: (box, ctx) => { const a = stereoBandsDisplay(box, ctx, ['Low width', 'Lo mid width', 'Hi mid width', 'High width']), b = stereoScope(box, ctx); st01Chips(box, ctx); return { update(i) { if (a) a.update(i); if (b) b.update(i); } }; }, LV26: stereoScope,
     RS03: (box, ctx) => textRules(box, ctx, [{ re: /^Hum at \d+ Hz and \d+ harmonics$/, text: (info, ctx) => { const hz = info.readouts && info.readouts.length >= 1 && info.readouts[0] > 0 ? info.readouts[0] : null, b = ctx.value('Base') !== undefined ? ctx.value('Base') : ctx.value('Base Hz'), f = hz ? hz.toFixed(hz % 1 ? 1 : 0) : (b < 0.5 ? '50' : b < 1.5 ? '60' : 'auto'), n = ctx.value('Harmonics'); return 'Hum at ' + f + ' Hz' + (n > 1 ? ' and ' + (n - 1) + (n - 1 === 1 ? ' harmonic' : ' harmonics') : ' only'); } }]),

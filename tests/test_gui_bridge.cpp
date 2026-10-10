@@ -156,3 +156,15 @@ TEST_CASE("GUI stereo scope: correlation of in-phase, out-of-phase and independe
     { gui::SpectrumTap t3; std::vector<float> q(n); for (int i = 0; i < n; ++i) q[i] = static_cast<float>(0.5 * std::sin(0.05 * i + 1.5708)); float* ch[2] = {l.data(), q.data()}; t3.pushStereo(ch, 2, n); t3.stereo(o); CHECK(std::abs(o[0]) < 0.1); }
     { gui::SpectrumTap t4; double z[1 + 2 * gui::kGonioPts]; t4.stereo(z); CHECK(z[0] == 0.0); }
 }
+
+namespace {
+struct FakeWithList : Fake { std::string linkListScript() { return "SWHOST.linkList([[\"LV01\",\"MC mic\",0,-18.2]]);"; } };
+}
+TEST_CASE("GUI session: 'linklist' is answered with the list of the other SW AUDIO instances when the plug-in has one, and is not passed on as a button") {
+    FakeWithList f; f.v = {1.0}; gui::Session<FakeWithList> s(f);
+    CHECK(s.onMessage("c linklist") == "SWHOST.linkList([[\"LV01\",\"MC mic\",0,-18.2]]);");
+    for (const auto& l : f.log) CHECK(l.rfind("c:linklist", 0) != 0);
+    Fake g; g.v = {1.0}; gui::Session<Fake> t(g);
+    CHECK(t.onMessage("c linklist").empty());                                       // a facade without the list: nothing (and no button call either)
+    for (const auto& l : g.log) CHECK(l.rfind("c:linklist", 0) != 0);
+}

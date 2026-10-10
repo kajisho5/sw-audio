@@ -22,6 +22,13 @@ TEST_CASE("LV29 table follows the spec") {
     CHECK(s[Crossfade].min == 50); CHECK(s[Crossfade].max == 2000); CHECK(s[Crossfade].def == 400); CHECK(s[Crossfade].curve == Curve::Log);
     CHECK(s[InterpLevel].min == -20); CHECK(s[InterpLevel].max == 10); CHECK(s[InterpLevel].def == 0); CHECK(s[AutoDetect].def == 1);
     Processor q; CHECK(q.latencySamples() == 0);
+    // Interp from (SW Link; appended at the end): the host's sidechain or the output of the instance of one LIVE product (not LV29 itself)
+    const auto& f = s[InterpFrom];
+    CHECK(std::string(f.id) == "lv29.link.interp"); CHECK(f.def == 0); CHECK_FALSE(f.automatable); CHECK(f.curve == Curve::Step);
+    REQUIRE(f.labels.size() > 20); CHECK(f.labels[0] == "Sidechain"); CHECK(f.steps.size() == f.labels.size());
+    CHECK(std::find(f.labels.begin(), f.labels.end(), "LV01 Voice") != f.labels.end()); CHECK(std::find(f.labels.begin(), f.labels.end(), "LV29 Interp Mix") == f.labels.end());
+    for (size_t k = 1; k < f.labels.size(); ++k) { CHECK(f.labels[k].rfind("LV", 0) == 0); CHECK(f.labels[k].rfind(Processor::interpProduct(static_cast<int>(k)), 0) == 0); }
+    CHECK(Processor::interpProduct(0) == nullptr);
 }
 TEST_CASE("LV29 without an interpreter the floor passes untouched") {
     auto p = make(); const auto x = noise(-20, 1.0, 3), y = run(p, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(y[i] == x[i]);
@@ -57,4 +64,21 @@ TEST_CASE("LV29 stereo sidechain, mono, odd blocks, before prepare") {
     for (size_t off = 0; off < l.size(); off += 77) { const int n = static_cast<int>(std::min<size_t>(77, l.size() - off)); float* c[1] = {l.data() + off}; const float* sc[2] = {s0.data() + off, s1.data() + off}; p.processWithSidechain(c, 1, n, sc, 2); }
     for (float v : l) REQUIRE(std::isfinite(v));
     Processor z; std::vector<float> a(256, 0.3f); float* c[1] = {a.data()}; z.process(c, 1, 256); CHECK(a[0] == 0.3f);
+}
+
+TEST_CASE("LV29 when the interpreter's line goes away (the sidechain is unplugged, the SW Link source stops) the floor comes back over the Crossfade, not at once") {
+    const auto floor = sine(-20, 4.0, 300), interp = sine(-20, 4.0, 900);
+    auto p = make({{AutoDetect, 0}, {Crossfade, 400}});   // Auto detect Off: the floor is under whenever the line is there
+    std::vector<float> a(floor.begin(), floor.begin() + 2 * 48000), s(interp.begin(), interp.begin() + 2 * 48000), r = a;
+    for (size_t off = 0; off < a.size(); off += 256) { float* c[2] = {a.data() + off, r.data() + off}; const float* sc[2] = {s.data() + off, s.data() + off}; p.processWithSidechain(c, 2, 256, sc, 2); }
+    NEAR(p.floorGainDb(), -14.0, 0.5);
+    // the line is gone: the same floor goes in with no sidechain at all
+    std::vector<float> b(floor.begin() + 2 * 48000, floor.end()), br = b;
+    for (size_t off = 0; off < b.size(); off += 256) { float* c[2] = {b.data() + off, br.data() + off}; p.processWithSidechain(c, 2, 256, nullptr, 0); }
+    const double ref0 = binDb(floor, 300, 2 * 48000, 2 * 48000 + 2400);
+    CHECK(binDb(b, 300, 0, 2400) < ref0 - 6.0);                  // the first 50 ms: still well under (it did not jump to full level)
+    CHECK(binDb(b, 300, 24000, 48000) > ref0 - 1.0);             // after 0.5 s .. 1 s: back to full
+    NEAR(p.floorGainDb(), 0.0, 0.2);
+    // and without any line from the start the floor is the input, bit for bit (as before)
+    auto q = make({{AutoDetect, 0}}); const auto x = noise(-20, 1.0, 3), y = run(q, x); for (size_t i = 0; i < x.size(); ++i) REQUIRE(y[i] == x[i]);
 }

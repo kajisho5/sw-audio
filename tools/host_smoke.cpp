@@ -787,6 +787,84 @@ bool linkLowKeyChecks(const std::vector<fs::path>& files) {
     return ok;
 }
 
+// SW Link, the loudness every instance publishes: VO05 with Music from = "All other SW AUDIO" (and = one product) rides the vocal against the loudness of the other instances (MT02 Spectrum here, which passes its input
+// as it is) with no sidechain; a louder music lifts the vocal by as much; "Music: Listening" (readout 1) says whether anything audible plays; an instance that stops does not count any more.
+// LV29 with Interp from = LV01: the interpreter's line is LV01's output, the floor goes under (Auto detect Off) while it is there and passes as it is when it is not.
+bool linkLoudnessChecks(const std::vector<fs::path>& files) {
+    auto find = [&](const char* code) { for (const auto& f : files) if (f.stem().string().find(std::string(" ") + code + " ") != std::string::npos) return f; return fs::path(); };
+    bool ok = true; double rideLoud = 0, rideQuiet = 0, lv29Floor = 0; auto fail = [&](const std::string& t) { std::printf("FAIL  SW Link loudness: %s\n", t.c_str()); ok = false; };
+    auto idOf = [&](Loaded& x, const char* name) { const auto* pe = static_cast<const clap_plugin_params_t*>(x.p->get_extension(x.p, CLAP_EXT_PARAMS)); for (uint32_t i = 0; pe && i < pe->count(x.p); ++i) { clap_param_info_t pi{}; if (pe->get_info(x.p, i, &pi) && std::string(pi.name) == name) return pi.id; } return CLAP_INVALID_ID; };
+    auto readouts = [&](Loaded& x) { const auto a = updateArrays(x.m->send(x.p, "p")); return a.size() > 3 ? a[3] : std::vector<double>{}; };
+    auto textValue = [&](Loaded& x, clap_id id, const char* text, double& v) { const auto* pe = static_cast<const clap_plugin_params_t*>(x.p->get_extension(x.p, CLAP_EXT_PARAMS)); return pe && pe->text_to_value(x.p, id, text, &v); };
+    const fs::path fv = find("VO05"), fm = find("MT02"), f2 = find("MT01"), fl = find("LV29"), fk = find("LV01");
+    if (!fv.empty() && !fm.empty() && !f2.empty()) {
+        Loaded v, m, m2; std::string why;
+        if (!v.open(fv, why)) { fail("VO05 " + why); return false; }
+        if (!m.open(fm, why)) { fail("MT02 " + why); v.close(); return false; }
+        if (!m2.open(f2, why)) { fail("MT01 " + why); v.close(); m.close(); return false; }
+        const clap_id write = idOf(v, "Write automation"), range = idOf(v, "Range"), target = idOf(v, "Target"), from = idOf(v, "Music from");
+        if (write == CLAP_INVALID_ID || range == CLAP_INVALID_ID || target == CLAP_INVALID_ID || from == CLAP_INVALID_ID) { fail("VO05 has no Write automation / Range / Target / Music from"); v.close(); m.close(); m2.close(); return false; }
+        EventList setUp; setUp.set(write, 1.0); setUp.set(range, 1.0); setUp.set(target, (-6.0 + 40.0) / 34.0); setUp.set(from, 1.0);   // Write On, Range 12, Target -6 (the top of its range), Music from = All other SW AUDIO
+        EventList none;
+        m.run.toneHz = 1000.0; m2.run.toneHz = 1000.0; m2.run.toneDb = -60.0;
+        auto play = [&](int blocks, double musicDb, bool musicPlays, uint64_t seed) {
+            for (int i = 0; i < blocks; ++i) {
+                m.run.toneDb = musicDb; if (musicPlays) m.run.process(1, seed + static_cast<uint64_t>(i), none);
+                v.run.process(1, 5000u + seed + static_cast<uint64_t>(i), i == 0 && seed == 1 ? setUp : none);
+            }
+        };
+        const int sec = static_cast<int>(std::lround(kSr / kBlock));   // blocks per second
+        play(14 * sec, -12.0, true, 1); auto r1 = readouts(v);
+        // the ride lifts the vocal against the music the others play: a quieter music by 6 dB lowers the ride by 6 dB
+        play(14 * sec, -18.0, true, 20000); auto r2 = readouts(v);
+        if (r1.size() < 2 || r2.size() < 2) fail("VO05 has no read-outs");
+        else {
+            rideLoud = r1[0]; rideQuiet = r2[0];
+            if (r1[1] != 1.0) fail("VO05 should be listening to the music of the other instances (MT02 plays -12 dBFS)");
+            if (!(std::abs((r1[0] - r2[0]) - 6.0) < 1.5)) fail("a music 6 dB louder from SW Link should lift the ride by about 6 dB (ride " + std::to_string(r1[0]) + " dB against " + std::to_string(r2[0]) + " dB)");
+            if (!(r1[0] > -12.0 && r1[0] < 12.0)) fail("the ride should have moved inside Range (" + std::to_string(r1[0]) + " dB)");
+        }
+        // MT02 stops (it is not processed any more): after a while nothing plays - not listening, the ride stays where it is
+        const double rideBefore = r2.size() > 0 ? r2[0] : 0.0;
+        play(4 * sec, -18.0, false, 40000); auto r3 = readouts(v);
+        if (r3.size() < 2 || r3[1] != 0.0) fail("VO05 should not be listening when the other instances stop");
+        else if (std::abs(r3[0] - rideBefore) > 0.5) fail("the ride should hold when nothing plays (" + std::to_string(rideBefore) + " -> " + std::to_string(r3[0]) + " dB)");
+        // one product: Music from = "MT02 Spectrum" (MT01, silent, plays on and must not count)
+        double mt02 = 0; if (!textValue(v, from, "MT02 Spectrum", mt02)) fail("Music from has no \"MT02 Spectrum\"");
+        else {
+            EventList pick; pick.set(from, mt02);
+            v.run.process(1, 7, pick);
+            for (int i = 0; i < 10 * sec; ++i) { m.run.toneDb = -12.0; m.run.process(1, 60000u + static_cast<uint64_t>(i), none); m2.run.process(1, 61000u + static_cast<uint64_t>(i), none); v.run.process(1, 62000u + static_cast<uint64_t>(i), none); }
+            const auto r4 = readouts(v);
+            if (r4.size() < 2 || r4[1] != 1.0) fail("VO05 should be listening to MT02 alone"); else if (std::abs(r4[0] - r1[0]) > 1.5) fail("music from MT02 alone should give the same ride as from all the others (" + std::to_string(r4[0]) + " dB against " + std::to_string(r1[0]) + " dB)");
+        }
+        v.close(); m.close(); m2.close();
+    }
+    if (!fl.empty() && !fk.empty()) {
+        Loaded d, k; std::string why;
+        if (!d.open(fl, why)) { fail("LV29 " + why); return false; }
+        if (!k.open(fk, why)) { fail("LV01 " + why); d.close(); return false; }
+        const clap_id autoId = idOf(d, "Auto detect"), from = idOf(d, "Interp from");
+        if (autoId == CLAP_INVALID_ID || from == CLAP_INVALID_ID) { fail("LV29 has no Auto detect / Interp from"); d.close(); k.close(); return false; }
+        EventList none, autoOff; autoOff.set(autoId, 0.0);                   // Auto detect Off: the floor is under whenever the interpreter's line is there
+        d.run.process(2, 1, autoOff); k.run.process(2, 2, none);
+        { const auto r = readouts(d); if (r.size() < 3 || std::abs(r[0]) > 0.01 || r[2] != 0.0) fail("LV29 with Interp from = Sidechain and no sidechain should pass the floor (gain 0 dB, nothing found)"); }
+        double lv01 = 0; if (!textValue(d, from, "LV01 Voice", lv01)) fail("Interp from has no \"LV01 Voice\"");
+        else {
+            EventList pick; pick.set(from, lv01); d.run.process(1, 3, pick);
+            const int perSec = static_cast<int>(std::lround(kSr / kBlock));   // (a time in seconds: the Crossfade of 400 ms is the same at any sample rate)
+            for (int i = 0; i < 2 * perSec; ++i) { k.run.process(1, 100u + static_cast<uint64_t>(i), none); d.run.process(1, 600u + static_cast<uint64_t>(i), none); }
+            { const auto r = readouts(d); if (!r.empty()) lv29Floor = r[0]; if (r.size() < 3 || r[2] != 1.0 || std::abs(r[0] - (-14.0)) > 1.0) fail("LV29 with Interp from = LV01 Voice should find it and take the floor 14 dB under (gain " + std::to_string(r.empty() ? 99.0 : r[0]) + " dB, found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
+            // LV01 stops: the line is gone, the floor comes back
+            for (int i = 0; i < 4 * static_cast<int>(std::lround(kSr / kBlock)); ++i) d.run.process(1, 2000u + static_cast<uint64_t>(i), none);
+            { const auto r = readouts(d); if (r.size() < 3 || r[2] != 0.0 || std::abs(r[0]) > 1.0) fail("with LV01 not playing the floor should come back to full (gain " + std::to_string(r.empty() ? 99.0 : r[0]) + " dB, found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
+        }
+        d.close(); k.close();
+    }
+    if (ok) std::printf("ok    SW Link loudness: VO05 rides against the loudness of the other instances (all of them, or MT02 alone; music at -12 dBFS gives a ride of %.2f dB, at -18 dBFS %.2f dB; it holds when they stop), LV29 takes LV01's output as the interpreter's line (floor %.2f dB under)\n", rideLoud, rideQuiet, lv29Floor);
+    return ok;
+}
+
 // SW Link shared setting: two MT05 instances in one process (the same binary opened twice, as a host with two tracks does): a change of the 0 VU reference made on one reaches the other's parameter, a late
 // instance takes the value that is already there, and a change on the second goes back to the first (the last change wins).
 bool linkSharedChecks(const std::vector<fs::path>& files) {
@@ -1558,7 +1636,7 @@ int main(int argc, char** argv) {
         return ok ? 0 : 1;
     }
     if (linkOnly) {   // --link: only the SW Link checks
-        bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkLowKeyChecks(files) && ok; ok = linkSharedChecks(files) && ok;
+        bool ok = linkChecks(files); ok = linkReferenceChecks(files) && ok; ok = linkKeyChecks(files) && ok; ok = linkLowKeyChecks(files) && ok; ok = linkLoudnessChecks(files) && ok; ok = linkSharedChecks(files) && ok;
         return ok ? 0 : 1;
     }
     if (reactivateOnly) {   // --reactivate: only the activate-again check
@@ -1634,6 +1712,7 @@ int main(int argc, char** argv) {
     if (!linkReferenceChecks(files)) ++fails;
     if (!linkKeyChecks(files)) ++fails;
     if (!linkLowKeyChecks(files)) ++fails;
+    if (!linkLoudnessChecks(files)) ++fails;
     if (!linkSharedChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }

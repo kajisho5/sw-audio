@@ -9,8 +9,11 @@ struct Lv29 {
     static constexpr int kOutputParam = -1;
     static constexpr int kInParam = -1;
     static constexpr int kMixParam = -1;
-    static constexpr int kReadouts = 2;   // floor gain (dB), interpreter speaking (1 / 0)
-    static void readouts(const Core& c, double* o) { o[0] = c.floorGainDb(); o[1] = c.interpreterSpeaking() ? 1.0 : 0.0; }
+    static constexpr int kReadouts = 3;   // floor gain (dB), interpreter speaking (1 / 0), the interpreter's source found in SW Link (1 / 0; the adapter writes it)
+    static void readouts(const Core& c, double* o) { o[0] = c.floorGainDb(); o[1] = c.interpreterSpeaking() ? 1.0 : 0.0; o[2] = 0.0; }
+    // SW Link: Interp from = the output of the instance of one LIVE product replaces the sidechain
+    static const char* linkKeyOf(const Core& c) { return c.interpSource(); }
+    static constexpr int kLinkKeyReadout = 2;
     static constexpr bool kAutoGain = false;
     static constexpr bool kDelta = false;
     static const clap_plugin_descriptor_t* descriptor() {

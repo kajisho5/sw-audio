@@ -13,7 +13,7 @@
 
 namespace sw::vo05 {
 
-enum ParamId { Target, Range, Sensitivity, BreathSkip, Ride, Write, kNumParams };
+enum ParamId { Target, Range, Sensitivity, BreathSkip, Ride, Write, MusicFrom, kNumParams };
 
 const std::vector<ParamSpec>& specs();
 
@@ -30,6 +30,12 @@ public:
     bool listening() const { return listening_; }       // "Music: Listening"
     double vocalLufs() const;
     double musicLufs() const;
+    // SW Link: where the music comes from (Music from: 0 the sidechain, 1 all the other SW AUDIO instances, 2.. the instance of one product): the plugin layer calls musicProduct() to know what to ask SW Link
+    // for, and hands the loudness it found (short-term LUFS of that instance's output, or of all the others added) to setLinkedMusic() before every block. With Music from >= 1 the sidechain is not listened to.
+    static const char* musicProduct(int step);        // nullptr: the sidechain; "*": all the others; otherwise the product code
+    bool musicFromLink() const { return target_[MusicFrom] >= 0.5; }
+    int musicFrom() const { return static_cast<int>(target_[MusicFrom] + 0.5); }
+    void setLinkedMusic(bool valid, double lufs) { linkValid_ = valid; linkMs_ = valid ? std::pow(10.0, (lufs + 0.691) / 10.0) : 0.0; }
     // plugin layer: bit 0 = begin gesture, bit 1 = value (plain dB), bit 2 = end gesture; 0 = nothing to report
     int takeParamWrite(int& id, double& plain);
 
@@ -44,7 +50,8 @@ private:
     std::array<double, kNumParams> target_{};
     std::array<KWeighting, 2> kv_{}, km_{};
     std::array<std::array<Svf, 2>, 2> hp_{}, lp_{};
-    bool open_ = false, dirty_ = false, listening_ = false, moving_ = false;
+    bool open_ = false, dirty_ = false, listening_ = false, moving_ = false, linkValid_ = false;
+    double linkMs_ = 0;                            // the music (mean square, K-weighted) SW Link gave
 };
 
 }  // namespace sw::vo05

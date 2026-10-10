@@ -24,7 +24,7 @@ std::vector<float> runSc(Processor& p, std::vector<float> voc, const std::vector
 TEST_CASE("VO05 table follows the spec") {
     const auto& s = specs();
     REQUIRE(s.size() == static_cast<size_t>(kNumParams));
-    const char* ids[] = {"vo05.target", "vo05.range", "vo05.sensitivity", "vo05.breathskip", "vo05.ride", "vo05.evo.on"};
+    const char* ids[] = {"vo05.target", "vo05.range", "vo05.sensitivity", "vo05.breathskip", "vo05.ride", "vo05.evo.on", "vo05.link.music"};
     for (int i = 0; i < kNumParams; ++i) CHECK(std::string(s[static_cast<size_t>(i)].id) == ids[i]);
     CHECK(s[Target].min == -40); CHECK(s[Target].max == -6); CHECK(s[Target].def == -18);
     CHECK(s[Range].min == 0); CHECK(s[Range].max == 12); CHECK(s[Range].def == 6);
@@ -32,6 +32,15 @@ TEST_CASE("VO05 table follows the spec") {
     CHECK(s[BreathSkip].labels == std::vector<std::string>{"Off", "On"}); CHECK(s[BreathSkip].def == 1);
     CHECK(s[Ride].min == -12); CHECK(s[Ride].max == 12); CHECK(s[Ride].def == 0); CHECK(s[Ride].automatable);
     CHECK(s[Write].def == 0); CHECK_FALSE(s[Write].automatable);
+    // Music from (SW Link; appended at the end): the host's sidechain, all the other SW AUDIO instances, or the instance of one product (not a vocal product)
+    const auto& m = s[MusicFrom];
+    CHECK(m.def == 0); CHECK_FALSE(m.automatable); CHECK(m.curve == Curve::Step);
+    REQUIRE(m.labels.size() > 20); CHECK(m.labels[0] == "Sidechain"); CHECK(m.labels[1] == "All other SW AUDIO");
+    CHECK(m.steps.size() == m.labels.size()); CHECK(m.steps.front() == 0); CHECK(m.steps.back() == static_cast<double>(m.labels.size() - 1));
+    CHECK(std::find(m.labels.begin(), m.labels.end(), "MS06 Master Chain") != m.labels.end());
+    for (const auto& l : m.labels) CHECK(l.rfind("VO", 0) != 0);          // no vocal product can be the music
+    CHECK(Processor::musicProduct(0) == nullptr); CHECK(std::string(Processor::musicProduct(1)) == "*"); CHECK(std::string(Processor::musicProduct(2)).size() == 4);
+    for (size_t k = 2; k < m.labels.size(); ++k) CHECK(m.labels[k].rfind(Processor::musicProduct(static_cast<int>(k)), 0) == 0);   // the label begins with the code
 }
 TEST_CASE("VO05 the ride pulls the vocal to music + Target, within Range") {
     // vocal -30 dBFS, music -20 dBFS (both 1 kHz): the vocal should sit at music - 18 = -38, so the ride is -8 dB
@@ -108,4 +117,31 @@ TEST_CASE("VO05 silence stays silent, extreme input finite, latency 0") {
     std::vector<float> x(4800); for (size_t i = 0; i < x.size(); ++i) x[i] = (i & 1) ? 1e6f : -1e6f;
     for (float v : runSc(p, x, x)) REQUIRE(std::isfinite(v));
     CHECK(p.latencySamples() == 0);
+}
+
+TEST_CASE("VO05 Music from SW Link: the level the other instances give is the music (no sidechain); the sidechain is not used then") {
+    // vocal -30 dBFS (1 kHz); the linked music is 20 dB louder than -20 dBFS means -20 LUFS-ish: the same ride as with a sidechain of -20 dBFS (K-weighting of a 1 kHz sine is +0.7 dB: use the meter's own number)
+    auto asSc = make({{Write, 1}, {Range, 12}, {Target, -18}});
+    runSc(asSc, sine(-30, 14), sine(-20, 14));
+    const double musicLufs = asSc.musicLufs();
+    // fed by SW Link: the same music as a number, and a sidechain with something else (-10 dBFS) that must not be listened to
+    auto p = make({{Write, 1}, {Range, 12}, {Target, -18}, {MusicFrom, 1}});
+    std::vector<float> voc = sine(-30, 14), r = voc; const auto loud = sine(-10, 14);
+    for (size_t off = 0; off + 256 <= voc.size(); off += 256) { float* c[2] = {voc.data() + off, r.data() + off}; const float* sc[2] = {loud.data() + off, loud.data() + off}; p.setLinkedMusic(true, musicLufs); p.processWithSidechain(c, 2, 256, sc, 2); }
+    NEAR(p.rideDb(), asSc.rideDb(), 0.3); CHECK(p.listening());
+    // a louder music from SW Link lifts the vocal by as much
+    auto q = make({{Write, 1}, {Range, 12}, {Target, -18}, {MusicFrom, 1}});
+    std::vector<float> v2 = sine(-30, 14), r2 = v2;
+    for (size_t off = 0; off + 256 <= v2.size(); off += 256) { float* c[2] = {v2.data() + off, r2.data() + off}; q.setLinkedMusic(true, musicLufs + 6.0); q.process(c, 2, 256); }
+    NEAR(q.rideDb() - p.rideDb(), 6.0, 0.6);
+    // nothing audible from SW Link (no instance plays): not listening, the ride stays where it is
+    auto z = make({{Write, 1}, {Range, 12}, {MusicFrom, 1}});
+    std::vector<float> v3 = sine(-30, 8), r3 = v3;
+    for (size_t off = 0; off + 256 <= v3.size(); off += 256) { float* c[2] = {v3.data() + off, r3.data() + off}; z.setLinkedMusic(false, -200.0); z.process(c, 2, 256); }
+    NEAR(z.rideDb(), 0.0, 1e-9); CHECK_FALSE(z.listening());
+    // Music from = Sidechain: the number from SW Link is not used, the sidechain is (as before)
+    auto w = make({{Write, 1}, {Range, 12}, {Target, -18}, {MusicFrom, 0}});
+    std::vector<float> v4 = sine(-30, 14), r4 = v4; const auto m4 = sine(-20, 14);
+    for (size_t off = 0; off + 256 <= v4.size(); off += 256) { float* c[2] = {v4.data() + off, r4.data() + off}; const float* sc[2] = {m4.data() + off, m4.data() + off}; w.setLinkedMusic(false, -5.0); w.processWithSidechain(c, 2, 256, sc, 2); }
+    NEAR(w.rideDb(), asSc.rideDb(), 0.3);
 }

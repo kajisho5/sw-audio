@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace sw::gui {
@@ -132,6 +133,10 @@ inline bool parseMessage(const std::string& m, Message& out) {
     return true;
 }
 
+// optional on the facade F: std::string linkListScript() -> "SWHOST.linkList([[product, track name, kind, LUFS], ...]);"
+template <class F, class = void> struct HasLinkList : std::false_type {};
+template <class F> struct HasLinkList<F, std::void_t<decltype(std::declval<F&>().linkListScript())>> : std::true_type {};
+
 // A window's session: messages in, a script (or nothing) out. F provides numParams(), plain(i), begin(i), set(i, v), end(i), latencyMs(), cpu(), meter(k) (dBFS: in L, in R, out L, out R), spectrum(double* kSpecBands dB), numReadouts(), readout(i), stereo(double* 1 + 2 * kGonioPts), link(double* 1 + kSpecBands) -> how many values (SW Link: peers, then the others' spectrum), call(name, args).
 template <class F>
 class Session {
@@ -145,7 +150,10 @@ public:
             case 'b': if (x.index < n) f_.begin(x.index); break;
             case 'e': if (x.index < n) f_.end(x.index); break;
             case 's': if (x.index < n) f_.set(x.index, x.value); break;
-            case 'c': if (x.name.rfind("preset", 0) == 0) return presetCall(x.name, x.args); f_.call(x.name, x.args); break;
+            case 'c':
+                if (x.name.rfind("preset", 0) == 0) return presetCall(x.name, x.args);
+                if (x.name == "linklist") { if constexpr (HasLinkList<F>::value) return f_.linkListScript(); else return ""; }   // the other SW AUDIO instances in this host, for the chooser of a SW Link source
+                f_.call(x.name, x.args); break;
             case 'p': case 'r': return snapshot();
             default: break;
         }

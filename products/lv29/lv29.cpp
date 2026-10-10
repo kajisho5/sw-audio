@@ -1,4 +1,6 @@
 #include "lv29/lv29.hpp"
+#include "sw/link_products.hpp"
+#include <cstring>
 #include <algorithm>
 #include <cmath>
 
@@ -12,17 +14,37 @@ const std::vector<ParamSpec>& specs() {
         {"lv29.interp",   "Interp level", -20, 10, 0, Curve::Lin, 1, {}, "dB"},
         {"lv29.auto",     "Auto detect",  0, 1, 1,    Curve::Step, 1, {0, 1}, "", {"Off", "On"}},
     };
-    return s;
+    static const std::vector<ParamSpec> all = [] {
+        std::vector<ParamSpec> v = s;
+        // Interp from (appended at the end, SW Link; the spec: "the interpreter comes in on the sidechain or SW Link"): the sidechain, or the output of one LIVE product (the LV05 Key's list; LV29 itself is not in it)
+        ParamSpec f{"lv29.link.interp", "Interp from", 0, 0, 0, Curve::Step, 1, {}, "", {}, nullptr, nullptr, 1.0, false};
+        f.labels = {"Sidechain"};
+        size_t n = 0; const LinkProduct* lp = linkProducts(n);
+        for (size_t k = 0; k < n; ++k) if (std::strncmp(lp[k].code, "LV", 2) == 0 && std::strcmp(lp[k].code, "LV29") != 0) f.labels.push_back(lp[k].label);
+        for (size_t k = 0; k < f.labels.size(); ++k) f.steps.push_back(static_cast<double>(k));
+        f.max = static_cast<double>(f.labels.size() - 1);
+        v.push_back(f);
+        return v;
+    }();
+    return all;
+}
+
+const char* Processor::interpProduct(int step) {
+    if (step <= 0) return nullptr;
+    int k = step - 1; size_t n = 0; const LinkProduct* lp = linkProducts(n);
+    for (size_t i = 0; i < n; ++i) if (std::strncmp(lp[i].code, "LV", 2) == 0 && std::strcmp(lp[i].code, "LV29") != 0) { if (k-- == 0) return lp[i].code; }
+    return nullptr;
 }
 
 Processor::Processor() { for (int i = 0; i < kNumParams; ++i) target_[static_cast<size_t>(i)] = specs()[static_cast<size_t>(i)].def; }
 
 void Processor::prepare(double sampleRate, int maxBlock) {
-    fs_ = sampleRate; vd_.prepare(fs_); mono_.assign(static_cast<size_t>(std::max(1, maxBlock) + 8), 0.0f); speaking_ = false; ph_ = 0; prepared_ = true; gF_ = goalFloor(); gI_ = goalInterp();
+    fs_ = sampleRate; vd_.prepare(fs_); mono_.assign(static_cast<size_t>(std::max(1, maxBlock) + 8), 0.0f); speaking_ = false; line_ = false; ph_ = 0; prepared_ = true; gF_ = goalFloor(); gI_ = goalInterp();
 }
 void Processor::setParam(int id, double v) { const auto& sp = specs()[static_cast<size_t>(id)]; target_[static_cast<size_t>(id)] = sp.toValue(sp.toNorm(v)); }
 
 double Processor::goalFloor() const {
+    if (!line_) return 1.0;   // no interpreter's line: the floor is the floor, whatever Output says (it comes back over the Crossfade when the line goes away)
     switch (static_cast<int>(target_[Output] + 0.5)) {
         case FloorOnly: return 1.0;
         case InterpOnly: return 0.0;
@@ -34,9 +56,11 @@ double Processor::goalInterp() const { return static_cast<int>(target_[Output] +
 void Processor::processWithSidechain(float** ch, int numCh, int n, const float* const* sc, int scCh) {
     if (!prepared_ || numCh < 1 || n <= 0) return;
     const int nc = std::min(numCh, 2); const bool hasInterp = sc && scCh > 0 && sc[0];
-    if (!hasInterp) return;   // nothing to mix: the floor passes
+    // no interpreter's line (no sidechain, or the SW Link source is gone): the floor passes as it is - after it has come back to full level over the Crossfade, if it was under
+    if (!hasInterp && !line_ && gF_ == 1.0 && gI_ < 1e-9) return;
+    line_ = hasInterp;
     if (static_cast<size_t>(n) > mono_.size()) mono_.assign(static_cast<size_t>(n), 0.0f);
-    for (int i = 0; i < n; ++i) mono_[static_cast<size_t>(i)] = scCh > 1 && sc[1] ? 0.5f * (sc[0][i] + sc[1][i]) : sc[0][i];
+    for (int i = 0; i < n; ++i) mono_[static_cast<size_t>(i)] = !hasInterp ? 0.0f : scCh > 1 && sc[1] ? 0.5f * (sc[0][i] + sc[1][i]) : sc[0][i];
     // the interpreter is judged on a grid of the stream (every kPiece samples, wherever the host's block starts): the detector is fed up to the end of each piece, the goal for the next piece follows
     const double a = 1.0 - std::exp(-3.0 / (0.001 * target_[Crossfade] * fs_));
     for (int off = 0; off < n;) {

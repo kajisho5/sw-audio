@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.16.0：132 製品が完成（単体テスト 1660 件（1656 件までは ASan・UBSan でも全合格、追加 4 件は関連テストだけ ASan 確認）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッドと窓のスレッドを同時に）で全製品 0 件。GitHub Actions は run 172＝v0.16.0（EQ05 の Match・EQ08／EQ02 の別スレッド設計・音声スレッドの確保の検査・MS07・CS04）まで Windows・macOS（auval の aumf を含む）・Linux で全ジョブ成功。そのあと：run 173 は macOS の ARM で SW Link の参照スペクトルの読み出しが混ざる不具合を見つけた〔弱い順序の CPU：シーケンスロックのフェンスを足して直した。run 174 で macOS・Windows は成功〕、Linux は試験の作りの不具合で 1 件〔書き手が動き出す前に試行が終わる：直した〕。run 175 は Linux の host_smoke の LV05 の Key で落ちた〔原因は試験：待つ長さをブロック数で固定していて 96 kHz では半分の時間になった。秒で決める形に直した。調査中に readKey の別の不具合〔同じ製品の止まったスロットが 2 つあると鍵を読み続ける〕も見つけて直した〕。修正後の実行は結果待ち）。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.16.0：132 製品が完成（単体テスト 1665 件（1656 件までは ASan・UBSan でも全合格、そのあとの追加分は関連テストだけ ASan 確認）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッド・窓のスレッド・ホストのメインスレッドを同時に）で全製品 0 件。GitHub Actions は run 183（e703e7b）まで Windows・macOS（auval の aumf を含む）・Linux の全ジョブ（`race` ジョブを含む）で成功。途中の失敗はどれも直した：run 173 は macOS の ARM で SW Link の参照スペクトルの読み出しが混ざる不具合〔シーケンスロックのフェンス〕、run 174・175 は試験の作り〔書き手が動き出す前に試行が終わる／待つ長さをブロック数で固定していて 96 kHz では半分の時間になった：秒で決める〕と、調査中に見つけた readKey の別の不具合〔同じ製品の止まったスロットが 2 つあると鍵を読み続ける〕、run 180・182 は GCC 11 の TSan の誤検出〔`pthread_cond_clockwait`〕。そのあとの SW Link v5（出力ラウドネス・トラック名と種別の共有）・VO05 の Music from・LV29 の Interp from は、手元では全部通した（単体テスト 1665 件、host_smoke 132 本を 4 つのレートで、SW Link 関連の ASan・UBSan と TSan）が CI は未実行。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。残りは RS02（学習済みモデルが要る・保留）と、拡大率の「100%」・Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 
@@ -56,6 +56,7 @@ STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wr
 - **別スレッドで設計する製品は、オフラインの書き出しで結果が同じになること**：コアに `setOffline(bool)`（オフラインのときは頼んだ設計の完了を待つ）を書くと、アダプターが CLAP の render 拡張を付ける（VST3 の kOffline も clap-wrapper がこれに写す）。`host_smoke --offline`（同じブロックを 2 回通して出力がビット単位で同じ）が通ること。製品が自分の乱数のシードを持つなら状態（`saveExtra`）に入れる。
 - **プロジェクト状態の追加ブロック（`saveExtra`／`loadExtra`）はコアのデータを触る**：ホストのメインスレッドが再生中に呼ぶので、アダプターが 3 状態の門（`extraGate_`）で音声スレッドの `process()` と排他する（門が閉じている間に来たブロックは入力のまま通す）。`loadExtra` を持つコアを足したら `tools/stress_tsan.sh`（ホストのメインスレッドが状態を保存・読み込みしながら）で 0 件であること。CI の `race` ジョブ（17 製品）が同じことを毎回やる。スレッドをまたいで共有する製品を足したら、そのジョブの製品の並びに足す。
 - **ステップで進むジョブ（IR の設計・読み込み）は `sw::GridClock`（`core/include/sw/grid_clock.hpp`）の格子で動かす**：`process()` をブロックの端でなく格子の点（絶対のサンプル位置の 64 ごと）で切り、ジョブの開始・1 ステップ（4 つごと）・切り替えは格子の点で行う（RV04・ST05・GT02）。「呼び出し 1 回に 1 ステップ」はブロック長で時間が変わる。`tests/test_ir_pacing.cpp` が「ブロック長が違っても出力がサンプル単位で同じ」を確かめる。
+- **SW Link で製品を指す選択肢（Music from・Interp from・Key）の一覧は `tools/gen_link_products.py` が `core/include/sw/link_products.hpp` に作る**（製品を足したら回す）。選択肢は Step パラメータで**末尾に足す**（保存済みの設定を壊さない）。相手の「動いている」判定は出力リングの位置が進んだかどうか（`KeyState`：スロットごとの記録。止まったインスタンスを鍵と取り違えない）。**待つ長さを試験に書くときはブロック数でなく秒で**（`kSr` から）。
 - **SW Link の共有メモリを複数のスレッドで読み書きする形（参照スペクトル、共有の設定）は「番号→値→番号」のシーケンスロック**：書き手は番号を 0 にして release フェンス→値→番号（release）、読み手は番号（acquire）→値（relaxed）→acquire フェンス→番号（relaxed）。**x86 の Linux・Windows では、フェンスが無くても通ってしまう**（macOS の ARM の CI だけが落ちた）。
 - **テストの処理ループは端数ブロックを必ず `std::min(256, n - off)` で切る**（配列の外を読む不具合を2回出した）。
 - 有効化前に状態を読み込まれても落ちないこと（prepare 前は `snapToTargets()` で何もしない）。
@@ -91,7 +92,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。LO03 の Bass 役が Kick 役の LO03 を鍵にする〔Role を登録簿の tag に〕。LV15・LV11 は `sw/link.hpp` の代用。残りは LV29・LV27・VO05：デザインに相手を選ぶ部品が無く、仕様書も選び方を決めていない）。MT05 の 0 VU 基準の共有は済・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。LO03 の Bass 役が Kick 役の LO03 を鍵にする〔Role を登録簿の tag に〕。VO05 の Music from・LV29 の Interp from〔SW Link のチップから選ぶ。登録簿の版 5＝各インスタンスの出力ラウドネスとトラック名・種別〕。LV15・LV11 は `sw/link.hpp` の代用。残りは LV27・LV17 のシーン連動：受け取る側が何を呼び出すか〔プリセット番号の意味〕が決まっていない。README「SW Link の残り」に提案）。MT05 の 0 VU 基準の共有は済・OBS 連携（LV27）、拡大率の「100%」・Linux の画面、RS02（学習済みモデルが要る・保留）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）

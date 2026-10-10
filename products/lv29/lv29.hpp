@@ -11,7 +11,7 @@
 
 namespace sw::lv29 {
 
-enum ParamId { Output, FloorUnder, Crossfade, InterpLevel, AutoDetect, kNumParams };
+enum ParamId { Output, FloorUnder, Crossfade, InterpLevel, AutoDetect, InterpFrom, kNumParams };
 enum OutId { FloorOnly = 0, InterpAndFloor = 1, InterpOnly = 2 };
 
 const std::vector<ParamSpec>& specs();
@@ -27,6 +27,9 @@ public:
     int latencySamples() const { return 0; }
     bool interpreterSpeaking() const { return speaking_; }
     double floorGainDb() const { return 20.0 * std::log10(std::max(gF_, 1e-9)); }
+    // SW Link: where the interpreter comes from (Interp from: 0 the sidechain, k = the instance of the k-th LIVE product): the plugin layer asks SW Link for that instance's output and gives it as the sidechain
+    static const char* interpProduct(int step);   // nullptr: the sidechain; otherwise the product code
+    const char* interpSource() const { return interpProduct(static_cast<int>(target_[InterpFrom] + 0.5)); }
 
 private:
     double goalFloor() const;
@@ -34,7 +37,7 @@ private:
     double fs_ = 48000.0, gF_ = 1.0, gI_ = 0.0;
     static constexpr int kPiece = 32;   // the grid of the stream on which the interpreter's activity is read
     int ph_ = 0;
-    bool prepared_ = false, speaking_ = false;
+    bool prepared_ = false, speaking_ = false, line_ = false;   // line_: the interpreter's line was there in the last block
     std::array<double, kNumParams> target_{};
     VoiceDetector vd_;
     std::vector<float> mono_;

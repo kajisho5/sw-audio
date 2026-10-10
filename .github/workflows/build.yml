@@ -169,4 +169,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Stress with ThreadSanitizer
-        run: tools/stress_tsan.sh 4 eq02 eq05 eq08 dy04 cs02 rv04 rv08 sa02 ut01 ut03 lv01 lv02 lv05 lv27 lv30 lo03 mt05
+        run: tools/stress_tsan.sh 4 eq02 eq05 eq08 dy04 cs02 rv04 rv08 sa02 ut01 ut03 lv01 lv02 lv05 lv27 lv29 lv30 lo03 mt05 vo05

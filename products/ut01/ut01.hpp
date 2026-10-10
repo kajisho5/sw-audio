@@ -7,6 +7,7 @@
 #pragma once
 #include "sw/copy_atomic.hpp"
 #include "sw/param.hpp"
+#include "sw/track_kind.hpp"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -17,6 +18,8 @@ namespace sw::ut01 {
 enum ParamId { Gain, Balance, Width, PhaseL, PhaseR, Swap, Mono, Channel, kNumParams };
 enum ChannelId { Both = 0, LeftOnly = 1, RightOnly = 2 };
 enum TrackKind { Vocal, Drums, Bass, Guitar, Keys, Bus, Other, kKinds };
+static_assert(static_cast<int>(Vocal) == kTrackVocal && static_cast<int>(Drums) == kTrackDrums && static_cast<int>(Bass) == kTrackBass && static_cast<int>(Guitar) == kTrackGuitar && static_cast<int>(Keys) == kTrackKeys &&
+              static_cast<int>(Bus) == kTrackBus && static_cast<int>(Other) == kTrackOther && static_cast<int>(kKinds) == kTrackKinds, "sw/track_kind.hpp");   // (the numbers are saved in the state)
 
 const std::vector<ParamSpec>& specs();
 int classifyTrack(const std::string& name);
