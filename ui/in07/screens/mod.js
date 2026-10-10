@@ -28,9 +28,18 @@
     const ov = el('div', { class: 'orbit', style: { left: '24px', top: '72px', width: '582px', height: '525px' } });
     root.appendChild(ov);
     orbit = new SW.OrbitView(ov, Object.assign(SW.orbitProps(), { view: 'mod', mods: mods() }));
-    root.appendChild(el('div', { style: { position: 'absolute', left: '40px', top: '640px', width: '560px', display: 'flex', flexDirection: 'column', gap: '8px' } },
+    root.appendChild(el('div', { style: { position: 'absolute', left: '40px', top: '604px', width: '560px', display: 'flex', flexDirection: 'column', gap: '4px' } },
       el('span', { class: 'cap', text: 'GRAVITY LINES' }),
-      el('p', { class: 'note', style: { margin: '0' }, text: 'Each slot is a line from its source to what it moves. The line is thicker for more amount and flows from source to target; a negative amount flows back as dots. Sources along the bottom: velocity, mod wheel, aftertouch and the eight macros; the LFO moon and the envelope at the core reach out from where they are.' })));
+      el('p', { class: 'note', style: { margin: '0', fontSize: '12px' }, text: 'Each slot is a line from its source to what it moves: thicker for more, flowing from source to target (a negative amount flows back as dots).' })));
+    // ---- the satellites (the unison copies orbit: detune one axis, pan the other) and the Roche limit (a hard note tears the copies apart)
+    const ps = (id, label) => ui.slider(id, { label, compact: true, labelWidth: 64, valWidth: 64 });
+    root.appendChild(el('div', { class: 'panel', style: { left: '24px', top: '668px', width: '283px', height: '172px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '2px' } },
+      el('div', { class: 'sec', title: 'The unison copies go round: each rises and falls in pitch as it crosses from side to side' }, el('span', { class: 't', text: 'SATELLITES' })),
+      ps('in07.sat.rate', 'RATE'), ps('in07.sat.depth', 'DEPTH'),
+      el('p', { class: 'note', style: { margin: '4px 0 0', fontSize: '11px' }, text: 'Needs unison (LAYER) for the full ring; one copy circles alone.' })));
+    root.appendChild(el('div', { class: 'panel', style: { left: '323px', top: '668px', width: '283px', height: '172px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '2px' } },
+      el('div', { class: 'sec', title: 'A note played harder than the limit is torn apart in pitch and pan, then pulled back together' }, el('span', { class: 't', text: 'ROCHE LIMIT' })),
+      ps('in07.roche.limit', 'LIMIT'), ps('in07.roche.spread', 'SPREAD'), ps('in07.roche.time', 'TIME')));
 
     // ---- the matrix
     const head = el('div', { class: 'cap2', style: { display: 'grid', gridTemplateColumns: '24px 52px 134px 18px 134px minmax(0, 1fr)', gap: '8px', alignItems: 'center', height: '30px', letterSpacing: '.24em', fontSize: '10px', borderBottom: '1px solid var(--line)' } },

@@ -256,6 +256,10 @@ TEST_CASE("IN07 MIDI: Program Change picks a factory preset, a learned controlle
     CHECK(module(sw::in07::modId(2, sw::in07::ModSrc)) == "Mod matrix/Slot 3");
     CHECK(module(sw::in07::arpVel(4)) == "Arpeggiator");
     CHECK(module(sw::in07::gateStep(0)) == "Trance gate");
+    CHECK(module(sw::in07::ArpAlign) == "Arpeggiator");
+    CHECK(module(sw::in07::GateShape) == "Trance gate");
+    CHECK(module(sw::in07::SatDepth) == "Satellites");
+    CHECK(module(sw::in07::RocheTime) == "Roche limit");
     CHECK(module(sw::in07::PresetSelect) == "Preset");
     CHECK(module(sw::in07::Level) == "Voice");
     for (int i = 0; i < sw::in07::kNumParams; ++i) CHECK_MESSAGE(!module(i).empty(), i);

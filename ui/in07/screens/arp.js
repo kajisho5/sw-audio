@@ -72,11 +72,12 @@
       nums.forEach((n, i) => { n.style.color = i < steps ? 'var(--sub)' : 'var(--track)'; n.style.fontWeight = i % 4 === 0 ? '700' : '400'; });
     };
     ui.watch(['in07.arp.steps'].concat(bars.map(b => b.vid), pitches.map(p => p.pid)), showSteps);
-    const arpPanel = el('div', { class: 'panel', style: { left: '630px', top: '72px', width: '626px', height: '436px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' } },
+    const arpPanel = el('div', { class: 'panel', style: { left: '630px', top: '72px', width: '626px', height: '476px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '4px' } },
       el('div', { class: 'sec', style: { height: '40px' } }, el('span', { class: 't', text: 'ARPEGGIATOR' }), ui.onButton('in07.arp.on', { style: { width: '96px', height: '32px' } })),
       row('MODE', ui.seg('in07.arp.mode', { labels: ['UP', 'DOWN', 'UP-DN', 'ORDER', 'RANDOM'] })),
       row('RATE', ui.seg('in07.arp.rate', { labels: ['1/8', '1/16', '1/16T', '1/32'] })),
       row('OCTAVES', ui.seg('in07.arp.octaves')),
+      row('ALIGN', ui.seg('in07.arp.align', { labels: ['OFF', '2·3·4', '3·4·5', '3·5·7'], title: 'Planetary alignment: each key held on its own orbit (the highest every 2 or 3 steps, the next slower ...); all of them together every so many steps' })),
       ui.slider('in07.arp.length', { label: 'LENGTH', compact: true, labelWidth: 90, valWidth: 70 }),
       ui.slider('in07.arp.swing', { label: 'SWING', compact: true, labelWidth: 90, valWidth: 70 }),
       el('div', { class: 'sec', style: { marginTop: '6px' } }, el('span', { class: 't', text: 'VELOCITY · DRAG A STEP', style: { letterSpacing: '.2em' } }),
@@ -97,7 +98,8 @@
     ui.watch(gates.map(x => x.id), () => gates.forEach(({ g, id }) => { const on = P.get(id) > 0.5; g.setAttribute('aria-checked', on ? 'true' : 'false'); g.style.background = on ? 'linear-gradient(180deg, rgba(141,224,195,.55), rgba(34,168,124,.75))' : 'none'; }));
     root.appendChild(el('div', { class: 'panel', style: { left: '630px', top: '596px', width: '626px', height: '170px', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' } },
       el('div', { class: 'sec', style: { height: '36px' } }, el('span', { class: 't', text: 'TRANCE GATE' }),
-        el('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } }, el('div', { style: { width: '170px' } }, ui.seg('in07.gate.rate')), ui.onButton('in07.gate.on', { style: { width: '96px', height: '32px' } }))),
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } }, el('div', { style: { width: '140px' }, title: 'Eclipse: a run of closed steps is one passage of the moon, the sound dims and comes back smoothly' }, ui.seg('in07.gate.shape', { labels: ['HARD', 'ECLIPSE'] })),
+          el('div', { style: { width: '150px' } }, ui.seg('in07.gate.rate')), ui.onButton('in07.gate.on', { style: { width: '84px', height: '32px' } }))),
       gateRow, ui.slider('in07.gate.depth', { label: 'DEPTH', compact: true, labelWidth: 90, valWidth: 70 })));
 
     const showOrbit = SW.throttle(() => orbit.set(Object.assign(SW.orbitProps(), { view: 'arp', arpOn: true, gateOn: P.get('in07.gate.on') > 0.5 })));

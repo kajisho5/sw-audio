@@ -165,6 +165,18 @@ const std::vector<ParamSpec>& specs() {
         static const bool kGate[kArpSteps] = {1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1};
         for (int i = 0; i < kArpSteps; ++i)
             onOff(str("in07.gate.step" + std::to_string(i + 1)), str("Gate step " + std::to_string(i + 1)), kGate[i]);
+        // the planets (2026-10-10; appended: the ids above keep their numbers)
+        v.push_back({"in07.arp.align",    "Arp alignment",   0, 3, AlignOff, Curve::Step, 1, {0, 1, 2, 3}, "", {"Off", "2-3-4", "3-4-5", "3-5-7"}});
+        v.push_back({"in07.gate.shape",   "Gate shape",      0, 1, GateHard, Curve::Step, 1, {0, 1}, "", {"Hard", "Eclipse"}});
+        v.push_back({"in07.sat.rate",     "Satellite rate",  0.05, 10, 0.5, Curve::Log, 1, {}, "Hz"});
+        v.push_back({"in07.sat.depth",    "Satellite depth", 0, 100, 0, Curve::Lin, 1, {}, "%"});
+        {
+            ParamSpec r{"in07.roche.limit", "Roche limit", 0, 100, 100, Curve::Lin, 1, {}, "%"};
+            r.maxLabel = "Off";   // no velocity is over 100 %
+            v.push_back(r);
+        }
+        v.push_back({"in07.roche.spread", "Roche spread",    0, 24, 7, Curve::Lin, 1, {}, "st"});
+        v.push_back({"in07.roche.time",   "Roche time",      20, 2000, 300, Curve::Log, 1, {}, "ms"});
         return v;
     }();
     return s;
@@ -172,6 +184,19 @@ const std::vector<ParamSpec>& specs() {
 
 namespace {
 constexpr double kPi = 3.14159265358979323846;
+// the eclipse gate: how much of the sun (radius 1) the moon (radius 1.25: a total eclipse) covers as it crosses, u = 0 .. 1 of the passage
+// (first contact .. last contact; total for the middle 11 %). The area of the two discs' overlap over the sun's: it starts and ends with a
+// zero slope, so the sound dims and comes back without an edge
+double eclipseCover(double u) {
+    constexpr double r = 1.0, R = 1.25;
+    const double d = (r + R) * std::abs(2.0 * u - 1.0);
+    if (d >= r + R) return 0.0;
+    if (d <= R - r) return 1.0;
+    const double a1 = r * r * std::acos(std::clamp((d * d + r * r - R * R) / (2.0 * d * r), -1.0, 1.0));
+    const double a2 = R * R * std::acos(std::clamp((d * d + R * R - r * r) / (2.0 * d * R), -1.0, 1.0));
+    const double k = 0.5 * std::sqrt(std::max(0.0, (-d + r + R) * (d + r - R) * (d - r + R) * (d + r + R)));
+    return std::clamp((a1 + a2 - k) / (3.14159265358979323846 * r * r), 0.0, 1.0);
+}
 constexpr double kSqrt2 = 1.41421356237309504880;
 constexpr double kQ24a = 0.5412, kQ24b = 1.3066, kQ12 = 0.7071, kQMax = 25.0, kEnvOctaves = 5.0, kDetuneCents = 50.0;
 // modulation scales (at amount 100 % and a source of 1): pitch 12 semitones, cutoff 5 octaves (kEnvOctaves), resonance / drive / detune /
@@ -439,6 +464,20 @@ void Voice::noteOn(int key, double velocity, double glideFrom) {
         os_.reset();
         first_ = true;
     }
+    // the Roche limit: a note harder than the limit is torn apart, as far as it is over it; each copy thrown its own way (spread over
+    // -1..1 in a shuffled order, so the tear is not the detune again; one copy: up or down)
+    tear_ = 0.0; tearT_ = 0.0;
+    if (sh_ && sh_->rocheLimit < 1.0 && v > sh_->rocheLimit) {
+        tear_ = (v - sh_->rocheLimit) / (1.0 - sh_->rocheLimit);
+        if (unison_ == 1) { rng_ = rng_ * 1664525u + 1013904223u; tearDir_[0] = (rng_ >> 31) ? 1.0 : -1.0; }
+        else {
+            for (int i = 0; i < unison_; ++i) tearDir_[static_cast<size_t>(i)] = 2.0 * i / (unison_ - 1) - 1.0;
+            for (int i = unison_ - 1; i > 0; --i) {
+                rng_ = rng_ * 1664525u + 1013904223u;
+                std::swap(tearDir_[static_cast<size_t>(i)], tearDir_[static_cast<size_t>((rng_ >> 8) % static_cast<uint32_t>(i + 1))]);
+            }
+        }
+    }
     fmEnv_ = 1.0;   // the FM index starts again
     if (otype_ == OscSample && !sampleBank().s[static_cast<size_t>(sample_)].loop)   // a one-shot plays again
         for (int i = 0; i < unison_; ++i) { spos_[static_cast<size_t>(i)] = 0.0; sdone_[static_cast<size_t>(i)] = false; }
@@ -512,11 +551,27 @@ void Voice::control() {
     const double pw = std::clamp(p(PulseWidth) + kModPw * md[DstPulseWidth], 5.0, 95.0) / 100.0;
     // gravity: the copies pull toward their common phase (Kuramoto coupling, updated here at control rate)
     const double grav = std::clamp((p(Gravity) + kModRange * md[DstGravity]) / 100.0, 0.0, 1.0);
-    double lo = 1.0, hi = 0.0;
+    // the satellites: each copy on a circle (its own place on it, all going round at the rate); the circle's one axis is the detune, the
+    // other the pan, so at full depth a copy rises and falls in pitch as it crosses from side to side. Then the Roche limit's tear, falling
+    // back with its time constant. Neither touches a copy when it is off (depth 0, no tear)
+    const double sd = sh_ ? sh_->satDepth : 0.0;
+    double tearNow = 0.0;
+    if (tear_ > 0.0) { tearNow = tear_ * std::exp(-tearT_ / std::max(0.001, sh_ ? sh_->rocheTime : 0.3)); tearT_ += kCtl / fs_; if (tearNow < 1e-4) tear_ = tearNow = 0.0; }
+    std::array<double, kMaxUnison> ud{}, up{};
     for (int i = 0; i < unison_; ++i) {
         const size_t k = static_cast<size_t>(i);
         const double u = unison_ > 1 ? 2.0 * i / (unison_ - 1) - 1.0 : 0.0;   // -1 .. +1
-        inc0_[k] = std::min(0.45, f * std::exp2(det * u / 1200.0) / fs_);
+        ud[k] = u; up[k] = u;
+        if (sd > 0.0) {
+            const double th = 2.0 * kPi * (sh_->satPhase + static_cast<double>(i) / unison_);
+            ud[k] = (1.0 - sd) * u + sd * std::cos(th); up[k] = (1.0 - sd) * u + sd * std::sin(th);
+        }
+    }
+    double lo = 1.0, hi = 0.0;
+    for (int i = 0; i < unison_; ++i) {
+        const size_t k = static_cast<size_t>(i);
+        const double tearCents = tearNow > 0.0 ? 100.0 * sh_->rocheSpread * tearNow * tearDir_[k] : 0.0;
+        inc0_[k] = std::min(0.45, f * std::exp2((det * ud[k] + tearCents) / 1200.0) / fs_);
         lo = std::min(lo, inc0_[k]); hi = std::max(hi, inc0_[k]);
     }
     double cEff = 0.0;
@@ -540,9 +595,8 @@ void Voice::control() {
     bool stereo = false;
     for (int i = 0; i < unison_; ++i) {
         const size_t k = static_cast<size_t>(i);
-        const double u = unison_ > 1 ? 2.0 * i / (unison_ - 1) - 1.0 : 0.0;
         if (otype_ == OscAnalog) { osc_[k].setWave(wave); osc_[k].setPulseWidth(pw); osc_[k].setIncrement(inc0_[k]); }
-        const double pan = u * spread;
+        const double pan = tearNow > 0.0 ? std::clamp(up[k] * spread + tearNow * tearDir_[k], -1.0, 1.0) : up[k] * spread;   // the torn copies fly out across the field too
         if (std::abs(pan) < 1e-12) { gl_[k] = gr_[k] = norm; }
         else { const double th = (pan + 1.0) * kPi / 4.0; gl_[k] = norm * kSqrt2 * std::cos(th); gr_[k] = norm * kSqrt2 * std::sin(th); stereo = true; }
     }
@@ -805,6 +859,7 @@ void Processor::prepare(double sampleRate, int maxBlock) {
     }
     lfoPhase_ = {}; lfoValue_ = {}; lfoSeed_ = {{0x1234567u, 0x7654321u}}; gctl_ = 0; wheel_ = after_ = 0.0; flyFlip_ = 1.0;
     updateMod();
+    updatePlanets(); shared_.satPhase = 0.0;
     tick(); gctl_ = 0;   // the sources are ready before the first note (the next sample ticks again, from where it starts)
     updateFx();
     fx_.prepare(fs_, fxParams_);
@@ -905,7 +960,7 @@ void Processor::swapPatch() {
         else end(s);
     }
     held_.clear(); monoSlot_ = -1;
-    arpNoteOn_ = false;
+    arpNoteOn_ = false; arpNotes_ = 0;
     fading_ = false;
     const bool pedal = pedal_;
     applyStaged();      // (a change of Mode lets all notes go, the pedal too: it is still down)
@@ -949,6 +1004,7 @@ void Processor::setNow(int id, double v) {
     if (id > PresetSelect) {         // the arp and the gate: their settings are read where they are used
         if (id == ArpOn) { const bool on = v > 0.5; if (on != arpOn_) { if (prepared_) arpSwitch(on); else arpOn_ = on; } }
         else if ((id == ArpRate || id == ArpSwing) && prepared_ && (arpN_ > 0 || playing_)) resyncSteps();
+        else if (id >= SatRate && id <= RocheTime) updatePlanets();
         return;
     }
     if (id >= kFxEnd && id < PresetSelect) { updateMod(); if (id == Macro7 || id == Macro8) updateFx(); return; }
@@ -993,6 +1049,13 @@ void Processor::updateMod() {
     shared_.flyDelta = 0.05 + 0.6 * (1.0 - p(FlybyNear) / 100.0);
 }
 
+void Processor::updatePlanets() {
+    shared_.satDepth = std::clamp(p(SatDepth), 0.0, 100.0) / 100.0;
+    shared_.rocheLimit = std::clamp(p(RocheLimit), 0.0, 100.0) / 100.0;
+    shared_.rocheSpread = std::clamp(p(RocheSpread), 0.0, 24.0);
+    shared_.rocheTime = std::clamp(p(RocheTime), 20.0, 2000.0) / 1000.0;
+}
+
 // every 32 samples on the synth's own grid (the same whatever the host's block size): the LFOs and the global sources
 void Processor::tick() {
     static const double kSyncBeats[11] = {0.0, 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25, 2.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0};
@@ -1016,6 +1079,8 @@ void Processor::tick() {
         lfoPhase_[static_cast<size_t>(k)] = ph;
     }
     shared_.src[SrcLfo1] = lfoValue_[0]; shared_.src[SrcLfo2] = lfoValue_[1];
+    const double sp = shared_.satPhase + std::clamp(p(SatRate), 0.05, 10.0) * Voice::kCtl / fs_;   // the satellites go round
+    shared_.satPhase = sp - std::floor(sp);
 }
 
 void Processor::modWheel(double v) { wheel_ = std::clamp(v, 0.0, 1.0); }
@@ -1217,7 +1282,7 @@ void Processor::allNotesOff() {
 void Processor::allSoundOff() {
     if (!prepared_) return;
     while (arpN_ > 0) arpRemove(arpN_ - 1, true);
-    arpNoteOn_ = false;
+    arpNoteOn_ = false; arpNotes_ = 0;
     pedal_ = false; held_.clear(); monoSlot_ = -1;
     for (auto& s : slots_) { for (auto& x : s.v) x.reset(); if (s.key >= 0) end(s); }
 }
@@ -1320,7 +1385,7 @@ void Processor::arpSwitch(bool on) {
         if (playing_) resyncSteps();
     } else {
         arpOn_ = false;
-        if (arpNoteOn_) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
+        arpStopNotes();
         const int n = arpN_;
         arpN_ = 0;
         for (int i = 0; i < n; ++i) {
@@ -1342,7 +1407,7 @@ int Processor::arpSamplesToNext() const {
 
 void Processor::arpEvents() {
     const double eps = 0.5 * beatsPerSample();
-    if (arpNoteOn_ && beat_ >= arpOffBeat_ - eps) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
+    if (arpNoteOn_ && beat_ >= arpOffBeat_ - eps) arpStopNotes();
     if (arpN_ == 0) return;
     int guard = 0;
     while (stepStart(arpK_ + 1) <= beat_ + eps && guard++ < 64) arpStep(++arpK_);
@@ -1350,12 +1415,45 @@ void Processor::arpEvents() {
 
 // step k: the pattern's step k mod Steps; a rest plays nothing; otherwise the next note of the order (Up, Down, Up-Down, Order, Random over
 // the keys and their octaves), moved by the step's pitch, at the key's velocity times the step's
+void Processor::arpStopNotes() {
+    for (int i = 0; i < arpNotes_; ++i) playOff(arpNoteKeys_[static_cast<size_t>(i)], kArpChannel);
+    arpNotes_ = 0; arpNoteOn_ = false;
+}
+
 void Processor::arpStep(long k) {
     const int steps = std::clamp(static_cast<int>(std::lround(p(ArpSteps))), 1, kArpSteps);
     const int idx = static_cast<int>(k % steps);
     const double sv = std::clamp(p(arpVel(idx)), 0.0, 100.0) / 100.0;
-    if (arpNoteOn_) { playOff(arpNoteKey_, kArpChannel); arpNoteOn_ = false; }
+    arpStopNotes();
     if (sv <= 0.0 || arpN_ == 0) return;
+    // planetary alignment: each key held is a planet, the highest the innermost; it plays every P steps (P from the set, then on by its last
+    // gap: 2-3-4 goes 2, 3, 4, 5, 6 ...; 3-5-7 goes 3, 5, 7, 9 ...), all of them together on step 0 and every common multiple after it.
+    // The mode and the octaves do not apply; the step's pitch moves every note it plays
+    const int align = std::clamp(static_cast<int>(std::lround(p(ArpAlign))), 0, 3);
+    if (align != AlignOff) {
+        static const int kOrbit[4][3] = {{1, 1, 1}, {2, 3, 4}, {3, 4, 5}, {3, 5, 7}};
+        std::array<int, 128> byKey{};
+        for (int i = 0; i < arpN_; ++i) byKey[static_cast<size_t>(i)] = i;
+        std::sort(byKey.begin(), byKey.begin() + arpN_, [&](int a, int b) { return arpKeys_[static_cast<size_t>(a)].key > arpKeys_[static_cast<size_t>(b)].key; });
+        const int* o = kOrbit[align];
+        const int shift = static_cast<int>(std::lround(p(arpPitch(idx))));
+        arpStarting_ = true;
+        for (int r = 0; r < std::min(arpN_, kArpChord); ++r) {
+            const long period = r < 3 ? o[r] : o[2] + static_cast<long>(r - 2) * (o[2] - o[1]);
+            if (k % period != 0) continue;
+            const ArpKey& a = arpKeys_[static_cast<size_t>(byKey[static_cast<size_t>(r)])];
+            const int key = std::clamp(a.key + shift, 0, 127);
+            bool dup = false;
+            for (int j = 0; j < arpNotes_; ++j) dup = dup || arpNoteKeys_[static_cast<size_t>(j)] == key;
+            if (dup) continue;
+            playOn(key, a.vel * sv, kArpChannel, -1);
+            arpNoteKeys_[static_cast<size_t>(arpNotes_++)] = key;
+        }
+        arpStarting_ = false;
+        arpNoteOn_ = arpNotes_ > 0;
+        arpOffBeat_ = stepStart(k) + std::clamp(p(ArpLength), 10.0, 100.0) / 100.0 * stepBeats();
+        return;
+    }
     // the keys, sorted (Order: as played), then their octaves
     std::array<int, 128> ord{};
     for (int i = 0; i < arpN_; ++i) ord[static_cast<size_t>(i)] = i;
@@ -1376,7 +1474,7 @@ void Processor::arpStep(long k) {
     arpStarting_ = true;
     playOn(key, a.vel * sv, kArpChannel, -1);
     arpStarting_ = false;
-    arpNoteOn_ = true; arpNoteKey_ = key;
+    arpNoteOn_ = true; arpNoteKeys_[0] = key; arpNotes_ = 1;
     arpOffBeat_ = stepStart(k) + std::clamp(p(ArpLength), 10.0, 100.0) / 100.0 * stepBeats();
 }
 
@@ -1436,10 +1534,34 @@ void Processor::process(float** ch, int numCh, int n) {
         if (gate) {
             static const double kGateRate[3] = {0.5, 0.25, 0.125};
             const double gl = kGateRate[std::clamp(static_cast<int>(std::lround(p(GateRate))), 0, 2)], bps = beatsPerSample();
-            const double low = 1.0 - std::clamp(p(GateDepth), 0.0, 100.0) / 100.0, ramp = 1.0 / std::max(1.0, 0.002 * fs_);
+            const double depth = std::clamp(p(GateDepth), 0.0, 100.0) / 100.0, low = 1.0 - depth, ramp = 1.0 / std::max(1.0, 0.002 * fs_);
+            // the eclipse: each run of closed steps (round the end of the pattern too) is one passage of the moon: where it starts and how long
+            const bool eclipse = std::lround(p(GateShape)) == GateEclipse;
+            std::array<int, kArpSteps> runFrom{}, runLen{};
+            if (eclipse) {
+                std::array<bool, kArpSteps> shut{};
+                int nShut = 0;
+                for (int s = 0; s < kArpSteps; ++s) { shut[static_cast<size_t>(s)] = p(gateStep(s)) <= 0.5; nShut += shut[static_cast<size_t>(s)]; }
+                for (int s = 0; s < kArpSteps; ++s) {
+                    if (!shut[static_cast<size_t>(s)]) continue;
+                    if (nShut == kArpSteps) { runFrom[static_cast<size_t>(s)] = 0; runLen[static_cast<size_t>(s)] = kArpSteps; continue; }
+                    int a = s;
+                    while (shut[static_cast<size_t>((a + kArpSteps - 1) % kArpSteps)]) a = (a + kArpSteps - 1) % kArpSteps;
+                    int len = 0;
+                    while (shut[static_cast<size_t>((a + len) % kArpSteps)]) ++len;
+                    runFrom[static_cast<size_t>(s)] = a; runLen[static_cast<size_t>(s)] = len;
+                }
+            }
             for (int i = 0; i < m; ++i) {
-                const long st = static_cast<long>(std::floor((beat_ + i * bps) / gl + 1e-9));
-                const double target = p(gateStep(static_cast<int>(((st % kArpSteps) + kArpSteps) % kArpSteps))) > 0.5 ? 1.0 : low;
+                const double pos = (beat_ + i * bps) / gl;
+                const long st = static_cast<long>(std::floor(pos + 1e-9));
+                const int s = static_cast<int>(((st % kArpSteps) + kArpSteps) % kArpSteps);
+                double target = p(gateStep(s)) > 0.5 ? 1.0 : low;
+                if (eclipse && target < 1.0) {
+                    const int into = (s - runFrom[static_cast<size_t>(s)] + kArpSteps) % kArpSteps;
+                    const double u = std::clamp((into + (pos - static_cast<double>(st))) / runLen[static_cast<size_t>(s)], 0.0, 1.0);
+                    target = 1.0 - depth * eclipseCover(u);
+                }
                 gateGain_ = target > gateGain_ ? std::min(target, gateGain_ + ramp) : std::max(target, gateGain_ - ramp);
                 l_[static_cast<size_t>(i)] = static_cast<float>(l_[static_cast<size_t>(i)] * gateGain_);
                 r_[static_cast<size_t>(i)] = static_cast<float>(r_[static_cast<size_t>(i)] * gateGain_);

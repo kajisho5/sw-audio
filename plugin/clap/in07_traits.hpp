@@ -52,6 +52,8 @@ struct In07 {
         if (g == "flyby") return "Flyby";
         if (g == "arp") return "Arpeggiator";
         if (g == "gate") return "Trance gate";
+        if (g == "sat") return "Satellites";
+        if (g == "roche") return "Roche limit";
         if (g == "preset") return "Preset";
         return "Voice";
     }

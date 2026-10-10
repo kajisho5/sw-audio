@@ -77,7 +77,11 @@ constexpr int arpVel(int i) { return kArpVelBase + i; }                  // 0..1
 constexpr int arpPitch(int i) { return kArpVelBase + kArpSteps + i; }    // -12 / 0 / +7 / +12 semitones
 enum GateParamId { GateOn = kArpVelBase + 2 * kArpSteps, GateRate, GateDepth, kGateStepBase };
 constexpr int gateStep(int i) { return kGateStepBase + i; }               // Off / On
-constexpr int kNumParams = kGateStepBase + kArpSteps;
+// the planets (appended after the gate steps, 2026-10-10): planetary alignment (the arp), the eclipse gate, satellite unison, the Roche limit
+enum PlanetParamId { ArpAlign = kGateStepBase + kArpSteps, GateShape, SatRate, SatDepth, RocheLimit, RocheSpread, RocheTime, kPlanetEnd };
+constexpr int kNumParams = kPlanetEnd;
+enum ArpAlignId { AlignOff = 0, Align234, Align345, Align357 };
+enum GateShapeId { GateHard = 0, GateEclipse };
 enum ArpModeId { ArpUp = 0, ArpDown, ArpUpDown, ArpOrder, ArpRandom };
 enum LfoShapeId { LfoOrbit = 0, LfoTriangle, LfoSaw, LfoSquare, LfoRandom };
 enum ModSource { SrcNone = 0, SrcLfo1, SrcLfo2, SrcEnv2, SrcVelocity, SrcModWheel, SrcAftertouch, SrcKey,
@@ -167,6 +171,9 @@ struct Shared {
     // flyby
     int flyMode = FlybyOff;
     double flyDepth = 0.6, flyTime = 1.5, flyDelta = 0.35, flySign = 1.0;
+    // the satellites (the unison copies' orbit: its phase in cycles, its depth 0..1) and the Roche limit (a velocity 0..1 over which a note is
+    // torn; 1 = off; how far, in semitones; how fast it comes back together, the time constant in seconds)
+    double satPhase = 0.0, satDepth = 0.0, rocheLimit = 1.0, rocheSpread = 7.0, rocheTime = 0.3;
 };
 
 // one layer of one note
@@ -203,6 +210,8 @@ private:
     double fs_ = 48000.0, key_ = 60.0, glideFrom_ = 60.0, velGain_ = 1.0, cutoff_ = 2400.0, drive_ = 0.0, pitch_ = 60.0;
     double gL_ = 1.0, gR_ = 1.0, gL0_ = 1.0, gR0_ = 1.0;   // the layer's level and pan, ramped over each control period
     double vel_ = 1.0, coherence_ = 0.0, flyT_ = 0.0, flySign_ = 1.0, levDb_ = 1e9, levGain_ = 1.0;
+    double tear_ = 0.0, tearT_ = 0.0;                     // the Roche limit: how torn the note is (0..1) and the time since (s)
+    std::array<double, kMaxUnison> tearDir_{};            // where each copy is thrown (-1..1)
     int layer_ = 0;
     bool flyOn_ = false;
     std::array<double, kMaxUnison> inc0_{};
@@ -352,11 +361,15 @@ private:
     int fadeLen_ = 1, fadeLeft_ = 0;                    // the fade before a patch change (samples)
     std::array<ArpKey, 128> arpKeys_{};                 // the keys the arp plays (held, or kept by the pedal), in the order played
     int arpN_ = 0;
-    bool arpOn_ = false, arpNoteOn_ = false, arpStarting_ = false, playing_ = false;
+    bool arpOn_ = false, arpNoteOn_ = false, arpStarting_ = false, playing_ = false;   // arpNoteOn_: an arp note sounds (arpNotes_ > 0)
     uint64_t arpOrder_ = 0;
     double beat_ = 0.0, arpOffBeat_ = 0.0, gateGain_ = 1.0;
     long arpK_ = -1, arpPos_ = 0;                       // the last step started; the steps that played a note (the note order)
-    int arpNoteKey_ = -1;
+    static constexpr int kArpChord = 8;                 // the most notes one step plays (planetary alignment)
+    std::array<int, kArpChord> arpNoteKeys_{};
+    int arpNotes_ = 0;
+    void arpStopNotes();                                // the arp's sounding notes end
+    void updatePlanets();                               // the satellites' and the Roche limit's settings into the shared state
     uint32_t arpSeed_ = 0x2545F491u;
 };
 

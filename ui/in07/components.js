@@ -129,6 +129,7 @@
     const order = o.order || s.steps.map((_, k) => k);
     const root = el('div', { class: 'seg' + (o.cols ? ' wrap' : ''), role: 'radiogroup', 'aria-label': o.label || s.name });
     if (o.cols) root.style.setProperty('--cols', o.cols);
+    if (o.title) root.title = o.title;
     const btns = order.map(k => {
       const b = el('button', { type: 'button', role: 'radio', text: (o.labels && o.labels[k]) || s.labels[k] });
       b.addEventListener('click', () => P.tap(id, s.steps[k]));

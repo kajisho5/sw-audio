@@ -70,7 +70,7 @@ TEST_CASE("IN07 ARP: the parameters (appended after the preset selector, arp and
         CHECK(s[static_cast<size_t>(arpVel(i))].def == 100.0);
         CHECK(s[static_cast<size_t>(arpPitch(i))].def == 0.0);
     }
-    CHECK(kNumParams == gateStep(kArpSteps - 1) + 1);
+    CHECK(ArpAlign == gateStep(kArpSteps - 1) + 1);   // the planets were appended after the gate (2026-10-10)
     // every factory preset leaves both off unless it says so (the table is the defaults plus each preset's values)
     Processor p;
     applyPreset(p, 0);

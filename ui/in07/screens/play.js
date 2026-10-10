@@ -28,7 +28,8 @@
         unison: P.get(lid(f, 'osc.unison')), detune: SW.clamp(P.get(lid(f, 'osc.detune')) + 50 * m(5), 0, 100),
         lfoRate: P.get('in07.lfo1.rate'), lfoDepth: 20 + 0.8 * P.get('in07.lfo1.orbit'), drive: SW.clamp(P.get(lid(f, 'flt.drive')) + 50 * m(4), 0, 100),
         release: SW.clamp(P.get(lid(f, 'amp.r')) * Math.pow(4, m(3)), 10, 20000), bpm: SW.info.bpm || 120,
-        spb: [2, 4, 6, 8][P.stepIndex('in07.arp.rate')], gateSpb: [2, 4, 8][P.stepIndex('in07.gate.rate')]
+        spb: [2, 4, 6, 8][P.stepIndex('in07.arp.rate')], gateSpb: [2, 4, 8][P.stepIndex('in07.gate.rate')],
+        satRate: P.get('in07.sat.rate'), satDepth: P.get('in07.sat.depth')
       },
       lfoText: sync > 0 ? 'LFO ' + P.label('in07.lfo1.sync') : 'LFO ' + Number(P.get('in07.lfo1.rate')).toFixed(2) + ' Hz',
       layers, focus: f, arpOn: P.get('in07.arp.on') > 0.5, gateOn: P.get('in07.gate.on') > 0.5,

@@ -74,10 +74,12 @@
       });
     }
     const N = Math.round(clamp(v.unison, 1, 8)), mc = close ? [CX, CY] : l1;
-    const ru = close ? cR * 1.9 + det01 * 40 : 14 + det01 * 26 + 14, flat = close ? 0.42 : 0.55;
-    if (N > 1 || close) for (let u = 0; u < N; u++) {
+    const sat01 = clamp((v.satDepth || 0) / 100, 0, 1);   // the satellites: the copies go round together at the rate, the ring wider
+    const ru = (close ? cR * 1.9 + det01 * 40 : 14 + det01 * 26 + 14) * (1 + 0.35 * sat01), flat = close ? 0.42 : 0.55;
+    if (N > 1 || close || sat01 > 0) for (let u = 0; u < N; u++) {
       const spread = N > 1 ? (u - (N - 1) / 2) / ((N - 1) / 2) : 0;
-      const ph = 2 * PI * u / N + t * (1.6 + det01 * 1.4 * spread) * (close ? 0.6 : 1);
+      const free = 2 * PI * u / N + t * (1.6 + det01 * 1.4 * spread) * (close ? 0.6 : 1), held = 2 * PI * (u / N + t * clamp(v.satRate || 0.5, 0.05, 10));
+      const ph = sat01 > 0 ? held : free;
       const mb = close ? Math.sin(ph) < 0 : l1behind;
       sprite(mb ? backB : frontB, mc[0] + ru * Math.cos(ph), mc[1] + ru * flat * Math.sin(ph), close ? 6 : 3.4, 'bead', 0, dimAll);
     }
