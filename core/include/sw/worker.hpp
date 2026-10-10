@@ -10,6 +10,17 @@
 #include <mutex>
 #include <thread>
 
+// ThreadSanitizer of GCC 11 (the Ubuntu 22.04 runner of the CI) does not see pthread_cond_clockwait, which condition_variable::wait_for (steady clock) calls: the mutex that the wait gives up and takes again goes
+// missing, and it reports races between accesses that are both under that one mutex (CI run 182: "Read ... (mutexes: write M288)" against "Previous write ... (mutexes: write M288)") and between a design
+// and the write after waitIdle(). A build with the sanitizer therefore waits against the system clock (pthread_cond_timedwait, which every version sees); the product waits as before.
+#if defined(__SANITIZE_THREAD__)
+#define SW_WORKER_TSAN 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define SW_WORKER_TSAN 1
+#endif
+#endif
+
 namespace sw {
 
 class BackgroundWork {
@@ -39,14 +50,21 @@ public:
     bool waitIdle(int ms = 5000) {
         if (!th_.joinable()) return true;
         std::unique_lock<std::mutex> lk(m_);
-        return idle_.wait_for(lk, std::chrono::milliseconds(ms), [this] { return !kicked_.load() && !busy_; });
+        return waitFor(idle_, lk, ms, [this] { return !kicked_.load() && !busy_; });
     }
 
 private:
+    template <class Pred> static bool waitFor(std::condition_variable& cv, std::unique_lock<std::mutex>& lk, int ms, Pred pred) {
+#ifdef SW_WORKER_TSAN
+        return cv.wait_until(lk, std::chrono::system_clock::now() + std::chrono::milliseconds(ms), pred);
+#else
+        return cv.wait_for(lk, std::chrono::milliseconds(ms), pred);
+#endif
+    }
     void loop() {
         std::unique_lock<std::mutex> lk(m_);
         for (;;) {
-            cv_.wait_for(lk, std::chrono::milliseconds(50), [this] { return kicked_.load() || quit_.load(); });
+            waitFor(cv_, lk, 50, [this] { return kicked_.load() || quit_.load(); });
             if (quit_.load()) return;
             if (!kicked_.exchange(false)) continue;
             busy_ = true;
