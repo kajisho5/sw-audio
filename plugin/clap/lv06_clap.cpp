@@ -14,7 +14,7 @@ struct Lv06 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_LIMITER, CLAP_PLUGIN_FEATURE_MASTERING, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv06", "SW LV06 Stream master", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Rides to the platform loudness target", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Rides to the platform loudness target", f};
         return &d;
     }
 };

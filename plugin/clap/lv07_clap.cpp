@@ -14,7 +14,7 @@ struct Lv07 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_COMPRESSOR, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv07", "SW LV07 Speech Agc", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Talker leveller for close and distant speakers", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Talker leveller for close and distant speakers", f};
         return &d;
     }
 };

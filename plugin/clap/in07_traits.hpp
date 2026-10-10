@@ -71,7 +71,7 @@ struct In07 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_INSTRUMENT, CLAP_PLUGIN_FEATURE_SYNTHESIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.in07", "SW IN07 SWINGBY", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Lightweight preset synth: four layers, orbits of sound", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Lightweight preset synth: four layers, orbits of sound", f};
         return &d;
     }
 };

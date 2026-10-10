@@ -12,7 +12,7 @@ struct Eq01 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_EQUALIZER, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.eq01", "SW EQ01 Passive", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Passive tone shaper with contour", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Passive tone shaper with contour", f};
         return &d;
     }
 };

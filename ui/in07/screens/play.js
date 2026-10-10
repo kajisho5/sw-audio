@@ -233,7 +233,7 @@
     const CORNER = [[0, 0], [1, 0], [0, 1], [1, 1]], IDS = [null, 'in07.morph.b', 'in07.morph.c', 'in07.morph.d'];
     const planets = CORNER.map(([cx, cy], k) => {
       const dot = el('span', { 'aria-hidden': 'true', style: { position: 'absolute', left: (cx * F.size - 9) + 'px', top: (cy * F.size - 9) + 'px', width: '18px', height: '18px', borderRadius: '50%', border: '1px solid var(--line2)', background: 'radial-gradient(circle at 35% 30%, var(--strong), var(--acc) 45%, rgba(0,0,0,0) 72%)' } });
-      const pct = el('span', { class: 'mono', 'aria-hidden': 'true', style: { position: 'absolute', left: (cx ? F.size - 64 : 14) + 'px', top: (cy ? F.size - 30 : 14) + 'px', width: '50px', textAlign: cx ? 'right' : 'left', fontSize: '10px', color: 'var(--sub)' } });
+      const pct = el('span', { class: 'mono', 'aria-hidden': 'true', style: { position: 'absolute', left: (cx ? F.size + 16 : -66) + 'px', top: (cy * F.size - 7) + 'px', width: '50px', textAlign: cx ? 'left' : 'right', fontSize: '10px', color: 'var(--sub)' } });   // beside its planet, outside the square (the lines never cross it)
       field.appendChild(dot); field.appendChild(pct);
       return { dot, pct };
     });

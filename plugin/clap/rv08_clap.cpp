@@ -12,7 +12,7 @@ struct Rv08 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_REVERB, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.rv08", "SW RV08 Gated", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Gated reverb", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Gated reverb", f};
         return &d;
     }
 };

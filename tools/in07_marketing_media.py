@@ -3,6 +3,7 @@
 tools/in07_ui_preview.py) and the real sound (build/in07_audition: the factory presets' audition phrases, exactly as the plug-in plays
 them). Nothing is drawn by hand: when the window or the sound changes, run this again.
   <out>/screen_<play|layer|arp|mod|fx>_<dark|light>.webp   1920 x 1290 (the window at 1.5x), the five screens in both looks
+  <out>/screen_morph_<dark|light>.webp                     PLAY with the morph on (planets B, C, D set, the probe between them)
   <out>/demo.mp4                                           40 s, 1280 x 860, 30 fps: PLAY (dark) through the first 10 factory presets,
                                                            the window following the notes of the sound (the same phrase, the same times)
 usage: tools/in07_marketing_media.py <out dir> [--no-video]
@@ -50,7 +51,7 @@ def load(pg, i):
 
 def shots():
     plan = [  # screen, preset, what the screen shows
-        ('play', 0, None), ('layer', 0, None), ('arp', 5, 'arp'), ('mod', 2, None), ('fx', 10, None)]
+        ('play', 0, None), ('layer', 0, None), ('arp', 5, 'arp'), ('mod', 2, None), ('fx', 10, None), ('play', 0, 'morph')]
     with sync_playwright() as pw:
         br = pw.chromium.launch(args=['--allow-file-access-from-files'])
         for theme in ('dark', 'light'):
@@ -73,14 +74,22 @@ def shots():
                       [100,60,85,40, 100,70,90,0, 100,55,80,45, 95,65,85,30].forEach((v, k) => SW.P.tap('in07.arp.vel' + (k + 1), v));
                       [48, 55, 60].forEach(k => SW.noteOn(k, 0.8));
                     }""")
+                elif extra == 'morph':   # planets B, C, D: three factory presets; the probe nearer A and B
+                    pg.evaluate("""() => {
+                      SW.P.tap('in07.morph.b', 3); SW.P.tap('in07.morph.c', 7); SW.P.tap('in07.morph.d', 11);
+                      SW.P.tap('in07.morph.x', 38); SW.P.tap('in07.morph.y', 27); SW.P.tap('in07.morph.on', 1);
+                      SW.noteOn(60, 0.8);
+                    }""")
                 else:
                     pg.evaluate('SW.noteOn(60, 0.8)')
                 pg.wait_for_timeout(450 if extra != 'arp' else 1300)
-                path = out / f'screen_{screen}_{theme}.png'
+                path = out / f'screen_{extra if extra == "morph" else screen}_{theme}.png'
                 pg.screenshot(path=str(path))
                 pg.evaluate('() => { for (let k = 0; k < 128; k++) SW.noteOff(k); }')
                 if extra == 'arp':
                     pg.evaluate("() => { SW.P.tap('in07.arp.on', 0); SW.P.tap('in07.gate.on', 0); }")
+                if extra == 'morph':
+                    pg.evaluate("() => { SW.P.tap('in07.morph.on', 0); }")
                 im = Image.open(path).convert('RGB')
                 im.save(path.with_suffix('.webp'), 'WEBP', quality=88, method=6)
                 path.unlink()

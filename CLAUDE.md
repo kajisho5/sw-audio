@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.14.1（ブランチ in07-engine：SWINGBY の画面・MIDI・配布の形を追加し、v0.14.1 でバグチェックの修正：README「IN07 のバグチェック」）。v0.13.0 で 132 製品が完成（単体テスト 1319 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 69＝LV30・GT03 まで Windows・macOS・Linux で全ジョブ成功）。残りは RS02（学習済みモデルが要る・保留）と画面（UI）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。IN07＝**SWINGBY**（軽量プリセットシンセ。名前は依頼者の決定、型番・ID は in07 のまま）は 2026-10-08 に依頼者の依頼で追加：エンジン・画面（`ui/in07/`、A 案「Orbital」）・MIDI・配布の形まで済み。残りは依頼者の作業（証明書・製品版の鍵・サーバー・価格・実機の DAW・`kActivationServer`・`docs/dist/in07/release_info.json`・版 1.0.0。販売用パッケージはこれらが欠けると止まる）と実機での確認（README「開発中の楽器」）。LP の画面写真と動画は `tools/in07_marketing_media.py` で今の画面から作る（画面を変えたら作り直す）。
+現状は v0.15.0（ブランチ in07-engine：SWINGBY の画面・MIDI・配布の形、v0.14.1 のバグチェック、v0.15.0 で惑星の機能・モーフ・ARP／ゲートのプリセットと ULTRA・ブラウザ体験版・デモ曲：README「IN07 の惑星の機能」「IN07 のモーフ」「IN07 のブラウザ体験版」）。v0.13.0 で 132 製品が完成（単体テスト 1319 件。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。GitHub Actions は run 69＝LV30・GT03 まで Windows・macOS・Linux で全ジョブ成功）。残りは RS02（学習済みモデルが要る・保留）と画面（UI）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。IN07＝**SWINGBY**（軽量プリセットシンセ。名前は依頼者の決定、型番・ID は in07 のまま）は 2026-10-08 に依頼者の依頼で追加：エンジン・画面（`ui/in07/`、A 案「Orbital」）・MIDI・配布の形まで済み。残りは依頼者の作業（証明書・製品版の鍵・サーバー・価格・実機の DAW・`kActivationServer`・`docs/dist/in07/release_info.json`・版 1.0.0。販売用パッケージはこれらが欠けると止まる）と実機での確認（README「開発中の楽器」）。LP の画面写真と動画は `tools/in07_marketing_media.py` で今の画面から作る（画面を変えたら作り直す）。
 
 ## 話し方・進め方
 

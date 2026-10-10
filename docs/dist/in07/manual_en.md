@@ -100,6 +100,7 @@ Motion, theme and size are remembered per user (the same in every project).
 - **ORBITS (right)**: the four layers and their levels; click to select one (double-click opens it on the LAYER page). Below: the selected layer's cutoff, resonance, drive, unison, detune and amp envelope. EDIT LAYER opens the LAYER page.
 - **8 macros**: BRIGHT, RESO, ATTACK, RELEASE, DRIVE, WIDTH, DELAY, REVERB. 50 leaves the preset as it is. Drag (Shift for fine), double-click for 50, or use the wheel. Right-click for MIDI learn (section 7).
 - **RIBBON**: press and slide to play C1 to C6 without a keyboard. Tab to it and press Space or Enter for C4.
+- **MORPH**: fly a probe between presets ("swing-by", 5.6).
 - **ARP ON / OFF**: arpeggiator on / off.
 
 ### 5.2 LAYER
@@ -121,7 +122,9 @@ Motion, theme and size are remembered per user (the same in every project).
 - **ARPEGGIATOR**: ON at the top right switches it. MODE (UP, DOWN, UP-DN, ORDER = the order you pressed, RANDOM), RATE (1/8, 1/16, 1/16 T, 1/32), OCTAVES (1–4), LENGTH (note length), SWING (delays the off-beats), STEPS (1–16).
   - Bars: each step's velocity. Drag to set, double-click for 0 / 100. 0 is a rest.
   - Row below: each step's pitch (0, +12, +7, −12). Click to step through, right-click for 0.
+  - **ALIGN (planetary alignment)**: when not OFF, each key you hold becomes a planet on its own orbit. The highest key is the innermost and fastest: with 2·3·4 it plays every 2 steps, the next key every 3, the next every 4 (then 5, 6 …). 3·4·5 and 3·5·7 work the same way. All the keys meet on the first step and at every common multiple of their periods (every 12 steps for three keys on 2·3·4). Up to 8 notes sound at once. MODE and OCTAVES do not apply; a step's velocity bar (0 = rest) and pitch apply to every note it plays.
 - **TRANCE GATE**: 16 on/off steps chop the sound. ON at the top right switches it; RATE (1/8, 1/16, 1/32), DEPTH.
+  - **HARD / ECLIPSE**: HARD cuts at the step edges. ECLIPSE treats a run of closed steps as one passage of the moon: the sound dims smoothly, reaches the full depth in the middle and comes back by the end of the run (the overlap of a total eclipse; no hard edges, good for softly pulsing pads).
 - While the host plays, both follow its beat; when it is stopped, they count from the first key you press.
 
 ### 5.4 MOD
@@ -130,6 +133,8 @@ Motion, theme and size are remembered per user (the same in every project).
 - Each slot is drawn as a gravity line in the system: thicker for more, flowing from source to target (dots flowing back for a negative amount).
 - **FLYBY**: every note approaches, passes or leaves. MODE (Off, Arrive, Pass, Leave), DEPTH, TIME, NEAR (how close it passes), SIDE (left to right, right to left, alternate). Pitch (Doppler), level, pan and air absorption move together.
 - **VOICE**: PLAY (Poly, Mono, Legato), VOICES (1–32), GLIDE (0–2000 ms), BEND (pitch bend range, 0–24 semitones), LEVEL (master level).
+- **SATELLITES (satellite unison)**: the unison voices (LAYER's UNISON) go round on a circle. One axis of the circle is the pitch (within DETUNE), the other the stereo position (within SPREAD), so each voice rises and falls in pitch as it crosses from side to side. RATE (0.05–10 Hz), DEPTH (0 = still). With one voice, that voice circles alone (pan and vibrato).
+- **ROCHE LIMIT**: a note played harder than LIMIT is torn apart, as far as it is over the limit: the unison voices are thrown to different pitches (up to ±SPREAD semitones) and positions and fall back together at the TIME's pace (one voice glides back from above or below). LIMIT 100 % is off. With GRAVITY, the scattered voices pull back into one.
 
 ### 5.5 FX
 
@@ -139,9 +144,19 @@ The signal path on top (voice → effects → OUT), six cards below. Their order
 - **‹ ›**: move an effect one place earlier or later. The output dips for 4 ms while the order changes.
 - Drive (AMOUNT, TONE, MIX), Chorus (RATE, DEPTH, MIX), Delay (TIME: tempo-synced 1/16 to 1/2, FEEDBACK, MIX), Reverb (SIZE = decay time, DAMP, MIX), EQ (LOW, MID, HIGH ±12 dB), Limit (GAIN, CEILING, RELEASE; the Limit's output never goes over CEILING in sample peaks — LEVEL after it can still raise it above 0 dB).
 
+### 5.6 MORPH (swing-by)
+
+Press MORPH on the PLAY screen: a square appears over the star system, with a planet at each corner and a probe.
+
+- **A (top left)**: the sound playing now (the preset you loaded, or your edits).
+- **B (top right), C (bottom left), D (bottom right)**: pick a factory preset from the list (None leaves it empty).
+- **Drag the probe**: each planet pulls with the inverse square of its distance and the sound blends in that proportion. On a planet you hear that sound exactly; in the middle, the average of all four. The % next to each planet is its share, as is the thickness of its line. Double-click to return to A.
+- How it blends: values such as the cutoff are averaged on their own scale (the cutoff in octaves); choices such as a wave or a filter type come from the planet that pulls hardest. A layer or an effect only one planet has fades in as you approach it.
+- The probe (X, Y) and B–D can be automated. Loading a preset keeps the morph's settings and makes the new sound planet A. PLAY (Poly etc.) and VOICES are not morphed. The window's controls and the star system show A's values.
+
 ## 6. Presets
 
-- **Factory**: 128 (LEAD 18, PAD 19, BASS 19, PLUCK 18, KEYS 18, SEQ 18, FX 18), all at −16 LUFS.
+- **Factory**: 128 (LEAD 18, PAD 19, BASS 19, PLUCK 18, KEYS 18, SEQ 18, FX 18), all at −16 LUFS. The four ULTRA sounds (Ultra Saw, Ultra Bass, Ultra Wobble, Ultra Riddim) are heavy, dubstep-ready sounds. The presets that use the arpeggiator (Arp Pulse, Bounce Seq, Glass Steps, Acid Seq) or the trance gate (Trance Gate, Stutter Saw, Ultra Riddim) move when you hold a chord.
 - **Saving**: SAVE PRESET, enter a name, category, author and comment, then SAVE. An existing name asks before it is replaced. Characters a file name cannot hold are replaced.
 - **Where they go** (a CLAP host's preset browser lists them too):
   - Windows: `Documents\SEVENTHWELL\SWINGBY\Presets\`
@@ -193,8 +208,10 @@ Support: 〔CONTACT〕
 | Envelopes | AMP and FILTER per layer |
 | LFOs | 2 (Orbit, triangle, saw, square, random; tempo sync) |
 | Modulation | 8-slot matrix, 8 macros, flyby, gravity |
-| Arpeggiator | 16 steps (velocity, pitch), 5 modes, swing |
-| Trance gate | 16 steps |
+| Arpeggiator | 16 steps (velocity, pitch), 5 modes, swing, planetary alignment (2·3·4, 3·4·5, 3·5·7) |
+| Trance gate | 16 steps, HARD / ECLIPSE |
+| Satellites, Roche limit | the unison voices on a circle (0.05–10 Hz); hard notes torn apart (up to ±24 semitones, back in 20–2000 ms) |
+| Morph | four planets (the sound now and three factory presets), a probe between them (X and Y can be automated) |
 | Effects | Drive, Chorus, Delay, Reverb, EQ, Limit (any order) |
 | Presets | 128 factory (−16 LUFS), save your own |
 | Output | Stereo |

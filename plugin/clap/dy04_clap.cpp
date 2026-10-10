@@ -12,7 +12,7 @@ struct Dy04 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_GATE, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.dy04", "SW DY04 Gate", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Gate, expander and ducker", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Gate, expander and ducker", f};
         return &d;
     }
 };

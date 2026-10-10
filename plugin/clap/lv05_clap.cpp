@@ -14,7 +14,7 @@ struct Lv05 {
     static const clap_plugin_descriptor_t* descriptor() {
         static const char* const f[] = {CLAP_PLUGIN_FEATURE_AUDIO_EFFECT, CLAP_PLUGIN_FEATURE_UTILITY, CLAP_PLUGIN_FEATURE_STEREO, nullptr};
         static const clap_plugin_descriptor_t d = {CLAP_VERSION_INIT, "com.seventh-well.sw-audio.lv05", "SW LV05 Auto ducker", "SEVENTHWELL",
-                                                   "https://seventh-well.com", "", "", "0.14.1", "Ducks the program under a voice key", f};
+                                                   "https://seventh-well.com", "", "", "0.15.0", "Ducks the program under a voice key", f};
         return &d;
     }
 };
