@@ -410,6 +410,13 @@ private:
     static clap_process_status process(const clap_plugin_t* p, const clap_process_t* pr) {
         ScopedNoDenormals noDenormals;
         Plugin* s = self(p);
+        // the extra block of the project state is the core's own data (SA02's seed, UT01's gains, LV02's fixed filters ...): while the main thread loads or saves it, this block is passed through
+        struct AudioGate { std::atomic<int>* g = nullptr; ~AudioGate() { if (g) g->store(0, std::memory_order_release); } } audioGate;
+        if constexpr (HasExtraState<typename P::Core>::value) {
+            int free = 0;
+            if (!s->extraGate_.compare_exchange_strong(free, 1, std::memory_order_acquire)) { copyThrough(pr); return CLAP_PROCESS_CONTINUE; }
+            audioGate.g = &s->extraGate_;
+        }
         const auto t0 = std::chrono::steady_clock::now();
         s->applyPending();
         s->guiDrain(pr->out_events, 0);
@@ -676,7 +683,7 @@ private:
         if (!writeAll(s, magic, 4) || !writeAll(s, &count, 4)) return false;
         for (int i = 0; i < numParams(); ++i) { const double v = self(p)->host_values_[static_cast<size_t>(i)].load(); if (!writeAll(s, &v, 8)) return false; }
         if constexpr (HasExtraState<typename P::Core>::value) {
-            std::vector<uint8_t> extra; self(p)->shell_.core().saveExtra(extra);
+            std::vector<uint8_t> extra; { ExtraLock lock(self(p)->extraGate_); self(p)->shell_.core().saveExtra(extra); }
             const char xm[4] = {'S', 'W', 'X', '1'}; const uint32_t len = static_cast<uint32_t>(extra.size());
             if (!writeAll(s, xm, 4) || !writeAll(s, &len, 4) || (len && !writeAll(s, extra.data(), len))) return false;
         }
@@ -699,7 +706,8 @@ private:
         if constexpr (HasExtraState<typename P::Core>::value) {   // optional: states saved before the extra block existed end here
             char xm[4]; uint32_t len = 0;
             if (readAll(s, xm, 4) && std::memcmp(xm, "SWX1", 4) == 0 && readAll(s, &len, 4) && len <= (1u << 20)) {
-                std::vector<uint8_t> extra(len); if (len == 0 || readAll(s, extra.data(), len)) pl->shell_.core().loadExtra(extra.data(), extra.size());
+                std::vector<uint8_t> extra(len);
+                if (len == 0 || readAll(s, extra.data(), len)) { ExtraLock lock(pl->extraGate_); pl->shell_.core().loadExtra(extra.data(), extra.size()); }
             }
         }
         pl->snap_pending_.store(true);
@@ -754,6 +762,19 @@ private:
     std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
     std::vector<float> scLink_;                   // room for the key read from another SW Link instance (allocated in activate)
     link::Member::KeyState keyState_; std::atomic<float> linkKeyFound_{0.0f};
+    // 0 free, 1 the audio thread is in process(), 2 the main thread is in loadExtra / saveExtra (cores with an extra state block only)
+    std::atomic<int> extraGate_{0};
+    struct ExtraLock {
+        std::atomic<int>& g;
+        explicit ExtraLock(std::atomic<int>& x) : g(x) { for (;;) { int free = 0; if (g.compare_exchange_weak(free, 2, std::memory_order_acquire)) break; std::this_thread::yield(); } }
+        ~ExtraLock() { g.store(0, std::memory_order_release); }
+    };
+    static void copyThrough(const clap_process_t* pr) {   // a block that comes in while the state is being loaded: the input as it is
+        if (pr->audio_inputs_count < 1 || pr->audio_outputs_count < 1) return;
+        const clap_audio_buffer_t& ib = pr->audio_inputs[0]; clap_audio_buffer_t& ob = pr->audio_outputs[0];
+        if (!ib.data32 || !ob.data32) return;
+        for (uint32_t c = 0; c < std::min(ib.channel_count, ob.channel_count); ++c) if (ob.data32[c] != ib.data32[c]) std::memcpy(ob.data32[c], ib.data32[c], pr->frames_count * sizeof(float));
+    }
     std::atomic<uint32_t> tail_{0};   // the tail in samples, kept up to date by the audio thread (the host asks from any thread)
     uint32_t maxFrames_ = 4096;   // the largest block activate() promised the buffers for (process() cuts a longer block, which the CLAP rules forbid but a host can still send)
     std::array<std::atomic<float>, 4> peaks_{};
