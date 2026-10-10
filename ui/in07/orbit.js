@@ -24,6 +24,7 @@
       : { text: '#e8e8e8', orbit: '#3fd1a0', trail: '#8de0c3', label: '#8de0c3', dim: '#5c7a70', halo: '#3fd1a0', reso: '#8de0c3', spark: '#e8fff6', wave: '#bff3df', tick: '#3fd1a0', cur: '#e8fff6', glowOp: 0.14 };
     const c01 = clamp(Math.log(v.cutoff / 20) / Math.log(1000), 0, 1), res01 = clamp(v.res / 100, 0, 1), det01 = clamp(v.detune / 100, 0, 1);
     const dep01 = clamp(v.lfoDepth / 100, 0, 1), drv01 = clamp(v.drive / 100, 0, 1), rel01 = clamp(Math.log(v.release / 10) / Math.log(400), 0, 1);
+    const tu = t * (SW.TURN || 1);   // the turning time (core.js SW.TURN): orbits, spins, moonlets, the LFO moon
     if (p.noteKey !== undefined && p.noteKey !== self._nk) { if (self._nk !== undefined) self._noteT = t; self._nk = p.noteKey; }
     // a still picture (MOTION OFF) shows no note wave: its time stands still, so a wave would never fade
     const nT = self._noteT === undefined || p.still ? -10 : self._noteT, dn = t - nT;
@@ -41,7 +42,7 @@
     const close = view === 'close', fl = layers[clamp(focus, 0, Math.max(0, layers.length - 1))] || { name: '', kind: 'pearl', lvl: 0.5, on: true };
     const cR = close ? (fl.kind === 'ring' ? 52 : 64) : 64;
     let haloR = close ? cR * 1.5 + 120 * c01 : 80 + 130 * c01;
-    const lfoA = close ? 250 : 104, lfoB = lfoA * (1 - 0.75 * dep01), lph = 2 * PI * Math.min(5, v.lfoRate * 0.5) * t, lfoVal = Math.sin(lph);
+    const lfoA = close ? 250 : 104, lfoB = lfoA * (1 - 0.75 * dep01), lph = 2 * PI * Math.min(5, v.lfoRate * 0.5) * tu, lfoVal = Math.sin(lph);
     haloR += 30 * dep01 * lfoVal;
     const lr = 24 * PI / 180, lx = lfoA * Math.cos(lph), ly = lfoB * Math.sin(lph);
     const lfoPt = [CX + lx * Math.cos(lr) - ly * Math.sin(lr), CY + lx * Math.sin(lr) + ly * Math.cos(lr)];
@@ -56,7 +57,7 @@
     if (!close) {
       layers.forEach((ly, i) => {
         if (i > 3) return;
-        const o = L[i], th = phs[i] + o.w * 2 * PI * t, isF = i === focus, on = ly.on !== false;
+        const o = L[i], th = phs[i] + o.w * 2 * PI * tu, isF = i === focus, on = ly.on !== false;
         const dimL = (on ? 1 : 0.35) * dimAll * (focus >= 0 && !isF && view === 'system' ? 0.75 : 1);
         orbits.push({ a: o.a, b: o.b, tilt: o.tilt, op: (0.18 + 0.3 * ly.lvl + (isF ? 0.25 : 0)) * dimAll, w: isF ? 1.8 : 1.1 });
         if (on) for (let k = trailN; k >= 1; k--) {
@@ -67,7 +68,7 @@
         const x = p0[0] + jit * Math.sin(t * 37 + i * 1.7), y = p0[1] + jit * Math.cos(t * 29 + i * 2.3);
         const size = 10 + 7 * ly.lvl, reach = ly.kind === 'ring' ? size * 2.05 : size;
         put(behind, { x, y, r: size * 2.4, glow: true, op: pal.glowOp * 5 * dimL });
-        sprite(behind ? backB : frontB, x, y, size, ly.kind, spins[i] * t + phs[i] / (2 * PI), (behind ? 0.85 : 1) * dimL);
+        sprite(behind ? backB : frontB, x, y, size, ly.kind, spins[i] * tu + phs[i] / (2 * PI), (behind ? 0.85 : 1) * dimL);
         labels.push({ x: x + reach + 6, y: y - size - 4, text: ly.name, size: isF ? 11 : 10, ink: isF ? pal.cur : (behind ? pal.dim : pal.label), behind });
         bodyPos.push([x, y]);
         if (i === 0) { l1 = [x, y]; l1behind = behind; }
@@ -78,7 +79,7 @@
     const ru = (close ? cR * 1.9 + det01 * 40 : 14 + det01 * 26 + 14) * (1 + 0.35 * sat01), flat = close ? 0.42 : 0.55;
     if (N > 1 || close || sat01 > 0) for (let u = 0; u < N; u++) {
       const spread = N > 1 ? (u - (N - 1) / 2) / ((N - 1) / 2) : 0;
-      const free = 2 * PI * u / N + t * (1.6 + det01 * 1.4 * spread) * (close ? 0.6 : 1), held = 2 * PI * (u / N + t * clamp(v.satRate || 0.5, 0.05, 10));
+      const free = 2 * PI * u / N + tu * (1.6 + det01 * 1.4 * spread) * (close ? 0.6 : 1), held = 2 * PI * (u / N + tu * clamp(v.satRate || 0.5, 0.05, 10));
       const ph = sat01 > 0 ? held : free;
       const mb = close ? Math.sin(ph) < 0 : l1behind;
       sprite(mb ? backB : frontB, mc[0] + ru * Math.cos(ph), mc[1] + ru * flat * Math.sin(ph), close ? 6 : 3.4, 'bead', 0, dimAll);
@@ -88,7 +89,7 @@
     labels.push({ x: lfoPt[0] + 12, y: lfoPt[1] + 17, text: p.lfoText || ('LFO ' + Number(v.lfoRate).toFixed(2) + ' Hz'), size: 10, ink: pal.label });
     if (close) {
       const fi = clamp(focus, 0, 3);
-      sprite(midB, CX + jit * Math.sin(t * 37), CY + jit * Math.cos(t * 29), cR, fl.kind, spins[fi] * t, fl.on === false ? 0.4 : 1);
+      sprite(midB, CX + jit * Math.sin(t * 37), CY + jit * Math.cos(t * 29), cR, fl.kind, spins[fi] * tu, fl.on === false ? 0.4 : 1);
       midB[0].k = 1 + 0.08 * env;
       labels.push({ x: CX - 150, y: CY - haloR - 18, text: fl.name, size: 12, ink: pal.cur });
     }

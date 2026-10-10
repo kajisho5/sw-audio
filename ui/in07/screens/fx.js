@@ -159,7 +159,7 @@
     // ---- the motion: the worlds turn, the dashes flow, the probe flies along the path (MOTION 60 / 30 / OFF, as the orbit views)
     const draw = t => {
       ord.forEach((e, pos) => {
-        const sp = sprites[pos], fr = Math.floor((((SPIN[e] * t + pos * 0.17) % 1) + 1) % 1 * 96) % 96;
+        const sp = sprites[pos], fr = Math.floor((((SPIN[e] * t * (SW.TURN || 1) + pos * 0.17) % 1) + 1) % 1 * 96) % 96;   // SW.TURN: core.js
         if (sp.fr !== fr) { sp.fr = fr; sp.im.style.transform = 'translate3d(' + (-(fr % 12) * SZ) + 'px,' + (-Math.floor(fr / 12) * SZ) + 'px,0)'; }
       });
       flow.style.strokeDashoffset = String(f1(-(t * 30) % 12));

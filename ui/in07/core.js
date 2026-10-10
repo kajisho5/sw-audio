@@ -20,6 +20,10 @@
   SW.post = post;
   SW.screens = SW.screens || [];   // the screens register here (screens/*.js); the frame (app.js) builds them
   SW.boot = BOOT;
+  // how fast the worlds turn: the orbits, the bodies' spins, the moonlets, the LFO moon, the FX stations (orbit.js, screens/fx.js).
+  // Half of the design's speeds (the client, 2026-10-10: "回転の速度が半分とかでもいいかも、すごい早い気がする"); the beat-locked rings,
+  // the note waves, Drive's sparks and the flowing dashes keep their own time.
+  SW.TURN = 0.5;
   const b64 = s => btoa(unescape(encodeURIComponent(s)));   // UTF-8 text as base64 (calls carry text that may hold spaces)
   SW.b64 = b64;
   SW.unb64 = s => decodeURIComponent(escape(atob(s)));
