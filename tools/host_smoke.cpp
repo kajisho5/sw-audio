@@ -128,6 +128,8 @@ struct Run {
     double toneHz = 0, toneDb = -20.0; uint64_t toneN = 0;   // toneHz > 0: a sine instead of noise (the SW Link checks)
     int64_t impulse = -1;                                    // >= 0: silence with one impulse (0.5) at that sample (the latency check)
     int64_t poisonAt = -1; float poison = 0.0f;              // >= 0: that input sample (left channel) is `poison` (NaN or an infinity) instead of what it would be
+    struct Tr { bool none = false; clap_event_transport_t t{}; };
+    std::vector<Tr> transports; size_t trIdx = 0;            // not empty: block k gets transports[k % size] (`none` = the host gives no transport at all)
 
     // processes `blocks` blocks of noise (seeded), appending to inAll/outAll; events go into the first block
     void process(int blocks, uint64_t seed, EventList& events) {
@@ -153,6 +155,7 @@ struct Run {
             clap_output_events_t oe{nullptr, outTryPush};
             clap_process_t pr{};
             pr.steady_time = -1; pr.frames_count = kBlock; pr.transport = nullptr;
+            if (!transports.empty()) { const Tr& tr = transports[trIdx++ % transports.size()]; if (!tr.none) pr.transport = &tr.t; }
             pr.audio_inputs = ib; pr.audio_inputs_count = nIn;
             pr.audio_outputs = &ob; pr.audio_outputs_count = 1;
             pr.in_events = &events.in; pr.out_events = &oe;
@@ -985,6 +988,79 @@ bool randomParamChecks(const std::vector<fs::path>& files, std::vector<std::stri
     return ok;
 }
 
+// The transport a host sends is not always sane: a tempo of 0, a negative or NaN tempo, a bar position far out of range, a time signature with a 0, a play position of INT64_MAX. The products that read the tempo or the
+// bar line (17 of them: delays, modulations, the tempo-locked ones) must still give a finite output of a sensible size, in a time that is not far over the audio (a loop that waits for a beat that never comes).
+// Three scripts, two random settings each (every parameter at a random value, so the Sync switches are on half of the time); the script cycles through a block each.
+static clap_event_transport_t makeTransport(uint32_t flags, double tempo, int64_t beats, int64_t barStart, uint16_t num, uint16_t den, int64_t secs) {
+    clap_event_transport_t t{};
+    t.header.size = sizeof(t); t.header.time = 0; t.header.space_id = CLAP_CORE_EVENT_SPACE_ID; t.header.type = CLAP_EVENT_TRANSPORT; t.header.flags = 0;
+    t.flags = flags; t.tempo = tempo; t.song_pos_beats = beats; t.bar_start = barStart; t.bar_number = 0; t.tsig_num = num; t.tsig_denom = den; t.song_pos_seconds = secs; t.tempo_inc = 0.0;
+    t.loop_start_beats = t.loop_end_beats = t.loop_start_seconds = t.loop_end_seconds = 0;
+    return t;
+}
+static std::vector<Run::Tr> transportScript(int which, uint64_t seed) {
+    const uint32_t all = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_BEATS_TIMELINE | CLAP_TRANSPORT_HAS_SECONDS_TIMELINE | CLAP_TRANSPORT_HAS_TIME_SIGNATURE;
+    const int64_t bf = CLAP_BEATTIME_FACTOR, sf = CLAP_SECTIME_FACTOR;
+    std::vector<Run::Tr> v; Rng rng(0x9E3779B97F4A7C15ull * (seed + 1) + static_cast<uint64_t>(which));
+    auto add = [&](const clap_event_transport_t& t) { Run::Tr x; x.t = t; v.push_back(x); };
+    auto none = [&]() { Run::Tr x; x.none = true; v.push_back(x); };
+    if (which == 0) {   // the tempo, with a sane playing position and 4/4 (every value for 5 blocks)
+        const double tempi[] = {120.0, 0.0, -120.0, std::nan(""), HUGE_VAL, -HUGE_VAL, 1e-300, 1e-9, 1e9, 1e30, 20.0, 999.0, 60.0, 240.0};
+        for (const double tp : tempi) for (int k = 0; k < 5; ++k) add(makeTransport(all | CLAP_TRANSPORT_IS_PLAYING, tp, (k * 3 + 1) * bf, 0, 4, 4, k * sf));
+    } else if (which == 1) {   // the bar position and the time signature, at a tempo of 120 and a tempo that is not there
+        const int64_t pos[] = {0, bf, 3 * bf + bf / 3, -bf, -1, INT64_MAX, INT64_MIN, INT64_MAX / 2, 1000000 * bf};
+        const uint16_t num[] = {4, 0, 3, 65535, 1, 7, 0}, den[] = {4, 4, 0, 1, 65535, 8, 0};
+        for (int k = 0; k < 70; ++k) {
+            const int64_t bp = pos[static_cast<size_t>(k) % 9], bs = (k % 3 == 0) ? 0 : pos[static_cast<size_t>(k / 2) % 9];
+            const uint32_t fl = (k % 4 == 3 ? (all & ~CLAP_TRANSPORT_HAS_TEMPO) : all) | (k % 5 < 3 ? CLAP_TRANSPORT_IS_PLAYING : 0u);
+            add(makeTransport(fl, 120.0, bp, bs, num[static_cast<size_t>(k / 3) % 7], den[static_cast<size_t>(k / 3) % 7], 0));
+        }
+    } else {   // the play position in seconds and the flags: playing and stopped, a transport with no flags, no transport at all, random in between
+        const int64_t secs[] = {0, -1, INT64_MAX, INT64_MIN, 5 * sf, 1000000 * sf, -5 * sf};
+        for (int k = 0; k < 70; ++k) {
+            if (k % 9 == 8) { none(); continue; }
+            uint32_t fl = static_cast<uint32_t>((rng.next() * 0.5f + 0.5f) * 65535.0f) & 0xFFFFu; if (k % 4 == 0) fl = 0;
+            const double tp = (k % 7 == 0) ? 0.0 : 40.0 + 200.0 * (rng.next() * 0.5 + 0.5);
+            add(makeTransport(fl, tp, static_cast<int64_t>(rng.next() * 4e9f), static_cast<int64_t>(rng.next() * 4e9f), 4, 4, secs[static_cast<size_t>(k) % 7]));
+        }
+    }
+    return v;
+}
+bool transportChecks(const std::vector<fs::path>& files, std::vector<std::string>& problems) {
+    bool ok = true; int tested = 0, runs = 0;
+    static const char* const kNames[3] = {"tempo", "bar position / time signature", "play position / flags"};
+    for (const auto& f : files) {
+        const std::string name = f.stem().string();
+        for (int seed = 1; seed <= 2; ++seed) {
+            for (int which = 0; which < 3; ++which) {
+                Loaded a; std::string why; if (!a.open(f, why)) { problems.push_back("FAIL  transport of " + name + ": " + why); ok = false; break; }
+                const auto* pe = static_cast<const clap_plugin_params_t*>(a.p->get_extension(a.p, CLAP_EXT_PARAMS));
+                const auto* ports = static_cast<const clap_plugin_audio_ports_t*>(a.p->get_extension(a.p, CLAP_EXT_AUDIO_PORTS));
+                a.run.nIn = ports ? std::min<uint32_t>(2, ports->count(a.p, true)) : 1;
+                if (a.run.nIn > 1) { clap_audio_port_info_t pi{}; if (ports->get(a.p, true, 1, &pi)) a.run.inCh[1] = std::min<uint32_t>(2, pi.channel_count); }
+                Rng rng(0xA24BAED4963EE407ull * static_cast<uint64_t>(seed) + 5);
+                EventList ev;
+                for (uint32_t i = 0; pe && i < pe->count(a.p); ++i) {
+                    clap_param_info_t pi{}; if (!pe->get_info(a.p, i, &pi) || (pi.flags & CLAP_PARAM_IS_READONLY)) continue;
+                    double v = pi.min_value + (rng.next() * 0.5 + 0.5) * (pi.max_value - pi.min_value); if (pi.flags & CLAP_PARAM_IS_STEPPED) v = std::round(v);
+                    ev.set(pi.id, v);
+                }
+                a.run.transports = transportScript(which, static_cast<uint64_t>(seed));
+                a.run.process(1, 300 + static_cast<uint64_t>(seed), ev);
+                a.run.process(69, 400 + static_cast<uint64_t>(seed), ev);
+                ++runs;
+                if (a.run.bad) { problems.push_back("FAIL  transport of " + name + " (" + kNames[which] + ", settings " + std::to_string(seed) + "): NaN / Inf in the output or an error from process()"); ok = false; }
+                else if (a.run.peak > 1e4) { char b[220]; std::snprintf(b, sizeof b, "FAIL  transport of %s (%s, settings %d): peak %.3g", name.c_str(), kNames[which], seed, a.run.peak); problems.push_back(b); ok = false; }
+                else if (a.run.seconds > 5.0 * a.run.audioSeconds + 0.05) { char b[220]; std::snprintf(b, sizeof b, "FAIL  transport of %s (%s, settings %d): %.2f s to process %.2f s of audio", name.c_str(), kNames[which], seed, a.run.seconds, a.run.audioSeconds); problems.push_back(b); ok = false; }
+                a.close();
+            }
+        }
+        ++tested;
+    }
+    if (ok) std::printf("ok    transport: %d plug-ins x %d runs (tempo 0 / negative / NaN / infinite / absurd; bar positions and time signatures out of range; INT64 play positions; random flags; no transport): finite output, peak under 1e4, no run slower than 5x real time\n", tested, runs / std::max(1, tested));
+    return ok;
+}
+
 // reset(): a host calls it when the transport stops or jumps; what rang before must not come out of the plug-in afterwards. 0.4 s of noise, reset(), then 0.5 s of silence: the output must be silent at once
 // (the first 20 ms are left out for the smoothers). Above -80 dBFS is listed; above -40 dBFS fails.
 bool resetChecks(const std::vector<fs::path>& files, std::vector<std::string>& lines, int& failing) {
@@ -1236,7 +1312,7 @@ int main(int argc, char** argv) {
     // the preset checks write into the person's home folder: a temporary one
     const fs::path tmpHome = fs::temp_directory_path() / ("sw-host-smoke-home-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(tmpHome); setenv("HOME", tmpHome.c_str(), 1);
-    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false; int tailSettings = 6;
+    std::vector<fs::path> files; double soakSeconds = 0; bool blocksOnly = false, tailsOnly = false, resetOnly = false, memoryOnly = false, leaksOnly = false, transportOnly = false; int tailSettings = 6;
     for (int i = 1; i < argc; ++i) {
         const std::string opt = argv[i];
         if (opt.rfind("--rate=", 0) == 0) {   // the whole run at another sample rate, with the same lengths in seconds
@@ -1246,6 +1322,7 @@ int main(int argc, char** argv) {
         if (opt.rfind("--soak=", 0) == 0) { soakSeconds = std::atof(opt.c_str() + 7); continue; }
         if (opt == "--blocks") { blocksOnly = true; continue; }
         if (opt == "--reset") { resetOnly = true; continue; }
+        if (opt == "--transport") { transportOnly = true; continue; }
         if (opt == "--memory") { memoryOnly = true; continue; }
         if (opt == "--leaks") { leaksOnly = true; continue; }
         if (opt.rfind("--tails", 0) == 0) { tailsOnly = true; tailSettings = opt.size() > 8 ? std::atoi(opt.c_str() + 8) : 6; continue; }
@@ -1270,6 +1347,11 @@ int main(int argc, char** argv) {
         std::vector<std::string> lines; memoryChecks(files, lines);
         for (const auto& l : lines) std::printf("%s\n", l.c_str());
         return 0;
+    }
+    if (transportOnly) {   // --transport: only the check with odd transports
+        std::vector<std::string> problems; const bool ok = transportChecks(files, problems);
+        for (const auto& l : problems) std::printf("%s\n", l.c_str());
+        return ok ? 0 : 1;
     }
     if (resetOnly) {   // --reset: only the reset() check
         std::vector<std::string> lines; int failing = 0; const bool ok = resetChecks(files, lines, failing);
@@ -1326,6 +1408,7 @@ int main(int argc, char** argv) {
     if (!linkSharedChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!randomParamChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { std::vector<std::string> problems; if (!poisonChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
+    { std::vector<std::string> problems; if (!transportChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     if (!unitChecks(files)) ++fails;
     { std::vector<std::string> problems; if (!stateChecks(files, problems)) { ++fails; for (const auto& l : problems) std::printf("%s\n", l.c_str()); } }
     { int w = 0; std::vector<std::string> lines; impulseChecks(files, w, lines); std::printf("\nlatency against an impulse: %d plug-in(s) differ from what they report\n", w); for (const auto& l : lines) std::printf("%s\n", l.c_str()); warns += w; }

@@ -406,7 +406,12 @@ private:
         if (!ib.data32 || !ob.data32 || nch == 0) return CLAP_PROCESS_ERROR;
         const uint32_t frames = pr->frames_count;
         if constexpr (HasSetTempo<typename P::Core>::value)
-            if (pr->transport && (pr->transport->flags & CLAP_TRANSPORT_HAS_TEMPO)) s->shell_.core().setTempo(pr->transport->tempo);
+            if (pr->transport && (pr->transport->flags & CLAP_TRANSPORT_HAS_TEMPO)) {
+                // 1 .. 1000 bpm goes to the core; a NaN, an infinity, 0 or a negative tempo (a broken tempo track) is "no tempo" (0), which every core reads as such
+                // (an infinite tempo gave a NaN output in DL05, MD02, MD03 and MD04; a NaN tempo in DY08: host_smoke --transport)
+                const double bpm = pr->transport->tempo;
+                s->shell_.core().setTempo(bpm >= 1.0 && bpm <= 1000.0 ? bpm : 0.0);
+            }
         if constexpr (HasSetTransport<typename P::Core>::value) {
             // playing, and the beats until the next bar line (-1 when the host does not tell)
             double toBar = -1.0; bool playing = false;
