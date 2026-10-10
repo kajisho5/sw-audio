@@ -21,7 +21,10 @@ for c in $CODES; do
     log=$B/stress_$c.log
     TSAN_OPTIONS="halt_on_error=0" timeout $((SECS * 20 + 60)) $B/sw-host-stress "$B/plugins/$f" "$SECS" > "$log" 2>&1; rc=$?
     races=$(grep -c "WARNING: ThreadSanitizer" "$log")
-    if [ $rc -ne 0 ] || [ "$races" != 0 ]; then echo "FAIL $c (exit $rc, $races TSan report(s)): $log"; fail=1; else tail -1 "$log"; fi
+    if [ $rc -ne 0 ] || [ "$races" != 0 ]; then
+        echo "FAIL $c (exit $rc, $races TSan report(s)): $log"; fail=1
+        grep -A28 -m3 "WARNING: ThreadSanitizer" "$log" | cut -c1-240   # (the reports themselves, for a run on a machine that nobody can log in to: CI)
+    else tail -1 "$log"; fi
     n=$((n + 1))
 done
 echo "$n plug-ins, $([ $fail = 0 ] && echo 'no race and no failure' || echo 'FAILURES')"
