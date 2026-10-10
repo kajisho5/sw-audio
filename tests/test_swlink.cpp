@@ -2,6 +2,7 @@
 #include "swlink.hpp"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <thread>
@@ -126,9 +127,10 @@ TEST_CASE("SW Link: a reference spectrum is shared by the product that has it (U
     // a reader against a writer that keeps changing it: what is returned is always one reference, never a mix
     REQUIRE(ut.join(a.view(), "UT03"));
     std::atomic<bool> stop{false};
-    std::thread w([&] { float x[link::kRefBands]; uint32_t n = 1; while (!stop) { for (auto& e : x) e = static_cast<float>(n); ut.publishReference(n, x); ++n; } });
+    std::thread w([&] { float x[link::kRefBands]; uint32_t n = 1; while (!stop) { for (auto& e : x) e = static_cast<float>(n); ut.publishReference(n, x); ++n; std::this_thread::sleep_for(std::chrono::microseconds(30)); } });   // (a new reference every 30 us: a seqlock reader gets a whole one between two writes; a writer that never rests starves it)
     int mixed = 0, reads = 0;
-    for (int k = 0; k < 20000; ++k) { double d[link::kRefBands]; const uint32_t s = eq.findReference("UT03", d); if (!s) continue; ++reads; for (int i = 1; i < link::kRefBands; ++i) if (d[i] != d[0]) { ++mixed; break; } }
+    // (until 2000 whole references were read, or 5 s: on a busy machine the writer may not even have started when a fixed number of attempts is over)
+    for (const auto t0 = std::chrono::steady_clock::now(); reads < 2000 && std::chrono::steady_clock::now() - t0 < std::chrono::seconds(5);) { double d[link::kRefBands]; const uint32_t s = eq.findReference("UT03", d); if (!s) continue; ++reads; for (int i = 1; i < link::kRefBands; ++i) if (d[i] != d[0]) { ++mixed; break; } }
     stop = true; w.join();
     INFO(reads << " reads"); CHECK(mixed == 0); CHECK(reads > 0);
 }
@@ -159,7 +161,7 @@ TEST_CASE("SW Link: a key signal - the latest samples of another instance's outp
     std::atomic<bool> stop{false};
     std::thread w([&] { while (!stop) { peer2.leave(); peer2.join(a.view(), "LV01"); a.advance(64); } });
     int reads = 0; link::Member::KeyState st4;
-    for (int k = 0; k < 20000; ++k) { if (me.readKey("LV01", key.data(), 256, st4)) { ++reads; for (float v : key) if (!(std::abs(v) <= 0.11f)) { CHECK(std::abs(v) <= 0.11f); break; } } }
+    for (const auto t0 = std::chrono::steady_clock::now(); reads < 2000 && std::chrono::steady_clock::now() - t0 < std::chrono::seconds(5);) { if (me.readKey("LV01", key.data(), 256, st4)) { ++reads; for (float v : key) if (!(std::abs(v) <= 0.11f)) { CHECK(std::abs(v) <= 0.11f); break; } } }
     stop = true; w.join();
     INFO(reads << " reads"); CHECK(reads > 0);
 }
