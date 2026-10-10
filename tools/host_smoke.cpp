@@ -733,14 +733,15 @@ bool linkKeyChecks(const std::vector<fs::path>& files) {
     d.run.process(2, 3, none); k.run.process(2, 4, none);
     { const auto r = readoutsOf(); if (r.size() < 3 || r[0] != 0.0 || r[2] != 0.0) { fail("LV05 should start with no ducking and no key found"); k.close(); k2.close(); d.close(); return false; } }
     d.run.process(1, 5, setKey); k.run.process(1, 6, none);
-    for (int i = 0; i < 480; ++i) { k.run.process(1, 10u + static_cast<uint64_t>(i), none); d.run.process(1, 1000u + static_cast<uint64_t>(i), none); }   // about 2.6 s, a block each in turn as a host does: the 80 ms attack is long over
+    const int sec26 = static_cast<int>(std::lround(480.0 * kSr / 48000.0));   // 2.56 s of blocks at any sample rate (the hold of 1.2 s and the release of 2 s are in seconds: a count of blocks that is right at 48 kHz is half the time at 96 kHz)
+    for (int i = 0; i < sec26; ++i) { k.run.process(1, 10u + static_cast<uint64_t>(i), none); d.run.process(1, 1000u + static_cast<uint64_t>(i), none); }   // about 2.6 s, a block each in turn as a host does: the 80 ms attack is long over
     { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 1.0 || r[0] > -10.0) fail("LV05 with Key = LV01 should duck by about 12 dB under LV01's noise (gain " + std::to_string(r.empty() ? 99.0 : r[0]) + " dB, key found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
     // LV01 stops (it is not processed any more): its ring stands still, the key is gone and the gain comes back (Release 2 s)
-    for (int i = 0; i < 960; ++i) d.run.process(1, 2000u + static_cast<uint64_t>(i), none);   // 5 s
+    for (int i = 0; i < 2 * sec26; ++i) d.run.process(1, 2000u + static_cast<uint64_t>(i), none);   // 5 s
     { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 0.0 || r[0] < -3.0) fail("with LV01 not playing the key should be gone and the ducking released (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB, found " + std::to_string(r.size() > 2 ? r[2] : -1) + ")"); }
     // back on the host's sidechain: nothing connected here, so nothing ducks even while LV01 plays
     EventList toSc; toSc.set(keyId, 0.0); d.run.process(1, 7, toSc);
-    for (int i = 0; i < 480; ++i) { k.run.process(1, 3000u + static_cast<uint64_t>(i), none); d.run.process(1, 4000u + static_cast<uint64_t>(i), none); }
+    for (int i = 0; i < sec26; ++i) { k.run.process(1, 3000u + static_cast<uint64_t>(i), none); d.run.process(1, 4000u + static_cast<uint64_t>(i), none); }
     { const auto r = readoutsOf(); if (r.size() < 3 || r[2] != 0.0 || r[0] < -1.0) fail("Key = Sidechain with nothing connected should not duck (gain " + std::to_string(r.empty() ? -99.0 : r[0]) + " dB)"); }
     k.close(); k2.close(); d.close();
     if (ok) std::printf("ok    SW Link key: LV05 ducks under another instance's output (Key = LV01 Voice, in the same process, with a second LV01 standing still next to it), notices when it stops, and the host's sidechain is used again with Key = Sidechain\n");
