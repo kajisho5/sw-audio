@@ -1,9 +1,12 @@
-// sw-host-stress — the audio thread and the window's thread on one plug-in at the same time, to be built with ThreadSanitizer (tools/stress_tsan.sh).
+// sw-host-stress — the audio thread, the window's thread and the host's main thread on one plug-in at the same time, to be built with ThreadSanitizer (tools/stress_tsan.sh).
 //   The audio thread processes noise in blocks of 256 and now and then receives parameter events (the host's automation) and a reset() (the transport stopped or jumped); a second thread plays the window: it polls ("p"), moves parameters
 //   ("s <i> <v>" with the gesture messages around them) and presses the buttons a screen can press ("c <name> <arg>": every call any product knows, with plausible arguments). The main thread
-//   waits and stops them. What it finds is data races (TSan prints them and the exit code is not 0), crashes, and an audio thread that fails or sees NaN.
+//   the host's main thread saves and loads the project state (while the audio thread processes), reads and writes parameter text, asks for latency and tail and switches the render mode between offline and
+//   realtime; the test thread waits and stops them. What it finds is data races (TSan prints them and the exit code is not 0), crashes, and an audio thread that fails or sees NaN.
 //   usage: sw-host-stress <plug-in.clap> [seconds = 6]
 #include <clap/clap.h>
+#include <clap/ext/render.h>
+#include <clap/ext/tail.h>
 #include "sw_message.h"
 #include <algorithm>
 #include <atomic>
@@ -35,6 +38,14 @@ struct Events {
     void set(clap_id id, double v, uint32_t t) { clap_event_param_value_t e{}; e.header.size = sizeof e; e.header.time = t; e.header.space_id = CLAP_CORE_EVENT_SPACE_ID; e.header.type = CLAP_EVENT_PARAM_VALUE; e.param_id = id; e.note_id = -1; e.port_index = -1; e.channel = -1; e.key = -1; e.value = v; ev.push_back(e); }
 };
 bool outTryPush(const clap_output_events_t*, const clap_event_header_t*) { return true; }
+struct MemOut { std::vector<uint8_t> d; clap_ostream_t s{}; MemOut() { s.ctx = this; s.write = [](const clap_ostream_t* st, const void* b, uint64_t n) -> int64_t { auto* m = static_cast<MemOut*>(st->ctx); const auto* q = static_cast<const uint8_t*>(b); m->d.insert(m->d.end(), q, q + n); return static_cast<int64_t>(n); }; } };
+struct MemIn {
+    std::vector<uint8_t> d; size_t pos = 0; clap_istream_t s{};
+    explicit MemIn(std::vector<uint8_t> bytes) : d(std::move(bytes)) {
+        s.ctx = this;
+        s.read = [](const clap_istream_t* st, void* b, uint64_t n) -> int64_t { auto* m = static_cast<MemIn*>(st->ctx); const size_t k = std::min<size_t>(static_cast<size_t>(n), m->d.size() - m->pos); std::memcpy(b, m->d.data() + m->pos, k); m->pos += k; return static_cast<int64_t>(k); };
+    }
+};
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -104,14 +115,33 @@ int main(int argc, char** argv) {
             ++messages; std::this_thread::sleep_for(std::chrono::microseconds(150));
         }
     });
+    std::atomic<long> hostCalls{0};
+    std::thread mainHost([&] {   // the host's main thread: project state, parameter text, latency, tail, render mode (all [main-thread] calls, allowed while the audio thread runs)
+        Rng rng(13);
+        const auto* st = static_cast<const clap_plugin_state_t*>(p->get_extension(p, CLAP_EXT_STATE));
+        const auto* lat = static_cast<const clap_plugin_latency_t*>(p->get_extension(p, CLAP_EXT_LATENCY));
+        const auto* tl = static_cast<const clap_plugin_tail_t*>(p->get_extension(p, CLAP_EXT_TAIL));
+        const auto* rn = static_cast<const clap_plugin_render_t*>(p->get_extension(p, CLAP_EXT_RENDER));
+        std::vector<uint8_t> saved;
+        while (!stop.load()) {
+            const double r = rng.next();
+            if (r < 0.12 && st) { MemOut mo; if (st->save(p, &mo.s) && rng.next() < 0.5) saved = mo.d; }
+            else if (r < 0.22 && st && !saved.empty()) { MemIn mi(saved); st->load(p, &mi.s); }
+            else if (r < 0.62 && np) { const uint32_t i = static_cast<uint32_t>(rng.next() * np) % np; double v = 0; pe->get_value(p, info[i].id, &v); char b[128] = {}; if (pe->value_to_text(p, info[i].id, v, b, sizeof b)) { double o = 0; pe->text_to_value(p, info[i].id, b, &o); } }
+            else if (r < 0.72 && lat) lat->get(p);
+            else if (r < 0.82 && tl) tl->get(p);
+            else if (r < 0.95 && rn) rn->set(p, rng.next() < 0.5 ? CLAP_RENDER_OFFLINE : CLAP_RENDER_REALTIME);
+            ++hostCalls; std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+    });
     std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<long>(seconds * 1000)));
-    stop = true; audio.join(); window.join();
+    stop = true; audio.join(); window.join(); mainHost.join();
     if (std::string(d->id).find(".eq05") != std::string::npos) {   // EQ05: how far Match got (read-outs: listening, progress, needs fit, reference, before, after, fits applied, loads done / failed)
         const std::string u = msg->send(p, "p"); std::vector<std::string> arrays; int depth = 0; size_t from = 0;
         for (size_t i = 0; i < u.size(); ++i) { if (u[i] == '[') { if (depth++ == 0) from = i; } else if (u[i] == ']' && --depth == 0) arrays.push_back(u.substr(from, i - from + 1)); }
         std::printf("  EQ05 read-outs: %s\n", arrays.size() > 3 ? arrays[3].c_str() : "(none)");
     }
     p->stop_processing(p); p->deactivate(p); p->destroy(p); entry->deinit(); dlclose(lib);
-    std::printf("%-28s %6ld blocks, %7ld window messages: %s\n", d->name, blocks.load(), messages.load(), bad.load() ? "FAIL (process error or NaN)" : "ok");
+    std::printf("%-28s %6ld blocks, %7ld window messages, %6ld host calls: %s\n", d->name, blocks.load(), messages.load(), hostCalls.load(), bad.load() ? "FAIL (process error or NaN)" : "ok");
     return bad.load() ? 1 : 0;
 }
