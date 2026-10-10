@@ -1,5 +1,5 @@
 // SWINGBY (SW IN07) tools: a recipe in the factory tables' language (products/in07/preset_dsl.hpp) as plain values, as the factory table
-// is built (products/in07/presets.cpp), and the factory presets' levels put on them. Shared by tools/in07_pack.cpp and tools/in07_song.cpp.
+// is built (products/in07/presets.cpp), and the factory presets' levels put on them. Used by the demo songs (tools/in07_songkit.hpp).
 #pragma once
 #include "in07/presets.hpp"
 #include "in07/preset_dsl.hpp"

@@ -445,6 +445,20 @@ std::vector<AuditionNote> audition(const std::string& c, double& total) {
     return n;
 }
 
+std::vector<AuditionNote> presetAudition(int index, double& total) {
+    const auto& P = factoryPresets();
+    if (index < 0 || index >= static_cast<int>(P.size())) { total = 0.0; return {}; }
+    const Preset& pr = P[static_cast<size_t>(index)];
+    bool held = false;
+    for (const auto& v : pr.values) held = held || ((v.first == ArpOn || v.first == GateOn) && v.second > 0.5);
+    if (!held) return audition(pr.category, total);
+    // the arp plays the held keys, the gate cuts them: a bass holds C2, the others C minor from C3 (C3 G3 C4 Eb4), 3 s
+    std::vector<AuditionNote> n;
+    if (pr.category == "BASS") { n.push_back({0.05, 2.2, 36}); total = 2.6; }
+    else { for (int k : {48, 55, 60, 63}) n.push_back({0.05, 3.0, k}); total = 3.5; }
+    return n;
+}
+
 PresetMeasure measurePreset(int index, double fs, const PresetLevels* lv, bool preFx) {
     PresetMeasure m;
     const auto& P = factoryPresets();
@@ -455,7 +469,7 @@ PresetMeasure measurePreset(int index, double fs, const PresetLevels* lv, bool p
     p.prepare(fs, 256);   // after the values: the level and the effects start where the preset puts them
     p.setTempo(120.0);
     double total = 0.0;
-    const auto notes = audition(P[static_cast<size_t>(index)].category, total);
+    const auto notes = presetAudition(index, total);
     struct Ev { long long at; int key; bool on; };
     std::vector<Ev> ev;
     for (const auto& n : notes) {

@@ -41,7 +41,7 @@ void play(int index, const PresetLevels& lv, double fs, std::vector<float>& L, s
     applyPreset(p, index, lv);
     p.prepare(fs, 256); p.setTempo(120.0);
     double total = 0.0;
-    const auto notes = audition(factoryPresets()[static_cast<size_t>(index)].category, total);
+    const auto notes = presetAudition(index, total);
     struct Ev { long long at; int key; bool on; };
     std::vector<Ev> ev;
     for (const auto& n : notes) { ev.push_back({std::llround(n.start * fs), n.key, true}); ev.push_back({std::llround((n.start + n.length) * fs), n.key, false}); }

@@ -84,6 +84,34 @@ struct B {
                                              {"mod7.src", "mod7.dst", "mod7.amount"}, {"mod8.src", "mod8.dst", "mod8.amount"}};
         return g({{id[slot - 1][0], src}, {id[slot - 1][1], dst}, {id[slot - 1][2], amount}});
     }
+    // the arpeggiator (2026-10-10): mode ("Up", "Down", "Up-Down", "Order", "Random"), rate ("1/8", "1/16", "1/16 T", "1/32"), octaves,
+    // note length %, swing %; then, optionally, the steps' velocity row (0 = a rest) and pitch row (-12, 0, 7, 12) from step 1
+    B& arp(const char* mode, const char* rate, int octaves, double length = 70, double swing = 0) {
+        return g({{"arp.on", 1.0}, {"arp.mode", mode}, {"arp.rate", rate}, {"arp.octaves", static_cast<double>(octaves)}, {"arp.length", length}, {"arp.swing", swing}});
+    }
+    B& arpVel(std::initializer_list<double> row) {
+        static const char* const id[16] = {"arp.vel1", "arp.vel2", "arp.vel3", "arp.vel4", "arp.vel5", "arp.vel6", "arp.vel7", "arp.vel8",
+                                           "arp.vel9", "arp.vel10", "arp.vel11", "arp.vel12", "arp.vel13", "arp.vel14", "arp.vel15", "arp.vel16"};
+        int i = 0;
+        for (double x : row) if (i < 16) v.push_back({id[i++], x});
+        return *this;
+    }
+    B& arpPitch(std::initializer_list<double> row) {
+        static const char* const id[16] = {"arp.pitch1", "arp.pitch2", "arp.pitch3", "arp.pitch4", "arp.pitch5", "arp.pitch6", "arp.pitch7", "arp.pitch8",
+                                           "arp.pitch9", "arp.pitch10", "arp.pitch11", "arp.pitch12", "arp.pitch13", "arp.pitch14", "arp.pitch15", "arp.pitch16"};
+        int i = 0;
+        for (double x : row) if (i < 16) v.push_back({id[i++], x});
+        return *this;
+    }
+    // the trance gate: rate ("1/8", "1/16", "1/32"), depth %, the 16 steps (1 open, 0 shut)
+    B& gate(const char* rate, double depth, std::initializer_list<int> steps) {
+        static const char* const id[16] = {"gate.step1", "gate.step2", "gate.step3", "gate.step4", "gate.step5", "gate.step6", "gate.step7", "gate.step8",
+                                           "gate.step9", "gate.step10", "gate.step11", "gate.step12", "gate.step13", "gate.step14", "gate.step15", "gate.step16"};
+        g({{"gate.on", 1.0}, {"gate.rate", rate}, {"gate.depth", depth}});
+        int i = 0;
+        for (int x : steps) if (i < 16) v.push_back({id[i++], static_cast<double>(x)});
+        return *this;
+    }
     B& fly(const char* mode, double depth, double time, double nearness, const char* side = "Alternate") {
         return g({{"flyby.mode", mode}, {"flyby.depth", depth}, {"flyby.time", time}, {"flyby.near", nearness}, {"flyby.side", side}});
     }

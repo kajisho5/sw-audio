@@ -1,8 +1,9 @@
-// SWINGBY: every factory preset's audition phrase (the one its level was measured on, products/in07/presets.cpp audition()) as a WAV file,
+// SWINGBY: every factory preset's audition phrase (the one its level was measured on, products/in07/presets.cpp presetAudition()) as a WAV file,
 // exactly as the plug-in plays it (48 kHz, 120 bpm, velocity 0.8, the preset's own effects and level; no normalising: they are all at
 // -16 LUFS already), with 2 s after the phrase for the tails. For the listening page (tools/in07_audition_page.py) and ear checks.
 //   g++ -std=c++17 -O2 -Icore/include -Iproducts tools/in07_audition.cpp products/in07/*.cpp -o build/in07_audition
-//   build/in07_audition <out dir>     -> <out dir>/<NNN>.wav (NNN = preset number from 001) and index.json (name, category, file)
+//   build/in07_audition <out dir>     -> <out dir>/<NNN>.wav (NNN = preset number from 001) and index.json (name, category, file, seconds,
+//                                         the phrase's notes: [start s, length s, key])
 #include "in07/in07.hpp"
 #include "in07/presets.hpp"
 #include <algorithm>
@@ -47,7 +48,7 @@ int main(int argc, char** argv) {
         p.prepare(fs, 256);
         p.setTempo(120.0);
         double total = 0.0;
-        const auto notes = audition(P[i].category, total);
+        const auto notes = presetAudition(static_cast<int>(i), total);
         struct Ev { long long at; int key; bool on; };
         std::vector<Ev> ev;
         for (const auto& n : notes) { ev.push_back({std::llround(n.start * fs), n.key, true}); ev.push_back({std::llround((n.start + n.length) * fs), n.key, false}); }
@@ -66,7 +67,10 @@ int main(int argc, char** argv) {
         char name[16];
         std::snprintf(name, sizeof name, "%03zu.wav", i + 1);
         if (!writeWav(dir + "/" + name, L, R, static_cast<int>(fs))) { std::fprintf(stderr, "cannot write %s/%s\n", dir.c_str(), name); return 1; }
-        index += std::string(i ? "," : "") + "{\"name\":" + json(P[i].name) + ",\"category\":" + json(P[i].category) + ",\"file\":\"" + name + "\",\"seconds\":" + std::to_string(total + 2.0) + "}";
+        index += std::string(i ? "," : "") + "{\"name\":" + json(P[i].name) + ",\"category\":" + json(P[i].category) + ",\"file\":\"" + name + "\",\"seconds\":" + std::to_string(total + 2.0) + ",\"notes\":[";
+        for (size_t k = 0; k < notes.size(); ++k)
+            index += std::string(k ? "," : "") + "[" + std::to_string(notes[k].start) + "," + std::to_string(notes[k].length) + "," + std::to_string(notes[k].key) + "]";
+        index += "]}";
         std::fprintf(stderr, "\r%zu / %zu", i + 1, P.size());
     }
     index += "]";

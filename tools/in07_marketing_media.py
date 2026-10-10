@@ -19,15 +19,10 @@ out = pathlib.Path(sys.argv[1]).resolve()
 out.mkdir(parents=True, exist_ok=True)
 VIDEO = '--no-video' not in sys.argv
 
-# the audition phrases (products/in07/presets.cpp audition()): (start s, length s, key) by category, at 120 bpm
-def phrase(cat):
-    if cat == 'LEAD': return [(0.05 + 0.5 * i, 0.45, k) for i, k in enumerate([72, 74, 76, 79])]
-    if cat == 'BASS': return [(0.05 + 0.4 * i, 0.33, k) for i, k in enumerate([36, 36, 43, 41])]
-    if cat == 'PAD': return [(0.05, 3.0, k) for k in (60, 64, 67)]
-    if cat == 'KEYS': return [(0.05, 1.2, k) for k in (60, 64, 67, 72)] + [(1.3, 1.2, k) for k in (62, 65, 69, 74)]
-    if cat == 'PLUCK': return [(0.05 + 0.25 * i, 0.2, k) for i, k in enumerate([60, 64, 67, 72, 76, 72, 67, 64])]
-    if cat == 'SEQ': return [(0.05 + 0.125 * i, 0.09, [48, 60, 55, 60][i % 4]) for i in range(16)]
-    return [(0.05, 3.0, 60)]   # FX
+# the audition phrases: build/in07_audition writes each preset's notes (products/in07/presets.cpp presetAudition(): its category's phrase,
+# or its notes held when it plays the arpeggiator or the gate) into index.json, (start s, length s, key)
+def phrase(entry):
+    return [tuple(n) for n in entry['notes']]
 
 # the sales page's chapter list (LISTEN): presets 1..10 of the factory list, the seconds each one plays
 SEGMENTS = [(0, 4), (1, 3), (2, 4), (3, 5), (4, 5), (5, 4), (6, 2), (7, 4), (8, 4), (9, 5)]
@@ -139,7 +134,7 @@ def video(wav, index):
     ev, t0 = [], 0.0
     for i, secs in SEGMENTS:
         ev.append((t0, 'load', i))
-        for start, length, key in phrase(index[i]['category']):
+        for start, length, key in phrase(index[i]):
             if start < secs:
                 ev.append((t0 + start, 'on', key))
                 ev.append((min(t0 + start + length, t0 + secs - 0.02), 'off', key))

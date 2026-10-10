@@ -1,8 +1,8 @@
 // "Slingshot": a dubstep demo made only with SWINGBY (2026-10-10, the client: 実際にダブステップつくってみてよ, then: the aggressive
 // early-2010s style, "brostep"). An original piece: the style's ways only (a different bass sound every half beat, metallic FM screeches, a
 // talking vowel bass, pitch dives, stutters, laser zaps, hard stops, a big snare), no melody or riff of any record. Every sound is a SWINGBY
-// instance: the drums (the kit's), the factory presets (pad, pluck with the arpeggiator, impact, downlifter), the ULTRA pack
-// (docs/dist/in07/ultra) and the basses written here.
+// instance: the drums (the kit's), the factory presets (pad, pluck with the arpeggiator, impact, downlifter, the ULTRA sounds: Ultra Saw,
+// Bass, Wobble, Riddim) and the basses written here.
 // Form (bars of 4 beats, 140 bpm, F minor, Fm7 - Db - Ab - Eb): intro 8, build 8, drop 16 (the wobble answering), break 8, drop 16 (the riddim
 // answering, the saw hook), outro 4. The drops' roots: F F Db Eb, a bar each. The drops at -9 LUFS (past it the limiter only crushes: about
 // 0.05 LU more per dB of gain).
@@ -59,7 +59,6 @@ inline const Raw& metalRecipe() {
 inline Song slingshot() {
     using namespace slingshot_detail;
     constexpr int kKickKey = 34;   // B flat 1, 58 Hz
-    const std::string ultra = "docs/dist/in07/ultra/";
     Song s;
     s.title = "Slingshot"; s.style = "dubstep (brostep)"; s.bpm = 140; s.bars = 60;
     s.sections = {{"intro", 0, 8, false}, {"build", 8, 16, false}, {"drop 1", 16, 32, true}, {"break", 32, 40, false}, {"drop 2", 40, 56, true}, {"outro", 56, 60, false}};
@@ -73,9 +72,9 @@ inline Song slingshot() {
     Track hat = songTrack("hat", hatRecipe(false), -4.0), ohat = songTrack("open hat", hatRecipe(true), -7.0);
     Track riser = songTrack("riser", riserRecipe(), -6.0), impact = factoryTrack("impact", "Impact Moon", -3.0), down = factoryTrack("downlifter", "Downlifter", -6.0);
     Track padT = factoryTrack("pad (Glass Horizon)", "Glass Horizon", -13.0, 5.0), arp = factoryTrack("arp (Glass Pluck)", "Glass Pluck", -16.0, 5.0);
-    Track saw = userTrack("Ultra Saw", ultra + "Ultra Saw.swpreset", -7.0, 5.0);
-    Track bass = userTrack("Ultra Bass", ultra + "Ultra Bass.swpreset", -1.0, 8.0), wob = userTrack("Ultra Wobble", ultra + "Ultra Wobble.swpreset", -1.0, 8.0);
-    Track rid = userTrack("Ultra Riddim", ultra + "Ultra Riddim.swpreset", 1.0, 8.0);
+    Track saw = factoryTrack("Ultra Saw", "Ultra Saw", -7.0, 5.0);
+    Track bass = factoryTrack("Ultra Bass", "Ultra Bass", -1.0, 8.0), wob = factoryTrack("Ultra Wobble", "Ultra Wobble", -1.0, 8.0);
+    Track rid = factoryTrack("Ultra Riddim", "Ultra Riddim", 1.0, 8.0);
     Track scr = songTrack("Screech", screechRecipe(), -4.0, 6.0), yoi = songTrack("Yoi", yoiRecipe(), -1.0, 8.0);
     Track zap = songTrack("Laser", laserRecipe(), -3.0), metal = songTrack("Metal", metalRecipe(), -2.0);
     bass.at(Bend) = 12;   // Ultra Bass dives an octave on the bend

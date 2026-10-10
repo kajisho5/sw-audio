@@ -79,7 +79,7 @@ double stepRatio(int a, int b) {
 
 TEST_CASE("IN07 PATCH: a preset change under a held chord has no step (the pairs that stepped before, and a spread of others)") {
     const std::vector<std::pair<std::string, std::string>> pairs = {
-        {"Tine Piano", "Wide Saw Lead"}, {"Jazz Organ", "Bounce Seq"}, {"Sine Glide", "Anthem Supersaw"}, {"Glass Horizon", "Kalimba Moon"},
+        {"Tine Piano", "Ultra Saw"}, {"Jazz Organ", "Bounce Seq"}, {"Sine Glide", "Anthem Supersaw"}, {"Glass Horizon", "Kalimba Moon"},
         {"Polar Bass", "Arp Pulse"}, {"Fold Bass", "Formant Seq"}, {"Deep Field", "Comet Tail"}, {"Slow Sweep", "Moon Slap"},
         {"Anthem Supersaw", "Sine Glide"}, {"Radio Static", "Velvet Keys"}};
     for (const auto& pr : pairs) {

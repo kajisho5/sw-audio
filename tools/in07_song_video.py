@@ -52,7 +52,7 @@ TOTAL = T1 - T0 + END
 tracks = data['tracks']
 shown = [k for k, t in enumerate(tracks) if any(e[1] == NOTE_ON and bar0 * 4 <= e[0] < bar1 * 4 + 1 for e in t['events'])]
 ROLE_ORDER = {'lead': 0, 'music': 1, 'bed': 2}
-SOURCE = {'factory': 'FACTORY', 'user': 'ULTRA PACK', 'song': 'MADE FOR THIS TRACK'}
+SOURCE = {'factory': 'FACTORY PRESET', 'user': 'USER PRESET', 'song': 'MADE FOR THIS TRACK'}
 
 
 class State:

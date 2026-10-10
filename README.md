@@ -1177,18 +1177,24 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 
 | カテゴリ | プリセット |
 | --- | --- |
-| LEAD | Anthem Supersaw（ハードなスーパーソウ）・Hoover Stab・Detuned Lead・Sync Runner・Comet Tail（離した音がフライバイで飛び去る）・Trance Lead・Square Pilot・Sine Glide・Acid Spike・FM Laser Lead・Vowel Lead・Screamer・Flute Moon・Bell Lead・Wide Saw Lead・Gravity Lead・Orbit Wah Lead・Brass Lead |
+| LEAD | Anthem Supersaw（ハードなスーパーソウ）・Hoover Stab・Detuned Lead・Sync Runner・Comet Tail（離した音がフライバイで飛び去る）・Trance Lead・Square Pilot・Sine Glide・Acid Spike・FM Laser Lead・Vowel Lead・Screamer・Flute Moon・Bell Lead・Ultra Saw（ULTRA）・Gravity Lead・Orbit Wah Lead・Brass Lead |
 | PAD | Glass Horizon・Solar Wind（重力 50 %・軌道 LFO）・Gravity Choir・Aurora・Eclipse Drone（離心率 85 % の軌道 LFO で、長い暗い時間と短い明るい通過）・Warm Analog Pad・String Ensemble・Cathedral Choir・Glass Cloud・Dust Pad・PWM Dream・Slow Sweep・Orbit Shimmer・Deep Field・FM Halo Pad・Breath Pad・Pump Pad・Frozen Pad・Tape Pad |
-| BASS | Polar Bass・Sub Orbit・Drift Bass（軌道 LFO で重力を揺らし、2 本の鋸がうなっては揃う）・Moon Slap・Fold Bass・Sub Pressure・Acid Line・Wobble Monster・Boom Sub・Pulse Bass・Saw Bass・Pluck Bass・Growl Fold・Hollow FM Bass・Octave Funk・Grit Engine・Square Depth・Stab Bass・Liquid Bass |
+| BASS | Polar Bass・Sub Orbit・Drift Bass（軌道 LFO で重力を揺らし、2 本の鋸がうなっては揃う）・Moon Slap・Fold Bass・Sub Pressure・Acid Line・Ultra Wobble（ULTRA）・Boom Sub・Pulse Bass・Saw Bass・Pluck Bass・Ultra Bass（ULTRA）・Hollow FM Bass・Octave Funk・Grit Engine・Ultra Riddim（ULTRA・トランスゲート）・Stab Bass・Liquid Bass |
 | PLUCK | Quiet Comet・Glass Pluck・Kalimba Moon・Pizz Saw・Deep House Pluck・Marimba Orbit・Harp Light・Music Box・Steel Drop・Koto Wind・Water Drop・Lo-Fi Pluck・Glass Mallet・Short Stab・Orbit Pluck・Sync Pluck・Bell Pluck・Nylon Moon |
 | KEYS | Velvet Keys・Satellite EP・Drawbar Station・Porcelain Keys・Tine Piano・Bark EP・Funk Keys・Jazz Organ・Church Organ・Vibra Moon・Celesta Dust・Harpsichord Comet・Toy Piano・Grand Synth・Glass EP・Choir Keys・Stage Organ Drive・Felt Keys |
-| SEQ | Night Pulse・Orbit Gate（16 分の軌道 LFO で音量を開く＝衛星の接近ごとに鳴る）・Binary Star・Tick Machine・Trance Gate・Acid Seq・FM Ticker・Pump Chords・Bounce Seq・Glass Steps・Formant Seq・Echo Orbit・Digital Rain Seq・Stutter Saw・Arp Pulse・Sidechain Bass・Click Grid・Swing Chop |
+| SEQ | Night Pulse・Orbit Gate（16 分の軌道 LFO で音量を開く＝衛星の接近ごとに鳴る）・Binary Star・Tick Machine・Trance Gate（トランスゲート）・Acid Seq（アルペジエーター）・FM Ticker・Pump Chords・Bounce Seq（アルペジエーター）・Glass Steps（アルペジエーター）・Formant Seq・Echo Orbit・Digital Rain Seq・Stutter Saw（トランスゲート 1/32）・Arp Pulse（アルペジエーター）・Sidechain Bass・Click Grid・Swing Chop |
 | FX | Radio Static・Swing-by Pass（フライバイ Pass）・Rain Planet・Gravity Well（軌道 LFO で重力 0〜100 %）・Riser Noise・Downlifter・Impact Moon・Wind Tunnel・Siren Orbit・Laser Zap・Underwater・Glitch Storm・Space Drone・Scanner Beam・Comms Beep・Flyby Jet・Engine Room・Cosmic Bell Swell |
 
+- **ULTRA と、アルペジエーター／トランスゲートを使うプリセット**（2026-10-10、依頼者の「7以外ぜんぶ！」で、提案した「1.0 の前に ARP／GATE のプリセットと ULTRA を入れる」を実施）。
+  - ULTRA の 4 種（Ultra Saw・Ultra Bass・Ultra Wobble・Ultra Riddim）をファクトリーへ。128 種とカテゴリごとの数（LP・説明書・プログラムチェンジ 0〜127 の範囲）を変えないため、似た音の 4 種と入れ替えた（同じ番号に入る）：Wide Saw Lead（Anthem Supersaw と同じ系統）→ Ultra Saw、Wobble Monster → Ultra Wobble（同じ 1/8 のワブルの強化版）、Growl Fold（Fold Bass と同じ折り返しの表）→ Ultra Bass、Square Depth（Pulse Bass と同じ矩形波）→ Ultra Riddim。ファクトリーの決まり（1 音あたりの発振器の数 24 まで）に合わせ、Ultra Saw の上のオクターブを 8 → 6 声、下を 4 → 2 声に減らした。別のパック（`docs/dist/in07/ultra/`・`tools/in07_pack.cpp`）は役目を終えたので消した（git の履歴に残る）。
+  - それまでアルペジエーターとトランスゲートを使うファクトリーは 0 だった。名前どおりの 6 種を本物に替えた：Arp Pulse（Up・1/16・2 オクターブ・拍ごとのアクセント）、Bounce Seq（Up-Down・音程の行で 4 歩ごとに 1 オクターブ跳ねる）、Glass Steps（Random・2 オクターブ・強さの行に休み）、Acid Seq（弾いた順・スイング 15 %・音程の行でオクターブの上下・強さの行のアクセント＝ベロシティでフィルターが開く）、Trance Gate（1/16 のゲート、深さ 100 %。前は矩形の LFO で音量）、Stutter Saw（1/32 のゲートで半小節の終わりへ詰まっていく。前は 1/16 三連の LFO）。Ultra Riddim も 1/16 のゲート。
+  - **試聴フレーズ**：アルペジエーターかゲートを使うプリセットは、和音を押さえたまま（アルペジエーターが弾き、ゲートが刻む）。ベースは C2 を 2.2 秒、ほかは C3・G3・C4・E♭4 を 3 秒（`presetAudition()`）。それ以外はカテゴリのフレーズのまま。音量はこのフレーズで測り直した（全種 −16 LUFS、0.5 LU を超えてずれた種類 0）。
+  - 確かめたこと（`tests/test_in07_presets.cpp`）：128 種とカテゴリごとの数、ULTRA の名前と入れ替えた 4 種がないこと、7 種がアルペジエーター／ゲートを使うこと、試聴が押さえたままの和音であること、ホストが止まっていても鳴らし始めから刻むこと（1/64 ごとの音量の 90 % 点と 10 % 点の差：7 種で 10.0〜51.0 dB、パッドの Glass Horizon は 3 dB 未満）。
+  - **似すぎの検査**：Ultra Saw は数値では Anthem Supersaw に一番近い（距離 1.00。これまでの残りの最小は 1.76）。どちらもハードなスーパーソウで、違い（シンクの表・上下のオクターブ・押し込んだリミッター）は帯域の釣り合いには出にくい。依頼者の注文の音なので残した。耳での確認はまだ。
 - **書き方**：プリセットは小さな記述言語（`products/in07/preset_dsl.hpp`）で、作り方がそのまま読める形にした（`saw(0, 8, 25)`＝鋸 ×8・デチューン 25、`flt("LP 24", 1800, 30, 40)`、`amp(…)`、`.drv(…)`・`.rev(…)`、`.lfoSync(1, "Orbit", "1/16")`・`.mod(1, "LFO 1", "Cutoff", 40)` など）。最初の 31 種は `presets.cpp`、足した 97 種は `presets_more.cpp`。新しい表（`N()`）は、設定しなかったエフェクトを Off にする（Limit だけは On のまま）。既定値の FX が勝手に乗らないようにするため。
 - **似すぎの検査（数値）**：`tools/in07_presets.cpp` が試聴フレーズの音から、9 オクターブ帯のエネルギー・スペクトルの重心・24 区間の音量の形・左右の広がりを取り、同じカテゴリの中で一番近い組を並べる。最初の版で近すぎた組は作り直した（House Pluck → Deep House Pluck に、Rain Machine は Engine Room に差し替え、Tine Piano を明るく、Sub Pressure を飽和させ、Glass Steps を 1 オクターブ上へ）。残った近い組（距離 1.76〜1.97：Saw Bass／Growl Fold、Glass Horizon／Orbit Shimmer、Quiet Comet／Orbit Pluck、FM Laser Lead／Vowel Lead など）は、音の狙い（たとえば Growl Fold は折り返しの倍音、Saw Bass は素直な鋸）が違うので残した。数値で近いだけで、耳での確認はしていない。
 - **形式**：プリセットは変える値だけをパラメータ ID の文字列で持つ（ホストの番号が並び替わっても壊れない）。読み込むと全パラメータを既定値に戻してから値を入れる。表の ID・段階の名前・範囲は起動時に確かめ、テストで誤りゼロを確認。
-- **音量の決め方（実測、2 段）**：カテゴリごとの試聴フレーズ（LEAD＝C5 付近の 4 音、BASS＝C2 付近の 4 音、PAD＝3 和音 3 秒、KEYS＝4 和音 2 つ、PLUCK＝8 音のアルペジオ、SEQ＝16 分 16 個（120 BPM）、FX＝1 音 3 秒、ベロシティ 0.8）を鳴らし、BS.1770 の積分ラウドネスで、ミキサーの仕込みと同じ順に合わせる（`tools/in07_presets.cpp` が測っては直し、`preset_levels.inc` に書く）。
+- **音量の決め方（実測、2 段）**：カテゴリごとの試聴フレーズ（LEAD＝C5 付近の 4 音、BASS＝C2 付近の 4 音、PAD＝3 和音 3 秒、KEYS＝4 和音 2 つ、PLUCK＝8 音のアルペジオ、SEQ＝16 分 16 個（120 BPM）、FX＝1 音 3 秒、ベロシティ 0.8。アルペジエーターかゲートを使うプリセットは和音を押さえたまま）を鳴らし、BS.1770 の積分ラウドネスで、ミキサーの仕込みと同じ順に合わせる（`tools/in07_presets.cpp` が測っては直し、`preset_levels.inc` に書く）。
   - **仕込み（ゲイン構成）**：On のレイヤーのレベルを全部同じだけ動かす「トリム」で、エフェクトの前のボイスの合計を **−18 LUFS** にする（0.02 LU 以内）。エフェクト（Drive・ディレイの帰還・リミッター）が、設計したときと同じ入力レベルで働く。
   - **出口**：エフェクトの後を **−16 LUFS** に（0.05 LU 以内）。下げるときはマスターの Level（リミッターの後ろなので下げる方向だけ）、上げるときはリミッターの Gain（ピークは天井の下に保たれる）。
   - 経緯：最初はトリムだけで出口を合わせていた。トリムはエフェクトの前に効くので、Anthem Supersaw で −20 dB になったとき Drive の入力も 20 dB 下がり、ほとんど歪んでいなかった（Radio Static・Fold Bass・Drawbar Station の Drive も同じく弱まっていた）。その前は Level（リミッターの後ろ）で合わせようとしてピークが天井を越えることが分かり、やめた。
@@ -1275,9 +1281,9 @@ FX（後段、`products/in07/fx.hpp`）と変調：
   - Windows で WebView2 ランタイムがないときは、画面に「WebView2 Runtime が必要」と出す（以前は真っ暗なままだった）。
 - **販売に必要な表記の下書き**：`docs/legal/`（特定商取引法に基づく表記・プライバシーポリシー・使用許諾。実装に合わせて書いた。専門家の確認前の下書きで、〔 〕は依頼者が埋める）。
 
-### IN07 の追加プリセット ULTRA（2026-10-10、ファクトリーの外）
+### IN07 の追加プリセット ULTRA（2026-10-10。同じ日にファクトリーへ入れた）
 
-依頼者「ゴリゴリの ultrasaw と ultrabass とかつくってみて。ダブステップとかで使えそうな」。ファクトリーの 128 には入れず、ユーザープリセット（`.swpreset`）のパックにした（入れると LP・説明書の「128」と、プログラムチェンジ 0〜127 の範囲が変わるため。入れるかは依頼者が聴いてから）。`tools/in07_pack.cpp` がファクトリーと同じ書き方（`preset_dsl.hpp`）のレシピから作り、ファクトリーと同じ 2 段で −16 LUFS にそろえ、`docs/dist/in07/ultra/` に書く。書いたファイルはプラグインと同じ読み方で読み戻して全値が一致することを確かめる。
+依頼者「ゴリゴリの ultrasaw と ultrabass とかつくってみて。ダブステップとかで使えそうな」。最初はファクトリーの外のユーザープリセットのパック（`tools/in07_pack.cpp` → `docs/dist/in07/ultra/`）にしたが、同じ日の「7以外ぜんぶ！」でファクトリーへ入れた（「IN07 のファクトリープリセット」の ULTRA の項。パックと道具は消した）。下の測定はパックのときのもの（Ultra Saw はそのあと 24 声に減らした）。
 
 | プリセット | 中身 | 測定（このコンテナ） |
 | --- | --- | --- |
@@ -1294,7 +1300,7 @@ FX（後段、`products/in07/fx.hpp`）と変調：
 
 - **音はすべて SWINGBY**：トラックごとに SWINGBY を 1 台ずつ立て、ホストの拍を送る（アルペジエーター・トランスゲート・同期 LFO が拍に乗る）。
   - ドラムもこの道具の中のレシピで作った。キックはサイン波を Env 2 → Pitch のスロット 4 本で約 3.5 オクターブ落とし、Knock を重ねる。スネアは三角波の胴に Static と Knock。ハットは Tick と Static。
-  - パッドとプラック（アルペジエーター）、インパクト、ダウンリフターはファクトリーのプリセット。ベースは ULTRA パックと、ここで作ったスクリーチ・母音のベース・レーザー・メタル。
+  - パッドとプラック（アルペジエーター）、インパクト、ダウンリフター、ULTRA の 4 種はファクトリーのプリセット（ULTRA は作った当初はパック。ファクトリーへ移したあとの曲は −9.83 LUFS で、前と 0.01 LU の差）。ほかのベースはここで作ったスクリーチ・母音のベース・レーザー・メタル。
 - **ドロップ**：半拍ごとにベースの音色が替わる 1 小節の型を 4 つ組み合わせる。うなりのダイブ（ベンド −12 半音）、ゲートの 1/32 スタッター、1/64 の打ち直し、レーザー、スネアに合わせたメタル、句の終わりで 1 拍止める。
 - **ミックスとマスター**：トラックの音量、キックに合わせた下げ（サイドチェインの代わり）、20 Hz の低域カット、SW MS04 Clipper（ピークを約 4 dB 削る）、SW MS01 Maximizer（−1 dBTP、ドロップを −9 LUFS に）。
   - ドロップは −9 LUFS より先は 1 dB 上げても 0.05 LU しか大きくならない（潰れるだけ）ため、そこで止めた。

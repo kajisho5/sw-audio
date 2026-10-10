@@ -31,9 +31,18 @@ const std::vector<Raw>& morePresets() {
         R("Bell Lead", "LEAD", N().dly("1/8 D", 30, 20).rev(2.5, 25)
             .L(1, fm("7", 25, 600) + open() + amp(1, 1500, 40, 400))
             .L(2, wave("Sine") + open() + amp(2, 600, 80, 300) + lvl(-6))),
-        R("Wide Saw Lead", "LEAD", N().dly("1/8 D", 30, 18).rev(2, 20)
-            .L(1, saw(0, 8, 25, 100) + flt("LP 24", 7000, 10, 10) + fenv(1, 400, 30, 300) + amp(1, 300, 90, 250))
-            .L(2, pulse(30, -1) + flt("LP 24", 2000) + amp(1, 300, 90, 250) + lvl(-10))),
+        // ULTRA (2026-10-10, in the place of Wide Saw Lead, a near duplicate of Anthem Supersaw): a festival supersaw, harder than Anthem
+        // Supersaw: two stacks of 8 (one a hard-sync table for the bite), 6 an octave up and 2 an octave down (24 copies, the factory's
+        // limit), each driven into its filter; then Drive, a presence EQ, a short delay and a room; the limiter pushed for density. The mod
+        // wheel spreads the stacks further.
+        R("Ultra Saw", "LEAD", N().drv(70, 90).eq(-3, 2, 5).dly("1/8 D", 25, 10).rev(1.4, 12)
+            .g({{"fx.slot1", "Drive"}, {"fx.slot2", "EQ"}, {"fx.slot3", "Delay"}, {"fx.slot4", "Reverb"}, {"fx.slot5", "Chorus"}, {"fx.slot6", "Limit"},
+                {"fx.limit.gain", 6}})
+            .mod(1, "Mod wheel", "Detune", 30).mod(2, "Velocity", "Cutoff", 10)
+            .L(1, wt("Classic", 0, 0, 8, 65, 100) + flt("LP 12", 14000, 0, 0, 70, 0) + amp(1, 300, 100, 250, 20))
+            .L(2, wt("Sync", 35, 0, 8, 45, 90) + flt("LP 24", 7000, 10, 0, 60, 0) + amp(1, 300, 100, 250, 20) + lvl(-5))
+            .L(3, saw(1, 6, 55, 100) + flt("LP 12", 18000, 0, 0, 50, 0) + amp(1, 300, 100, 250, 20) + lvl(-5))
+            .L(4, saw(-1, 2, 20, 40) + flt("LP 24", 2200, 0, 0, 50, 0) + amp(1, 300, 100, 250, 20) + lvl(-7))),
         R("Gravity Lead", "LEAD", N().lfo(1, "Orbit", 0.5, 70).mod(1, "LFO 1", "Gravity", 100).dly("1/8 D", 30, 20).rev(2, 20)
             .L(1, saw(0, 6, 40, 80) + grav(0) + flt("LP 24", 5000, 15) + amp(2, 300, 90, 300))),
         R("Orbit Wah Lead", "LEAD", N().mono(40).lfoSync(1, "Orbit", "1/8", false, 60).mod(1, "LFO 1", "Cutoff", 25).dly("1/16", 30, 15).rev(1.2, 12)
@@ -94,9 +103,16 @@ const std::vector<Raw>& morePresets() {
             .L(1, wave("Sine") + flt("LP 12", 6000, 0, 0, 70) + amp(1, 500, 100, 80, 20))),
         R("Acid Line", "BASS", N().mono(60).mod(1, "Velocity", "Cutoff", 20).drv(40, 60).dly("1/16", 25, 12)
             .L(1, saw() + flt("LP 24", 600, 80, 75, 50) + fenv(0.5, 180, 0, 120) + amp(1, 250, 80, 80, 70))),
-        R("Wobble Monster", "BASS", N().mono().lfoSync(1, "Triangle", "1/8", true).mod(1, "LFO 1", "Cutoff", 60).drv(45, 50).eq(2, 0, 2)
-            .L(1, saw(0, 4, 20, 50) + flt("LP 24", 400, 50, 0, 40) + amp(1, 300, 100, 100))
-            .L(2, wave("Sine", -1) + open() + amp(1, 300, 100, 100) + lvl(-4))),
+        // ULTRA (2026-10-10, in the place of Wobble Monster): the classic wobble: detuned saws and a half-square table into resonant 24 dB
+        // filters (not following the key) that a 1/8 triangle opens and shuts over 7 octaves, a sine sub under them (its filter stays open),
+        // Drive; the mod wheel doubles the wobble (1/16)
+        R("Ultra Wobble", "BASS", N().mono().drv(75, 100).eq(0, 3, 6)
+            .g({{"fx.limit.gain", 3}})
+            .lfoSync(1, "Triangle", "1/8", true)
+            .mod(1, "LFO 1", "Cutoff", 70).mod(2, "LFO 1", "Resonance", 15).mod(3, "Mod wheel", "LFO 1 rate", 25)
+            .L(1, saw(0, 3, 15, 15) + flt("LP 24", 700, 55, 0, 80, 0) + amp(1, 300, 100, 60, 10))
+            .L(2, wt("Classic", 50, 0, 2, 12, 25) + flt("LP 24", 800, 40, 0, 70, 0) + amp(1, 300, 100, 60, 10) + lvl(-3))
+            .L(3, wave("Sine", 0, 1, 0, 0) + flt("LP 12", 20000, 0, 0, 0, 0) + amp(1, 300, 100, 60, 10) + lvl(-5))),
         R("Boom Sub", "BASS", N().mono(50).mod(1, "Env 2", "Pitch", 50).drv(20, 50, 50)
             .L(1, wave("Sine") + flt("LP 12", 20000, 0, 0, 30) + fenv(0.5, 120, 0, 100) + amp(0.5, 1500, 0, 200))),
         R("Pulse Bass", "BASS", N().mono()
@@ -108,9 +124,20 @@ const std::vector<Raw>& morePresets() {
         R("Pluck Bass", "BASS", N().mono().rev(0.8, 6)
             .L(1, saw(0, 2, 10, 30) + flt("LP 24", 300, 30, 80) + fenv(0.5, 150, 0, 100) + amp(0.5, 350, 40, 100, 60))
             .L(2, wave("Sine") + open() + amp(0.5, 400, 60, 100, 60) + lvl(-6))),
-        R("Growl Fold", "BASS", N().mono().lfoSync(1, "Square", "1/16").mod(1, "LFO 1", "WT position", 30).drv(40, 60)
-            .L(1, wt("Fold", 50, 0, 2, 10, 30) + flt("LP 24", 2500, 20, 0, 30) + amp(1, 300, 100, 100))
-            .L(2, wave("Sine", -1) + open() + amp(1, 300, 100, 100) + lvl(-4))),
+        // ULTRA (2026-10-10, in the place of Growl Fold, a near duplicate of Fold Bass): a heavy growl: a sine sub (one voice, centre) and
+        // an FM growl with feedback (one voice, centre) carry the low end, so it stays mono for a club; a folded table (3 voices, wide) and a
+        // formant table an octave up (the vowel) are band-passed, so their width is in the mids and the top only. The filters do not follow
+        // the key (a low note stays bright). One LFO at 1/8 (from the note) sweeps the filters, the tables and the FM index together, the
+        // mod wheel doubles it; Drive bright, an EQ that lifts the mids and the top, the limiter. Legato with a short glide (the riff talks).
+        R("Ultra Bass", "BASS", N().legato(35).drv(85, 100).eq(0, 4, 7)
+            .g({{"fx.limit.gain", 4}})
+            .lfoSync(1, "Triangle", "1/8", true).lfoSync(2, "Random", "1/16")
+            .mod(1, "LFO 1", "Cutoff", 50).mod(2, "LFO 1", "WT position", 45).mod(3, "LFO 1", "FM index", 35)
+            .mod(4, "Mod wheel", "LFO 1 rate", 25).mod(5, "LFO 2", "Resonance", 15)
+            .L(1, wave("Sine", 0, 1, 0, 0) + flt("LP 12", 20000, 0, 0, 10, 0) + amp(1, 300, 100, 60, 10) + lvl(-6))
+            .L(2, fm("1", 80, 10000, 60, 0, 1) + flt("LP 12", 3000, 35, 0, 90, 0) + amp(1, 300, 100, 60, 10))
+            .L(3, wt("Fold", 70, 0, 3, 22, 90) + flt("BP 12", 1500, 15, 0, 80, 0) + amp(1, 300, 100, 60, 10) + lvl(-2))
+            .L(4, wt("Formant", 30, 1, 2, 15, 80) + flt("BP 12", 2000, 45, 0, 50, 0) + amp(1, 300, 100, 60, 10) + lvl(-3))),
         R("Hollow FM Bass", "BASS", N().mono()
             .L(1, fm("0.5", 35, 300, 10) + flt("LP 12", 4000) + amp(1, 500, 70, 100))),
         R("Octave Funk", "BASS", N().mono(25)
@@ -119,9 +146,17 @@ const std::vector<Raw>& morePresets() {
         R("Grit Engine", "BASS", N().mono().drv(60, 50).eq(2, -2, 2)
             .L(1, saw(0, 3, 15, 40) + flt("LP 24", 2000, 20, 0, 70) + amp(1, 400, 100, 100))
             .L(2, smp("Grit") + flt("LP 24", 1500) + amp(1, 400, 100, 100) + lvl(-16))),
-        R("Square Depth", "BASS", N().mono()
-            .L(1, pulse(50) + flt("LP 24", 400, 10) + amp(1, 400, 100, 90))
-            .L(2, wave("Sine") + open() + amp(1, 400, 100, 90) + lvl(-6))),
+        // ULTRA (2026-10-10, in the place of Square Depth, a near duplicate of Pulse Bass): riddim: a square and a hard FM pair, chopped by
+        // the trance gate on the 1/16 (a riddim pattern, on the host's beat), the filter alternating every 1/16 (a square LFO) and a new FM
+        // brightness every 1/8 (random); the sub under it, Drive to the edge
+        R("Ultra Riddim", "BASS", N().mono().drv(90, 80).eq(0, 2, 4)
+            .g({{"fx.limit.gain", 3}})
+            .gate("1/16", 95, {1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1})
+            .lfoSync(1, "Square", "1/16", true).lfoSync(2, "Random", "1/8", true)
+            .mod(1, "LFO 1", "Cutoff", 35).mod(2, "LFO 2", "FM index", 40).mod(3, "Mod wheel", "Drive", 30)
+            .L(1, pulse(50, 0, 2, 8, 20) + flt("LP 24", 3000, 25, 0, 95, 0) + amp(1, 300, 100, 50, 10))
+            .L(2, fm("2", 60, 10000, 70, 0, 1) + flt("LP 24", 4000, 20, 0, 70, 0) + amp(1, 300, 100, 50, 10) + lvl(-4))
+            .L(3, wave("Sine", 0, 1, 0, 0) + flt("LP 12", 20000, 0, 0, 0, 0) + amp(1, 300, 100, 50, 10) + lvl(-5))),
         R("Stab Bass", "BASS", N().mono().rev(1.2, 10)
             .L(1, saw(0, 4, 20, 60) + flt("LP 24", 2000, 15, 30) + fenv(0.5, 150, 0, 80) + amp(0.5, 300, 35, 80))
             .L(2, wave("Sine", -1) + open() + amp(0.5, 300, 50, 80) + lvl(-6))),
@@ -217,9 +252,15 @@ const std::vector<Raw>& morePresets() {
             .L(2, wave("Sine", 1) + open() + amp(2, 1500, 0, 500, 70) + lvl(-14))),
 
         // ================= SEQ
-        R("Trance Gate", "SEQ", N().lfoSync(1, "Square", "1/16", true).mod(1, "LFO 1", "Level", 100).dly("1/8 D", 30, 20).rev(2, 20)
+        // the trance gate itself (2026-10-10; before, a square LFO on the level): a held chord chopped on the 1/16, on the host's beat
+        R("Trance Gate", "SEQ", N().gate("1/16", 100, {1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1}).dly("1/8 D", 30, 20).rev(2, 20)
             .L(1, saw(0, 8, 25, 100) + flt("LP 24", 3000, 10) + amp(1, 300, 100, 150))),
+        // the arpeggiator in the order played, a little swing, octave jumps on the pitch row and accents on the velocity row (the velocity
+        // opens the filter) (2026-10-10)
         R("Acid Seq", "SEQ", N().mod(1, "Velocity", "Cutoff", 25).lfoSync(1, "Triangle", "2 bars").mod(2, "LFO 1", "Cutoff", 30).drv(30, 60).dly("1/16", 30, 15)
+            .arp("Order", "1/16", 1, 60, 15)
+            .arpVel({100, 55, 70, 100, 55, 70, 100, 55, 100, 55, 70, 55, 100, 70, 55, 85})
+            .arpPitch({0, 0, 12, 0, 0, -12, 0, 12, 0, 0, 7, 0, 12, 0, -12, 0})
             .L(1, saw() + flt("LP 24", 500, 75, 70, 40) + fenv(0.5, 150, 0, 100) + amp(1, 200, 60, 100, 70))),
         R("FM Ticker", "SEQ", N().dly("1/8 D", 35, 22).rev(1.2, 12)
             .L(1, fm("7", 30, 60) + open() + amp(0.5, 120, 0, 80))
@@ -227,10 +268,13 @@ const std::vector<Raw>& morePresets() {
         R("Pump Chords", "SEQ", N().lfoSync(1, "Saw", "1/4", true).mod(1, "LFO 1", "Level", 100).rev(1.5, 15)
             .L(1, saw(0, 6, 20, 90) + flt("LP 24", 2500) + amp(1, 300, 100, 200))
             .L(2, pulse(50, -1) + flt("LP 24", 1500) + amp(1, 300, 100, 200) + lvl(-8))),
-        R("Bounce Seq", "SEQ", N().dly("1/16", 20, 10)
+        // the arpeggiator up and down, the pitch row bouncing an octave every fourth step (2026-10-10)
+        R("Bounce Seq", "SEQ", N().dly("1/16", 20, 10).arp("Up-Down", "1/16", 1, 55).arpPitch({0, 0, 12, 0, 0, 0, 12, 0, 0, 7, 12, 0, 0, 0, 12, 7})
             .L(1, saw() + flt("LP 24", 800, 40, 60) + fenv(0.5, 120, 0, 80) + amp(0.5, 180, 0, 80))
             .L(2, wave("Sine", -1) + open() + amp(0.5, 200, 0, 80) + lvl(-4))),
+        // the arpeggiator at random over two octaves, rests on the velocity row (2026-10-10)
         R("Glass Steps", "SEQ", N().lfoSync(1, "Random", "1/16").mod(1, "LFO 1", "WT position", 40).dly("1/8 D", 40, 25).rev(2, 20)
+            .arp("Random", "1/16", 2, 60).arpVel({100, 0, 70, 85, 100, 60, 0, 80, 100, 0, 75, 60, 100, 70, 0, 85})
             .L(1, wt("Glass", 70, 1) + open() + amp(0.5, 250, 0, 150))),
         R("Formant Seq", "SEQ", N().lfoSync(1, "Square", "1/8").mod(1, "LFO 1", "WT position", 40).dly("1/8", 30, 15)
             .L(1, wt("Formant", 50, 0, 2, 10, 50) + flt("LP 12", 5000) + amp(1, 200, 80, 120))),
@@ -240,9 +284,11 @@ const std::vector<Raw>& morePresets() {
             .L(1, smp("Tick") + open() + amp(0.5, 200, 0, 80))
             .L(2, fm("11", 20, 80) + open() + amp(0.5, 250, 20, 80) + lvl(-6))
             .L(3, wave("Sine", 1) + open() + amp(0.5, 250, 20, 80) + lvl(-10))),
-        R("Stutter Saw", "SEQ", N().lfoSync(1, "Square", "1/16 T", true).mod(1, "LFO 1", "Level", 100).rev(1.2, 12)
+        // the trance gate on the 1/32, speeding up into the half bar (2026-10-10; before, a square LFO on the level)
+        R("Stutter Saw", "SEQ", N().gate("1/32", 100, {1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1}).rev(1.2, 12)
             .L(1, saw(0, 4, 15, 70) + flt("LP 24", 4000) + amp(1, 200, 100, 80))),
-        R("Arp Pulse", "SEQ", N().dly("1/16", 35, 20).rev(1, 12)
+        // the arpeggiator up over two octaves, an accent on every beat (2026-10-10)
+        R("Arp Pulse", "SEQ", N().dly("1/16", 35, 20).rev(1, 12).arp("Up", "1/16", 2, 50).arpVel({100, 55, 75, 55, 100, 55, 75, 55, 100, 55, 75, 55, 100, 55, 75, 55})
             .L(1, pulse(30, 0, 2, 8, 40) + flt("LP 24", 1500, 25, 50) + fenv(0.5, 120, 20, 60) + amp(0.5, 200, 30, 60))),
         R("Sidechain Bass", "SEQ", N().lfoSync(1, "Saw", "1/4", true).mod(1, "LFO 1", "Level", 100)
             .L(1, saw(0, 2, 10, 30) + flt("LP 24", 600, 20) + amp(1, 300, 100, 100))

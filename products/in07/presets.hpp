@@ -39,6 +39,8 @@ void applyInit(Processor& p);                     // every parameter but the sel
 // the audition phrase of a category: (start s, length s, key); velocity 0.8, tempo 120
 struct AuditionNote { double start, length; int key; };
 std::vector<AuditionNote> audition(const std::string& category, double& total);
+// a factory preset's audition: its category's phrase, or, when it plays the arpeggiator or the trance gate, its notes held (2026-10-10)
+std::vector<AuditionNote> presetAudition(int index, double& total);
 struct PresetMeasure {
     double lufs = -200.0, monoLufs = -200.0;     // integrated loudness, stereo and the mono fold-down (L+R)/2 on both channels
     double peakDb = -200.0, rawPeakDb = -200.0;  // sample peak out, and into the limiter

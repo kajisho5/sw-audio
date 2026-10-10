@@ -3,9 +3,11 @@
 #include "doctest.h"
 #include "in07/in07.hpp"
 #include "in07/presets.hpp"
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <string>
+#include <vector>
 
 using namespace sw::in07;
 
@@ -55,6 +57,89 @@ TEST_CASE("IN07 PRESETS: the table") {
         CHECK_MESSAGE(val(p, "in07.fx.limit.gain") + p.boost <= 12.0, p.name);
         CHECK_MESSAGE((p.level == 0.0 || p.boost == 0.0), p.name);   // one or the other
     }
+}
+
+TEST_CASE("IN07 PRESETS: 128 presets, the counts the sales page and the manual give (LEAD 18, PAD 19, BASS 19, PLUCK 18, KEYS 18, SEQ 18, FX 18)") {
+    const auto& P = factoryPresets();
+    CHECK(P.size() == 128);   // program change 0..127
+    const std::pair<const char*, int> want[] = {{"LEAD", 18}, {"PAD", 19}, {"BASS", 19}, {"PLUCK", 18}, {"KEYS", 18}, {"SEQ", 18}, {"FX", 18}};
+    for (const auto& w : want) {
+        int n = 0;
+        for (const auto& p : P) n += p.category == w.first;
+        CHECK_MESSAGE(n == w.second, w.first);
+    }
+}
+
+TEST_CASE("IN07 PRESETS: the ULTRA sounds are factory presets (2026-10-10), in the places of the near duplicates they replace") {
+    const auto& P = factoryPresets();
+    const std::pair<const char*, const char*> ultra[] = {{"Ultra Saw", "LEAD"}, {"Ultra Bass", "BASS"}, {"Ultra Wobble", "BASS"}, {"Ultra Riddim", "BASS"}};
+    for (const auto& u : ultra) {
+        int found = -1;
+        for (size_t i = 0; i < P.size(); ++i) if (P[i].name == u.first) found = static_cast<int>(i);
+        REQUIRE_MESSAGE(found >= 0, u.first);
+        CHECK(P[static_cast<size_t>(found)].category == u.second);
+    }
+    for (const char* gone : {"Wide Saw Lead", "Wobble Monster", "Growl Fold", "Square Depth"})
+        for (const auto& p : P) CHECK_MESSAGE(p.name != gone, gone);
+}
+
+TEST_CASE("IN07 PRESETS: factory presets play the arpeggiator and the trance gate; their audition is a held chord") {
+    const auto& P = factoryPresets();
+    auto uses = [&](size_t i, int id) { for (const auto& v : P[i].values) if (v.first == id) return v.second > 0.5; return false; };
+    std::set<std::string> arp, gate;
+    for (size_t i = 0; i < P.size(); ++i) { if (uses(i, ArpOn)) arp.insert(P[i].name); if (uses(i, GateOn)) gate.insert(P[i].name); }
+    for (const char* n : {"Arp Pulse", "Bounce Seq", "Glass Steps", "Acid Seq"}) CHECK_MESSAGE(arp.count(n) == 1, n);
+    for (const char* n : {"Trance Gate", "Stutter Saw", "Ultra Riddim"}) CHECK_MESSAGE(gate.count(n) == 1, n);
+    // the audition: an arp or gate preset holds its notes (the arp plays them, the gate cuts them); the others play their category's phrase
+    for (size_t i = 0; i < P.size(); ++i) {
+        INFO(P[i].name);
+        double total = 0.0, catTotal = 0.0;
+        const auto a = presetAudition(static_cast<int>(i), total);
+        const auto c = audition(P[i].category, catTotal);
+        REQUIRE_FALSE(a.empty());
+        if (uses(i, ArpOn) || uses(i, GateOn)) {
+            for (const auto& n : a) { CHECK(n.start == doctest::Approx(a[0].start)); CHECK(n.length >= 2.0); }
+            CHECK(total >= a[0].start + a[0].length);
+        } else {
+            REQUIRE(a.size() == c.size());
+            for (size_t k = 0; k < a.size(); ++k) { CHECK(a[k].start == c[k].start); CHECK(a[k].length == c[k].length); CHECK(a[k].key == c[k].key); }
+            CHECK(total == catTotal);
+        }
+    }
+    // held, with the host stopped (the arp and the gate start with the first key): the sound moves on the steps. The loudness in 1/64 windows
+    // over two seconds swings by several dB (a held pad barely moves)
+    auto swing = [](int index) {
+        Processor p; applyPreset(p, index);
+        p.prepare(48000, 256); p.setTempo(120);
+        double total = 0.0;
+        for (const auto& n : presetAudition(index, total)) p.noteOn(n.key, 0.8);
+        const int win = 48000 * 60 / 120 / 16;   // a 1/64 at 120 bpm: 375 samples
+        std::vector<float> l(256), r(256);
+        std::vector<double> e;
+        double acc = 0.0; int in = 0;
+        const int n = 48000 * 3;
+        for (int off = 0; off < n; off += 256) {
+            const int k = std::min(256, n - off);
+            float* c[2] = {l.data(), r.data()};
+            p.process(c, 2, k);
+            for (int i = 0; i < k; ++i) {
+                acc += l[static_cast<size_t>(i)] * l[static_cast<size_t>(i)] + r[static_cast<size_t>(i)] * r[static_cast<size_t>(i)];
+                if (++in == win) { if (off + i >= 48000) e.push_back(10.0 * std::log10(acc / win + 1e-20)); acc = 0.0; in = 0; }
+            }
+        }
+        std::sort(e.begin(), e.end());
+        return e[e.size() * 9 / 10] - e[e.size() / 10];   // the loud steps over the quiet ones (90th over 10th percentile, dB)
+    };
+    for (size_t i = 0; i < P.size(); ++i)
+        if (uses(i, ArpOn) || uses(i, GateOn)) {
+            const double s = swing(static_cast<int>(i));
+            MESSAGE(P[i].name << ": the steps swing " << s << " dB");
+            CHECK_MESSAGE(s >= 6.0, P[i].name);
+        }
+    int pad = -1;
+    for (size_t i = 0; i < P.size(); ++i) if (P[i].name == "Glass Horizon") pad = static_cast<int>(i);
+    REQUIRE(pad >= 0);
+    CHECK(swing(pad) < 3.0);
 }
 
 TEST_CASE("IN07 PRESETS: a preset sets every parameter (the defaults first, then its own values, then its staging and output level)") {
