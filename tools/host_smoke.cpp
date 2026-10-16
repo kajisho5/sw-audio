@@ -65,9 +65,11 @@ const void* hostGetExtension(const clap_host_t*, const char* id) {
     return nullptr;
 }
 void hostNop(const clap_host_t*) {}
+int gCallbackRequests = 0;   // request_callback: the plug-in wants on_main_thread (the Linux window hands the zoom chip's request over this way)
+void hostCallback(const clap_host_t*) { ++gCallbackRequests; }
 int gRestartRequests = 0;   // how many times a plug-in asked the host to restart it (a setting changed the delay)
 void hostRestart(const clap_host_t*) { ++gRestartRequests; }
-clap_host_t gHost = {CLAP_VERSION_INIT, nullptr, "sw-host-smoke", "SEVENTHWELL", "", "1", hostGetExtension, hostRestart, hostNop, hostNop};
+clap_host_t gHost = {CLAP_VERSION_INIT, nullptr, "sw-host-smoke", "SEVENTHWELL", "", "1", hostGetExtension, hostRestart, hostNop, hostCallback};
 
 // ---- events (parameter values and MIDI / note events, in the order they were added; all at time 0)
 struct EventList {
@@ -256,8 +258,9 @@ void zoomChecks(const clap_plugin_t* p, const sw_plugin_message_t* m, const std:
     const clap_plugin_gui_t* g = m->gui;   // (on Linux get_extension(CLAP_EXT_GUI) is null: no window)
     if (!g) { fail("zoom: no gui table"); return; }
     uint32_t w0 = 0, h0 = 0, w = 0, h = 0;
+    auto zoomTo = [&](const std::string& message) { gCallbackRequests = 0; m->send(p, message.c_str()); if (gCallbackRequests > 0) p->on_main_thread(p); };   // (the host's main thread runs what the plug-in asked for)
     gGuiAsk = GuiAsk{};
-    m->send(p, "c zoom 100"); g->get_size(p, &w0, &h0);
+    zoomTo("c zoom 100"); g->get_size(p, &w0, &h0);
     if (!w0 || !h0) { fail("zoom: no size at 100 %"); return; }
     if (!g->can_resize(p)) fail("zoom: the window cannot be resized");
     clap_gui_resize_hints_t hints{}; const bool hh = g->get_resize_hints && g->get_resize_hints(p, &hints);
@@ -265,17 +268,17 @@ void zoomChecks(const clap_plugin_t* p, const sw_plugin_message_t* m, const std:
     auto close1 = [](uint32_t a, double b) { return std::fabs(static_cast<double>(a) - b) <= 1.0; };
     for (int pct : {150, 75, 200, 125}) {
         gGuiAsk = GuiAsk{};
-        m->send(p, ("c zoom " + std::to_string(pct)).c_str()); g->get_size(p, &w, &h);
+        zoomTo("c zoom " + std::to_string(pct)); g->get_size(p, &w, &h);
         if (gGuiAsk.n != 1 || !close1(gGuiAsk.w, w0 * pct / 100.0) || !close1(gGuiAsk.h, h0 * pct / 100.0)) fail("zoom " + std::to_string(pct) + ": the host was asked for " + std::to_string(gGuiAsk.w) + " x " + std::to_string(gGuiAsk.h) + " (" + std::to_string(gGuiAsk.n) + " requests)");
         if (w != gGuiAsk.w || h != gGuiAsk.h) fail("zoom " + std::to_string(pct) + ": get_size is " + std::to_string(w) + " x " + std::to_string(h) + " after the host said yes");
     }
     // the host says no: the size stays
     gGuiAsk = GuiAsk{}; gGuiAsk.accept = false; uint32_t wa = 0, ha = 0; g->get_size(p, &wa, &ha);
-    m->send(p, "c zoom 200"); g->get_size(p, &w, &h);
+    zoomTo("c zoom 200"); g->get_size(p, &w, &h);
     if (gGuiAsk.n != 1 || w != wa || h != ha) fail("zoom: a refused request changed the size");
     gGuiAsk.accept = true;
     // sizes the host proposes (a dragged edge): the design's aspect ratio, 50 % .. 200 %
-    m->send(p, "c zoom 100"); g->get_size(p, &w0, &h0);
+    zoomTo("c zoom 100"); g->get_size(p, &w0, &h0);
     w = w0 * 3; h = static_cast<uint32_t>(h0 * 1.2); g->adjust_size(p, &w, &h);
     if (!close1(w, w0 * 1.2) || !close1(h, h0 * 1.2)) fail("zoom: adjust_size of a wide proposal gave " + std::to_string(w) + " x " + std::to_string(h));
     w = w0 * 10; h = h0 * 10; g->adjust_size(p, &w, &h);
@@ -287,19 +290,21 @@ void zoomChecks(const clap_plugin_t* p, const sw_plugin_message_t* m, const std:
     uint32_t w2 = 0, h2 = 0; g->get_size(p, &w2, &h2);
     if (!close1(w2, w0 * 1.5) || !close1(h2, h0 * 1.5)) fail("zoom: after set_size(150 %) get_size is " + std::to_string(w2) + " x " + std::to_string(h2));
     // the host's display scale counts in: 125 % of the pixels at 150 % zoom
+    // (X11 counts in pixels and takes no host scale: the person has the zoom chip for a bigger window; with the Linux window off the generic rule, as for Windows, multiplies)
+    const double hostScale = g->is_api_supported(p, CLAP_WINDOW_API_X11, false) ? 1.0 : 1.25;
     g->set_scale(p, 1.25); g->get_size(p, &w2, &h2);
-    if (!close1(w2, w0 * 1.5 * 1.25) || !close1(h2, h0 * 1.5 * 1.25)) fail("zoom: with the host scale 1.25 get_size is " + std::to_string(w2) + " x " + std::to_string(h2));
+    if (!close1(w2, w0 * 1.5 * hostScale) || !close1(h2, h0 * 1.5 * hostScale)) fail("zoom: with the host scale 1.25 get_size is " + std::to_string(w2) + " x " + std::to_string(h2));
     g->set_scale(p, 1.0);
     // nonsense from the page does not move the window out of range or crash
     for (const char* bad : {"c zoom", "c zoom abc", "c zoom -50", "c zoom 0", "c zoom 99999999999999999999", "c zoom 1e9", "c zoom nan"}) {
-        m->send(p, bad); g->get_size(p, &w, &h);
+        zoomTo(bad); g->get_size(p, &w, &h);
         if (w < w0 * 0.5 - 1 || w > w0 * 2.0 + 1 || h < h0 * 0.5 - 1 || h > h0 * 2.0 + 1) fail(std::string("zoom: '") + bad + "' moved the size to " + std::to_string(w) + " x " + std::to_string(h));
     }
     // the choice is kept for the next window: <Documents>/SW AUDIO/zoom.txt (HOME is a temporary folder here)
-    m->send(p, "c zoom 150");
+    zoomTo("c zoom 150");
     const char* home = std::getenv("HOME"); std::ifstream f(std::string(home ? home : "") + "/Documents/SW AUDIO/zoom.txt"); int kept = 0; f >> kept;
     if (kept != 150) fail("zoom: the choice was not kept (zoom.txt says " + std::to_string(kept) + ")");
-    m->send(p, "c zoom 100");   // (leave the plug-in at 100 % and the file with 100)
+    zoomTo("c zoom 100");   // (leave the plug-in at 100 % and the file with 100)
 }
 void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, EventList& ev, Result& r) {
     const auto* m = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE));

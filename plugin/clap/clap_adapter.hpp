@@ -387,8 +387,8 @@ private:
     static void guiDestroy(const clap_plugin_t* p) { Plugin* s = self(p); if (s->view_) gui::zoom::save(gui::documentsDir(), static_cast<int>(std::lround(s->zoom_ * 100.0))); s->guiDestroyView(); }
     static bool guiSetScale(const clap_plugin_t* p, double scale) { self(p)->scale_ = scale > 0.0 ? scale : 1.0; return true; }
     // the size of the window = the design's size times the zoom (the "100%" chip, or an edge dragged in a host that lets the window be resized) times the host's scale where the host counts in pixels
-    // (macOS counts in points, so no scale there). The page draws the design at whatever size the view has (ui/sw-ui.js "fit").
-    static void guiBase(const Plugin* s, double& bw, double& bh) { const char* api = gui::platformApi(); const bool logical = api && !std::strcmp(api, "cocoa"); const double k = logical ? 1.0 : s->scale_; bw = kGuiW * k; bh = kGuiH * k; }
+    // (macOS counts in points, so no scale there; on X11 the size is in pixels and the person has the zoom chip for a bigger window: the web view does not scale by itself either). The page draws the design at whatever size the view has (ui/sw-ui.js "fit").
+    static void guiBase(const Plugin* s, double& bw, double& bh) { const char* api = gui::platformApi(); const bool logical = api && (!std::strcmp(api, "cocoa") || !std::strcmp(api, "x11")); const double k = logical ? 1.0 : s->scale_; bw = kGuiW * k; bh = kGuiH * k; }
     static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { const Plugin* s = self(p); double bw, bh; guiBase(s, bw, bh); gui::zoom::sizeFor(s->zoom_, bw, bh, *w, *h); return true; }
     static bool guiCanResize(const clap_plugin_t*) { return true; }
     static bool guiResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t* hints) {
@@ -404,10 +404,18 @@ private:
     }
     // the page's zoom chip ("c zoom <percent>"): ask the host for the size; when it says yes, take it (CLAP: the host does not have to call set_size), and keep the choice for the next window.
     // A host that says no (or has no gui extension) leaves the window as it is.
+    // On X11 the page's messages arrive on the view's own thread, not the host's main thread: the request is handed over (request_callback -> on_main_thread), as a host's window calls belong to its main thread;
+    // on macOS and Windows the web view talks on the main thread already.
     void guiZoom(const std::string& arg) {
         char* end = nullptr; const double pct = std::strtod(arg.c_str(), &end);
         if (end == arg.c_str() || !std::isfinite(pct) || pct <= 0.0) return;
-        const double z = gui::zoom::clamp(pct / 100.0);
+        const int percent = static_cast<int>(std::lround(std::min(pct, 100000.0)));
+        const char* api = gui::platformApi();
+        if (api && !std::strcmp(api, "x11") && host_ && host_->request_callback) { zoomPending_.store(percent); host_->request_callback(host_); return; }
+        zoomApply(percent);
+    }
+    void zoomApply(int percent) {   // the main thread
+        const double z = gui::zoom::clamp(percent / 100.0);
         double bw, bh; guiBase(this, bw, bh); uint32_t w, h; gui::zoom::sizeFor(z, bw, bh, w, h);
         const auto* hg = host_ ? static_cast<const clap_host_gui_t*>(host_->get_extension(host_, CLAP_EXT_GUI)) : nullptr;
         if (!hg || !hg->request_resize || !hg->request_resize(host_, w, h)) return;
@@ -606,7 +614,7 @@ private:
         if (!std::strcmp(id, CLAP_EXT_GUI) && gui::platformApi()) return &gui;
         return nullptr;
     }
-    static void onMainThread(const clap_plugin_t*) {}
+    static void onMainThread(const clap_plugin_t* p) { Plugin* s = self(p); const int pct = s->zoomPending_.exchange(0); if (pct > 0) s->zoomApply(pct); }
 
     // ---- note ports: one MIDI input (the plug-in plays no notes), CLAP notes and MIDI both accepted
     static uint32_t notePortsCount(const clap_plugin_t*, bool isInput) { return isInput ? 1 : 0; }
@@ -813,7 +821,9 @@ private:
     std::unique_ptr<GuiFacade> facade_;
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
-    double scale_ = 1.0, zoom_ = 1.0, sr_ = 48000.0;
+    std::atomic<double> zoom_{1.0};
+    std::atomic<int> zoomPending_{0};   // a zoom the page asked for on the view's own thread (Linux), taken in on_main_thread
+    double scale_ = 1.0, sr_ = 48000.0;
     std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
     std::vector<float> scLink_;                   // room for the key read from another SW Link instance (allocated in activate)
     link::Member::KeyState keyState_; std::atomic<float> linkKeyFound_{0.0f};

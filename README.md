@@ -196,6 +196,22 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **仕様書からの差・未実装：** ①「高品質設定は直線位相 FIR（遅延を報告）」は作っていない（MS04 だけが FIR を持つ）。標準の IIR のみ。②**再生中に設定を切り替えると、その瞬間に 1 回プチッと鳴る**（ハーフバンドの群遅延が設定ごとに違い、波形の位相が飛ぶ。Drive 段で 1 kHz・0.3 の正弦波を再生中に 2×→1× にすると、1 サンプルの最大の差が通常の最大の差の約 5 倍、1×→2× は約 1.2 倍、2×⇄4× は約 2 倍（実測）。クロスフェードは入れていない）。保存した設定の読み込みと `prepare` では状態がそろっているので鳴らない。③報告遅延は従来どおり 0（IIR の群遅延は数サンプルで、設定により変わる。Mix で原音と混ぜたときの櫛形は従来と同じ性質で、1×・2×・4× で量が違う）。④CPU は 4× が 2× のおよそ 2 倍近く、1× は約半分（設計上の見積もり。この変更での再測定はしていない）。
 - テスト：`tests/test_os.cpp`（`OsSwitch`：呼び出し回数、線形段のレベル、折り返し、設定の切替中も有限、8×）、`test_drive.cpp`・`test_shaper.cpp`（共通部品）、21 製品それぞれの `test_<code>.cpp`（パラメータの位置・1x／2x／4x・既定、飽和段が設定に従うこと）。共通の測定は `tests/os_helpers.hpp`。画面：EVO バーの「2× OS」は `data-cycle` のボタンで、押すと 1×→2×→4×→1× と進み、表示は設定どおり（「4× OS」など）。このパラメータを持たない製品では従来どおり薄く表示される。
 
+### Linux の画面（別プロセスの WebKitGTK を X11 の窓に入れる：`plugin/clap/gui_x11.cpp`・`gui_x11_helper.cpp`・`gui_x11_proto.hpp`）
+
+CLAP の gui は `x11`（ホストが X11 の窓の番号を渡す）。macOS は WKWebView、Windows は WebView2 をその窓に入れているが、Linux には「どの DAW にもある Web ビュー」がない。**何を・なぜ・どう決めたか（設計値）：**
+
+- **WebKitGTK（GTK 3）を、プラグインとは別の実行ファイル `sw-audio-gui` で動かす。** なぜ別プロセスか：DAW はすでに GTK 2／3 や Qt など自分のツールキットを読み込んでいて、同じプロセスに別のツールキットを入れると互いに壊し合う。Web エンジンが落ちても DAW のセッションは落ちない。窓を開くたびに 1 つ起動し、閉じると終わる。
+- **つなぎ方：** プラグインが `posix_spawn` で `sw-audio-gui --parent <ホストの窓の番号> --size 幅x高さ` を起動し、ソケット対（fd 3）で話す。1 件は「種類 1 バイト＋長さ 4 バイト（リトルエンディアン）＋本体」：プラグイン→helper は H＝ページ（HTML。最初に 1 回）・S＝ページで実行するスクリプト・Z＝窓の大きさ・V＝表示／非表示・Q＝終了、helper→プラグインは M＝ページの投げたメッセージ（`s 3 0.5`・`c zoom 150`・`p` …。macOS と同じ `window.webkit.messageHandlers.sw.postMessage`）・P＝窓の番号・R＝読み込み済み・E＝エラー。**メッセージの内容は macOS・Windows と同じ**なので、ページ（`ui/host.js`）もセッション（`gui_bridge.hpp`）も変えていない。書き込みは `MSG_NOSIGNAL`（相手が死んでいても SIGPIPE でホストを落とさない）、書けない相手を待つのは数秒まで。
+- **窓：** helper は GtkPlug（X11 の埋め込み）でホストの窓の子になる。**ホストの窓は XEmbed の相手ではない（ただの窓）ので、GtkPlug が待つ「親が map してくれる」ことは起きない：helper が自分で map する**（試験で見つけた：これをしないと窓は出るが空のまま）。大きさは `Z` で `gtk_window_resize`、非表示→表示でも map し直す。
+- **X11 の大きさはピクセルで、ホストの表示倍率は掛けない**（macOS は points、Windows は倍率を掛ける、X11 は掛けない）。大きくしたい人には拡大チップがある（上の「ウィンドウの拡大縮小」）。helper は `GDK_SCALE=1`（ページが窓に合わせて拡縮するので、GTK の二重の拡縮はしない）。
+- **スレッド：** ページのメッセージは、ビューの専用スレッド（helper の声を読む）で処理する（セッションはもともと窓のスレッドを想定した作り）。**ただし窓の拡大の要求だけは、`request_callback`→`on_main_thread` でホストのメインスレッドへ渡す**（ホストの窓の操作はメインスレッドのもの。CLAP は `request_resize` を thread-safe としているが、Xlib をそのまま呼ぶホストなどに備えた）。窓を壊すときはビューのデストラクターが helper に終了を伝え（終わらなければ 1 秒後に SIGKILL）スレッドを待つ。
+- **helper の探し方：** 環境変数 `SW_AUDIO_GUI_HELPER`、プラグイン本体のあるフォルダ（.clap の隣）、.vst3 のバンドルの中と 4 つ上まで、`~/.local/share/sw-audio/`、`/usr/local/lib/sw-audio/`、`/usr/lib/sw-audio/`。**見つからない、または `sw-audio-gui --check` が成功しない（GTK・WebKitGTK が入っていない）と窓なし**（`get_extension(gui)` が空、または `create` が false：ホストは自分のパラメータ一覧を出す。以前の Linux と同じ）。Linux の配布物（`ubuntu-22.04.zip`）には、.clap・.vst3 と同じフォルダに `sw-audio-gui` を入れる。**実行に GTK 3 と WebKitGTK（`libgtk-3-0`・`libwebkit2gtk-4.1-0` または `-4.0-37`）が要る**（ビルドには `libgtk-3-dev` と `libwebkit2gtk-4.1-dev`〔なければ 4.0〕。CMake が見つけられないときは `-DSW_LINUX_GUI=OFF` と同じ扱いで窓なし）。
+- **試験用に WebKit のサンドボックスを切る環境変数（`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS`）は、CI の試験だけが付ける**（コンテナはユーザー名前空間が使えないことがある）。プラグインは付けない。
+
+**確かめたこと（Linux・このクラウド環境、Ubuntu 24.04・WebKitGTK 2.52）：** ①プロトコルの単体テスト `tests/test_gui_x11_proto.cpp`（フレームの符号化・復号、どんな細切れでも、大きすぎる長さ・文字でない種類の拒否、大きさの文字、helper の探し場所。6 件）。②**X11 の試験ホスト `tools/x11_host_test.cpp`（Xvfb の中で、実物の .clap・実物の helper・実物のページ・xdotool のポインタ）：窓が描かれる（EQ01 で 293 色・窓の 100 %）、1 つだけ helper が動く、非表示で窓が空になり表示で戻る、つまみを下へドラッグするとパラメータが 1 つ動く（ポインタ→ページ→メッセージ→ホストのパラメータまで通る）、「100%」チップを押すとホストに 1200×553（125 %）を頼み、ホストが窓を大きくするとページが窓いっぱいに広がる、窓を壊すと helper が終わる。EQ01〔チップがヘッダー〕と DY08〔チップが下の EVO バー〕で全部合格。** ③helper が起動できない（`--check` が失敗する）と `create` が false になることを確かめた（空の窓が出ない）。④`host_smoke` 全 132 製品（拡大縮小の検査は X11 の「倍率を掛けない」に合わせて直した）、両 validator 各 132 製品 0 不合格（gui 拡張が Linux でも出るようになったが通った）、単体テスト 1675 件。⑤**ThreadSanitizer（`tools/x11_tsan.sh`：プラグインを TSan で作り、helper は付けずに X11 の試験ホストで使う）：EQ01・DY08 で 0 件。**（拡大の要求を窓のスレッドからそのままホストに渡していた最初の形は、試験ホスト側で競合を出した〔Xlib をスレッドをまたいで呼ぶ〕。メインスレッドへ渡す形にして 0 件。）CI にこの試験（Xvfb 上の X11 ホストと TSan）を足した。
+
+**確かめていないこと：** 実際の Linux の DAW（REAPER・Bitwig・Ardour・Carla など）での埋め込みと大きさの交渉、キーボードのフォーカス（DAW のショートカットとの兼ね合い）、Wayland（`GDK_BACKEND=x11` で XWayland として動くはず）、高 DPI の表示、WebKit のサンドボックスを有効にしたままの動作（試験では切っている）、他の WebKitGTK のバージョン（試験は 2.52 だけ。CI は Ubuntu 22.04 の版）、VST3 としてのホスト（clap-wrapper 経由）で拡大チップの `on_main_thread` が呼ばれること（CLAP では確かめた。VST3 のラッパーが `request_callback` を実際に回すかは実機）、ネイティブのツールチップ（ページの `title` で出る：テーマのない Xvfb では黒い四角に見えた。普通のデスクトップでは文字が出るはず）。`docs/real_host_checklist.md` の 1-10〜1-12。
+
 ### ウィンドウの拡大縮小（デザインヘッダーの「100%」チップ、`plugin/clap/gui_zoom.hpp`・`ui/sw-ui.js` の fit）
 
 デザインのヘッダー（または EVO バー）に「100%」というチップがあるが、仕様書に拡大率の記述はない。**何を・なぜ・どう決めたか（設計値）：**
@@ -1002,7 +1018,7 @@ clap-validator の process-audio-denormals が、処理の軽い製品（DY04・
 
 ## 画面（UI）
 
-- **方式。** 画面は Web（HTML／CSS／JS）で、各 OS の Web ビューにプラグインの窓として載せる：macOS＝WKWebView、Windows＝WebView2（Edge。Windows 10／11 に入っている WebView2 ランタイムが要る）。Linux は窓なし（ホストの汎用パラメータ画面）。窓は CLAP の gui 拡張で、VST3・AU には clap-wrapper が引き継ぐ。デザイン（`docs/design/canvas/*.dc.html`）が HTML なので素材と方式を揃えられる。
+- **方式。** 画面は Web（HTML／CSS／JS）で、各 OS の Web ビューにプラグインの窓として載せる：macOS＝WKWebView、Windows＝WebView2（Edge。Windows 10／11 に入っている WebView2 ランタイムが要る）。Linux は WebKitGTK（GTK 3）を**別プロセス**（`sw-audio-gui`）で動かして X11 の親ウィンドウに入れる（下の「Linux の画面」。そのプロセスが無い・起動できないときは窓なしで、ホストの汎用パラメータ画面）。窓は CLAP の gui 拡張で、VST3・AU には clap-wrapper が引き継ぐ。デザイン（`docs/design/canvas/*.dc.html`）が HTML なので素材と方式を揃えられる。
 - **共通ランタイム `ui/sw-ui.js`。** 製品のパラメータ表から画面を自動で組み立てる：連続値は弧ノブ（ドラッグ・ホイール・ダブルクリックで既定値・値のクリックで数値入力）、段階値は 2 択ならボタン、6 択まではボタン列、それ以上はメニュー、Hold to… はおしている間だけ効くボタン、Band の並びはフェーダー。名前の前半が同じものは区画にまとめる（EQ05 の HF／HMF …、GT03 の Pedal 1〜8）。ツールバー（型番バッジ・名前・LIVE の遅延・A／B・Undo／Redo・Auto gain・Delta）、EVO バー、CPU の実測値（1 ブロックの処理時間÷長さ）を出す。色はカテゴリ色。曲線と値の書式は `sw::ParamSpec` と同じで、`tests/ui/curves.test.js` が 8055 点で C++ の値と一致を確かめる（`node tests/ui/curves.test.js`）。
 - **プラグインとの通信。** 画面は `ui/host.js` の `bridge`（値・set・begin／end・call・onChange・info）だけを通す。ネイティブ側へはテキスト 1 行（`s <番号> <値>`、`b`／`e`＝ジェスチャの開始と終了、`c`＝ボタン、`p`＝50 ms ごとの問い合わせ）を投げ、答えは `SWHOST.update([...値], 遅延ms, CPU)`。処理は `plugin/clap/gui_bridge.hpp`（プラットフォームに依存しない：ページ組み立て・メッセージ解釈・応答。`tests/test_gui_bridge.cpp`）。画面の操作は待ち行列を通って音声スレッドでホストのパラメータイベント（begin／value／end）になるので、オートメーションに記録できる。素材は `tools/embed_ui.py` が 1 つのヘッダーにして埋め込む。
 - **確認したこと／していないこと。** 全 132 製品の画面を Chromium（ヘッドレス）で描画して、実行時エラーが無く、ドラッグ・ダブルクリック・数値入力・ボタン・Undo・A/B が効くことを確かめた。**macOS と Windows の実機（ホストの中）では確かめていない**：Actions のビルドと validator が通ることだけ。
@@ -1164,7 +1180,7 @@ cmake/             MinGW 用ツールチェーン
 
 - **実機の DAW と実機の Web ビュー（WKWebView・WebView2）での確認**：音と画面とも、クラウド環境の検査（単体テスト・両 validator・`host_smoke`・ブラウザ・TSan・ASan）と CI の範囲まで。項目ごとの手順は `docs/real_host_checklist.md`。
 - **RS02 Voice Isolate**（学習済みの音源分離モデルが要る。保留）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
-- **画面**：Linux の画面（X11 への埋め込み）、Blender 描画の素材の追加（DY03 の GR メーター、MS01 のフェーダーなど）、一部の製品の中央の表示（`docs/tasks.md`）。
+- **画面**：Blender 描画の素材の追加（DY03 の GR メーター、MS01 のフェーダーなど）、一部の製品の中央の表示（`docs/tasks.md`）。
 - **工場出荷のプリセットの中身**（自分の設定の保存・呼び出しは済み）。
 - 64 bit 浮動小数での入出力（VST3 validator の情報表示より。32 bit で動作）。
 - 直していない小さな差：再生中のオーバーサンプリング倍率の切り替えで 1 回プチッと鳴る。直線位相 FIR のオーバーサンプリングは無い。

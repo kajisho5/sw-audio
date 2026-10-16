@@ -39,6 +39,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Linux window dependencies (GTK 3, WebKitGTK, Xvfb, xdotool)
+        if: runner.os == 'Linux'
+        run: |
+          # the plug-in window on Linux is a WebKitGTK web view in a helper process (sw-audio-gui) embedded through X11: its build needs the dev packages; its test needs a virtual X server and a pointer
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-3-dev xvfb xdotool
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev || sudo apt-get install -y -qq libwebkit2gtk-4.0-dev   # (CMake takes 4.1 or 4.0)
+
       - name: Configure
         run: |
           # macOS builds the runner's own architecture here (a universal build compiles everything twice); the
@@ -100,6 +108,15 @@ jobs:
           # create / process / destroy over and over (a host does it for every project that is opened): the resident memory must not keep growing
           build/sw-host-smoke --leaks build/plugins
 
+      - name: "Linux window (X11 host under Xvfb - the real helper, the real page, the pointer)"
+        if: matrix.shard == 0 && runner.os == 'Linux'
+        run: |
+          # tools/x11_host_test.cpp loads a .clap like an X11 DAW, opens its window inside a window of its own and checks: the page is painted, a drag on a knob changes a parameter, the 100% chip asks the host for a bigger window
+          # and the page fills it, and the helper process ends with the window. (The web engine's own sandbox needs user namespaces: switched off for this test, on the runner only.)
+          export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --chip 788 20 --knob 195 242
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW DY08 Clean.clap" --chip 831 536 --knob 47 436
+
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -153,6 +170,7 @@ jobs:
         run: |
           mkdir -p dist
           find build -maxdepth 4 \( -name "*.clap" -o -name "*.vst3" -o -name "*.component" \) -not -path "*/cpm/*" -exec cp -R {} dist/ \;
+          if [ -f build/plugins/sw-audio-gui ]; then cp build/plugins/sw-audio-gui dist/; fi   # Linux: the window's helper process goes next to the plug-ins (that is where a plug-in looks first)
           ls -la dist
 
       - uses: actions/upload-artifact@v4
@@ -168,5 +186,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - name: Linux window dependencies (GTK 3, WebKitGTK, Xvfb, xdotool)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-3-dev xvfb xdotool
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev || sudo apt-get install -y -qq libwebkit2gtk-4.0-dev   # (CMake takes 4.1 or 4.0)
       - name: Stress with ThreadSanitizer
         run: tools/stress_tsan.sh 4 eq02 eq05 eq08 dy04 cs02 rv04 rv08 sa02 ut01 ut03 lv01 lv02 lv05 lv27 lv29 lv30 lo03 mt05 vo05
+      - name: Linux window under ThreadSanitizer (an X11 host under Xvfb uses the window of two plug-ins)
+        run: tools/x11_tsan.sh

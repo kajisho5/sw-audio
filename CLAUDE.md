@@ -1,7 +1,7 @@
 # CLAUDE.md — SW AUDIO（SEVENTHWELL のオーディオプラグイン・バンドル）
 
 STUDIO 109 本＋LIVE 30 本＝139 製品。CLAP を正として作り、clap-wrapper で VST3／AU を生成する。DSP はフレームワーク非依存の C++17。
-現状は v0.16.0：132 製品が完成（単体テスト 1669 件（1656 件までは ASan・UBSan でも全合格、そのあとの追加分は関連テストだけ ASan 確認）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッド・窓のスレッド・ホストのメインスレッドを同時に）で全製品 0 件。GitHub Actions は run 188（669d512。ウィンドウの拡大縮小まで）まで Windows・macOS（auval の aumf を含む）・Linux の全ジョブ（`race` ジョブを含む）で成功。途中の失敗はどれも直した：run 173 は macOS の ARM で SW Link の参照スペクトルの読み出しが混ざる不具合〔シーケンスロックのフェンス〕、run 174・175 は試験の作り〔書き手が動き出す前に試行が終わる／待つ長さをブロック数で固定していて 96 kHz では半分の時間になった：秒で決める〕と、調査中に見つけた readKey の別の不具合〔同じ製品の止まったスロットが 2 つあると鍵を読み続ける〕、run 180・182 は GCC 11 の TSan の誤検出〔`pthread_cond_clockwait`〕。run 186 は SW Link v5（出力ラウドネス・トラック名と種別の共有）・VO05 の Music from・LV29 の Interp from を含み、run 188 は拡大縮小を含む。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。ウィンドウの拡大縮小（デザインの「100%」チップ・縁のドラッグ。`plugin/clap/gui_zoom.hpp`）も実装済み。残りは RS02（学習済みモデルが要る・保留）と Linux の画面など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
+現状は v0.16.0：132 製品が完成（単体テスト 1669 件（1656 件までは ASan・UBSan でも全合格、そのあとの追加分は関連テストだけ ASan 確認）。clap-validator・Steinberg VST3 validator とも Linux で全製品不合格 0。ThreadSanitizer のストレス試験（音声スレッド・窓のスレッド・ホストのメインスレッドを同時に）で全製品 0 件。GitHub Actions は run 188（669d512。ウィンドウの拡大縮小まで）まで Windows・macOS（auval の aumf を含む）・Linux の全ジョブ（`race` ジョブを含む）で成功。途中の失敗はどれも直した：run 173 は macOS の ARM で SW Link の参照スペクトルの読み出しが混ざる不具合〔シーケンスロックのフェンス〕、run 174・175 は試験の作り〔書き手が動き出す前に試行が終わる／待つ長さをブロック数で固定していて 96 kHz では半分の時間になった：秒で決める〕と、調査中に見つけた readKey の別の不具合〔同じ製品の止まったスロットが 2 つあると鍵を読み続ける〕、run 180・182 は GCC 11 の TSan の誤検出〔`pthread_cond_clockwait`〕。run 186 は SW Link v5（出力ラウドネス・トラック名と種別の共有）・VO05 の Music from・LV29 の Interp from を含み、run 188 は拡大縮小を含む。画面（UI）は全製品にデザインを載せ、中央の表示も大半が動く（残りと未実装の共通機能は `docs/tasks.md`。実機の DAW でしか確かめられないことは `docs/real_host_checklist.md`）。MIDI 入力（MD05・CR04・VO03・LV25）、共通機能の Low lat（仕様書が定める 11 製品すべて）・オーバーサンプリング（21 製品）・Unit A/B/C（42 製品）、SW Link の最初の部分は実装済み。ウィンドウの拡大縮小（デザインの「100%」チップ・縁のドラッグ。`plugin/clap/gui_zoom.hpp`）も実装済み。Linux の画面（別プロセスの WebKitGTK：`plugin/clap/gui_x11*.{hpp,cpp}`、README「Linux の画面」）も実装済み。残りは RS02（学習済みモデルが要る・保留）など（`docs/tasks.md`）。IN01〜IN06 の楽器プラグインは作らない（依頼者の決定）。
 
 ## 話し方・進め方
 
@@ -74,6 +74,8 @@ node tests/ui/refload.test.js   # UT03・RV04 の読み込み（ページが作�
 NODE_PATH=$(npm root -g) node tools/audit_static_text.js [コード]   # 画面で数字が動かない文字（デザインの例の数字の残り）を探す（preview を http.server で配っておく）
 ./build_tests.sh && ./build/tests          # CMake なしの手早い単体テスト（third_party/doctest.h が要る）
 tools/stress_tsan.sh [秒] [製品コード…]    # 音声スレッドと窓のスレッドを同時に当てて ThreadSanitizer でデータ競合を探す（build-tsan。全製品で約 40 分）
+tools/x11_tsan.sh                         # Linux の窓：Xvfb の X11 ホスト（tools/x11_host_test.cpp）が実物の .clap・helper・ページを使う（描画・ドラッグ・100% チップ・非表示と表示・終了）。プラグイン側を ThreadSanitizer で（GTK 3・WebKitGTK の dev、xvfb、xdotool が要る。CI の race ジョブでも）
+#   手で：xvfb-run -a -s "-screen 0 1600x1000x24" build-cmake/sw-x11-host "build-cmake/plugins/SW EQ01 Passive.clap" --chip 788 20 --knob 195 242   （座標はデザインの左上から。DY08 は --chip 831 536 --knob 47 436）
 # ASan / UBSan（先に python3 tools/embed_ui.py build/gui_assets.hpp）
 g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Iplugin/clap -Ibuild -Itests \
     $(ls tests/test_*.cpp | grep -v test_main) $(ls products/*/*.cpp) tests/test_main.cpp -o /tmp/tests_asan && /tmp/tests_asan
@@ -92,7 +94,7 @@ g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Icore/include -Iproducts -Ip
 
 ## 次にやること
 
-`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。LO03 の Bass 役が Kick 役の LO03 を鍵にする〔Role を登録簿の tag に〕。VO05 の Music from・LV29 の Interp from〔SW Link のチップから選ぶ。登録簿の版 5＝各インスタンスの出力ラウドネスとトラック名・種別〕。LV15・LV11 は `sw/link.hpp` の代用。残りは LV27・LV17 のシーン連動：受け取る側が何を呼び出すか〔プリセット番号の意味〕が決まっていない。README「SW Link の残り」に提案）。MT05 の 0 VU 基準の共有は済・OBS 連携（LV27）、Linux の画面、RS02（学習済みモデルが要る・保留）。拡大縮小は macOS・Windows の実機の確認待ち（`docs/real_host_checklist.md` の 1-8・1-9）。
+`docs/tasks.md` の項目。進化機能（学習・解析のボタン）は仕様書にあるものをすべて実装済み（EQ02・EQ05・EQ07・DY04・DY10・CS02・CS03・CS04・RV08・MS07 など）。残りは、**実機の DAW と Web ビューでの確認（依頼者の実機待ち。`docs/real_host_checklist.md`）**、ホストのトラック名・SW Link の残り（済：EQ05 Match の参照元に UT03、LV05 の Key に別のインスタンス。LO03 の Bass 役が Kick 役の LO03 を鍵にする〔Role を登録簿の tag に〕。VO05 の Music from・LV29 の Interp from〔SW Link のチップから選ぶ。登録簿の版 5＝各インスタンスの出力ラウドネスとトラック名・種別〕。LV15・LV11 は `sw/link.hpp` の代用。残りは LV27・LV17 のシーン連動：受け取る側が何を呼び出すか〔プリセット番号の意味〕が決まっていない。README「SW Link の残り」に提案）。MT05 の 0 VU 基準の共有は済・OBS 連携（LV27）、RS02（学習済みモデルが要る・保留）。拡大縮小と Linux の画面は実機の DAW の確認待ち（`docs/real_host_checklist.md` の 1-8〜1-12）。
 1 つごとに commit。まとまったら版を上げ（`CMakeLists.txt` の VERSION と各 `*_clap.cpp` の版文字列）、README の検証結果を更新する。
 
 ## 画面（UI）の作業（v0.13.0 以降）
