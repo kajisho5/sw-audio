@@ -5,7 +5,8 @@
 //   3. a drag down on a knob changes a parameter of the plug-in (the pointer reached the page, the page's message reached the plug-in, the value reached the host's parameter)
 //   4. hide empties the window, show brings the page back
 //   5. closing the window ends the helper process (no process is left behind)
-// usage: sw-x11-host <plug-in .clap> --chip <x> <y> --knob <x> <y> [--ppm <file prefix>]      (coordinates: in the design's own pixels, from its top left; EQ01: --chip 797 21 --knob 195 242)
+// usage: sw-x11-host <plug-in .clap> --chip <x> <y> --knob <x> <y> [--preset <button x y> <name field x y> <Save x y>] [--ppm <file prefix>]      (coordinates: in the design's own pixels, from its top left; EQ01: --chip 797 21 --knob 195 242)
+//   (--preset: the preset menu: a click on its button, a click on the name field, the keyboard types a name, a click on Save: the preset file must appear - the keyboard reaches the page; EQ01: --preset 488 20 426 116 537 116)
 // exit code 0 = all passed; the reasons are printed. Needs xdotool for the pointer.
 #include <clap/clap.h>
 #include <clap/ext/gui.h>
@@ -76,16 +77,19 @@ double darkShare(const Shot& s, unsigned y) {
     return static_cast<double>(dark) / s.w;
 }
 bool bottomPainted(const Shot& s) { return s.h >= 8 && darkShare(s, s.h - 3) > 0.8; }
+// a point of the host window in screen coordinates (with a window manager the window has a title bar and a border: its place on the screen is not what XCreateWindow was told)
+void screenPoint(int x, int y, int& sx, int& sy) { Window child; XTranslateCoordinates(gDpy, gWin, DefaultRootWindow(gDpy), x, y, &sx, &sy, &child); }
 void xdo(const std::string& args) { const std::string c = "xdotool " + args + " >/dev/null 2>&1"; if (std::system(c.c_str()) != 0) std::printf("(xdotool failed: %s)\n", args.c_str()); }
 int helperProcesses() { FILE* p = popen("pgrep -c -x sw-audio-gui 2>/dev/null", "r"); int n = 0; if (p) { if (std::fscanf(p, "%d", &n) != 1) n = 0; pclose(p); } return n; }
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) { std::fprintf(stderr, "usage: sw-x11-host <plug-in .clap> --chip x y --knob x y [--ppm prefix]\n"); return 2; }
-    const std::string path = argv[1]; int chipX = -1, chipY = -1, knobX = -1, knobY = -1; std::string ppm;
+    const std::string path = argv[1]; int chipX = -1, chipY = -1, knobX = -1, knobY = -1; int pre[6] = {-1, -1, -1, -1, -1, -1}; std::string ppm;
     for (int i = 2; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--chip") && i + 2 < argc) { chipX = std::atoi(argv[i + 1]); chipY = std::atoi(argv[i + 2]); i += 2; }
         else if (!std::strcmp(argv[i], "--knob") && i + 2 < argc) { knobX = std::atoi(argv[i + 1]); knobY = std::atoi(argv[i + 2]); i += 2; }
+        else if (!std::strcmp(argv[i], "--preset") && i + 6 < argc) { for (int k = 0; k < 6; ++k) pre[k] = std::atoi(argv[i + 1 + k]); i += 6; }
         else if (!std::strcmp(argv[i], "--ppm") && i + 1 < argc) ppm = argv[++i];
     }
     char home[] = "/tmp/sw_x11_host_XXXXXX"; if (!mkdtemp(home)) { std::perror("mkdtemp"); return 2; }
@@ -132,15 +136,27 @@ int main(int argc, char** argv) {
     if (knobX >= 0 && params) {
         const uint32_t n = params->count(p); std::vector<double> before(n), after(n);
         for (uint32_t i = 0; i < n; ++i) { clap_param_info_t inf{}; params->get_info(p, i, &inf); double v = 0; params->get_value(p, inf.id, &v); before[i] = v; }
-        char cmd[200]; std::snprintf(cmd, sizeof cmd, "mousemove %d %d mousedown 1 mousemove_relative --sync 0 20 mousemove_relative --sync 0 20 mousemove_relative --sync 0 20 mouseup 1", 20 + knobX, 20 + knobY);
+        int sx, sy; screenPoint(knobX, knobY, sx, sy); char cmd[200]; std::snprintf(cmd, sizeof cmd, "mousemove %d %d mousedown 1 mousemove_relative --sync 0 20 mousemove_relative --sync 0 20 mousemove_relative --sync 0 20 mouseup 1", sx, sy);
         xdo(cmd); pump(1.0);
         int changed = 0; for (uint32_t i = 0; i < n; ++i) { clap_param_info_t inf{}; params->get_info(p, i, &inf); double v = 0; params->get_value(p, inf.id, &v); after[i] = v; if (std::fabs(after[i] - before[i]) > 1e-9) ++changed; }
         if (changed >= 1) pass("a drag on the knob moved " + std::to_string(changed) + " parameter(s)"); else fail("a drag on the knob changed nothing (the pointer, the page or the message path)");
     }
 
+    // the keyboard: a preset is named by typing (the page has a text field in the preset menu); the file appears in the (temporary) Documents folder
+    if (pre[0] >= 0) {
+        char cmd[320]; int sx, sy;
+        screenPoint(pre[0], pre[1], sx, sy); std::snprintf(cmd, sizeof cmd, "mousemove %d %d click 1", sx, sy); xdo(cmd); pump(0.8);
+        screenPoint(pre[2], pre[3], sx, sy); std::snprintf(cmd, sizeof cmd, "mousemove %d %d click 1", sx, sy); xdo(cmd); pump(0.5);
+        xdo("type --delay 60 xkeytest"); pump(0.5);
+        screenPoint(pre[4], pre[5], sx, sy); std::snprintf(cmd, sizeof cmd, "mousemove %d %d click 1", sx, sy); xdo(cmd);
+        const std::string find = std::string("find '") + home + "/Documents/SW AUDIO/Presets' -name 'xkeytest.swpreset' 2>/dev/null | grep -q .";
+        bool found = false; for (int i = 0; i < 30 && !found; ++i) { pump(0.2); found = std::system(find.c_str()) == 0; }
+        if (found) pass("typing a preset name and pressing Save wrote the preset file (the keyboard reaches the page)"); else fail("the preset file did not appear (the keyboard does not reach the page, or the click missed)");
+    }
+
     // 2. the zoom chip: the plug-in asks this host for a bigger window, the page fills it
     if (chipX >= 0) {
-        gAsks = 0; char cmd[120]; std::snprintf(cmd, sizeof cmd, "mousemove %d %d click 1", 20 + chipX, 20 + chipY); xdo(cmd);
+        gAsks = 0; int sx, sy; screenPoint(chipX, chipY, sx, sy); char cmd[120]; std::snprintf(cmd, sizeof cmd, "mousemove %d %d click 1", sx, sy); xdo(cmd);
         for (int i = 0; i < 40 && gAsks == 0; ++i) pump(0.25);
         if (gAsks >= 1 && gAskW > w0 && gAskH > h0) pass("the chip asked the host for " + std::to_string(gAskW) + " x " + std::to_string(gAskH) + " (was " + std::to_string(w0) + " x " + std::to_string(h0) + ")"); else fail("the chip did not ask for a bigger window (" + std::to_string(gAsks) + " requests)");
         for (int i = 0; i < 40; ++i) { pump(0.25); s = grab(); if (bottomPainted(s) && s.w == gAskW) break; }   // (WebKit repaints a moment after the window grew)

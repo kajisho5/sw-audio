@@ -111,10 +111,10 @@ jobs:
       - name: "Linux window (X11 host under Xvfb - the real helper, the real page, the pointer)"
         if: matrix.shard == 0 && runner.os == 'Linux'
         run: |
-          # tools/x11_host_test.cpp loads a .clap like an X11 DAW, opens its window inside a window of its own and checks: the page is painted, a drag on a knob changes a parameter, the 100% chip asks the host for a bigger window
+          # tools/x11_host_test.cpp loads a .clap like an X11 DAW, opens its window inside a window of its own and checks: the page is painted, a drag on a knob changes a parameter, typing a preset name writes the preset (keyboard), the 100% chip asks the host for a bigger window
           # and the page fills it, and the helper process ends with the window. (The web engine's own sandbox needs user namespaces: switched off for this test, on the runner only.)
           export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
-          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --chip 788 20 --knob 195 242
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --chip 788 20 --knob 195 242 --preset 488 20 426 116 537 116
           xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW DY08 Clean.clap" --chip 831 536 --knob 47 436
 
       - name: Drop bundles of other shards (macOS)
