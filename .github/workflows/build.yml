@@ -116,6 +116,9 @@ jobs:
           export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
           xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --chip 788 20 --knob 195 242 --preset 488 20 426 116 537 116
           xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW DY08 Clean.clap" --chip 831 536 --knob 47 436
+          # the web engine crashes (the helper is killed under the window) and a host that destroys its window before it tells the plug-in
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --kill
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/sw-x11-host "build/plugins/SW EQ01 Passive.clap" --parent-first
 
       - name: Drop bundles of other shards (macOS)
         if: runner.os == 'macOS'

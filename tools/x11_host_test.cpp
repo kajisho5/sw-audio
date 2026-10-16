@@ -4,7 +4,7 @@
 //   2. a click on the design's "100%" chip makes the plug-in ask this host for a bigger window (CLAP request_resize); this host says yes and resizes its window; the page then fills the new size
 //   3. a drag down on a knob changes a parameter of the plug-in (the pointer reached the page, the page's message reached the plug-in, the value reached the host's parameter)
 //   4. hide empties the window, show brings the page back
-//   5. closing the window ends the helper process (no process is left behind)
+//   5. closing the window ends the helper process (no process is left behind); with --kill the helper is killed first (a crash of the web engine): the plug-in carries on
 // usage: sw-x11-host <plug-in .clap> --chip <x> <y> --knob <x> <y> [--preset <button x y> <name field x y> <Save x y>] [--ppm <file prefix>]      (coordinates: in the design's own pixels, from its top left; EQ01: --chip 797 21 --knob 195 242)
 //   (--preset: the preset menu: a click on its button, a click on the name field, the keyboard types a name, a click on Save: the preset file must appear - the keyboard reaches the page; EQ01: --preset 488 20 426 116 537 116)
 // exit code 0 = all passed; the reasons are printed. Needs xdotool for the pointer.
@@ -85,11 +85,13 @@ int helperProcesses() { FILE* p = popen("pgrep -c -x sw-audio-gui 2>/dev/null", 
 
 int main(int argc, char** argv) {
     if (argc < 2) { std::fprintf(stderr, "usage: sw-x11-host <plug-in .clap> --chip x y --knob x y [--ppm prefix]\n"); return 2; }
-    const std::string path = argv[1]; int chipX = -1, chipY = -1, knobX = -1, knobY = -1; int pre[6] = {-1, -1, -1, -1, -1, -1}; std::string ppm;
+    const std::string path = argv[1]; int chipX = -1, chipY = -1, knobX = -1, knobY = -1; int pre[6] = {-1, -1, -1, -1, -1, -1}; bool killHelper = false, parentFirst = false; std::string ppm;
     for (int i = 2; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--chip") && i + 2 < argc) { chipX = std::atoi(argv[i + 1]); chipY = std::atoi(argv[i + 2]); i += 2; }
         else if (!std::strcmp(argv[i], "--knob") && i + 2 < argc) { knobX = std::atoi(argv[i + 1]); knobY = std::atoi(argv[i + 2]); i += 2; }
         else if (!std::strcmp(argv[i], "--preset") && i + 6 < argc) { for (int k = 0; k < 6; ++k) pre[k] = std::atoi(argv[i + 1 + k]); i += 6; }
+        else if (!std::strcmp(argv[i], "--kill")) killHelper = true;
+        else if (!std::strcmp(argv[i], "--parent-first")) parentFirst = true;
         else if (!std::strcmp(argv[i], "--ppm") && i + 1 < argc) ppm = argv[++i];
     }
     char home[] = "/tmp/sw_x11_host_XXXXXX"; if (!mkdtemp(home)) { std::perror("mkdtemp"); return 2; }
@@ -168,11 +170,22 @@ int main(int argc, char** argv) {
         if (w1 == gAskW && h1 == gAskH) pass("get_size agrees with what was asked"); else fail("get_size is " + std::to_string(w1) + " x " + std::to_string(h1));
     }
 
+    // the helper is killed under the window (a crash of the web engine): the plug-in and the host carry on, and the window can still be closed
+    if (killHelper) {
+        if (std::system("pkill -9 -x sw-audio-gui") != 0) fail("could not kill the helper");
+        pump(1.0);
+        uint32_t kw = 0, kh = 0; gui->get_size(p, &kw, &kh); gui->set_size(p, kw, kh); gui->hide(p); gui->show(p);   // (calls on a window whose helper is gone must not crash or hang)
+        pass("the plug-in carries on after the helper was killed");
+    }
+
+    // some hosts destroy their window before they tell the plug-in: the helper's window goes with it and the helper ends; destroy afterwards is still fine
+    if (parentFirst) { XDestroyWindow(gDpy, gWin); XSync(gDpy, False); pump(1.0); pass("the host window was destroyed first"); gWin = 0; }
+
     // 5. closing the window ends the helper
     gui->hide(p); gui->destroy(p);
     for (int i = 0; i < 40 && helperProcesses() != 0; ++i) usleep(100000);
     if (helperProcesses() == 0) pass("the helper process ended with the window"); else fail("the helper process is still running after destroy");
-    p->destroy(p); entry->deinit(); XDestroyWindow(gDpy, gWin); XCloseDisplay(gDpy);
+    p->destroy(p); entry->deinit(); if (gWin) XDestroyWindow(gDpy, gWin); XCloseDisplay(gDpy);
     { const std::string rm = std::string("rm -rf ") + home; if (std::system(rm.c_str()) != 0) {} }
     std::printf("%s\n", gFails ? "FAILURES" : "all passed");
     return gFails ? 1 : 0;
