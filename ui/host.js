@@ -28,7 +28,7 @@
   };
   const txt = id => { const e = document.getElementById(id); return e ? e.textContent : null; };
   const skinHtml = txt('swskin'), skinCss = txt('swskincss');
-  window.SWUI_instance = SWUI.mount(document.getElementById('app'), { product: SWBOOT.product, params: SWBOOT.params, traits: SWBOOT.traits, bridge, skin: skinHtml ? { html: skinHtml, css: skinCss || '' } : undefined });
+  window.SWUI_instance = SWUI.mount(document.getElementById('app'), { product: SWBOOT.product, params: SWBOOT.params, traits: SWBOOT.traits, bridge, fit: true, skin: skinHtml ? { html: skinHtml, css: skinCss || '' } : undefined });
   document.addEventListener('contextmenu', e => e.preventDefault());
   setInterval(() => post('p'), 50); post('r');
 })();

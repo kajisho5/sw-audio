@@ -479,7 +479,7 @@ UNIT_NONE = 'This plug-in has no Unit A / B / C (the spec: component tolerances 
 INERT_TITLES = {
     'low lat': 'This plug-in has no low-latency mode (the spec has one for EQ02, EQ07, EQ08, DY05, DY08, MS01, MS02, MS03, MS04, CS04 and RS01 only)',
     '2× os': 'This plug-in has no nonlinear stage that oversampling would apply to (MS04 has its own Oversample setting on the panel)',
-    '100%': 'The window size is fixed (zoom is not built yet)',
+    '100%': 'The window size cannot be changed in this host',
     'a': UNIT_NONE, 'b': UNIT_NONE, 'c': UNIT_NONE,
 }
 
@@ -488,7 +488,7 @@ def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
     inert = {'δ', 'auto gain', 'low lat', '2× os', '100%', 'main show', 'remote', 'lock', 'tap', 'auto', 'dynamic', 'unmask', 'analyzer', 'add module', 'save chain', 'copy', 'paste', 'learn current', 'snapshot', 'repair', 'truncation check'}
-    bound = ('data-p', 'data-set', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave', 'data-addband', 'data-lock', 'data-history')
+    bound = ('data-p', 'data-set', 'data-pb', 'data-band', 'data-act', 'data-call', 'data-tap', 'data-preset', 'data-compare', 'data-dynpb', 'data-analyzer', 'data-copy', 'data-paste', 'data-presetsave', 'data-addband', 'data-lock', 'data-history', 'data-zoom')
     n = 0
     for b in root.select('button'):
         if any(b.get(k) for k in bound) or b.find_parent(attrs={'data-p': True}):
@@ -508,6 +508,8 @@ def mark_inert(root):
             b['data-' + t] = '1'; b['title'] = 'Copy these settings' if t == 'copy' else 'Paste the settings copied from another window of this product'; continue
         if t == 'compare a' and root.select_one('.disp svg'):   # MT02: keep the current spectrum as the reference curve (the page does it: ui/displays.js compareReference)
             b['data-compare'] = '1'; b['title'] = 'Keep the current spectrum as the reference curve; press again to clear it'; continue
+        if t == '100%':   # the zoom chip (the header\'s or the EVO bar\'s; 70 of the designs have one): it prints the size of the window and asks the plug-in for the next step (the page: sw-ui.js "fit")
+            b['data-zoom'] = '1'; b['title'] = 'Window size: click for the next step (75 / 100 / 125 / 150 / 200 %); in a host that lets the window be resized, dragging an edge works too'; continue
         if t == 'auto fade':                    # dropped from the specification (DY03 v2): not shown
             b['style'] = (b.get('style') or '') + ';visibility:hidden'; continue
         if (b.get('aria-label') or '').lower() == 'history':   # the list of the last changes, to step back to (the page: sw-ui.js)

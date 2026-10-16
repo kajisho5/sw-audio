@@ -15,6 +15,7 @@
 #include "sw_message.h"
 
 #include <clap/clap.h>
+#include <clap/ext/gui.h>
 #include <clap/ext/render.h>
 #include <clap/ext/note-ports.h>
 #include <clap/ext/tail.h>
@@ -32,6 +33,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -48,7 +51,19 @@ int kMeasureBlocks = 188; // last ~1 s of a phase
 // the host's track information (CLAP track-info): a track called "Lead Vocal" (UT01 sorts its Gain by the kind of track)
 bool hostTrackInfoGet(const clap_host_t*, clap_track_info_t* i) { std::memset(i, 0, sizeof *i); i->flags = CLAP_TRACK_INFO_HAS_TRACK_NAME; std::strcpy(i->name, "Lead Vocal"); return true; }
 const clap_host_track_info_t gHostTrackInfo = {hostTrackInfoGet};
-const void* hostGetExtension(const clap_host_t*, const char* id) { return id && !std::strcmp(id, CLAP_EXT_TRACK_INFO) ? &gHostTrackInfo : nullptr; }
+// the host's gui extension: records the size a plug-in asks for (the window's zoom chip) and answers yes or no as the test says
+struct GuiAsk { int n = 0; uint32_t w = 0, h = 0; bool accept = true; } gGuiAsk;
+void hostGuiHints(const clap_host_t*) {}
+bool hostGuiResize(const clap_host_t*, uint32_t w, uint32_t h) { ++gGuiAsk.n; gGuiAsk.w = w; gGuiAsk.h = h; return gGuiAsk.accept; }
+bool hostGuiShowHide(const clap_host_t*) { return true; }
+void hostGuiClosed(const clap_host_t*, bool) {}
+const clap_host_gui_t gHostGui = {hostGuiHints, hostGuiResize, hostGuiShowHide, hostGuiShowHide, hostGuiClosed};
+const void* hostGetExtension(const clap_host_t*, const char* id) {
+    if (!id) return nullptr;
+    if (!std::strcmp(id, CLAP_EXT_TRACK_INFO)) return &gHostTrackInfo;
+    if (!std::strcmp(id, CLAP_EXT_GUI)) return &gHostGui;
+    return nullptr;
+}
 void hostNop(const clap_host_t*) {}
 int gRestartRequests = 0;   // how many times a plug-in asked the host to restart it (a setting changed the delay)
 void hostRestart(const clap_host_t*) { ++gRestartRequests; }
@@ -235,6 +250,57 @@ std::vector<uint8_t> wav16Noise(double seconds, double rate) {   // 16 bit stere
     return f;
 }
 std::string codeOfId(const char* id) { std::string s = id; s = s.substr(s.rfind('.') + 1); for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c))); return s; }
+// The window's zoom chip ("c zoom <percent>" from the page): the plug-in asks the host for the size (CLAP gui request_resize) and, when the host says yes, takes it; it says it can be resized with the design's
+// aspect ratio; a size the host proposes is snapped to that ratio within 50 % .. 200 %; the choice is kept in <Documents>/SW AUDIO/zoom.txt. A host that says no leaves the size as it was.
+void zoomChecks(const clap_plugin_t* p, const sw_plugin_message_t* m, const std::function<void(const std::string&)>& fail) {
+    const clap_plugin_gui_t* g = m->gui;   // (on Linux get_extension(CLAP_EXT_GUI) is null: no window)
+    if (!g) { fail("zoom: no gui table"); return; }
+    uint32_t w0 = 0, h0 = 0, w = 0, h = 0;
+    gGuiAsk = GuiAsk{};
+    m->send(p, "c zoom 100"); g->get_size(p, &w0, &h0);
+    if (!w0 || !h0) { fail("zoom: no size at 100 %"); return; }
+    if (!g->can_resize(p)) fail("zoom: the window cannot be resized");
+    clap_gui_resize_hints_t hints{}; const bool hh = g->get_resize_hints && g->get_resize_hints(p, &hints);
+    if (!hh || !hints.can_resize_horizontally || !hints.can_resize_vertically || !hints.preserve_aspect_ratio || hints.aspect_ratio_width != w0 || hints.aspect_ratio_height != h0) fail("zoom: the resize hints do not say 'keep the design\'s aspect ratio'");
+    auto close1 = [](uint32_t a, double b) { return std::fabs(static_cast<double>(a) - b) <= 1.0; };
+    for (int pct : {150, 75, 200, 125}) {
+        gGuiAsk = GuiAsk{};
+        m->send(p, ("c zoom " + std::to_string(pct)).c_str()); g->get_size(p, &w, &h);
+        if (gGuiAsk.n != 1 || !close1(gGuiAsk.w, w0 * pct / 100.0) || !close1(gGuiAsk.h, h0 * pct / 100.0)) fail("zoom " + std::to_string(pct) + ": the host was asked for " + std::to_string(gGuiAsk.w) + " x " + std::to_string(gGuiAsk.h) + " (" + std::to_string(gGuiAsk.n) + " requests)");
+        if (w != gGuiAsk.w || h != gGuiAsk.h) fail("zoom " + std::to_string(pct) + ": get_size is " + std::to_string(w) + " x " + std::to_string(h) + " after the host said yes");
+    }
+    // the host says no: the size stays
+    gGuiAsk = GuiAsk{}; gGuiAsk.accept = false; uint32_t wa = 0, ha = 0; g->get_size(p, &wa, &ha);
+    m->send(p, "c zoom 200"); g->get_size(p, &w, &h);
+    if (gGuiAsk.n != 1 || w != wa || h != ha) fail("zoom: a refused request changed the size");
+    gGuiAsk.accept = true;
+    // sizes the host proposes (a dragged edge): the design's aspect ratio, 50 % .. 200 %
+    m->send(p, "c zoom 100"); g->get_size(p, &w0, &h0);
+    w = w0 * 3; h = static_cast<uint32_t>(h0 * 1.2); g->adjust_size(p, &w, &h);
+    if (!close1(w, w0 * 1.2) || !close1(h, h0 * 1.2)) fail("zoom: adjust_size of a wide proposal gave " + std::to_string(w) + " x " + std::to_string(h));
+    w = w0 * 10; h = h0 * 10; g->adjust_size(p, &w, &h);
+    if (!close1(w, w0 * 2.0) || !close1(h, h0 * 2.0)) fail("zoom: adjust_size of a huge proposal gave " + std::to_string(w) + " x " + std::to_string(h));
+    w = 10; h = 10; g->adjust_size(p, &w, &h);
+    if (!close1(w, w0 * 0.5) || !close1(h, h0 * 0.5)) fail("zoom: adjust_size of a tiny proposal gave " + std::to_string(w) + " x " + std::to_string(h));
+    w = static_cast<uint32_t>(w0 * 1.5); h = static_cast<uint32_t>(h0 * 1.5);
+    if (!g->set_size(p, w, h)) fail("zoom: set_size of 150 % was refused");
+    uint32_t w2 = 0, h2 = 0; g->get_size(p, &w2, &h2);
+    if (!close1(w2, w0 * 1.5) || !close1(h2, h0 * 1.5)) fail("zoom: after set_size(150 %) get_size is " + std::to_string(w2) + " x " + std::to_string(h2));
+    // the host's display scale counts in: 125 % of the pixels at 150 % zoom
+    g->set_scale(p, 1.25); g->get_size(p, &w2, &h2);
+    if (!close1(w2, w0 * 1.5 * 1.25) || !close1(h2, h0 * 1.5 * 1.25)) fail("zoom: with the host scale 1.25 get_size is " + std::to_string(w2) + " x " + std::to_string(h2));
+    g->set_scale(p, 1.0);
+    // nonsense from the page does not move the window out of range or crash
+    for (const char* bad : {"c zoom", "c zoom abc", "c zoom -50", "c zoom 0", "c zoom 99999999999999999999", "c zoom 1e9", "c zoom nan"}) {
+        m->send(p, bad); g->get_size(p, &w, &h);
+        if (w < w0 * 0.5 - 1 || w > w0 * 2.0 + 1 || h < h0 * 0.5 - 1 || h > h0 * 2.0 + 1) fail(std::string("zoom: '") + bad + "' moved the size to " + std::to_string(w) + " x " + std::to_string(h));
+    }
+    // the choice is kept for the next window: <Documents>/SW AUDIO/zoom.txt (HOME is a temporary folder here)
+    m->send(p, "c zoom 150");
+    const char* home = std::getenv("HOME"); std::ifstream f(std::string(home ? home : "") + "/Documents/SW AUDIO/zoom.txt"); int kept = 0; f >> kept;
+    if (kept != 150) fail("zoom: the choice was not kept (zoom.txt says " + std::to_string(kept) + ")");
+    m->send(p, "c zoom 100");   // (leave the plug-in at 100 % and the file with 100)
+}
 void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, EventList& ev, Result& r) {
     const auto* m = static_cast<const sw_plugin_message_t*>(p->get_extension(p, SW_EXT_MESSAGE));
     auto fail = [&](const std::string& t) { r.notes.push_back("FAIL page messages: " + t); r.fail = true; };
@@ -244,6 +310,7 @@ void messageChecks(const clap_plugin_t* p, const std::string& code, Run& run, Ev
     if (up.rfind("SWHOST.update([", 0) != 0 || up.size() < 4 || up.substr(up.size() - 2) != ");") fail("the poll is not an update script");
     if (up.find("nan") != std::string::npos || up.find("inf") != std::string::npos) fail("the update script has nan / inf");
     if (std::string(m->send(p, "garbage")).size() || std::string(m->send(p, "c")).size()) fail("a malformed message got a reply");
+    zoomChecks(p, m, fail);
     // presets: save, list, load, delete in a temporary HOME (the same folder rules as the window)
     const std::string pre = std::string("c presetsave smoke%20test a.b=1;c_d=-2.5e-3;e=0");
     const std::string sv = m->send(p, pre.c_str());

@@ -5,6 +5,7 @@
 //   4. Low lat (one button, the product's own latency setting); UT01's track line (remember / recall); VO03's chord line;
 //   6. the EVO bar's Unit A / B / C (a radio of the product's `unit` parameter; dim on the products that have none).
 //   7. the Learn button of DY04, CS02 and RV08, the Set input button of CS03 (all put in the EVO bar: the design only has the text), and DY10's Auto (the design's own button; what the core writes back is one undo step); MS07's Truncation check (the design's own button: it shows its progress and what it found); CS04's Suggest order (a menu of kinds: the order of the six modules, one undo step).
+//   8. the window's zoom (the design's 100% chip): the screen scales to fill the view the plug-in gives it, the chip prints the factor and steps through 75 / 100 / 125 / 150 / 200 %, a fader still follows the pointer 1:1 when scaled.
 //   5. the EVO bar's oversampling button (1x / 2x / 4x: a click steps, the label follows, undo takes it back; hidden on MS04, dim where the product has no such stage).
 // Needs the preview data (python3 tools/gen_skins.py writes ui/skins.json) and Playwright with a Chromium or Chrome:
 //   NODE_PATH=$(npm root -g) [PW_CHROMIUM=/path/to/chrome] node tests/ui/browser.test.js            (CI: PW_CHANNEL=chrome)
@@ -230,6 +231,62 @@ async function open(code, query = '') {
 
   await open('DY01'); eq(await pg.locator('.evob button[data-call="learn"]').count(), 0, 'DY01 has no Learn button');
 
+
+  // ---- 8. window zoom: the plug-in decides the size of the view (the zoom chip asks the host, or an edge is dragged); the page draws the whole screen at that size
+  {
+    const fitOf = () => pg.evaluate(() => { const f = window.screen_.fit; return f ? { nat: f.natural, k: f.scale(), chip: f.chip && f.chip.textContent.trim(), box: (() => { const r = f.box.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })() } : null; });
+    // the chip: the header\'s (EQ01) and the EVO bar\'s (CS01) are the same part; the designs of 63 products have none (the window can still be resized by the host)
+    for (const c of ['EQ01', 'CS01']) {
+      await open(c); const fc = await fitOf(); ok(fc && fc.nat[0] > 400 && fc.nat[1] > 300, c + ' reports the design\'s natural size: ' + JSON.stringify(fc && fc.nat));
+      eq(fc.chip, '100%', c + ': the chip prints 100% at the natural size'); ok(Math.abs(fc.k - 1) < 1e-9, c + ': without fit the screen is not scaled');
+      const chipTitle = await pg.evaluate(() => { const c = window.screen_.fit.chip; return [c.getAttribute('data-inert'), c.title]; });
+      eq(chipTitle[0], null, c + ': the 100% chip is no longer dimmed'); ok(/75.*200/.test(chipTitle[1]), c + ': its title says the steps: ' + chipTitle[1]);
+      await pg.evaluate(() => { window.zoomCalls.length = 0; window.screen_.fit.chip.click(); }); eq(await pg.evaluate(() => window.zoomCalls.join()), '125', c + ': at 100% the chip asks for 125');
+    }
+    await open('LV03'); const f0 = await fitOf(); ok(f0 && f0.nat[0] > 400 && f0.nat[1] > 300, 'LV03 reports the design\'s natural size: ' + JSON.stringify(f0 && f0.nat));
+    eq(f0.chip, null, 'LV03 has no zoom chip'); const nat = f0.nat;
+    // the drag of a fader (LV03 Out) at 100 % and at 150 %: the same pointer distance moves it 1 / 1.5 as far in the screen\'s own units, so it follows the pointer 1:1 on the screen
+    const dragFader = async () => {
+      const info = await pg.evaluate(() => { const sh = document.getElementById('app').shadowRoot, cap = sh.querySelector('[data-fader]'), i = +cap.dataset.fader, h = window.screen_.host[i]; const r = cap.getBoundingClientRect(); const t = cap.parentElement.getBoundingClientRect(); return { i, x: r.left + r.width / 2, y: r.top + r.height / 2, n0: h.c.norm(window.simValues()[i]), trackH: t.height, capH: r.height }; });
+      const dy = info.n0 > 0.5 ? 60 : -60;
+      await pg.mouse.move(info.x, info.y); await pg.mouse.down(); await pg.mouse.move(info.x, info.y + dy / 2, { steps: 3 }); await pg.mouse.move(info.x, info.y + dy, { steps: 3 }); await pg.mouse.up(); await pg.waitForTimeout(100);
+      const n1 = await pg.evaluate(i => window.screen_.host[i].c.norm(window.simValues()[i]), info.i);
+      return { dn: Math.abs(n1 - info.n0), span: info.trackH - info.capH, dy: Math.abs(dy) };
+    };
+    const d1 = await dragFader(); ok(d1.dn > 0.01, 'the fader moved at 100 % (' + d1.dn.toFixed(3) + ')');
+    ok(Math.abs(d1.dn - d1.dy / d1.span) < 0.015, 'at 100 % 60 px move it 60 / span: ' + d1.dn.toFixed(3) + ' vs ' + (d1.dy / d1.span).toFixed(3));
+    await pg.setViewportSize({ width: Math.round(nat[0] * 1.5), height: Math.round(nat[1] * 1.5) });
+    await open('LV03', '&fit=1'); const f15 = await fitOf();
+    ok(Math.abs(f15.k - 1.5) < 0.01, 'a view of 150 % scales the screen by 1.5: ' + f15.k);
+    ok(Math.abs(f15.box[0]) < 0.5 && Math.abs(f15.box[1]) < 0.5 && Math.abs(f15.box[2] - nat[0] * 1.5) < 1.5 && Math.abs(f15.box[3] - nat[1] * 1.5) < 1.5, 'the screen fills the view: ' + JSON.stringify(f15.box));
+    const d15 = await dragFader(); ok(d15.dn > 0.01, 'the fader moved at 150 % (' + d15.dn.toFixed(3) + ')');
+    ok(Math.abs(d15.dn - d15.dy / (d15.span)) < 0.015, 'at 150 % 60 px (on the screen) move it as far as the fader\'s own length says: ' + d15.dn.toFixed(3) + ' vs ' + (d15.dy / d15.span).toFixed(3));
+    // the chip follows the view and asks for the next step above it (EQ01)
+    await pg.setViewportSize({ width: 1100, height: 800 }); await open('EQ01'); const ne = (await fitOf()).nat;
+    await pg.setViewportSize({ width: Math.round(ne[0] * 1.5), height: Math.round(ne[1] * 1.5) }); await open('EQ01', '&fit=1');
+    eq((await fitOf()).chip, '150%', 'EQ01: a view of 150 %: the chip prints 150%');
+    await pg.evaluate(() => { window.zoomCalls.length = 0; window.screen_.fit.chip.click(); });
+    eq(await pg.evaluate(() => window.zoomCalls.join()), '200', 'EQ01: at 150 % the chip asks for 200');
+    // the view shrinks to 80 % (a host dragged an edge): not a step, the chip prints what it is and the next step above it is 100
+    await pg.setViewportSize({ width: Math.round(ne[0] * 0.8), height: Math.round(ne[1] * 0.8) }); await pg.waitForTimeout(150);
+    const f8 = await fitOf(); eq(f8.chip, '80%', 'EQ01: the chip follows a view of 80 %'); ok(Math.abs(f8.k - 0.8) < 0.01, 'scale 0.8: ' + f8.k);
+    await pg.evaluate(() => { window.zoomCalls.length = 0; window.screen_.fit.chip.click(); });
+    eq(await pg.evaluate(() => window.zoomCalls.join()), '100', 'EQ01: at 80 % the chip asks for 100');
+    // a view of another shape (wider): the whole design stays visible, scaled by the smaller ratio, at the top left
+    await pg.setViewportSize({ width: Math.round(ne[0] * 2), height: Math.round(ne[1] * 1.25) }); await pg.waitForTimeout(150);
+    const fw = await fitOf(); ok(Math.abs(fw.k - 1.25) < 0.01, 'a wide view: the height decides (' + fw.k + ')');
+    // the Escape hatch: a view smaller than a tenth is not followed to nothing (the scale stays at least 0.25)
+    await pg.setViewportSize({ width: 40, height: 30 }); await pg.waitForTimeout(150);
+    ok((await fitOf()).k >= 0.25 - 1e-9, 'the scale has a floor');
+    // some screens of other shapes: no error, and the screen fills a view of 125 %
+    for (const c of ['EQ01', 'DY08', 'MS01', 'RV04', 'GT03', 'LV01', 'LV30', 'MT02']) {
+      await pg.setViewportSize({ width: 1100, height: 800 }); await open(c); const n = (await fitOf()).nat;
+      errors.length = 0; await pg.setViewportSize({ width: Math.round(n[0] * 1.25), height: Math.round(n[1] * 1.25) }); await open(c, '&fit=1'); const f = await fitOf();
+      ok(f && Math.abs(f.k - 1.25) < 0.01 && Math.abs(f.box[2] - n[0] * 1.25) < 1.5, c + ' at 125 %: ' + JSON.stringify(f && [f.k, f.box])); eq(errors.length, 0, c + ' at 125 %: ' + errors.join(' | '));
+    }
+    await pg.setViewportSize({ width: 1100, height: 800 });
+  }
+
   await browser.close(); server.close();
-  console.log('browser checks: ' + codes.length + ' screens load, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match and LV05 Key, VO05 / LV29 SW Link source chooser: ' + checks + ' checks passed');
+  console.log('browser checks: ' + codes.length + ' screens load, window zoom, undo / history / Assist / Unmask / Low lat / UT01 line / oversampling button / Unit / DY04 / CS02 / RV08 Learn, CS03 Set input, DY10 Auto, MS07 Truncation check, CS04 Suggest order and EQ05 Match and LV05 Key, VO05 / LV29 SW Link source chooser: ' + checks + ' checks passed');
 })().catch(async e => { console.error(e); try { await browser.close(); } catch (_) { } server.close(); process.exit(1); });

@@ -15,6 +15,7 @@
 #include "sw_message.h"
 #include "gui_paths.hpp"
 #include "gui_view.hpp"
+#include "gui_zoom.hpp"
 #include "swlink.hpp"
 #ifdef SW_SKIN_HEADER
 #include SW_SKIN_HEADER   // the product's design (tools/gen_skins.py): kSkinCss, kSkinHtml, kSkinW, kSkinH
@@ -281,6 +282,7 @@ private:
         void call(const std::string& name, const std::string& arg) {
             if (name == "linkwatch") { pl.link_watch_.store(arg == "1"); return; }
             if (name == "linkref") { pl.linkRefTake(); return; }
+            if (name == "zoom") { pl.guiZoom(arg); return; }
             pl.guiCall(name, arg);
         }
         // the other SW AUDIO instances in this host (SW Link), for the chooser of a source: SWHOST.linkList([[product, track name, kind (0 vocal .. 6 other, 255 not known), short-term LUFS of its output], ...]);
@@ -364,6 +366,7 @@ private:
         Plugin* s = self(p);
         if (!guiIsApiSupported(p, api, floating)) return false;
         s->guiDestroyView();
+        s->zoom_ = gui::zoom::load(gui::documentsDir()) / 100.0;   // (the next window opens at the size the person chose last)
         std::vector<double> init(static_cast<size_t>(numParams())); GuiFacade f{*s}; for (int i = 0; i < numParams(); ++i) init[static_cast<size_t>(i)] = f.plain(i);
         const std::string html = gui::page(gui::codeOf(P::descriptor()->id), P::specs(), kHasAutoGain, kHasDelta, kHasBypass, init, f.latencyMs(), skin());
         s->facade_ = std::make_unique<GuiFacade>(GuiFacade{*s}); const std::string code = gui::codeOf(P::descriptor()->id);
@@ -381,13 +384,36 @@ private:
         return reply.c_str();
     }
     void guiDestroyView() { view_.reset(); session_.reset(); facade_.reset(); link_watch_.store(false); }
-    static void guiDestroy(const clap_plugin_t* p) { self(p)->guiDestroyView(); }
+    static void guiDestroy(const clap_plugin_t* p) { Plugin* s = self(p); if (s->view_) gui::zoom::save(gui::documentsDir(), static_cast<int>(std::lround(s->zoom_ * 100.0))); s->guiDestroyView(); }
     static bool guiSetScale(const clap_plugin_t* p, double scale) { self(p)->scale_ = scale > 0.0 ? scale : 1.0; return true; }
-    static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { const char* api = gui::platformApi(); const bool logical = api && !std::strcmp(api, "cocoa"); const double k = logical ? 1.0 : self(p)->scale_; *w = static_cast<uint32_t>(kGuiW * k + 0.5); *h = static_cast<uint32_t>(kGuiH * k + 0.5); return true; }
-    static bool guiCanResize(const clap_plugin_t*) { return false; }
-    static bool guiResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t*) { return false; }
-    static bool guiAdjustSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { return guiGetSize(p, w, h); }
-    static bool guiSetSize(const clap_plugin_t* p, uint32_t w, uint32_t h) { uint32_t a, b; guiGetSize(p, &a, &b); return w == a && h == b; }
+    // the size of the window = the design's size times the zoom (the "100%" chip, or an edge dragged in a host that lets the window be resized) times the host's scale where the host counts in pixels
+    // (macOS counts in points, so no scale there). The page draws the design at whatever size the view has (ui/sw-ui.js "fit").
+    static void guiBase(const Plugin* s, double& bw, double& bh) { const char* api = gui::platformApi(); const bool logical = api && !std::strcmp(api, "cocoa"); const double k = logical ? 1.0 : s->scale_; bw = kGuiW * k; bh = kGuiH * k; }
+    static bool guiGetSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { const Plugin* s = self(p); double bw, bh; guiBase(s, bw, bh); gui::zoom::sizeFor(s->zoom_, bw, bh, *w, *h); return true; }
+    static bool guiCanResize(const clap_plugin_t*) { return true; }
+    static bool guiResizeHints(const clap_plugin_t*, clap_gui_resize_hints_t* hints) {
+        hints->can_resize_horizontally = hints->can_resize_vertically = true; hints->preserve_aspect_ratio = true; hints->aspect_ratio_width = kGuiW; hints->aspect_ratio_height = kGuiH; return true;
+    }
+    // a size the host proposes: the design's aspect ratio, 50 % .. 200 %
+    static bool guiAdjustSize(const clap_plugin_t* p, uint32_t* w, uint32_t* h) { double bw, bh; guiBase(self(p), bw, bh); gui::zoom::sizeFor(gui::zoom::fromSize(*w, *h, bw, bh), bw, bh, *w, *h); return true; }
+    static bool guiSetSize(const clap_plugin_t* p, uint32_t w, uint32_t h) {
+        Plugin* s = self(p); double bw, bh; guiBase(s, bw, bh);
+        s->zoom_ = gui::zoom::fromSize(w, h, bw, bh);
+        uint32_t a, b; gui::zoom::sizeFor(s->zoom_, bw, bh, a, b); if (s->view_) s->view_->setSize(a, b);
+        return true;
+    }
+    // the page's zoom chip ("c zoom <percent>"): ask the host for the size; when it says yes, take it (CLAP: the host does not have to call set_size), and keep the choice for the next window.
+    // A host that says no (or has no gui extension) leaves the window as it is.
+    void guiZoom(const std::string& arg) {
+        char* end = nullptr; const double pct = std::strtod(arg.c_str(), &end);
+        if (end == arg.c_str() || !std::isfinite(pct) || pct <= 0.0) return;
+        const double z = gui::zoom::clamp(pct / 100.0);
+        double bw, bh; guiBase(this, bw, bh); uint32_t w, h; gui::zoom::sizeFor(z, bw, bh, w, h);
+        const auto* hg = host_ ? static_cast<const clap_host_gui_t*>(host_->get_extension(host_, CLAP_EXT_GUI)) : nullptr;
+        if (!hg || !hg->request_resize || !hg->request_resize(host_, w, h)) return;
+        zoom_ = z; if (view_) view_->setSize(w, h);
+        gui::zoom::save(gui::documentsDir(), static_cast<int>(std::lround(z * 100.0)));
+    }
     static bool guiSetParent(const clap_plugin_t* p, const clap_window_t* win) {
         Plugin* s = self(p); if (!s->view_ || !win || !win->api || std::strcmp(win->api, gui::platformApi()) != 0) return false;
         uint32_t w, h; guiGetSize(p, &w, &h); s->view_->setSize(w, h);
@@ -566,8 +592,8 @@ private:
         static const clap_plugin_params_t params = {paramsCount, paramsInfo, paramsValue, paramsToText, paramsFromText, paramsFlush};
         static const clap_plugin_state_t state = {stateSave, stateLoad};
         static const clap_plugin_latency_t latency = {latencyGet};
-        static const sw_plugin_message_t message = {guiMessage};
         static const clap_plugin_gui_t gui = {guiIsApiSupported, guiPreferredApi, guiCreate, guiDestroy, guiSetScale, guiGetSize, guiCanResize, guiResizeHints, guiAdjustSize, guiSetSize, guiSetParent, guiSetTransient, guiSuggestTitle, guiShow, guiHide};
+        static const sw_plugin_message_t message = {guiMessage, &gui};
         if (!std::strcmp(id, CLAP_EXT_AUDIO_PORTS)) return &ports;
         if (!std::strcmp(id, CLAP_EXT_PARAMS)) return &params;
         if constexpr (HasTail<typename P::Core>::value) { static const clap_plugin_tail_t tailExt = {tailGet}; if (!std::strcmp(id, CLAP_EXT_TAIL)) return &tailExt; }
@@ -787,7 +813,7 @@ private:
     std::unique_ptr<GuiFacade> facade_;
     std::unique_ptr<gui::Session<GuiFacade>> session_;
     std::unique_ptr<gui::View> view_;
-    double scale_ = 1.0, sr_ = 48000.0;
+    double scale_ = 1.0, zoom_ = 1.0, sr_ = 48000.0;
     std::array<std::vector<float>, 2> scClean_;   // room for a cleaned copy of the sidechain (allocated in activate)
     std::vector<float> scLink_;                   // room for the key read from another SW Link instance (allocated in activate)
     link::Member::KeyState keyState_; std::atomic<float> linkKeyFound_{0.0f};

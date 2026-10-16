@@ -453,7 +453,7 @@
       skinBox.querySelectorAll('[data-fader]').forEach(cap => {
         const i = +cap.dataset.fader, h = hostOf(i); if (!h) return;
         const track = cap.parentElement, rv = (cap.closest('.mod') || skinBox).querySelector('.rv'), capH = cap.style.height || '26px';
-        const span = () => Math.max(1, track.clientHeight - parseFloat(capH));
+        const span = () => { const h = track.clientHeight, sc = h ? track.getBoundingClientRect().height / h : 1; return Math.max(1, (h - parseFloat(capH)) * sc); };   // (on the screen's own pixels: the pointer's distance is, and the screen may be scaled)
         const draw = () => { cap.style.top = 'calc((100% - ' + capH + ') * ' + (1 - h.c.norm(vals[i])).toFixed(4) + ')'; if (rv) rv.textContent = format(h.p, vals[i], h.c); };
         cap.style.touchAction = 'none'; cap.style.cursor = 'ns-resize'; let drag = null;
         cap.addEventListener('pointerdown', e => { cap.setPointerCapture(e.pointerId); drag = { y: e.clientY, x0: h.c.norm(vals[i]) }; bridge.begin(i); });
@@ -635,7 +635,28 @@
         btn.onclick = () => { if (!drawer) build(); else drawer.style.display = drawer.style.display === 'none' ? 'flex' : 'none'; };
       }
     }
-    return { destroy() { clearInterval(timer); root.innerHTML = ''; }, values: () => vals.slice(), host };
+    // ---- fit: the plug-in decides how big the view is (the zoom chip asks the host for a size, or an edge is dragged in the host); the design is fixed pixels, so the whole screen is scaled to fill the view
+    // (the smaller of the two ratios, at the top left; between 25 % and 400 %). Only the window asks for it (opt.fit): the preview keeps the natural size.
+    let fit = null;
+    if (skinBox) {
+      const sh = skinBox.parentNode, strip = sh.lastElementChild, box2 = document.createElement('div');
+      const natural = [skinBox.offsetWidth, skinBox.offsetHeight + (strip && strip !== skinBox ? strip.offsetHeight : 0)];
+      box2.style.cssText = 'position:relative;transform-origin:0 0;width:' + natural[0] + 'px;height:' + natural[1] + 'px';
+      [...sh.childNodes].forEach(n => box2.appendChild(n));   // (the styles too: a <style> works anywhere in the shadow tree)
+      sh.appendChild(box2);
+      const chip = skinBox.querySelector('button[data-zoom]'); let k = 1;
+      const steps = [75, 100, 125, 150, 200];
+      const apply = () => {
+        k = opt.fit && natural[0] > 0 && natural[1] > 0 ? Math.max(0.25, Math.min(4, Math.min(global.innerWidth / natural[0], global.innerHeight / natural[1]))) : 1;
+        box2.style.transform = Math.abs(k - 1) < 0.002 ? '' : 'scale(' + k + ')';
+        if (chip && opt.fit) chip.textContent = Math.round(k * 100) + '%';
+      };
+      if (opt.fit) { root.style.cssText += ';position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden'; global.addEventListener('resize', apply); }
+      if (chip) chip.addEventListener('click', () => { const cur = Math.round(k * 100); bridge.call('zoom', String(steps.find(x => x > cur) || steps[0])); });
+      apply();
+      fit = { natural, scale: () => k, chip, box: box2, apply };
+    }
+    return { destroy() { clearInterval(timer); if (fit) global.removeEventListener('resize', fit.apply); root.innerHTML = ''; }, values: () => vals.slice(), host, fit };
   }
 
   global.SWUI = { mount, makeCurve, format, parseValue };
