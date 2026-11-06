@@ -15,6 +15,7 @@
 
 SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様書 v1.0 初稿」に従う。
 ロゴ（C Rack Ear：ラックイヤーの形。ロゴの色＝製品カテゴリの色）の規定は `docs/design/design-system/project/LOGO.md`、データは `docs/design/design-system/project/assets/Logo/`（`tools/gen_logo.py` が LOGO.md の寸法から作る）。
+製品画面のヘッダー左端も、デザインの「SEVENTHWELL」の文字に代えてこのロゴ（記号＝製品のカテゴリ色、ワードマーク＝#B4B4B4、LOGO.md「使用箇所」のとおり）を出す（`tools/gen_skins.py` の `brand_logo`。新しい版のデザインは同じロゴを CSS のマスクで描く作りだったが、マスクの画像がキャンバスに無く色の棒になっていた：それも置き換えた。ヘッダーにロゴの無い DY04〔500 シリーズの細い筐体〕はそのまま）。
 
 ## 資料の場所
 

@@ -484,6 +484,28 @@ INERT_TITLES = {
 }
 
 
+def brand_logo(root):
+    """The header's brand mark (LOGO.md, "使用箇所": the toolbar's left end = the symbol in the product's category colour + the wordmark in #B4B4B4,
+    8 px high). The designs print the parent brand's name there as text; it is replaced by the logo, drawn by tools/gen_logo.py (one source)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import gen_logo
+    body, w = gen_logo.word('SW AUDIO')
+    sym = ('<svg class="swmark" viewBox="78 10 100 236" width="7" height="16" aria-hidden="true" style="flex:none;display:block">'
+           '<path fill="var(--acc,#b4b4b4)" fill-rule="evenodd" d="%s"/></svg>' % gen_logo.SYMBOL)
+    wm = ('<svg class="swword" viewBox="-7 -7 %g 114" height="9.1" width="%g" aria-hidden="true" style="flex:none;display:block">'
+          '<g fill="none" stroke="#B4B4B4" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">%s</g></svg>' % (w + 14, (w + 14) * 9.1 / 114, body))
+    for sp in root.select('.tb .logo'):
+        if sp.get_text().strip().upper() != 'SEVENTHWELL':
+            continue
+        sp.clear()
+        sp['title'] = 'SW AUDIO by SEVENTHWELL'
+        sp['style'] = (sp.get('style') or '') + ';display:inline-flex;align-items:center;gap:7px;letter-spacing:0'
+        sp['data-swlogo'] = '1'
+        # (the newer designs draw the same logo with ::before / ::after and CSS masks whose images are not in the canvas: the drawing here takes their place)
+        sp.append(BeautifulSoup(sym + wm + '<style>.tb .logo[data-swlogo]::before,.tb .logo[data-swlogo]::after{content:none!important;display:none!important}'
+                                '.tb .logo[data-swlogo]{font-size:9px!important;color:inherit!important}</style>', 'html.parser'))
+
+
 def mark_inert(root):
     """Parts of the design whose function is not in the product yet (Low lat, 2x OS, Unit A/B/C, History, the zoom, the LIVE scene/remote/lock chips) are
     shown dimmed with a title instead of pretending to work."""
@@ -751,6 +773,7 @@ def build(code, report):
     if code == 'CS04':
         cs04_bind(root, params)
     mark_inert(root)
+    brand_logo(root)
     # the SW Link lamp of the bottom bar: grey until the page hears that other SW AUDIO instances are in the process (ui/sw-ui.js: data-link; the plug-in's readings: plugin/clap/swlink.hpp)
     for evr in root.select('.evob .evr'):
         if 'SW Link' in evr.get_text():
