@@ -1,6 +1,20 @@
+<p align="center">
+  <img src="docs/images/sw-audio-banner.png" alt="SW AUDIO" width="800">
+</p>
+
+<p align="center"><b>SEVENTHWELL のオーディオプラグイン群 — STUDIO 109 本・LIVE 30 本（CLAP／VST3／AU、macOS・Windows・Linux）</b></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-0.16.0-3b7fe6" alt="version 0.16.0">
+  <img src="https://img.shields.io/badge/products-132%20built-22a87c" alt="132 products built">
+  <img src="https://img.shields.io/badge/formats-CLAP%20%7C%20VST3%20%7C%20AU-a3a39f" alt="CLAP, VST3, AU">
+  <img src="https://img.shields.io/badge/C%2B%2B-17-7a6be0" alt="C++17">
+</p>
+
 # SW AUDIO — プラグイン本体
 
 SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様書 v1.0 初稿」に従う。
+ロゴ（C Rack Ear：ラックイヤーの形。ロゴの色＝製品カテゴリの色）の規定は `docs/design/design-system/project/LOGO.md`、データは `docs/design/design-system/project/assets/Logo/`（`tools/gen_logo.py` が LOGO.md の寸法から作る）。
 
 ## 資料の場所
 
