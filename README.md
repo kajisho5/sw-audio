@@ -211,6 +211,14 @@ SEVENTHWELL の SW AUDIO のプラグイン実装。仕様は「SW AUDIO 仕様�
 - **仕様書からの差・未実装：** ①「高品質設定は直線位相 FIR（遅延を報告）」は作っていない（MS04 だけが FIR を持つ）。標準の IIR のみ。②**再生中に設定を切り替えると、その瞬間に 1 回プチッと鳴る**（ハーフバンドの群遅延が設定ごとに違い、波形の位相が飛ぶ。Drive 段で 1 kHz・0.3 の正弦波を再生中に 2×→1× にすると、1 サンプルの最大の差が通常の最大の差の約 5 倍、1×→2× は約 1.2 倍、2×⇄4× は約 2 倍（実測）。クロスフェードは入れていない）。保存した設定の読み込みと `prepare` では状態がそろっているので鳴らない。③報告遅延は従来どおり 0（IIR の群遅延は数サンプルで、設定により変わる。Mix で原音と混ぜたときの櫛形は従来と同じ性質で、1×・2×・4× で量が違う）。④CPU は 4× が 2× のおよそ 2 倍近く、1× は約半分（設計上の見積もり。この変更での再測定はしていない）。
 - テスト：`tests/test_os.cpp`（`OsSwitch`：呼び出し回数、線形段のレベル、折り返し、設定の切替中も有限、8×）、`test_drive.cpp`・`test_shaper.cpp`（共通部品）、21 製品それぞれの `test_<code>.cpp`（パラメータの位置・1x／2x／4x・既定、飽和段が設定に従うこと）。共通の測定は `tests/os_helpers.hpp`。画面：EVO バーの「2× OS」は `data-cycle` のボタンで、押すと 1×→2×→4×→1× と進み、表示は設定どおり（「4× OS」など）。このパラメータを持たない製品では従来どおり薄く表示される。
 
+### macOS の配布物（Developer ID 署名＋Apple の公証：kajisho5/runway の mac-notarize）
+
+`.github/workflows/release-mac.yml`（手動実行、または `v*` のタグ）。**Universal（Apple シリコン＋Intel、macOS 11 以降）で CLAP・VST3・AU を作り、runway の共通ワークフローが Developer ID で署名 → Apple の公証 → ステープル → `.dmg` にする**（証明書は runway の hanger、公証は App Store Connect API のチームキー。Mac は要らない）。
+- 132 製品を **4 つに分けて**作る（`tools/build_mac_release.sh <part> 4`。CI と同じ「`sw_add_plugin` の並びで 4 つおき」）。runway のジョブは 90 分で打ち切られ、Universal はすべてを 2 回コンパイルするため（1 回で全部は時間が読めない）。成果物は Artifacts に `SW-AUDIO-part-1of4-<版>.dmg` 〜 `4of4` の 4 つ。各 dmg にインストール方法（`packaging/macos/INSTALL.txt`）を入れる。
+- ビルドの最後に、全バンドルの実行ファイルが arm64 と x86_64 の両方を持つことを `lipo` で確かめる（片方だけなら失敗）。
+- **前提：** runway の Secrets がこのリポに配られていること（runway の `repos.txt` に `kajisho5/sw-audio` の行）。Developer ID 証明書は runway の apple-signing（`create-developer-id`）で用意済み（runway の README：2026-10-16 に通し確認済み）。
+- **確かめていないこと：** この構成での実行（Universal ビルドの所要時間、公証の結果）。Windows の署名は runway が未対応。
+
 ### Linux の画面（別プロセスの WebKitGTK を X11 の窓に入れる：`plugin/clap/gui_x11.cpp`・`gui_x11_helper.cpp`・`gui_x11_proto.hpp`）
 
 CLAP の gui は `x11`（ホストが X11 の窓の番号を渡す）。macOS は WKWebView、Windows は WebView2 をその窓に入れているが、Linux には「どの DAW にもある Web ビュー」がない。**何を・なぜ・どう決めたか（設計値）：**

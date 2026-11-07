@@ -1,0 +1,34 @@
+# macOS release: Universal build → Developer ID signature → Apple notarization → .dmg, done by kajisho5/runway (mac-notarize).
+# The 132 products are built in 4 parts (runway's job has a 90-minute limit and a Universal build compiles everything twice); each part is one notarized .dmg
+# (SW-AUDIO-part-1of4-<version>.dmg ...). Needs the runway Secrets in this repository: kajisho5/sw-audio must be listed in runway's repos.txt.
+# Run: Actions → release-mac → Run workflow, or push a tag v0.16.0 etc.
+name: release-mac
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {part: 0, label: 1of4}
+          - {part: 1, label: 2of4}
+          - {part: 2, label: 3of4}
+          - {part: 3, label: 4of4}
+    uses: kajisho5/runway/.github/workflows/mac-notarize.yml@main
+    with:
+      name: SW-AUDIO-part-${{ matrix.label }}
+      build: tools/build_mac_release.sh ${{ matrix.part }} 4
+      products: |
+        build/plugins/*.vst3
+        build/plugins/*.component
+        build/plugins/*.clap
+      readme: packaging/macos/INSTALL.txt
+    secrets: inherit

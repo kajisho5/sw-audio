@@ -1,0 +1,17 @@
+SW AUDIO for macOS — インストール / Installation
+
+このディスクイメージのプラグインは Apple の Developer ID で署名し、Apple の公証（notarization）を通してあります。
+Apple シリコンと Intel の両方で動きます（macOS 11 以降）。
+
+入れる場所（自分だけ使うなら ~/Library、全ユーザーなら /Library）:
+  *.vst3       →  ~/Library/Audio/Plug-Ins/VST3/
+  *.component  →  ~/Library/Audio/Plug-Ins/Components/     （Logic Pro・GarageBand など AU のホスト）
+  *.clap       →  ~/Library/Audio/Plug-Ins/CLAP/
+Finder で「移動」→ option キーを押しながら「ライブラリ」でフォルダを開き、コピーしてから DAW を起動し直してください。
+AU が出てこないときは、DAW を終了してから一度ログアウト／ログインするか、ターミナルで  killall -9 AudioComponentRegistrar  を実行してください。
+
+Install (per user; use /Library for all users):
+  *.vst3 -> ~/Library/Audio/Plug-Ins/VST3/    *.component -> ~/Library/Audio/Plug-Ins/Components/    *.clap -> ~/Library/Audio/Plug-Ins/CLAP/
+Restart your DAW after copying. Signed with Developer ID and notarized by Apple. Universal (Apple silicon + Intel), macOS 11 or later.
+
+SEVENTHWELL
